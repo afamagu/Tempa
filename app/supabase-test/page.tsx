@@ -22,12 +22,11 @@ async function checkRestApiKey() {
   try {
     // A nonexistent table still proves the key was accepted: PostgREST
     // returns 404/PGRST205 (schema cache) for a bad table name, but 401
-    // for a bad or missing API key.
+    // for a bad or missing API key. Only `apikey` is needed here — the
+    // publishable key is not a JWT, so it must not be sent as a Bearer
+    // token in Authorization.
     const res = await fetch(`${url}/rest/v1/_connection_check?select=*`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
+      headers: { apikey: key },
       cache: 'no-store',
     })
     return { ok: res.status !== 401, status: res.status }
