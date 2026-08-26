@@ -43,6 +43,10 @@ export default async function SupabaseTestPage() {
 
   const connected = auth.ok && rest.ok && !authError
 
+  const rawKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  const keyDefined = rawKey !== undefined && rawKey !== ''
+  const keyLength = rawKey?.length ?? 0
+
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-md w-full space-y-4 rounded-lg border border-black/10 dark:border-white/20 p-6">
@@ -76,6 +80,18 @@ export default async function SupabaseTestPage() {
           <div className="flex justify-between">
             <dt className="text-black/60 dark:text-white/60">Auth client</dt>
             <dd>{authError ? authError.message : 'OK'}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-black/60 dark:text-white/60">
+              Publishable key defined
+            </dt>
+            <dd>{keyDefined ? 'yes' : 'no'}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-black/60 dark:text-white/60">
+              Publishable key length
+            </dt>
+            <dd>{keyLength}</dd>
           </div>
         </dl>
       </div>
