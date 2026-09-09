@@ -1,26 +1,125 @@
 @import "tailwindcss";
 
+/* Tempa is one deliberate warm-editorial look, not a system-adaptive
+   light/dark app. Redefining the `dark` variant to a selector nothing in
+   the app ever applies neutralizes every `dark:` utility already
+   scattered through existing components without needing to edit each
+   one — removing this line restores automatic OS-driven dark mode. */
+@custom-variant dark (&:where(.unused-dark-mode-marker));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f2e7; /* warm ivory / off-white */
+  --foreground: #24211a; /* near-black warm ink */
+  --muted: #726a59; /* muted warm grey / taupe, for secondary text */
+  --accent: #5b6b47; /* restrained moss / olive */
+  --accent-foreground: #f7f2e7;
+  /* A quieter, slightly cooler neutral than --background, derived from
+     it rather than picked as a new arbitrary color — used only as the
+     correspondence workspace's outer surface (see the letter reader),
+     so an expanded letter's warm --background paper visibly sits "on
+     top of" a calmer surrounding layer instead of blending into it. */
+  --surface-shell: color-mix(in srgb, var(--background) 90%, var(--foreground) 6%);
+  color-scheme: light;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-surface-shell: var(--surface-shell);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-serif: var(--font-newsreader);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The Moments walkthrough's one-time "tap the photo" teaching cue — a
+   slow, quiet opacity breath. Runs while the class is applied; the
+   component removes the class the instant the photo is first tapped, so
+   the loop being CSS-infinite never means visually-indefinite in
+   practice. No scale/shadow/glow — deliberately calmer than a typical
+   UI "look here" pulse. */
+@keyframes moment-hint {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.86; }
+}
+
+.animate-moment-hint {
+  animation: moment-hint 2.6s ease-in-out infinite;
+}
+
+/* The Moments walkthrough's "start with the world around you" carousel
+   (app/guide/moments-walkthrough.tsx) — a plain horizontally-scrolling,
+   snap-scrolling row. Hides the scrollbar so it reads as a quiet swipe
+   gesture rather than a generic scrollable list; touch/trackpad swipe
+   and scroll-snap both keep working normally, only the visible scrollbar
+   track is suppressed. Written as explicit CSS for the same reason as
+   the Postcard flip below: `scrollbar-width`/the WebKit pseudo-element
+   aren't expressible as Tailwind utilities. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Postcard flip (expanded view only). Written as explicit CSS rather
+   than Tailwind arbitrary-value utilities — properties like
+   backface-visibility (and its -webkit- prefixed form, which Tailwind's
+   bracket syntax cannot express reliably given the leading hyphen) need
+   to be guaranteed present, not hopefully JIT-generated. */
+.postcard-perspective {
+  perspective: 1400px;
+}
+
+.postcard-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 500ms ease-in-out;
+  transform: rotateY(0deg);
+}
+
+.postcard-inner[data-flipped='true'] {
+  transform: rotateY(180deg);
+}
+
+.postcard-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.postcard-face-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* Reduced-motion users never get the 3D transform at all (see
+   moment-display.tsx, which renders only one face directly in that
+   case) — this override is defense in depth in case that element ever
+   ends up in the DOM under prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .postcard-inner {
+    transition: none;
+  }
+}
+
+/* The continuous letter composer's placeholder text (moments-composer.tsx,
+   @tiptap/extension-placeholder) — the extension marks the empty first
+   paragraph with this class/attribute and expects the placeholder to be
+   painted via ::before, not a real text node, so it's never mistaken for
+   actual letter content. */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted);
 }

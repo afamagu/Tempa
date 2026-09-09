@@ -18,6 +18,19 @@ export function getRegionOptions(countryName: string): Option[] {
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 
+/**
+ * The selected country's own ISO alpha-2 code, straight from
+ * country-state-city — never a reverse-mapping of the saved display
+ * name after the fact. Returns null only for a country name that isn't
+ * one of COUNTRY_OPTIONS' own values, which the picker itself can never
+ * produce (selection only ever comes from clicking/Enter-selecting one
+ * of those options — see SearchableSelect), so this is a genuine
+ * "shouldn't happen" fallback, not an expected path.
+ */
+export function findCountryIsoCode(countryName: string): string | null {
+  return COUNTRY_OPTIONS.find((c) => c.value === countryName)?.isoCode ?? null
+}
+
 export const LANGUAGE_OPTIONS: Option[] = ISO6391.getAllNames()
   .map((name) => ({ value: name, label: name }))
   .sort((a, b) => a.label.localeCompare(b.label))

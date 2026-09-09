@@ -103,12 +103,10 @@ export default function SearchableSelect({
         <ul
           id={`${id}-listbox`}
           role="listbox"
-          className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-black/10 dark:border-white/20 bg-background shadow-lg"
+          className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none"
         >
           {filtered.length === 0 && (
-            <li className="px-3 py-2 text-sm text-black/50 dark:text-white/50">
-              No matches
-            </li>
+            <li className="px-3 py-2 text-sm text-muted">No matches</li>
           )}
           {filtered.map((option, index) => (
             <li key={option.value} role="option" aria-selected={option.value === value}>
@@ -116,10 +114,8 @@ export default function SearchableSelect({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectOption(option)}
-                className={`w-full text-left px-3 py-2 text-sm ${
-                  index === highlighted
-                    ? 'bg-black/[.06] dark:bg-white/[.1]'
-                    : 'hover:bg-black/[.04] dark:hover:bg-white/[.08]'
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'
                 }`}
               >
                 {option.label}

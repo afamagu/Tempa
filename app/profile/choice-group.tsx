@@ -36,7 +36,7 @@ export default function ChoiceGroup({
               <>
                 <span className="block text-sm font-medium">{option.label}</span>
                 {option.description && (
-                  <span className="block text-xs mt-0.5 text-black/50 dark:text-white/50">
+                  <span className="block text-xs mt-0.5 text-muted">
                     {option.description}
                   </span>
                 )}

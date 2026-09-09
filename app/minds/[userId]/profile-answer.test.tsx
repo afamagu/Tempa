@@ -1,0 +1,59 @@
+import { describe, it, expect } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import ProfileAnswer, { isLongAnswer } from './profile-answer'
+
+const PROMPT = 'What is something ordinary that means more to you than most people would expect?'
+const SHORT_BODY = 'A short answer.'
+const LONG_BODY =
+  'A much longer answer that goes on for quite a while, describing in careful detail the kind of ' +
+  'ordinary object that carries far more weight than its size would suggest, wandering through several ' +
+  'connected memories before finally arriving at why it still matters today, well past the length a ' +
+  'four-line preview could ever hope to contain in full.'
+
+describe('isLongAnswer (pure)', () => {
+  it('a short answer is not long', () => {
+    expect(isLongAnswer(SHORT_BODY)).toBe(false)
+  })
+
+  it('a long answer is long', () => {
+    expect(isLongAnswer(LONG_BODY)).toBe(true)
+  })
+})
+
+describe('ProfileAnswer', () => {
+  it('the Question is not permanently/visibly displayed — no popover content rendered until activated', () => {
+    const html = renderToStaticMarkup(<ProfileAnswer prompt={PROMPT} body={SHORT_BODY} isCurrent={false} />)
+    // Tooltip only renders its visible role="tooltip" content once its
+    // internal `visible` state is true — untouched (collapsed) on
+    // initial render, so the prompt is not shown as a heading/paragraph
+    // the way it used to be printed above every answer.
+    expect(html).not.toContain('role="tooltip"')
+  })
+
+  it('the info control still carries an accessible label naming the Question — present for assistive tech even while visually collapsed', () => {
+    const html = renderToStaticMarkup(<ProfileAnswer prompt={PROMPT} body={SHORT_BODY} isCurrent={false} />)
+    expect(html).toContain(`aria-label="The Question: ${PROMPT}"`)
+  })
+
+  it('a short answer shows in full with no Read more control', () => {
+    const html = renderToStaticMarkup(<ProfileAnswer prompt={PROMPT} body={SHORT_BODY} isCurrent={false} />)
+    expect(html).toContain(SHORT_BODY)
+    expect(html).not.toContain('Read more')
+  })
+
+  it('a long answer is clamped and offers Read more, but the full text is still present in the DOM (CSS-clamped, never sliced)', () => {
+    const html = renderToStaticMarkup(<ProfileAnswer prompt={PROMPT} body={LONG_BODY} isCurrent={false} />)
+    expect(html).toContain('line-clamp-4')
+    expect(html).toContain(LONG_BODY)
+    expect(html).toContain('Read more')
+    expect(html).toContain('aria-expanded="false"')
+  })
+
+  it('shows "Shown in Minds" only for the current answer', () => {
+    const current = renderToStaticMarkup(<ProfileAnswer prompt={PROMPT} body={SHORT_BODY} isCurrent />)
+    expect(current).toContain('Shown in Minds')
+
+    const notCurrent = renderToStaticMarkup(<ProfileAnswer prompt={PROMPT} body={SHORT_BODY} isCurrent={false} />)
+    expect(notCurrent).not.toContain('Shown in Minds')
+  })
+})

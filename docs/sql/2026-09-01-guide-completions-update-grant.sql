@@ -1,0 +1,145 @@
+-- Tempa — guide_completions / correspondence_feature_acknowledgements:
+-- investigation result and (unneeded, kept for reference) fallback SQL.
+--
+-- SUPERSEDED BY A CODE FIX. NOT EXECUTED, AND NOT REQUIRED — see
+-- "RECOMMENDATION" below. Kept only as the corrected Design-A migration
+-- in case that design is ever preferred over what's actually shipped.
+--
+-- ============================================================
+-- WHAT THIS FILE ORIGINALLY GOT WRONG
+-- ============================================================
+--
+-- An earlier version of this file granted only:
+--
+--   grant update on public.guide_completions to authenticated;
+--   grant update on public.correspondence_feature_acknowledgements to authenticated;
+--
+-- reasoning that the missing UPDATE grant alone explained why upsert
+-- ('.upsert(..., { onConflict: ... })', compiled by Postgres to
+-- `INSERT ... ON CONFLICT DO UPDATE`) failed permission-denied on every
+-- call. The GRANT diagnosis was correct, but incomplete: GRANT is only
+-- the table-level ACL check. RLS is a SEPARATE, per-row check that also
+-- has to pass, and it only gets evaluated for whichever command
+-- sub-plan actually executes — the UPDATE branch is only reached when a
+-- conflict genuinely occurs (i.e. on a REPEAT call, not the first one).
+--
+-- Inspecting the actual live policies on both tables
+-- (docs/sql/2026-08-31-moments.sql,
+-- docs/sql/2026-09-01-correspondence-feature-acknowledgements.sql):
+--
+--   guide_completions: ONE policy, `for all`:
+--     create policy guide_completions_own
+--       on public.guide_completions
+--       for all
+--       using (auth.uid() = user_id)
+--       with check (auth.uid() = user_id);
+--   `for all` applies to select/insert/update/delete alike, so UPDATE
+--   is already covered, correctly scoped to the row's own owner. Adding
+--   only the missing GRANT UPDATE would have been sufficient for this
+--   table.
+--
+--   correspondence_feature_acknowledgements: only `for select` and
+--   `for insert` policies exist. No `for update` (or `for all`) policy
+--   was ever defined — and the migration's own comment says so
+--   explicitly: "no UPDATE or DELETE policy is defined, so both remain
+--   fully denied under RLS regardless of any future grant." That is
+--   RLS's default-deny behavior: a command with no matching policy is
+--   rejected outright. So a grant-only fix would NOT have been
+--   sufficient here — the very first call (plain INSERT, no conflict)
+--   would have started working once GRANT UPDATE was added (that part
+--   only needs the table-level ACL to be satisfied, not the UPDATE
+--   policy, since no conflict occurs), but any REPLAY of the same
+--   (user_id, correspondence_id, feature_key) — the exact "already
+--   acknowledged, called again" case this table exists to make
+--   idempotent — would have hit the conflict branch and been rejected
+--   by RLS with no matching UPDATE policy, still permission-denied,
+--   just for a different reason than before.
+--
+-- ============================================================
+-- WHAT THE TWO UPSERTS ACTUALLY UPDATE ON CONFLICT
+-- ============================================================
+--
+-- Neither call site's payload includes anything beyond its own primary
+-- key columns:
+--   markGuideCompleted:            { user_id, guide_key }             (not completed_at)
+--   acknowledgeCorrespondenceFeature: { user_id, correspondence_id, feature_key } (not acknowledged_at)
+--
+-- Supabase/PostgREST's upsert only SETs the columns present in the
+-- payload. Since the payload IS the conflict key, the generated
+-- `ON CONFLICT (...) DO UPDATE SET user_id = excluded.user_id, ...`
+-- sets every column to the value it already has — a genuine no-op. On
+-- a repeat call, the upsert path was never going to change one single
+-- byte of either table. There is no field either row ever needs
+-- updated after its first write; each is a pure "did this happen, yes
+-- or no, once" fact.
+--
+-- ============================================================
+-- RECOMMENDATION: Design B, not Design A — and it's what's shipped
+-- ============================================================
+--
+-- A. keep UPSERT + grant UPDATE + a correctly-scoped UPDATE RLS policy
+-- B. plain INSERT once; treat a unique-violation (23505) conflict as
+--    success, never issue an UPDATE at all
+--
+-- B is simpler and strictly safer for "this happened once and stays
+-- true forever," which is exactly Tempa's semantics for both tables:
+--   - No UPDATE grant, no new UPDATE RLS policy, on EITHER table —
+--     smaller total permission surface. correspondence_feature_
+--     acknowledgements keeps exactly the access its own migration
+--     comment says was the deliberate intent ("no UPDATE or DELETE...
+--     regardless of any future grant").
+--   - Given the no-op finding above, an UPDATE policy would exist
+--     solely to authorize a write that never changes anything — pure
+--     unused attack surface (e.g. against a future column added to
+--     either table without re-auditing this policy).
+--   - It matches Postgres's own unique_violation signal 1:1 to the
+--     product meaning "already true" — no extra RLS reasoning needed
+--     to convince yourself the idempotent path is actually safe.
+--
+-- lib/guide.ts's markGuideCompleted and lib/acknowledgements.ts's
+-- acknowledgeCorrespondenceFeature now both do exactly this: `.insert()`,
+-- with error.code === '23505' treated as success. No SQL migration is
+-- required for either table — their existing `grant select, insert`
+-- (already applied for guide_completions via 2026-08-31-moments.sql;
+-- prepared, not yet applied, for correspondence_feature_acknowledgements
+-- via 2026-09-01-correspondence-feature-acknowledgements.sql) is
+-- already everything this design needs.
+--
+-- ============================================================
+-- FALLBACK — Design A, corrected (NOT applied; do not run unless you
+-- deliberately choose upsert over the shipped INSERT-based design)
+-- ============================================================
+--
+-- If upsert is ever preferred again, guide_completions needs only the
+-- grant (its RLS already covers UPDATE):
+--
+--   grant update
+--   on public.guide_completions
+--   to authenticated;
+--
+-- correspondence_feature_acknowledgements needs BOTH the grant and a
+-- new UPDATE policy scoped exactly like its existing insert policy —
+-- own row only, and only while still a real participant in the
+-- referenced correspondence, using both USING (which existing rows are
+-- even visible to update) and WITH CHECK (what the row is allowed to
+-- become) so a participant can neither reach nor produce a row outside
+-- those bounds:
+--
+--   create policy correspondence_feature_acknowledgements_update
+--     on public.correspondence_feature_acknowledgements
+--     for update
+--     using (
+--       auth.uid() = user_id
+--       and public.is_correspondence_participant(correspondence_id)
+--     )
+--     with check (
+--       auth.uid() = user_id
+--       and public.is_correspondence_participant(correspondence_id)
+--     );
+--
+--   grant update
+--   on public.correspondence_feature_acknowledgements
+--   to authenticated;
+--
+-- Neither anon nor public gets any grant here, matching the existing
+-- `revoke all ... from public, anon` on this table.

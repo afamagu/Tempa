@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -9,9 +9,19 @@ import {
   helperTextClass,
   primaryButtonClass,
   secondaryButtonClass,
+  proseSubheadingClass,
+  proseBodyClass,
+  contextQuestionClass,
 } from '@/app/profile/ui'
+import {
+  questionSaveConfirmationCopy,
+  QUESTION_ANSWER_MAX_CHARS,
+  type CanonicalQuestion,
+} from '@/lib/questions'
+import { insertAtCursor } from '@/lib/textarea-insert'
+import EmojiPicker from '@/app/letters/emoji-picker'
 
-const MAX_CHARS = 2000
+const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
 
 function charLength(text: string) {
@@ -38,13 +48,30 @@ export default function QuestionAnswer({
   questionId,
   prompt,
   initialAnswer,
+  initialIsCurrent = false,
   isActive = true,
+  nextQuestion = null,
 }: {
   userId: string
   questionId: string
   prompt: string
   initialAnswer: string | null
+  /** Whether THIS Question's answer is the member's current
+   * Shown-in-Minds answer, as of page load — the baseline
+   * questionSaveConfirmationCopy compares against to tell "this save
+   * just became featured" apart from "this was already featured" (see
+   * publish_question_answer's own doc comment, docs/sql/2026-09-03-
+   * publish-question-answer-canonical.sql: only a member's first-ever
+   * canonical answer is auto-promoted; every later save leaves
+   * is_current untouched). */
+  initialIsCurrent?: boolean
   isActive?: boolean
+  /** The next unanswered canonical Question in canonical order, or
+   * null when this Question isn't canonical or none remain — computed
+   * server-side (lib/questions.ts's nextUnansweredCanonicalQuestion).
+   * Only ever offered once there's a saved answer to show (never
+   * during active editing, so Next can't discard unsaved text). */
+  nextQuestion?: CanonicalQuestion | null
 }) {
   const router = useRouter()
 
@@ -52,26 +79,62 @@ export default function QuestionAnswer({
     initialAnswer || !isActive ? 'view' : 'edit'
   )
   const [publishedBody, setPublishedBody] = useState(initialAnswer)
+  const [isCurrent, setIsCurrent] = useState(initialIsCurrent)
   const [body, setBody] = useState(
     () => readDraft(questionId, userId) ?? initialAnswer ?? ''
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Set only immediately after a successful save this visit — never
+  // restored from a page load, so a member who saved earlier and comes
+  // back later just sees their answer, not a stale "Answer saved."
+  const [confirmation, setConfirmation] = useState<string | null>(null)
 
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
   const aboveMax = charCount > MAX_CHARS
   const canPublish = hasContent && !aboveMax && !saving
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
+  // Editing/choosing a Question: the prompt is the writing instruction,
+  // reasonably prominent since there's no answer yet to compete with.
+  // Viewing a published answer: the answer is the content now, so the
+  // Question steps back to a subordinate, contextual size.
+  const hasPublishedView = mode === 'view' && Boolean(publishedBody)
+  const promptClass = hasPublishedView ? contextQuestionClass : proseSubheadingClass
 
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const next = e.target.value
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  function updateBody(next: string) {
     setBody(next)
     try {
       window.localStorage.setItem(draftKey(questionId, userId), next)
     } catch {
       // ignore storage failures (e.g. private browsing quota)
     }
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    updateBody(e.target.value)
+  }
+
+  // Intentionally plain-textarea insertion, not a Tiptap command — the
+  // Question editor stays plain text (see this component's own
+  // rationale in docs/tempa-build-guide.md's writing-essentials
+  // section); emoji are still Unicode characters either way, so a
+  // manual selectionStart/selectionEnd splice is all "insert at the
+  // cursor" needs here. Cursor restoration happens after React commits
+  // the new value, since the DOM textarea's own selection would
+  // otherwise reset to the end on re-render.
+  function insertEmoji(emoji: string) {
+    const el = textareaRef.current
+    const start = el?.selectionStart ?? body.length
+    const end = el?.selectionEnd ?? body.length
+    const { value: next, cursor } = insertAtCursor(body, start, end, emoji)
+    updateBody(next)
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(cursor, cursor)
+    })
   }
 
   async function handlePublish() {
@@ -82,53 +145,32 @@ export default function QuestionAnswer({
 
     const supabase = createClient()
     const trimmed = body.trim()
+    const wasCurrent = isCurrent
 
-    // A member has exactly one current discovery answer at a time. Demote
-    // any other row of theirs before promoting this one, so the partial
-    // unique index on question_answers(user_id) where is_current never
-    // sees two rows marked current at once.
-    const { error: demoteError } = await supabase
-      .from('question_answers')
-      .update({ is_current: false })
-      .eq('user_id', userId)
-      .neq('question_id', questionId)
-
-    if (demoteError) {
-      setSaving(false)
-      console.error('[question] demote previous answer failed', {
-        message: demoteError.message,
-        code: demoteError.code,
-      })
-      setError('Could not save your answer. Please try again.')
-      return
-    }
-
-    const { error: saveError } = await supabase
-      .from('question_answers')
-      .upsert(
-        {
-          user_id: userId,
-          question_id: questionId,
-          body: trimmed,
-          is_current: true,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,question_id' }
-      )
+    // Demoting the previous current answer and promoting this one must be
+    // atomic: either both happen or neither does. That's enforced inside a
+    // single database function (one round trip, one transaction), not by
+    // sequencing two separate client calls. This saves a Question
+    // answer into the member's OWN question_answers collection — never
+    // a letter, never a recipient, never Mail Call/Letterbox activity.
+    const { data: savedAnswer, error: publishError } = await supabase.rpc('publish_question_answer', {
+      p_question_id: questionId,
+      p_body: trimmed,
+    })
 
     setSaving(false)
 
-    if (saveError) {
-      console.error('[question] save failed', {
-        message: saveError.message,
-        details: saveError.details,
-        hint: saveError.hint,
-        code: saveError.code,
+    if (publishError) {
+      console.error('[question] publish failed', {
+        message: publishError.message,
+        details: publishError.details,
+        hint: publishError.hint,
+        code: publishError.code,
       })
       setError(
         'Could not save your answer. Please try again.' +
           (process.env.NODE_ENV === 'development'
-            ? ` (${saveError.message})`
+            ? ` (${publishError.message})`
             : '')
       )
       return
@@ -139,6 +181,10 @@ export default function QuestionAnswer({
     } catch {
       // ignore
     }
+
+    const nowCurrent = savedAnswer?.is_current ?? wasCurrent
+    setIsCurrent(nowCurrent)
+    setConfirmation(questionSaveConfirmationCopy(wasCurrent, nowCurrent))
 
     setPublishedBody(trimmed)
     setBody(trimmed)
@@ -151,31 +197,47 @@ export default function QuestionAnswer({
       <div className="w-full max-w-2xl space-y-8 py-10">
         <div className="space-y-3">
           <p className={sectionLabelClass}>The Question</p>
-          <h1 className="text-xl font-semibold leading-snug">{prompt}</h1>
+          <h1 className={promptClass}>{prompt}</h1>
         </div>
 
         {mode === 'view' && publishedBody ? (
           <div className="space-y-8">
             <div className="space-y-4">
+              {confirmation && <p className={helperTextClass}>{confirmation}</p>}
               <p className={helperTextClass}>
                 {isActive ? 'Published' : 'This Question is no longer open'}
               </p>
-              <p className="whitespace-pre-wrap text-base leading-relaxed">
-                {publishedBody}
-              </p>
+              <div className="rounded-md bg-surface-shell p-4 sm:p-5">
+                <p className={`whitespace-pre-wrap ${proseBodyClass}`}>
+                  {publishedBody}
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/question" className={secondaryButtonClass}>
-                Back to Questions
+              <Link href="/minds?view=answers" className={secondaryButtonClass}>
+                Back to my answers
               </Link>
-              {isActive && (
-                <button
-                  type="button"
-                  onClick={() => setMode('edit')}
-                  className={secondaryButtonClass}
-                >
-                  Edit answer
-                </button>
+              {/* Editable regardless of isActive: "no longer open" governs
+                  whether a NEW answer can be started, not whether a
+                  member may keep editing their own already-published
+                  writing — old answers remain permanently editable. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmation(null)
+                  setMode('edit')
+                }}
+                className={secondaryButtonClass}
+              >
+                Edit answer
+              </button>
+              {/* Only reachable once there's a saved answer on screen —
+                  never during active editing, so Next can never discard
+                  unsaved text. */}
+              {nextQuestion && (
+                <Link href={`/question/${nextQuestion.id}`} className={primaryButtonClass}>
+                  Next
+                </Link>
               )}
             </div>
           </div>
@@ -184,18 +246,22 @@ export default function QuestionAnswer({
             <p className={helperTextClass}>
               This Question is no longer open, and you haven&apos;t answered it.
             </p>
-            <Link href="/question" className={secondaryButtonClass}>
-              Back to Questions
+            <Link href="/minds?view=answers" className={secondaryButtonClass}>
+              Back to my answers
             </Link>
           </div>
         ) : (
           <div className="space-y-4">
+            <div className="flex items-center gap-1 border-b border-foreground/10 pb-2">
+              <EmojiPicker onSelect={insertEmoji} />
+            </div>
             <textarea
+              ref={textareaRef}
               value={body}
               onChange={handleChange}
               rows={16}
               placeholder="Begin writing…"
-              className="w-full resize-y rounded-md border border-black/10 dark:border-white/20 bg-transparent px-4 py-3 text-base leading-relaxed outline-none focus:border-black/30 dark:focus:border-white/40"
+              className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent"
             />
 
             {showCharCount && (
@@ -203,15 +269,11 @@ export default function QuestionAnswer({
                 {charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}
               </p>
             )}
-            {error && (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {error}
-              </p>
-            )}
+            {error && <p className="text-sm text-red-600">{error}</p>}
 
             <div className="flex flex-wrap gap-3">
-              <Link href="/question" className={secondaryButtonClass}>
-                Back to Questions
+              <Link href="/minds?view=answers" className={secondaryButtonClass}>
+                Back to my answers
               </Link>
               <button
                 type="button"
@@ -219,7 +281,7 @@ export default function QuestionAnswer({
                 disabled={!canPublish}
                 className={primaryButtonClass}
               >
-                {saving ? 'Saving…' : 'Publish answer'}
+                {saving ? 'Saving…' : 'Save answer'}
               </button>
             </div>
           </div>

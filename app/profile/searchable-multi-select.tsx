@@ -107,14 +107,14 @@ export default function SearchableMultiSelect({
         {values.map((v) => (
           <span
             key={v}
-            className="inline-flex items-center gap-1 rounded-full border border-black/10 dark:border-white/20 bg-black/[.03] dark:bg-white/[.06] px-2.5 py-1 text-sm"
+            className="inline-flex items-center gap-1 rounded-full border border-foreground/15 bg-foreground/[.03] px-2.5 py-1 text-sm"
           >
             {v}
             <button
               type="button"
               onClick={() => removeValue(v)}
               aria-label={`Remove ${v}`}
-              className="text-black/40 hover:text-black/70 dark:text-white/40 dark:hover:text-white/70"
+              className="text-muted transition-colors hover:text-foreground"
             >
               ×
             </button>
@@ -146,12 +146,10 @@ export default function SearchableMultiSelect({
         <ul
           id={`${id}-listbox`}
           role="listbox"
-          className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-black/10 dark:border-white/20 bg-background shadow-lg"
+          className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none"
         >
           {filtered.length === 0 && !showCustomOption && (
-            <li className="px-3 py-2 text-sm text-black/50 dark:text-white/50">
-              No matches
-            </li>
+            <li className="px-3 py-2 text-sm text-muted">No matches</li>
           )}
           {filtered.map((option, index) => (
             <li key={option.value} role="option" aria-selected={false}>
@@ -159,10 +157,8 @@ export default function SearchableMultiSelect({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => addValue(option.value)}
-                className={`w-full text-left px-3 py-2 text-sm ${
-                  index === highlighted
-                    ? 'bg-black/[.06] dark:bg-white/[.1]'
-                    : 'hover:bg-black/[.04] dark:hover:bg-white/[.08]'
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'
                 }`}
               >
                 {option.label}
@@ -175,10 +171,8 @@ export default function SearchableMultiSelect({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => addValue(trimmedQuery)}
-                className={`w-full text-left px-3 py-2 text-sm ${
-                  filtered.length === highlighted
-                    ? 'bg-black/[.06] dark:bg-white/[.1]'
-                    : 'hover:bg-black/[.04] dark:hover:bg-white/[.08]'
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  filtered.length === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'
                 }`}
               >
                 Add &ldquo;{trimmedQuery}&rdquo;

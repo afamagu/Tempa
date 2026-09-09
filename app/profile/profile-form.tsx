@@ -11,6 +11,7 @@ import {
   LANGUAGE_OPTIONS,
   RECEIVING_OPTIONS,
   WRITING_STYLE_OPTIONS,
+  findCountryIsoCode,
   getRegionOptions,
 } from './data'
 import ChoiceGroup from './choice-group'
@@ -66,6 +67,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
   const regionOptions = useMemo(() => getRegionOptions(country), [country])
   const hasStructuredRegions = regionOptions.length > 0
+  // Always derived fresh from `country`, never stored as its own piece
+  // of state — the only way this can ever go stale relative to
+  // `country` is if this derivation itself is wrong, not from an
+  // update happening to one but not the other.
+  const countryCode = useMemo(() => findCountryIsoCode(country), [country])
 
   function handleCountryChange(value: string) {
     setCountry(value)
@@ -191,6 +197,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
       id: userId,
       pseudonym: value,
       country,
+      country_code: countryCode,
       region: region.trim() || null,
       age_range: ageRange,
       languages,
@@ -239,11 +246,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md space-y-8 py-10">
         <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-black/40 dark:text-white/40">
+          <p className="font-serif text-xs italic tracking-[0.2em] text-muted">
             Tempa
           </p>
-          <h1 className="text-2xl font-semibold">Choose your name</h1>
-          <p className="text-sm text-black/60 dark:text-white/60">
+          <h1 className="font-serif text-2xl font-medium">Choose your name</h1>
+          <p className="text-sm text-muted">
             This is the name other minds will know you by.
           </p>
         </div>
@@ -269,7 +276,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
               </p>
 
               {pseudonymStatus === 'invalid' && formError === null && (
-                <p className="text-xs text-red-600 dark:text-red-400">
+                <p className="text-xs text-red-600">
                   {validatePseudonym(pseudonym).message}
                 </p>
               )}
@@ -277,13 +284,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 <p className={helperTextClass}>Checking availability…</p>
               )}
               {pseudonymStatus === 'available' && (
-                <p className="text-xs text-green-600 dark:text-green-400">
-                  Available
-                </p>
+                <p className="text-xs text-accent">Available</p>
               )}
               {pseudonymStatus === 'taken' && (
                 <div className="space-y-2">
-                  <p className="text-sm text-red-600 dark:text-red-400">
+                  <p className="text-sm text-red-600">
                     That name is taken.
                   </p>
                   {suggestions.length > 0 && (
@@ -293,7 +298,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
                           key={s}
                           type="button"
                           onClick={() => applySuggestion(s)}
-                          className="rounded-full border border-black/10 dark:border-white/20 px-3 py-1.5 text-sm hover:bg-black/[.04] dark:hover:bg-white/[.08]"
+                          className="rounded-full border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
                         >
                           {s}
                         </button>
@@ -320,7 +325,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
             <div className="space-y-1.5">
               <label htmlFor="region" className={fieldLabelClass}>
                 Region{' '}
-                <span className="text-black/40 dark:text-white/40">
+                <span className="text-muted">
                   (optional)
                 </span>
               </label>
@@ -376,7 +381,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
             <div className="space-y-1.5">
               <p className={fieldLabelClass}>
                 Gender{' '}
-                <span className="text-black/40 dark:text-white/40">
+                <span className="text-muted">
                   (optional)
                 </span>
               </p>
@@ -454,9 +459,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
           </section>
 
           {formError && (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {formError}
-            </p>
+            <p className="text-sm text-red-600">{formError}</p>
           )}
 
           <button
@@ -466,7 +469,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
               pseudonymStatus === 'checking' ||
               pseudonymStatus === 'taken'
             }
-            className="w-full rounded-md bg-foreground text-background px-4 py-3 text-base font-medium disabled:opacity-50"
+            className="w-full rounded-md bg-accent text-accent-foreground px-4 py-3 text-base font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
             {submitting ? 'Saving…' : 'Continue'}
           </button>

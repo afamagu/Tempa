@@ -1,0 +1,22 @@
+-- Tempa — Write Anytime, part 3: retire the exclusive-reply constraint.
+-- PREPARED 2026-09-03. NOT EXECUTED — review, then run in the Supabase
+-- SQL editor, AFTER 2026-09-03-correspondence-established-at.sql and
+-- 2026-09-03-reply-to-letter-established-at.sql, and BEFORE
+-- 2026-09-03-write-letter-rpc.sql.
+--
+-- letters_one_reply_per_original (2026-08-30-letters.sql) is a unique
+-- index on reply_to_id where not null — at most one letter could ever
+-- point at a given parent. That was correct for the old strict
+-- alternating-chain model; it directly blocks Write Anytime's "multiple
+-- discrete letters may legitimately reference the same earlier letter
+-- as context." reply_to_id remains a plain nullable FK
+-- (letters.reply_to_id references letters(id) on delete set null) —
+-- only the uniqueness is removed. It is now contextual ancestry, never
+-- a turn-taking lock.
+--
+-- Nothing else about reply_to_id changes: the immutability trigger
+-- still freezes it after creation, and write_letter (this checkpoint's
+-- new RPC) still validates that a supplied reply_to_id belongs to the
+-- same correspondence.
+
+drop index if exists public.letters_one_reply_per_original;
