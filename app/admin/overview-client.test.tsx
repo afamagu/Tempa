@@ -139,7 +139,7 @@ describe('AdminOverview — rendering', () => {
       />
     )
     expect(html).toContain('2 open reports')
-    expect(html).toContain('/admin/reports')
+    expect(html).toContain('/admin/moderation/reports')
   })
 })
 

@@ -20,6 +20,9 @@ export type SimAnswer = {
   isCanonical: boolean
   body: string
   isCurrent: boolean
+  // Independent review item 5 — defaults to 'visible' when omitted, so
+  // every pre-existing call site is unaffected.
+  moderationStatus?: 'visible' | 'hidden'
 }
 
 let nextId = 0
@@ -30,13 +33,30 @@ function freshId(): string {
 
 /** Mirrors publish_question_answer: promotes to current only when the
  * Question is canonical AND the member has no current answer yet;
- * otherwise leaves every is_current flag exactly as it was. */
+ * otherwise leaves every is_current flag exactly as it was.
+ *
+ * Independent review items 5 and 8: `question.isActive` (default true)
+ * mirrors the new server-side rejection of ANY write — insert or edit —
+ * against an inactive Question; a hidden existing row for this
+ * (userId, questionId) pair mirrors the new rejection of edits to
+ * frozen/moderated content. Both throw rather than silently no-op,
+ * matching the RPC's own RAISE EXCEPTION contract. */
 export function simulatePublishQuestionAnswer(
   answers: SimAnswer[],
   userId: string,
-  question: { id: string; isCanonical: boolean },
+  question: { id: string; isCanonical: boolean; isActive?: boolean },
   body: string
 ): SimAnswer[] {
+  const isActive = question.isActive ?? true
+  if (!isActive) {
+    throw new Error('This Question is no longer accepting answers.')
+  }
+
+  const existing = answers.find((a) => a.userId === userId && a.questionId === question.id)
+  if (existing && (existing.moderationStatus ?? 'visible') === 'hidden') {
+    throw new Error('This answer has been hidden and cannot be edited.')
+  }
+
   const hasCurrent = answers.some((a) => a.userId === userId && a.isCurrent)
   const shouldPromote = question.isCanonical && !hasCurrent
 
@@ -70,7 +90,12 @@ export function simulatePublishQuestionAnswer(
 
 /** Mirrors set_current_answer: rejects a non-canonical target
  * (matching the RPC's existence-check guard), otherwise demotes every
- * other answer of this member and promotes the chosen one. */
+ * other answer of this member and promotes the chosen one.
+ *
+ * Independent review item 5: the existence check now also requires
+ * moderation_status = 'visible' — reuses the SAME error message as the
+ * non-canonical rejection, exactly like the real RPC folds both into
+ * one `exists (...)` check. */
 export function simulateSetCurrentAnswer(
   answers: SimAnswer[],
   userId: string,
@@ -80,7 +105,7 @@ export function simulateSetCurrentAnswer(
   if (!target) {
     throw new Error('Answer not found, or not yours.')
   }
-  if (!target.isCanonical) {
+  if (!target.isCanonical || (target.moderationStatus ?? 'visible') === 'hidden') {
     throw new Error(
       'Only a completed answer to one of the three canonical Questions can be shown in Minds.'
     )

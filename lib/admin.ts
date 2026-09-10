@@ -30,6 +30,12 @@ export type ReportDetail = ReportQueueRow & {
   context: string | null
   evidenceSnapshot: Record<string, unknown>
   reportedCurrentStatus: AccountStatus
+  /** Admin Phase 2A-1 — the reported content's own moderation state,
+   * for the two content types this phase adds it to (dispatch,
+   * question_answer); null for every other target_type. Resolved
+   * server-side (admin_get_report) since an already-hidden row is
+   * invisible to a non-author under ordinary RLS, staff included. */
+  targetModerationStatus: 'visible' | 'hidden' | null
 }
 
 export type MemberSearchResult = {
@@ -135,6 +141,7 @@ export async function getReport(
         reported_user_id: string
         reported_pseudonym: string
         reported_current_status: AccountStatus
+        target_moderation_status: 'visible' | 'hidden' | null
       }
     | undefined
   if (!row) return { data: null, error: null }
@@ -153,6 +160,7 @@ export async function getReport(
       reportedUserId: row.reported_user_id,
       reportedPseudonym: row.reported_pseudonym,
       reportedCurrentStatus: row.reported_current_status,
+      targetModerationStatus: row.target_moderation_status,
     },
     error: null,
   }

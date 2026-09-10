@@ -193,6 +193,22 @@ describe('publishDispatch', () => {
     expect(data?.authorId).toBe(AUTHOR_A)
   })
 
+  it('independent review item 5 (final audit round): a freshly published Dispatch always lands moderation_status = visible — a raw insert cannot forge a hidden/moderated state, mirrored by dispatches_insert_own\'s tightened WITH CHECK', async () => {
+    const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'Freshly published',
+      body: 'x',
+      topics: [],
+    })
+    expect(error).toBeNull()
+    expect(data?.moderationStatus).toBe('visible')
+
+    // And it's immediately visible on the Board — proving the row
+    // wasn't accidentally created in a filtered-out state.
+    const board = await getPublishedDispatches(client(fake))
+    expect(board.map((d) => d.id)).toContain(data!.id)
+  })
+
   // Checkpoint 1C, test category F — the live-tested
   // dispatches_published_at_required regression: a successful publish
   // must always carry a non-null publishedAt, and title+body+topics+
@@ -723,6 +739,34 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
     const reloaded = await getDispatchById(client(fake), 'd-1')
     expect(reloaded?.topics).toEqual(['a', 'b', 'c'])
   })
+
+  it('independent review item 4: a HIDDEN Dispatch cannot be edited by its own still-active author', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Frozen while hidden', moderation_status: 'hidden' })],
+    })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', {
+      title: 'Sneaky rewrite',
+      body: 'x',
+      topics: [],
+    })
+    expect(data).toBeNull()
+    expect(error?.message).toContain('author')
+    // The title must remain exactly as it was — evidence not mutated.
+    fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
+    const reread = await getDispatchById(client(fake), 'd-1')
+    expect(reread?.title).toBe('Frozen while hidden')
+  })
+
+  it('restoring a Dispatch makes it editable by its author again', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old', moderation_status: 'hidden' })],
+    })
+    fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'New', body: 'x', topics: [] })
+    expect(error).toBeNull()
+  })
 })
 
 describe('Board usability checkpoint — deleteDispatch', () => {
@@ -755,6 +799,26 @@ describe('Board usability checkpoint — deleteDispatch', () => {
     const share = await shareDispatch(client(fake), 'd-1')
     await deleteDispatch(client(fake), 'd-1')
     expect(await getSharedDispatch(client(fake), share.data!.id)).toBeNull()
+  })
+
+  it('independent review item 4: a HIDDEN Dispatch cannot be deleted by its own still-active author — moderated evidence is preserved', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, moderation_status: 'hidden' })],
+    })
+    const { error } = await deleteDispatch(client(fake), 'd-1')
+    expect(error?.message).toContain('author')
+    expect(fake._rows.find((r) => r.id === 'd-1')).toBeDefined()
+  })
+
+  it('restoring a Dispatch makes it deletable by its author again', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, moderation_status: 'hidden' })],
+    })
+    fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
+    const { error } = await deleteDispatch(client(fake), 'd-1')
+    expect(error).toBeNull()
   })
 })
 
@@ -1037,5 +1101,104 @@ describe('Checkpoint 1C — a letters-only block leaves public Dispatch visibili
     await blockUser(client(fake), AUTHOR_A, 'letters')
     const { error } = await unblockUser(client(fake), AUTHOR_A)
     expect(error).toBeNull()
+  })
+})
+
+describe('Admin Phase 2A-1 — hidden Dispatch is invisible everywhere except the author\'s own direct view', () => {
+  it('the Board pool (getPublishedDispatches) excludes a hidden Dispatch, even the viewer\'s own', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [
+        row({ id: 'visible-1', author_id: AUTHOR_A, moderation_status: 'visible' }),
+        row({ id: 'hidden-1', author_id: AUTHOR_A, moderation_status: 'hidden' }),
+      ],
+    })
+    const result = await getPublishedDispatches(client(fake))
+    expect(result.map((r) => r.id)).toEqual(['visible-1'])
+  })
+
+  it('Home (getHomeBoardDispatches) excludes a hidden Dispatch from its pool', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [
+        row({ id: 'visible-1', author_id: AUTHOR_A, moderation_status: 'visible' }),
+        row({ id: 'hidden-1', author_id: AUTHOR_B, moderation_status: 'hidden' }),
+      ],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'A' }, { id: AUTHOR_B, pseudonym: 'B' }],
+    })
+    const home = await getHomeBoardDispatches(client(fake), VIEWER)
+    expect(home.map((r) => r.id)).toEqual(['visible-1'])
+  })
+
+  it('a profile\'s Dispatch list (getPublishedDispatchesByAuthor) excludes a hidden Dispatch, even for the profile owner themself', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [
+        row({ id: 'visible-1', author_id: AUTHOR_A, moderation_status: 'visible' }),
+        row({ id: 'hidden-1', author_id: AUTHOR_A, moderation_status: 'hidden' }),
+      ],
+    })
+    const result = await getPublishedDispatchesByAuthor(client(fake), AUTHOR_A)
+    expect(result.map((r) => r.id)).toEqual(['visible-1'])
+  })
+
+  it('search excludes a hidden Dispatch even when its title/body matches the query', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [row({ id: 'hidden-1', author_id: AUTHOR_A, title: 'Unmistakable Ritual', moderation_status: 'hidden' })],
+    })
+    const result = await searchDispatches(client(fake), 'Unmistakable')
+    expect(result).toHaveLength(0)
+  })
+
+  it('the direct reader (getDispatchById) still resolves a hidden Dispatch — the author\'s own appropriate direct view', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'hidden-1', author_id: AUTHOR_A, moderation_status: 'hidden' })],
+    })
+    const result = await getDispatchById(client(fake), 'hidden-1')
+    expect(result?.moderationStatus).toBe('hidden')
+  })
+
+  it('the external share reader (getSharedDispatch) stops resolving the instant a Dispatch is hidden, and works again once restored', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, moderation_status: 'visible' })],
+    })
+    const { data: share } = await shareDispatch(client(fake), 'd-1')
+    const shareToken = share?.id
+    expect(shareToken).toBeTruthy()
+
+    const beforeHide = await getSharedDispatch(client(fake), shareToken as string)
+    expect(beforeHide).not.toBeNull()
+
+    fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'hidden'
+    const afterHide = await getSharedDispatch(client(fake), shareToken as string)
+    expect(afterHide).toBeNull()
+
+    fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
+    const afterRestore = await getSharedDispatch(client(fake), shareToken as string)
+    expect(afterRestore).not.toBeNull()
+  })
+
+  it('restoring a Dispatch makes it public again on the Board where it was previously excluded', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, moderation_status: 'hidden' })],
+    })
+    expect(await getPublishedDispatches(client(fake))).toHaveLength(0)
+
+    fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
+    const board = await getPublishedDispatches(client(fake))
+    expect(board.map((r) => r.id)).toEqual(['d-1'])
+  })
+
+  it('another member cannot directly access a hidden Dispatch — only the author\'s own view resolves it', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, moderation_status: 'hidden' })],
+    })
+    const result = await getDispatchById(client(fake), 'd-1')
+    expect(result).toBeNull()
   })
 })

@@ -65,13 +65,55 @@ export function pickCanonicalQuestions(
 }
 
 /**
- * The three canonical Questions, in fixed display order. Degrades to
- * an empty array (rather than throwing) if `questions.slug` hasn't
- * been added yet or the three rows haven't been seeded — every caller
- * below treats an empty result as "canonical Questions aren't live in
- * this database yet," never as "this member has no Questions."
+ * The canonical Questions currently OFFERED to members, in fixed
+ * display order — up to three, but genuinely fewer whenever an admin
+ * has deactivated one (Admin Phase 2A-1). `is_active` was previously
+ * ignored here entirely (a known, now-fixed inconsistency: deactivating
+ * a canonical Question already stopped its existing answers from being
+ * publicly visible, via question_answers' own RLS, but never actually
+ * stopped it from still being offered to write a NEW answer against).
+ * Every caller of this function already treats its return value's
+ * actual length as authoritative rather than assuming exactly three —
+ * confirmed by inspection before this change shipped: needsParticipationGate
+ * and nextUnansweredCanonicalQuestion both degrade correctly for 2, 1,
+ * or 0 results, and QuestionWorkspace/MindsPage render purely by
+ * iterating whatever array they're given. Degrades to an empty array
+ * (rather than throwing) if `questions.slug` hasn't been added yet or
+ * the three rows haven't been seeded — every caller treats an empty
+ * result as "canonical Questions aren't live in this database yet,"
+ * never as "this member has no Questions."
  */
 export async function getCanonicalQuestions(
+  supabase: SupabaseClient
+): Promise<CanonicalQuestion[]> {
+  const { data, error } = await supabase
+    .from('questions')
+    .select('id, slug, prompt')
+    .in('slug', CANONICAL_QUESTION_SLUGS as unknown as string[])
+    .eq('is_active', true)
+
+  if (error || !data) return []
+  return pickCanonicalQuestions(data)
+}
+
+/**
+ * ALL three canonical Question rows, active or not — deliberately the
+ * ONE place `is_active` is never consulted. Used only to resolve
+ * id/prompt for getCanonicalAnswers below, which must keep surfacing a
+ * member's own historical answer to a since-deactivated canonical
+ * Question wherever the product has an own-history/profile view (the
+ * public profile page, Minds' own "My answers" tab) — never to decide
+ * what's offered to answer fresh, which stays getCanonicalQuestions'
+ * job alone. Whether an individual ANSWER row actually comes back for
+ * a given caller is entirely down to question_answers' own RLS: its
+ * self-select policy (untouched by Admin Phase 2A-1) already grants a
+ * member their own row regardless of is_active/moderation_status, while
+ * the cross-user policy still requires both — so fetching against this
+ * wider, unfiltered id set is what lets RLS itself draw the
+ * self-vs-other distinction correctly, without this function needing
+ * to know who's asking.
+ */
+export async function getAllCanonicalQuestions(
   supabase: SupabaseClient
 ): Promise<CanonicalQuestion[]> {
   const { data, error } = await supabase
@@ -93,6 +135,12 @@ export type CanonicalAnswer = {
   body: string
   updatedAt: string
   isCurrent: boolean
+  /** Admin Phase 2A-1 — 'hidden' only ever reaches the CALLER when the
+   * caller is this answer's own author (question_answers' self-select
+   * RLS policy; every other viewer's row is excluded entirely before
+   * this ever runs). The owner's own profile view renders "Hidden by
+   * TEMPA" for it instead of the normal answer card. */
+  moderationStatus: 'visible' | 'hidden'
 }
 
 /**
@@ -112,6 +160,7 @@ export function buildCanonicalAnswers(
     body: string
     updated_at: string
     is_current: boolean
+    moderation_status: 'visible' | 'hidden'
   }[]
 ): CanonicalAnswer[] {
   const byQuestionId = new Map(canonicalQuestions.map((q) => [q.id, q]))
@@ -127,6 +176,7 @@ export function buildCanonicalAnswers(
         body: row.body,
         updatedAt: row.updated_at,
         isCurrent: row.is_current,
+        moderationStatus: row.moderation_status,
       }
     })
 }
@@ -134,18 +184,24 @@ export function buildCanonicalAnswers(
 /**
  * This member's answers to the three canonical Questions only —
  * distinct from every historical answer they may also have, which
- * this deliberately never returns (see buildCanonicalAnswers).
+ * this deliberately never returns (see buildCanonicalAnswers). Resolves
+ * against getAllCanonicalQuestions (active or not — see that function's
+ * own doc comment for why), so this always returns a member's complete
+ * canonical answer history; a caller building the "what's still
+ * available to answer fresh" view must itself intersect the result
+ * against getCanonicalQuestions' active-only set (see
+ * app/minds/page.tsx's own "answer" vs "answers" tab handling).
  */
 export async function getCanonicalAnswers(
   supabase: SupabaseClient,
   userId: string
 ): Promise<CanonicalAnswer[]> {
-  const canonical = await getCanonicalQuestions(supabase)
+  const canonical = await getAllCanonicalQuestions(supabase)
   if (canonical.length === 0) return []
 
   const { data } = await supabase
     .from('question_answers')
-    .select('id, question_id, body, updated_at, is_current')
+    .select('id, question_id, body, updated_at, is_current, moderation_status')
     .eq('user_id', userId)
     .in(
       'question_id',

@@ -14,12 +14,25 @@ const PHOTO_SIGNED_URL_TTL_SECONDS = 60 * 10
  * lib/letter-editor-draft.ts's Dispatch draft scope for where drafting
  * actually lives).
  */
+export type ModerationStatus = 'visible' | 'hidden'
+
 export type Dispatch = {
   id: string
   authorId: string
   title: string
   body: string
   publishedAt: string
+  /** Admin Phase 2A-1 — 'hidden' means TEMPA moderation suppressed this
+   * Dispatch from every public/discovery surface. Every LISTING query
+   * below (Board, Home, a profile's Dispatch list, search) already
+   * filters this out entirely (never returned even to its own author —
+   * a feed/browse context is never the "appropriate own/direct view"
+   * hidden content is still reachable through); only a direct fetch by
+   * id (getDispatchById) can return a hidden row at all, and only ever
+   * to its own author (dispatches_select_published's RLS), so the
+   * single-Dispatch reader can render the calm "Hidden by TEMPA" state
+   * instead of the normal one. */
+  moderationStatus: ModerationStatus
 }
 
 export type DispatchMoment = {
@@ -59,6 +72,7 @@ type DispatchRow = {
   title: string
   body: string
   published_at: string
+  moderation_status: ModerationStatus
 }
 
 function toDispatch(row: DispatchRow): Dispatch {
@@ -68,6 +82,7 @@ function toDispatch(row: DispatchRow): Dispatch {
     title: row.title,
     body: row.body,
     publishedAt: row.published_at,
+    moderationStatus: row.moderation_status,
   }
 }
 
@@ -184,7 +199,7 @@ export function interleaveByAuthor<T extends { authorId: string }>(items: T[]): 
   return result
 }
 
-const LIST_COLUMNS = 'id, author_id, title, body, published_at'
+const LIST_COLUMNS = 'id, author_id, title, body, published_at, moderation_status'
 const BROWSE_LIMIT = 60
 
 async function attachTopicsAndAuthors(
@@ -220,17 +235,24 @@ async function attachTopicsAndAuthors(
 }
 
 /**
- * Every currently published Dispatch, newest first — the raw pool The
- * Board's viewer-aware ordering (sortBoardDispatches) is applied to.
- * RLS (dispatches_select_published) is the real enforcement of
- * "published only"; the explicit status filter here is defense in
- * depth, not the security boundary itself.
+ * Every currently published, currently visible Dispatch, newest first —
+ * the raw pool The Board's viewer-aware ordering (sortBoardDispatches)
+ * is applied to. RLS (dispatches_select_published) is the real
+ * enforcement of "published only"; the explicit status filter here is
+ * defense in depth, not the security boundary itself. The explicit
+ * `moderation_status = 'visible'` filter is NOT merely defense in depth
+ * though (Admin Phase 2A-1): RLS's own author-exception would otherwise
+ * let a member's OWN hidden Dispatch resurface in their OWN general
+ * Board browse, mixed in with everyone else's — a feed/browse context
+ * is never the "appropriate own/direct view" hidden content should
+ * stay reachable through (see getDispatchById for that instead).
  */
 export async function getPublishedDispatches(supabase: SupabaseClient): Promise<DispatchListItem[]> {
   const { data: rows } = await supabase
     .from('dispatches')
     .select(LIST_COLUMNS)
     .eq('status', 'published')
+    .eq('moderation_status', 'visible')
     .order('published_at', { ascending: false })
     .limit(BROWSE_LIMIT)
 
@@ -262,6 +284,7 @@ export async function getHomeBoardDispatches(
     .from('dispatches')
     .select(LIST_COLUMNS)
     .eq('status', 'published')
+    .eq('moderation_status', 'visible')
     .order('published_at', { ascending: false })
     .limit(HOME_POOL_LIMIT)
 
@@ -281,9 +304,11 @@ export async function getHomeBoardDispatches(
 }
 
 /**
- * One author's published Dispatches, newest first — the profile-
- * integration list (app/minds/[userId]/page.tsx). Same RLS/defense-in-
- * depth reasoning as getPublishedDispatches.
+ * One author's published, visible Dispatches, newest first — the
+ * profile-integration list (app/minds/[userId]/page.tsx). Same RLS/
+ * defense-in-depth reasoning as getPublishedDispatches, including the
+ * explicit moderation_status filter — a hidden Dispatch never appears
+ * in this list even when the profile's own owner is viewing it.
  */
 export async function getPublishedDispatchesByAuthor(
   supabase: SupabaseClient,
@@ -294,6 +319,7 @@ export async function getPublishedDispatchesByAuthor(
     .select(LIST_COLUMNS)
     .eq('author_id', authorId)
     .eq('status', 'published')
+    .eq('moderation_status', 'visible')
     .order('published_at', { ascending: false })
 
   return attachTopicsAndAuthors(supabase, (rows ?? []) as DispatchRow[])
@@ -315,9 +341,17 @@ export async function searchDispatches(
 
 /**
  * One Dispatch for the reader — returns null both when no row with this
- * id exists at all AND when RLS hides an unpublished one that isn't the
- * viewer's own (the two cases are indistinguishable from the client
- * side by design; the reader treats both as notFound()).
+ * id exists at all AND when RLS hides an unpublished/hidden one that
+ * isn't the viewer's own (the cases are indistinguishable from the
+ * client side by design; the reader treats them all as notFound()).
+ *
+ * Admin Phase 2A-1: deliberately the ONE Dispatch fetcher that does NOT
+ * filter out a hidden row — dispatches_select_published's RLS already
+ * only ever returns a hidden Dispatch to its own author (`or author_id
+ * = auth.uid()`), so this is exactly the "appropriate own/direct view"
+ * Decision 2 describes. The caller (app/board/[dispatchId]/page.tsx)
+ * checks `moderationStatus` itself and renders the calm "Hidden by
+ * TEMPA" state instead of the normal reading view for that one case.
  */
 export async function getDispatchById(
   supabase: SupabaseClient,
@@ -941,6 +975,14 @@ export async function unpinDispatch(supabase: SupabaseClient): Promise<{ error: 
  * (e.g. mid-transaction) — the public profile page simply omits the
  * section either way, never a broken "Pinned" heading with nothing
  * under it.
+ *
+ * Admin Phase 2A-1: also returns null for a HIDDEN pinned Dispatch,
+ * even when the profile's own owner is the one viewing it —
+ * getDispatchById's own RLS-driven author-exception would otherwise
+ * let it through here, but a "Pinned" card on a profile is a feed/
+ * browse-style surface (same reasoning as the Board/Home/profile-list
+ * filters above), never the "appropriate own/direct view" hidden
+ * content should stay reachable through.
  */
 export async function getPinnedDispatch(
   supabase: SupabaseClient,
@@ -955,5 +997,7 @@ export async function getPinnedDispatch(
   const pinnedId = (data as { pinned_dispatch_id: string | null } | null)?.pinned_dispatch_id
   if (!pinnedId) return null
 
-  return getDispatchById(supabase, pinnedId)
+  const dispatch = await getDispatchById(supabase, pinnedId)
+  if (!dispatch || dispatch.moderationStatus === 'hidden') return null
+  return dispatch
 }

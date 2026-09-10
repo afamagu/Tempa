@@ -179,9 +179,29 @@ export default async function PublicProfilePage({
 
           {answers.length > 0 && (
             <div className="space-y-6">
-              {answers.map((a) => (
-                <ProfileAnswer key={a.id} prompt={a.prompt} body={a.body} isCurrent={a.isCurrent} />
-              ))}
+              {/* A 'hidden' answer only ever reaches this array for the
+                  answer's own author — question_answers' cross-user RLS
+                  policy already excludes it entirely for anyone else
+                  (Admin Phase 2A-1). This is exactly the "appropriate
+                  own-context" Decision 2/9 describes: a calm, private
+                  notice on the author's own profile view, never a
+                  public tombstone. */}
+              {answers.map((a) =>
+                a.moderationStatus === 'hidden' ? (
+                  <div key={a.id} className="rounded-md border border-foreground/10 p-4">
+                    <p className={metadataTextClass}>Hidden by TEMPA.</p>
+                  </div>
+                ) : (
+                  <ProfileAnswer
+                    key={a.id}
+                    id={a.id}
+                    prompt={a.prompt}
+                    body={a.body}
+                    isCurrent={a.isCurrent}
+                    showReport={!isSelf}
+                  />
+                )
+              )}
             </div>
           )}
 

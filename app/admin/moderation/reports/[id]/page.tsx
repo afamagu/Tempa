@@ -4,8 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { getReport } from '@/lib/admin'
 import { REPORT_REASONS } from '@/lib/reports'
 import { formatDateTimeFull } from '@/lib/format-date'
-import { sectionTitleClass, sectionLabelClass, helperTextClass, proseBodyClass } from '@/app/profile/ui'
+import {
+  sectionTitleClass,
+  sectionLabelClass,
+  helperTextClass,
+  proseBodyClass,
+  contextQuestionClass,
+} from '@/app/profile/ui'
 import MarkReviewedButton from '@/app/admin/mark-reviewed-button'
+import ContentModerationActions from '@/app/admin/content-moderation-actions'
 
 const REASON_LABELS = Object.fromEntries(REPORT_REASONS.map((r) => [r.value, r.label]))
 
@@ -14,9 +21,19 @@ const REASON_LABELS = Object.fromEntries(REPORT_REASONS.map((r) => [r.value, r.l
  * Moment that came from one), this shows ONLY the report-time evidence
  * snapshot the reporter's own report carried with it, never the
  * reported member's other letters or their mailbox generally. A
- * Dispatch/profile/published-photo report shows the same content any
- * member could already see, since those were never private to begin
- * with.
+ * Dispatch/profile/published-answer/published-photo report shows the
+ * same content any member could already see, since those were never
+ * private to begin with.
+ *
+ * Admin Command Center Phase 2A-1 — moved here from app/admin/reports/
+ * [id]/page.tsx as Reports became a child of Moderation (see
+ * app/admin/moderation/layout.tsx). Two additions: a `question_answer`
+ * evidence branch (prompt + body + author pseudonym snapshot, frozen at
+ * report time — never the live row, which may have since changed), and
+ * Hide/Restore content-moderation actions for the two target types that
+ * now carry moderation state (dispatch, question_answer). Every other
+ * target type (profile, letter, photo_moment) is completely unchanged —
+ * account enforcement remains the only moderation lever for those.
  */
 export default async function AdminReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -39,7 +56,10 @@ export default async function AdminReportDetailPage({ params }: { params: Promis
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/admin/reports" className="text-[14px] text-foreground/70 transition-colors hover:text-foreground">
+        <Link
+          href="/admin/moderation/reports"
+          className="text-[14px] text-foreground/70 transition-colors hover:text-foreground"
+        >
           ← Report queue
         </Link>
       </div>
@@ -90,6 +110,11 @@ export default async function AdminReportDetailPage({ params }: { params: Promis
               <div>Pseudonym: {String(evidence.pseudonym ?? '—')}</div>
               <div>Country: {String(evidence.country ?? '—')}</div>
             </dl>
+          ) : report.targetType === 'question_answer' ? (
+            <>
+              <p className={contextQuestionClass}>{String(evidence.prompt ?? '')}</p>
+              <p className={`mt-2 whitespace-pre-wrap ${proseBodyClass}`}>{String(evidence.body ?? '')}</p>
+            </>
           ) : (
             <>
               {typeof evidence.title === 'string' && (
@@ -100,6 +125,18 @@ export default async function AdminReportDetailPage({ params }: { params: Promis
           )}
         </div>
       </div>
+
+      {(report.targetType === 'dispatch' || report.targetType === 'question_answer') &&
+        report.targetModerationStatus && (
+          <div className="space-y-2">
+            <p className={sectionLabelClass}>Content moderation</p>
+            <ContentModerationActions
+              contentType={report.targetType}
+              contentId={report.targetId}
+              currentStatus={report.targetModerationStatus}
+            />
+          </div>
+        )}
 
       <div className="flex items-center gap-3">
         <MarkReviewedButton reportId={report.id} alreadyReviewed={report.status === 'reviewed'} />

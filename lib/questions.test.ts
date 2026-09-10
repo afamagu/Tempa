@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   pickCanonicalQuestions,
   buildCanonicalAnswers,
@@ -6,6 +7,8 @@ import {
   needsParticipationGate,
   questionSaveConfirmationCopy,
   nextUnansweredCanonicalQuestion,
+  getCanonicalQuestions,
+  getAllCanonicalQuestions,
   CANONICAL_QUESTION_SLUGS,
   QUESTION_ANSWER_MAX_CHARS,
   type CanonicalQuestion,
@@ -45,8 +48,8 @@ describe('pickCanonicalQuestions', () => {
 describe('buildCanonicalAnswers — old Question answers remain untouched', () => {
   it('excludes every historical (non-canonical) answer row entirely, never reading or altering it', () => {
     const rows = [
-      { id: 'a-1', question_id: PRIVATE_RITUAL.id, body: 'canonical body', updated_at: '2026-09-01', is_current: true },
-      { id: 'a-2', question_id: HISTORICAL.id, body: 'historical body — must never appear', updated_at: '2020-01-01', is_current: false },
+      { id: 'a-1', question_id: PRIVATE_RITUAL.id, body: 'canonical body', updated_at: '2026-09-01', is_current: true, moderation_status: 'visible' as const },
+      { id: 'a-2', question_id: HISTORICAL.id, body: 'historical body — must never appear', updated_at: '2020-01-01', is_current: false, moderation_status: 'visible' as const },
     ]
     const result = buildCanonicalAnswers(THREE_CANONICAL, rows)
 
@@ -61,6 +64,7 @@ describe('buildCanonicalAnswers — old Question answers remain untouched', () =
       body: 'historical body — must never appear',
       updated_at: '2020-01-01',
       is_current: false,
+      moderation_status: 'visible',
     })
   })
 })
@@ -68,7 +72,7 @@ describe('buildCanonicalAnswers — old Question answers remain untouched', () =
 describe('mergeCanonicalQuestionState — Answer a Question completed/uncompleted state', () => {
   it('always returns all three, pairing answered ones and leaving the rest null', () => {
     const answers = buildCanonicalAnswers(THREE_CANONICAL, [
-      { id: 'a-1', question_id: PLACE_OUTSIDERS.id, body: 'x', updated_at: 't', is_current: false },
+      { id: 'a-1', question_id: PLACE_OUTSIDERS.id, body: 'x', updated_at: 't', is_current: false, moderation_status: 'visible' },
     ])
     const result = mergeCanonicalQuestionState(THREE_CANONICAL, answers)
 
@@ -83,7 +87,7 @@ function stateFor(answeredSlugs: (typeof CANONICAL_QUESTION_SLUGS)[number][]): C
   return THREE_CANONICAL.map((q) => ({
     ...q,
     answer: answeredSlugs.includes(q.slug)
-      ? { id: `a-${q.slug}`, questionId: q.id, slug: q.slug, prompt: q.prompt, body: 'x', updatedAt: 't', isCurrent: false }
+      ? { id: `a-${q.slug}`, questionId: q.id, slug: q.slug, prompt: q.prompt, body: 'x', updatedAt: 't', isCurrent: false, moderationStatus: 'visible' }
       : null,
   }))
 }
@@ -237,6 +241,147 @@ describe('questionSaveConfirmationCopy', () => {
   })
 })
 
+// Admin Phase 2A-1 (Decision 3) — the getCanonicalQuestions query fix,
+// exercised end-to-end through a tiny fake `.from('questions')
+// .select().in().eq('is_active', true)` chain rather than through the
+// pure pickCanonicalQuestions helper alone, so this proves the actual
+// query filter is wired up, not just that the pure post-processing
+// degrades gracefully.
+function fakeQuestionsClient(rows: { id: string; slug: string | null; prompt: string; is_active: boolean }[]) {
+  function from() {
+    let filtered = rows
+    const builder = {
+      select() {
+        return builder
+      },
+      in(column: string, values: string[]) {
+        filtered = filtered.filter((r) => values.includes((r as Record<string, unknown>)[column] as string))
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        filtered = filtered.filter((r) => (r as Record<string, unknown>)[column] === value)
+        return Promise.resolve({ data: filtered, error: null })
+      },
+      then(resolve: (v: { data: typeof filtered; error: null }) => void) {
+        resolve({ data: filtered, error: null })
+      },
+    }
+    return builder
+  }
+  return { from } as unknown as SupabaseClient
+}
+
+const [SLUG_1, SLUG_2, SLUG_3] = CANONICAL_QUESTION_SLUGS
+
+describe('getCanonicalQuestions — offering query is canonical slug AND is_active = true (Decision 3)', () => {
+  it('all 3 active: all 3 are offered, in canonical order', async () => {
+    const client = fakeQuestionsClient([
+      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: true },
+      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: true },
+      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: true },
+    ])
+    const result = await getCanonicalQuestions(client)
+    expect(result.map((q) => q.slug)).toEqual([SLUG_1, SLUG_2, SLUG_3])
+  })
+
+  it('2 active, 1 deactivated: only the 2 active ones are offered — the deactivated slug is not offered to answer fresh', async () => {
+    const client = fakeQuestionsClient([
+      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: true },
+      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: false },
+      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: true },
+    ])
+    const result = await getCanonicalQuestions(client)
+    expect(result.map((q) => q.slug)).toEqual([SLUG_1, SLUG_3])
+  })
+
+  it('1 active, 2 deactivated: exactly 1 is offered — does not crash or pad back up to 3', async () => {
+    const client = fakeQuestionsClient([
+      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: false },
+      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: true },
+      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: false },
+    ])
+    const result = await getCanonicalQuestions(client)
+    expect(result.map((q) => q.slug)).toEqual([SLUG_2])
+  })
+
+  it('0 active: an empty array, not an error, not a crash — every real consumer already treats this as "nothing to offer"', async () => {
+    const client = fakeQuestionsClient([
+      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: false },
+      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: false },
+      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: false },
+    ])
+    const result = await getCanonicalQuestions(client)
+    expect(result).toEqual([])
+
+    // The two pure consumers this feeds must not throw or misbehave
+    // against zero canonical Questions.
+    expect(needsParticipationGate(result.length, 0)).toBe(false)
+    expect(() => mergeCanonicalQuestionState(result, [])).not.toThrow()
+    expect(mergeCanonicalQuestionState(result, [])).toEqual([])
+  })
+
+  it('getAllCanonicalQuestions ignores is_active entirely — used only to resolve id/prompt for own-history, never for what is offered fresh', async () => {
+    const client = fakeQuestionsClient([
+      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: false },
+      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: false },
+      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: false },
+    ])
+    const result = await getAllCanonicalQuestions(client)
+    expect(result.map((q) => q.slug)).toEqual([SLUG_1, SLUG_2, SLUG_3])
+  })
+})
+
+// Admin Phase 2A-1, Section 9 — Minds/Discovery's pool query
+// (app/minds/page.tsx: `.from('question_answers').select(...)
+// .eq('is_current', true).neq('user_id', viewer.id)`) deliberately adds
+// NO application-level moderation_status filter of its own — per the
+// migration's own documented reasoning (docs/sql/2026-09-10-admin-
+// moderation-and-questions.sql section 3), the cross-user RLS policy
+// alone is the authority here, since this query already excludes the
+// viewer's own rows before RLS ever runs, so there is no author-
+// exception leak to defend against the way Dispatches' Board/Home feeds
+// have. This models that RLS predicate directly (same convention as
+// fakeDispatches.ts's visibleRows) to prove end-to-end: with RLS
+// applied, a hidden answer never reaches the discovery pool, and
+// restoring it makes it reachable again.
+function discoveryPool(
+  rows: { id: string; user_id: string; question_id: string; body: string; moderation_status: 'visible' | 'hidden' }[],
+  activeQuestionIds: Set<string>,
+  viewerId: string
+) {
+  const rlsVisible = rows.filter(
+    (r) => activeQuestionIds.has(r.question_id) && r.moderation_status === 'visible'
+  )
+  return rlsVisible.filter((r) => r.user_id !== viewerId)
+}
+
+describe('Minds/Discovery pool — a hidden answer is absent, a restored one reappears (Section 9)', () => {
+  const VIEWER = 'viewer-1'
+  const OTHER = 'other-1'
+  const activeQuestions = new Set(['q1'])
+
+  it('a hidden answer from another member never appears in the discovery pool', () => {
+    const rows = [
+      { id: 'a-1', user_id: OTHER, question_id: 'q1', body: 'Visible answer', moderation_status: 'visible' as const },
+      { id: 'a-2', user_id: OTHER, question_id: 'q1', body: 'Hidden answer', moderation_status: 'hidden' as const },
+    ]
+    const pool = discoveryPool(rows, activeQuestions, VIEWER)
+    expect(pool.map((r) => r.id)).toEqual(['a-1'])
+  })
+
+  it('restoring the answer (moderation_status back to visible) makes it reachable in the pool again', () => {
+    const rows = [{ id: 'a-2', user_id: OTHER, question_id: 'q1', body: 'Restored answer', moderation_status: 'visible' as const }]
+    const pool = discoveryPool(rows, activeQuestions, VIEWER)
+    expect(pool.map((r) => r.id)).toEqual(['a-2'])
+  })
+
+  it('a hidden answer to an inactive Question is doubly excluded — neither condition alone lets it through', () => {
+    const rows = [{ id: 'a-3', user_id: OTHER, question_id: 'q-inactive', body: 'x', moderation_status: 'hidden' as const }]
+    const pool = discoveryPool(rows, activeQuestions, VIEWER)
+    expect(pool).toEqual([])
+  })
+})
+
 describe('set_current_answer simulation', () => {
   const USER = 'user-1'
   const seed: SimAnswer[] = [
@@ -253,5 +398,93 @@ describe('set_current_answer simulation', () => {
 
   it('rejects a historical/non-canonical answer', () => {
     expect(() => simulateSetCurrentAnswer(seed, USER, 'a-3')).toThrow(/canonical/)
+  })
+
+  it('independent review item 5: rejects a HIDDEN canonical answer, reusing the same error as the non-canonical case', () => {
+    const withHidden: SimAnswer[] = [
+      ...seed,
+      { id: 'a-4', userId: USER, questionId: ORDINARY_WORTH.id, isCanonical: true, body: 'd', isCurrent: false, moderationStatus: 'hidden' },
+    ]
+    expect(() => simulateSetCurrentAnswer(withHidden, USER, 'a-4')).toThrow(/canonical/)
+  })
+})
+
+describe('publish_question_answer simulation — independent review items 5 and 8', () => {
+  const USER = 'user-1'
+
+  it('rejects any write (fresh answer) against an INACTIVE Question', () => {
+    expect(() =>
+      simulatePublishQuestionAnswer([], USER, { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: false }, 'body')
+    ).toThrow('This Question is no longer accepting answers.')
+  })
+
+  it('rejects an EDIT of an existing answer once its Question is deactivated', () => {
+    const afterFirst = simulatePublishQuestionAnswer(
+      [],
+      USER,
+      { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
+      'v1'
+    )
+    expect(() =>
+      simulatePublishQuestionAnswer(
+        afterFirst,
+        USER,
+        { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: false },
+        'v2 — attempted edit while inactive'
+      )
+    ).toThrow('This Question is no longer accepting answers.')
+  })
+
+  it('an active Question accepts writes normally — the guard is scoped to inactive only', () => {
+    const result = simulatePublishQuestionAnswer(
+      [],
+      USER,
+      { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
+      'v1'
+    )
+    expect(result[0].body).toBe('v1')
+  })
+
+  it('rejects editing your own answer while it is HIDDEN by moderation', () => {
+    const hidden: SimAnswer[] = [
+      {
+        id: 'a-1',
+        userId: USER,
+        questionId: PRIVATE_RITUAL.id,
+        isCanonical: true,
+        body: 'original',
+        isCurrent: true,
+        moderationStatus: 'hidden',
+      },
+    ]
+    expect(() =>
+      simulatePublishQuestionAnswer(
+        hidden,
+        USER,
+        { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
+        'trying to sneak an edit through'
+      )
+    ).toThrow('This answer has been hidden and cannot be edited.')
+  })
+
+  it('a visible answer can still be edited normally — the guard is scoped to hidden only', () => {
+    const visible: SimAnswer[] = [
+      {
+        id: 'a-1',
+        userId: USER,
+        questionId: PRIVATE_RITUAL.id,
+        isCanonical: true,
+        body: 'original',
+        isCurrent: true,
+        moderationStatus: 'visible',
+      },
+    ]
+    const result = simulatePublishQuestionAnswer(
+      visible,
+      USER,
+      { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
+      'a legitimate edit'
+    )
+    expect(result[0].body).toBe('a legitimate edit')
   })
 })

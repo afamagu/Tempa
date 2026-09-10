@@ -17,7 +17,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * beyond a quiet confirmation.
  */
 
-export type ReportTargetType = 'profile' | 'letter' | 'dispatch' | 'photo_moment'
+// 'question_answer' added Admin Phase 2A-1 — reportable only when the
+// caller could legitimately see it (active Question, moderation_status
+// = 'visible', not a blocked pair — the same predicate as its own read
+// policy), enforced entirely server-side by report_content.
+export type ReportTargetType = 'profile' | 'letter' | 'dispatch' | 'photo_moment' | 'question_answer'
 
 export type ReportReason =
   | 'scam_fraud'

@@ -170,3 +170,168 @@ describe('reportContent — thin RPC wrapper (pre-beta minimum safety build)', (
     expect(scamFraud?.label).toBe('Scam, fraud or money request')
   })
 })
+
+describe('reportContent — dispatch target (independent review item 3)', () => {
+  const AUTHOR = 'user-dispatch-author'
+
+  it('accepts a published, visible Dispatch as a report target', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'A title', body: 'A body', status: 'published' }],
+    })
+    const { error } = await reportContent(client(fake), 'dispatch', 'd1', 'harassment', '')
+    expect(error).toBeNull()
+    expect(fake._reports[0].reported_user_id).toBe(AUTHOR)
+  })
+
+  it('a HIDDEN Dispatch cannot be reported by a stale/guessed id — resolves to the same "not found" as a nonexistent one', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'A title', body: 'A body', status: 'published', moderation_status: 'hidden' }],
+    })
+    const { error } = await reportContent(client(fake), 'dispatch', 'd1', 'harassment', '')
+    expect(error?.message).toBe('Dispatch not found.')
+    expect(fake._reports).toHaveLength(0)
+  })
+
+  it('an unpublished Dispatch is likewise not reportable', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'A title', body: 'A body', status: 'unpublished' }],
+    })
+    const { error } = await reportContent(client(fake), 'dispatch', 'd1', 'harassment', '')
+    expect(error?.message).toBe('Dispatch not found.')
+  })
+})
+
+describe('reportContent — photo_moment target, dispatch-sourced half (independent review item 3)', () => {
+  const AUTHOR = 'user-dispatch-author'
+
+  it('accepts a Moment on a published, visible Dispatch', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'A title', body: 'A body', status: 'published' }],
+      dispatchMoments: [{ id: 'dm-1', dispatch_id: 'd1', image_path: 'author-a/photo.jpg' }],
+    })
+    const { error } = await reportContent(client(fake), 'photo_moment', 'dm-1', 'inappropriate_content', '')
+    expect(error).toBeNull()
+    expect(fake._reports[0].reported_user_id).toBe(AUTHOR)
+  })
+
+  it('a Moment under a HIDDEN Dispatch cannot be reported — the parent Dispatch must be published and visible', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'A title', body: 'A body', status: 'published', moderation_status: 'hidden' }],
+      dispatchMoments: [{ id: 'dm-1', dispatch_id: 'd1', image_path: 'author-a/photo.jpg' }],
+    })
+    const { error } = await reportContent(client(fake), 'photo_moment', 'dm-1', 'inappropriate_content', '')
+    expect(error?.message).toBe('Photo not found.')
+    expect(fake._reports).toHaveLength(0)
+  })
+
+  it('private-letter Photo Moment reporting is unchanged by this correction — participant access still governs it, not Dispatch predicates', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: 'user-sender-2', pseudonym: 'Sender' }],
+      letters: [{ id: 'letter-1', sender_id: 'user-sender-2', recipient_id: REPORTER, body: 'Hello' }],
+      moments: [{ id: 'moment-1', letter_id: 'letter-1', type: 'photo', image_path: 'letter-photos/x/y.jpg' }],
+    })
+    const { error } = await reportContent(client(fake), 'photo_moment', 'moment-1', 'inappropriate_content', '')
+    expect(error).toBeNull()
+    expect(fake._reports[0].reported_user_id).toBe('user-sender-2')
+  })
+})
+
+describe('reportContent — question_answer target (Admin Phase 2A-1, Decision 1)', () => {
+  const AUTHOR = 'user-answer-author'
+
+  it('accepts a visible answer to an active Question as a report target', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      questions: [{ id: 'q1', slug: 'favorite-season', prompt: 'What is your favorite season?', is_active: true }],
+      questionAnswers: [{ id: 'a1', question_id: 'q1', user_id: AUTHOR, body: 'Autumn, no contest.' }],
+    })
+    const { error } = await reportContent(client(fake), 'question_answer', 'a1', 'harassment', '')
+    expect(error).toBeNull()
+    expect(fake._reports).toHaveLength(1)
+    expect(fake._reports[0].reported_user_id).toBe(AUTHOR)
+  })
+
+  it('the frozen evidence snapshot contains the prompt, the answer body, and the author pseudonym', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Autumn Fan' }],
+      questions: [{ id: 'q1', slug: 'favorite-season', prompt: 'What is your favorite season?', is_active: true }],
+      questionAnswers: [{ id: 'a1', question_id: 'q1', user_id: AUTHOR, body: 'Autumn, no contest.' }],
+    })
+    await reportContent(client(fake), 'question_answer', 'a1', 'harassment', '')
+    expect(fake._reports[0].evidence_snapshot).toEqual({
+      prompt: 'What is your favorite season?',
+      body: 'Autumn, no contest.',
+      author_pseudonym: 'Autumn Fan',
+    })
+  })
+
+  it('rejects self-reporting your own answer', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }],
+      questions: [{ id: 'q1', slug: 'favorite-season', prompt: 'What is your favorite season?', is_active: true }],
+      questionAnswers: [{ id: 'a1', question_id: 'q1', user_id: REPORTER, body: 'Winter.' }],
+    })
+    const { error } = await reportContent(client(fake), 'question_answer', 'a1', 'harassment', '')
+    expect(error?.message).toBe('You cannot report your own content.')
+  })
+
+  it('rejects a second report of the same answer by the same reporter (duplicate protection preserved)', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      questions: [{ id: 'q1', slug: 'favorite-season', prompt: 'What is your favorite season?', is_active: true }],
+      questionAnswers: [{ id: 'a1', question_id: 'q1', user_id: AUTHOR, body: 'Autumn.' }],
+    })
+    await reportContent(client(fake), 'question_answer', 'a1', 'harassment', '')
+    const { error } = await reportContent(client(fake), 'question_answer', 'a1', 'spam', '')
+    expect(error?.message).toBe('You have already reported this.')
+    expect(fake._reports).toHaveLength(1)
+  })
+
+  it('rejects a nonexistent answer id', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }],
+      questions: [{ id: 'q1', slug: 'favorite-season', prompt: 'What is your favorite season?', is_active: true }],
+      questionAnswers: [],
+    })
+    const { error } = await reportContent(client(fake), 'question_answer', 'does-not-exist', 'harassment', '')
+    expect(error?.message).toBe('Answer not found.')
+  })
+
+  it('rejects an answer whose Question is inactive — inaccessible target, same as a hidden or nonexistent one', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      questions: [{ id: 'q1', slug: 'comfort-food', prompt: 'What is your comfort food?', is_active: false }],
+      questionAnswers: [{ id: 'a1', question_id: 'q1', user_id: AUTHOR, body: 'Soup.' }],
+    })
+    const { error } = await reportContent(client(fake), 'question_answer', 'a1', 'harassment', '')
+    expect(error?.message).toBe('Answer not found.')
+  })
+
+  it('rejects an answer that is already hidden — cannot report a target you could no longer legitimately see', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      questions: [{ id: 'q1', slug: 'favorite-season', prompt: 'What is your favorite season?', is_active: true }],
+      questionAnswers: [{ id: 'a1', question_id: 'q1', user_id: AUTHOR, body: 'Autumn.', moderation_status: 'hidden' }],
+    })
+    const { error } = await reportContent(client(fake), 'question_answer', 'a1', 'harassment', '')
+    expect(error?.message).toBe('Answer not found.')
+  })
+})

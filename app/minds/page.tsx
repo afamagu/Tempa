@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
   getCanonicalQuestions,
+  getAllCanonicalQuestions,
   getCanonicalAnswers,
   mergeCanonicalQuestionState,
   needsParticipationGate,
@@ -132,7 +133,15 @@ export default async function MindsPage({
   const needsAnswer = needsParticipationGate(canonicalQuestions.length, canonicalAnswers.length)
 
   if (view !== 'explore') {
-    const questions = mergeCanonicalQuestionState(canonicalQuestions, canonicalAnswers)
+    // "My answers" must keep showing a member's answer to a since-
+    // deactivated canonical Question (Admin Phase 2A-1, Decision 4) —
+    // merged against the FULL canonical set, not just the currently
+    // active/offered one. "Answer a Question" (the 'new' tab) stays on
+    // the active-only set, so a deactivated Question is never offered
+    // to write against.
+    const questionsForTab =
+      view === 'answers' ? await getAllCanonicalQuestions(supabase) : canonicalQuestions
+    const questions = mergeCanonicalQuestionState(questionsForTab, canonicalAnswers)
 
     return (
       <AppShell active="minds" waitingLetterCount={waitingCount}>

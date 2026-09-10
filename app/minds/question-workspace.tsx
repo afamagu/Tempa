@@ -49,7 +49,7 @@ function AnsweredQuestionRow({ state }: { state: CanonicalQuestionState & { answ
           </p>
         </div>
       </Link>
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         {answer.isCurrent ? (
           <span className={helperTextClass}>Shown in Minds</span>
         ) : (
@@ -61,6 +61,13 @@ function AnsweredQuestionRow({ state }: { state: CanonicalQuestionState & { answ
           >
             {settingCurrent ? 'Updating…' : 'Show in Minds'}
           </button>
+        )}
+        {/* Admin Phase 2A-1 — only ever true for the answer's own
+            author (question_answers' RLS excludes a hidden row from
+            everyone else entirely); a calm, private notice, never a
+            public tombstone. */}
+        {answer.moderationStatus === 'hidden' && (
+          <span className={helperTextClass}>Hidden by TEMPA.</span>
         )}
       </div>
     </div>

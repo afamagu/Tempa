@@ -21,6 +21,9 @@ export type FakeDispatchRow = {
   body: string
   status: 'published' | 'unpublished'
   published_at: string
+  // Admin Phase 2A-1 — defaults to 'visible' (matching the migration's
+  // `not null default 'visible'`) when a test row omits it.
+  moderation_status?: 'visible' | 'hidden'
 }
 
 export type FakeProfileRow = {
@@ -59,6 +62,7 @@ export function createFakeDispatches(options: {
 }) {
   const { viewerId } = options
   const rows = options.rows
+  for (const r of rows) if (r.moderation_status === undefined) r.moderation_status = 'visible'
   const profiles = options.profiles ?? []
   const topics = options.topics ?? []
   const kept = options.kept ?? []
@@ -92,15 +96,24 @@ export function createFakeDispatches(options: {
   // migration text itself (docs/sql/2026-09-12-scoped-blocking-and-
   // fixes.sql) is the authority for that helper's behavior.
 
+  // Mirrors dispatches_select_published's RLS predicate (Admin Phase
+  // 2A-1: status = 'published' AND moderation_status = 'visible' AND
+  // not blocked) OR author_id = auth.uid() — a hidden Dispatch resolves
+  // through this base filter ONLY for its own author, exactly like the
+  // live policy. getDispatchById relies on this base filter alone (no
+  // extra .eq of its own) for exactly that reason.
   function visibleRows() {
     return rows.filter(
       (r) =>
-        (r.status === 'published' && !isBlockedPair(viewerId, r.author_id)) || r.author_id === viewerId
+        (r.status === 'published' &&
+          r.moderation_status === 'visible' &&
+          !isBlockedPair(viewerId, r.author_id)) ||
+        r.author_id === viewerId
     )
   }
 
   function dispatchesFrom() {
-    const filters: { authorId?: string; status?: string; id?: string } = {}
+    const filters: { authorId?: string; status?: string; id?: string; moderationStatus?: string } = {}
     let insertedPayload: Record<string, unknown> | null = null
 
     function applyFilters() {
@@ -108,6 +121,12 @@ export function createFakeDispatches(options: {
         .filter((r) => (filters.authorId ? r.author_id === filters.authorId : true))
         .filter((r) => (filters.status ? r.status === filters.status : true))
         .filter((r) => (filters.id ? r.id === filters.id : true))
+        // Only applied when the caller actually asks for it (the
+        // Board/Home/profile LISTING queries add this explicitly, per
+        // lib/dispatches.ts) — getDispatchById never adds this filter,
+        // deliberately, so an author's own hidden Dispatch still
+        // resolves there.
+        .filter((r) => (filters.moderationStatus ? r.moderation_status === filters.moderationStatus : true))
         .sort((a, b) => b.published_at.localeCompare(a.published_at))
     }
 
@@ -119,6 +138,7 @@ export function createFakeDispatches(options: {
         if (column === 'author_id') filters.authorId = value as string
         if (column === 'status') filters.status = value as string
         if (column === 'id') filters.id = value as string
+        if (column === 'moderation_status') filters.moderationStatus = value as string
         return builder
       },
       order() {
@@ -146,6 +166,10 @@ export function createFakeDispatches(options: {
           body: insertedPayload.body as string,
           status: 'published',
           published_at: new Date().toISOString(),
+          // Independent review item 5 (final audit round) — mirrors
+          // the column default / dispatches_insert_own's tightened
+          // WITH CHECK: a fresh insert always lands visible/unmoderated.
+          moderation_status: 'visible',
         }
         rows.push(row)
         return { data: row, error: null }
@@ -384,6 +408,10 @@ export function createFakeDispatches(options: {
         body: (params?.p_body as string) ?? '',
         status: 'published',
         published_at: new Date().toISOString(),
+        // Independent review item 5 (final audit round) — mirrors the
+        // column default / dispatches_insert_own's tightened WITH
+        // CHECK: a fresh insert always lands visible/unmoderated.
+        moderation_status: 'visible',
       }
       rows.push(row)
       for (const topic of topics) {
@@ -404,6 +432,7 @@ export function createFakeDispatches(options: {
       const matches = visibleRows().filter(
         (r) =>
           r.status === 'published' &&
+          r.moderation_status === 'visible' &&
           (r.title.toLowerCase().includes(q) ||
             r.body.toLowerCase().includes(q) ||
             topics.some((t) => t.dispatch_id === r.id && t.topic.toLowerCase().includes(q)))
@@ -462,7 +491,9 @@ export function createFakeDispatches(options: {
     if (fn === 'get_shared_dispatch') {
       const token = params?.p_token as string
       const share = shares.find((s) => s.id === token && s.revoked_at === null)
-      const dispatch = share ? rows.find((r) => r.id === share.dispatch_id && r.status === 'published') : undefined
+      const dispatch = share
+        ? rows.find((r) => r.id === share.dispatch_id && r.status === 'published' && r.moderation_status === 'visible')
+        : undefined
       if (!share || !dispatch) return { data: [], error: null }
 
       const pseudonym = profiles.find((p) => p.id === dispatch.author_id)?.pseudonym ?? 'A TEMPA member'
@@ -493,13 +524,21 @@ export function createFakeDispatches(options: {
     // Mirrors update_dispatch: author + published only, same title/
     // topic validation as publish, wholesale-replaces topics, never
     // touches dispatch_shares (an active token survives untouched).
+    // Independent review item 4: a HIDDEN Dispatch is not editable by
+    // its own still-active author either — folded into the same
+    // existence check, reusing the existing message.
     if (fn === 'update_dispatch') {
       if (!viewerId) {
         return { data: null, error: { message: 'Authentication required.', code: '42501' } }
       }
       const dispatchId = params?.p_dispatch_id as string
       const dispatch = rows.find((r) => r.id === dispatchId)
-      if (!dispatch || dispatch.author_id !== viewerId || dispatch.status !== 'published') {
+      if (
+        !dispatch ||
+        dispatch.author_id !== viewerId ||
+        dispatch.status !== 'published' ||
+        dispatch.moderation_status !== 'visible'
+      ) {
         return {
           data: null,
           error: { message: 'Only the author of a published Dispatch may edit it.', code: 'P0001' },
@@ -526,14 +565,17 @@ export function createFakeDispatches(options: {
     }
     // Mirrors delete_dispatch: author-only, then the same cascades the
     // live FK constraints perform (topics, shares, and un-pinning any
-    // profile that had this Dispatch pinned).
+    // profile that had this Dispatch pinned). Independent review item
+    // 4: a HIDDEN Dispatch is not deletable by its own still-active
+    // author either — folded into the same existence check, reusing the
+    // existing message.
     if (fn === 'delete_dispatch') {
       if (!viewerId) {
         return { data: null, error: { message: 'Authentication required.', code: '42501' } }
       }
       const dispatchId = params?.p_dispatch_id as string
       const dispatch = rows.find((r) => r.id === dispatchId)
-      if (!dispatch || dispatch.author_id !== viewerId) {
+      if (!dispatch || dispatch.author_id !== viewerId || dispatch.moderation_status !== 'visible') {
         return { data: null, error: { message: 'Only the author of a Dispatch may delete it.', code: 'P0001' } }
       }
       rows.splice(rows.indexOf(dispatch), 1)
@@ -683,5 +725,14 @@ export function createFakeDispatches(options: {
     topics.push({ dispatch_id: dispatchId, topic })
   }
 
-  return { from, rpc, storage }
+  return {
+    from,
+    rpc,
+    storage,
+    /** Test-only escape hatch — e.g. to flip a row's moderation_status
+     * directly, standing in for admin_hide_dispatch/admin_restore_dispatch
+     * (which this fake doesn't model; see admin-moderation.test.ts's
+     * simulate-RPC suite for that layer). */
+    _rows: rows,
+  }
 }

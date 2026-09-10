@@ -12,6 +12,7 @@ function item(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
     title: 'A quiet morning ritual',
     body: 'A short Dispatch to whoever finds it, longer than one line so the excerpt has something to clamp.',
     publishedAt: '2026-09-07T12:00:00Z',
+    moderationStatus: 'visible',
     topics: [],
     ...overrides,
   }

@@ -51,3 +51,56 @@ describe('QuestionWorkspace — zero-answer state (the exact live-test crash sce
     expect(() => renderToStaticMarkup(<QuestionWorkspace tab="answers" />)).not.toThrow()
   })
 })
+
+describe('QuestionWorkspace — "My answers" own-history view (Admin Phase 2A-1, Section 4/9)', () => {
+  const ANSWERED_STATE: CanonicalQuestionState[] = [
+    {
+      id: 'q-private-ritual',
+      slug: 'private_ritual',
+      prompt: "Is there something you return to when no one's watching?",
+      answer: {
+        id: 'a-1',
+        questionId: 'q-private-ritual',
+        slug: 'private_ritual',
+        prompt: "Is there something you return to when no one's watching?",
+        body: 'A visible answer body.',
+        updatedAt: '2026-09-01T00:00:00Z',
+        isCurrent: true,
+        moderationStatus: 'visible',
+      },
+    },
+  ]
+
+  it('a visible own answer never shows the "Hidden by TEMPA" notice', () => {
+    const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" questions={ANSWERED_STATE} />)
+    expect(html).not.toContain('Hidden by TEMPA')
+    expect(html).toContain('A visible answer body.')
+  })
+
+  it('a hidden own answer still renders (own-history access preserved) AND shows a private "Hidden by TEMPA" notice, never a public tombstone', () => {
+    const hiddenState: CanonicalQuestionState[] = [
+      {
+        ...ANSWERED_STATE[0],
+        answer: { ...ANSWERED_STATE[0].answer!, moderationStatus: 'hidden' },
+      },
+    ]
+    const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" questions={hiddenState} />)
+    // Own-history access preserved: the answer body itself still renders.
+    expect(html).toContain('A visible answer body.')
+    // The private moderation notice appears exactly once, is never
+    // phrased as a public "one result hidden" disclosure, and carries
+    // no reporter/moderator/internal-reason detail.
+    expect((html.match(/Hidden by TEMPA/g) ?? []).length).toBe(1)
+    expect(html).not.toMatch(/reason|moderator|report/i)
+  })
+
+  it('an inactive Question whose answer is still visible keeps rendering the answer in "My answers" — deactivation never erases own history', () => {
+    // getAllCanonicalQuestions (unfiltered by is_active) is what feeds
+    // this tab, so an inactive Question's state object reaching here at
+    // all already proves the history path; this asserts the answer
+    // itself still renders normally, not suppressed.
+    const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" questions={ANSWERED_STATE} />)
+    expect(html).toContain('A visible answer body.')
+    expect(html).not.toContain('Not yet answered')
+  })
+})

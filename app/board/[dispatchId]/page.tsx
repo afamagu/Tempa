@@ -13,7 +13,7 @@ import {
 } from '@/lib/dispatches'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
-import { sectionTitleClass, metadataTextClass } from '@/app/profile/ui'
+import { sectionTitleClass, metadataTextClass, helperTextClass } from '@/app/profile/ui'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { iconButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
@@ -94,6 +94,33 @@ export default async function DispatchPage({
   }
 
   const isAuthor = dispatch.authorId === user.id
+
+  // Admin Command Center Phase 2A-1 — a hidden Dispatch's row only ever
+  // reaches this point for its own author (dispatches_select_published's
+  // RLS already returns null — notFound() above — for anyone else).
+  // The author gets a calm, restrained notice here instead of the
+  // normal reading view — never the reporter/moderator identity or the
+  // internal moderation reason, matching Decision 2 exactly.
+  if (dispatch.moderationStatus === 'hidden') {
+    const waitingCount = await getWaitingLetterCount(supabase, user.id)
+    return (
+      <AppShell active="board" waitingLetterCount={waitingCount}>
+        <main className="flex min-h-screen items-center justify-center p-6">
+          <div className="w-full max-w-sm space-y-4 text-center">
+            <p className={sectionTitleClass}>{dispatch.title}</p>
+            <p className={helperTextClass}>Hidden by TEMPA.</p>
+            <Link
+              href="/board"
+              className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
+            >
+              <BackArrowIcon />
+              Back to The Board
+            </Link>
+          </div>
+        </main>
+      </AppShell>
+    )
+  }
 
   const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),

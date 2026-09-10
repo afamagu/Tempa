@@ -225,7 +225,7 @@ export function buildAttentionItems(input: {
       key: 'open-reports',
       label: `${input.openReports} open report${input.openReports === 1 ? '' : 's'}`,
       detail: 'Awaiting review.',
-      href: '/admin/reports',
+      href: '/admin/moderation/reports',
     })
   }
 
@@ -234,7 +234,7 @@ export function buildAttentionItems(input: {
       key: 'report-spike',
       label: 'Unusual report volume today',
       detail: `${input.reportSpike.today} today vs. a ${input.reportSpike.trailingAverage.toFixed(1)}/day trailing average.`,
-      href: '/admin/reports',
+      href: '/admin/moderation/reports',
     })
   }
 

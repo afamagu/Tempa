@@ -15,15 +15,33 @@ export type FakeDispatch = {
   body: string
   status: 'published' | 'unpublished'
   published_at?: string
+  // Admin Phase 2A-1 — defaults to 'visible' when omitted.
+  moderation_status?: 'visible' | 'hidden'
+  moderated_at?: string | null
 }
 export type FakeMoment = { id: string; letter_id: string; type: 'photo' | 'postcard'; image_path: string }
 export type FakeDispatchMoment = { id: string; dispatch_id: string; image_path: string }
+
+// Admin Phase 2A-1 — canonical Questions + their answers, for
+// question_answer reportability/hide-restore/Questions-admin.
+export type FakeQuestion = { id: string; slug: string | null; prompt: string; is_active: boolean }
+export type FakeQuestionAnswer = {
+  id: string
+  question_id: string
+  user_id: string
+  body: string
+  moderation_status?: 'visible' | 'hidden'
+  moderated_at?: string | null
+  updated_at?: string
+  // Final pre-apply correction — defaults to false when omitted.
+  is_current?: boolean
+}
 
 export type FakeReport = {
   id: string
   reporter_user_id: string
   reported_user_id: string
-  target_type: 'profile' | 'letter' | 'dispatch' | 'photo_moment'
+  target_type: 'profile' | 'letter' | 'dispatch' | 'photo_moment' | 'question_answer'
   target_id: string
   reason: string
   context: string | null
@@ -54,6 +72,8 @@ export function createFakeReports(options: {
   dispatches?: FakeDispatch[]
   moments?: FakeMoment[]
   dispatchMoments?: FakeDispatchMoment[]
+  questions?: FakeQuestion[]
+  questionAnswers?: FakeQuestionAnswer[]
   staff?: Record<string, 'moderator' | 'admin'>
 }) {
   let viewerId = options.viewerId
@@ -62,7 +82,15 @@ export function createFakeReports(options: {
   const dispatches = options.dispatches ?? []
   const moments = options.moments ?? []
   const dispatchMoments = options.dispatchMoments ?? []
+  const questions = options.questions ?? []
+  const questionAnswers = options.questionAnswers ?? []
   const staff = options.staff ?? {}
+
+  // Default every dispatch/answer to 'visible' unless the fixture says
+  // otherwise — mirrors the migration's `not null default 'visible'`.
+  for (const d of dispatches) if (d.moderation_status === undefined) d.moderation_status = 'visible'
+  for (const qa of questionAnswers) if (qa.moderation_status === undefined) qa.moderation_status = 'visible'
+  for (const qa of questionAnswers) if (qa.is_current === undefined) qa.is_current = false
 
   const reports: FakeReport[] = []
   const accountStatus = new Map<string, { status: string; reason: string | null; changed_by: string; changed_at: string }>()
@@ -89,7 +117,7 @@ export function createFakeReports(options: {
       const reason = params?.p_reason as string
       const context = (params?.p_context as string | null) ?? null
 
-      if (!['profile', 'letter', 'dispatch', 'photo_moment'].includes(targetType)) {
+      if (!['profile', 'letter', 'dispatch', 'photo_moment', 'question_answer'].includes(targetType)) {
         return { data: null, error: { message: 'Unknown report target.', code: 'P0001' } }
       }
       if (!VALID_REASONS.includes(reason)) {
@@ -115,10 +143,19 @@ export function createFakeReports(options: {
           evidence = { body: l.body, sender_pseudonym: pseudonymOf(l.sender_id) }
         }
       } else if (targetType === 'dispatch') {
-        const d = dispatches.find((d) => d.id === targetId && d.status === 'published')
+        const d = dispatches.find(
+          (d) => d.id === targetId && d.status === 'published' && d.moderation_status === 'visible'
+        )
         if (d) {
           reportedUserId = d.author_id
           evidence = { title: d.title, body: d.body, author_pseudonym: pseudonymOf(d.author_id) }
+        }
+      } else if (targetType === 'question_answer') {
+        const qa = questionAnswers.find((qa) => qa.id === targetId && qa.moderation_status === 'visible')
+        const q = qa ? questions.find((q) => q.id === qa.question_id && q.is_active) : undefined
+        if (qa && q) {
+          reportedUserId = qa.user_id
+          evidence = { prompt: q.prompt, body: qa.body, author_pseudonym: pseudonymOf(qa.user_id) }
         }
       } else if (targetType === 'photo_moment') {
         const m = moments.find((m) => m.id === targetId && m.type === 'photo')
@@ -132,7 +169,12 @@ export function createFakeReports(options: {
         if (!reportedUserId) {
           const dm = dispatchMoments.find((dm) => dm.id === targetId)
           if (dm) {
-            const d = dispatches.find((d) => d.id === dm.dispatch_id && d.status === 'published')
+            // Independent review item 3: same visibility predicate as
+            // the plain 'dispatch' branch — a hidden parent Dispatch's
+            // Moment is not reportable by a guessed/stale id either.
+            const d = dispatches.find(
+              (d) => d.id === dm.dispatch_id && d.status === 'published' && d.moderation_status === 'visible'
+            )
             if (d) {
               reportedUserId = d.author_id
               evidence = { image_path: dm.image_path, source: 'dispatch', sender_pseudonym: pseudonymOf(d.author_id) }
@@ -149,7 +191,9 @@ export function createFakeReports(options: {
               ? 'Letter not found.'
               : targetType === 'dispatch'
                 ? 'Dispatch not found.'
-                : 'Photo not found.'
+                : targetType === 'question_answer'
+                  ? 'Answer not found.'
+                  : 'Photo not found.'
         return { data: null, error: { message: notFoundMessage, code: 'P0001' } }
       }
 
@@ -283,8 +327,342 @@ export function createFakeReports(options: {
             reported_user_id: report.reported_user_id,
             reported_pseudonym: pseudonymOf(report.reported_user_id),
             reported_current_status: accountStatus.get(report.reported_user_id)?.status ?? 'active',
+            target_moderation_status:
+              report.target_type === 'dispatch'
+                ? (dispatches.find((d) => d.id === report.target_id)?.moderation_status ?? null)
+                : report.target_type === 'question_answer'
+                  ? (questionAnswers.find((qa) => qa.id === report.target_id)?.moderation_status ?? null)
+                  : null,
           },
         ],
+        error: null,
+      }
+    }
+
+    // ---- Admin Phase 2A-1: hide/restore, Public Content Review, ----
+    // ---- Questions admin, content audit. Moderator floor for       ----
+    // ---- hide/restore + audit read; ADMIN floor for the proactive   ----
+    // ---- public-content list and all Questions-management RPCs.    ----
+
+    if (fn === 'admin_hide_dispatch' || fn === 'admin_restore_dispatch') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'moderator')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const dispatchId = params?.p_dispatch_id as string
+      // Independent review item 1: admin may act on any eligible
+      // target; a moderator-only caller must have a qualifying report
+      // for this EXACT target — same generic message either way, never
+      // leaking report existence.
+      if (!isStaff(viewerId, 'admin')) {
+        if (!reports.some((r) => r.target_type === 'dispatch' && r.target_id === dispatchId)) {
+          return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+        }
+      }
+      const reason = ((params?.p_reason as string) ?? '').trim()
+      if (reason.length === 0) return { data: null, error: { message: 'A reason is required.', code: 'P0001' } }
+      const d = dispatches.find((d) => d.id === dispatchId)
+      if (!d) return { data: null, error: { message: 'Dispatch not found.', code: 'P0001' } }
+      const oldStatus = d.moderation_status
+      const newStatus = fn === 'admin_hide_dispatch' ? 'hidden' : 'visible'
+      // Independent review item 9: idempotency guard.
+      if (oldStatus === newStatus) {
+        return {
+          data: null,
+          error: {
+            message: newStatus === 'hidden' ? 'This content is already hidden.' : 'This content is already visible.',
+            code: 'P0001',
+          },
+        }
+      }
+      d.moderation_status = newStatus
+      d.moderated_at = new Date().toISOString()
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: fn === 'admin_hide_dispatch' ? 'content_hidden' : 'content_restored',
+        target_type: 'dispatch',
+        target_id: d.id,
+        target_identifier_snapshot: d.title,
+        reason,
+        metadata: { previous_status: oldStatus, new_status: newStatus },
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    if (fn === 'admin_hide_question_answer' || fn === 'admin_restore_question_answer') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'moderator')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const answerId = params?.p_answer_id as string
+      // Independent review item 1: same report-driven boundary as
+      // admin_hide_dispatch/admin_restore_dispatch above.
+      if (!isStaff(viewerId, 'admin')) {
+        if (!reports.some((r) => r.target_type === 'question_answer' && r.target_id === answerId)) {
+          return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+        }
+      }
+      const reason = ((params?.p_reason as string) ?? '').trim()
+      if (reason.length === 0) return { data: null, error: { message: 'A reason is required.', code: 'P0001' } }
+      const qa = questionAnswers.find((qa) => qa.id === answerId)
+      if (!qa) return { data: null, error: { message: 'Answer not found.', code: 'P0001' } }
+      const oldStatus = qa.moderation_status
+      const newStatus = fn === 'admin_hide_question_answer' ? 'hidden' : 'visible'
+      // Independent review item 9: idempotency guard.
+      if (oldStatus === newStatus) {
+        return {
+          data: null,
+          error: {
+            message: newStatus === 'hidden' ? 'This content is already hidden.' : 'This content is already visible.',
+            code: 'P0001',
+          },
+        }
+      }
+      const wasCurrent = qa.is_current ?? false
+      qa.moderation_status = newStatus
+      qa.moderated_at = new Date().toISOString()
+      // Final pre-apply correction item 2: hiding also clears
+      // is_current — never touched by restore (item 3), per the
+      // migration's own documented decision.
+      if (fn === 'admin_hide_question_answer') {
+        qa.is_current = false
+      }
+      const q = questions.find((q) => q.id === qa.question_id)
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: fn === 'admin_hide_question_answer' ? 'content_hidden' : 'content_restored',
+        target_type: 'question_answer',
+        target_id: qa.id,
+        target_identifier_snapshot: q?.prompt ?? null,
+        reason,
+        metadata:
+          fn === 'admin_hide_question_answer'
+            ? { previous_status: oldStatus, new_status: newStatus, was_current: wasCurrent }
+            : { previous_status: oldStatus, new_status: newStatus },
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    if (fn === 'admin_list_public_content') {
+      // Admin floor only — a moderator must be refused here even though
+      // they pass the plain is_staff() check, per the locked permission
+      // split (proactive surveillance vs. report-driven access).
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const type = (params?.p_type as string | null) ?? null
+      const status = (params?.p_status as string | null) ?? null
+      const limit = Math.min(Math.max((params?.p_limit as number) ?? 30, 1), 100)
+      const offset = Math.max((params?.p_offset as number) ?? 0, 0)
+
+      const dispatchRows = dispatches
+        .filter((d) => d.status === 'published')
+        .filter(() => type === null || type === 'dispatch')
+        .filter((d) => status === null || d.moderation_status === status)
+        .map((d) => ({
+          content_type: 'dispatch' as const,
+          id: d.id,
+          title: d.title,
+          excerpt: d.body.slice(0, 280),
+          author_id: d.author_id,
+          author_pseudonym: pseudonymOf(d.author_id),
+          moderation_status: d.moderation_status,
+          moderated_at: d.moderated_at ?? null,
+          content_created_at: d.published_at ?? '',
+        }))
+
+      const answerRows = questionAnswers
+        .filter(() => type === null || type === 'question_answer')
+        .filter((qa) => status === null || qa.moderation_status === status)
+        // Independent review item 7 (revised, final audit round): a
+        // VISIBLE answer counts as "Public Content" only when its
+        // Question is currently active; a HIDDEN answer remains
+        // reachable here regardless — it's a moderation record Admin
+        // may still need to inspect/restore even after the Question is
+        // later deactivated.
+        .filter((qa) => {
+          const isActive = questions.find((q) => q.id === qa.question_id)?.is_active === true
+          return (qa.moderation_status === 'visible' && isActive) || qa.moderation_status === 'hidden'
+        })
+        .map((qa) => ({
+          content_type: 'question_answer' as const,
+          id: qa.id,
+          title: questions.find((q) => q.id === qa.question_id)?.prompt ?? '',
+          excerpt: qa.body.slice(0, 280),
+          author_id: qa.user_id,
+          author_pseudonym: pseudonymOf(qa.user_id),
+          moderation_status: qa.moderation_status,
+          moderated_at: qa.moderated_at ?? null,
+          content_created_at: qa.updated_at ?? '',
+        }))
+
+      const combined = [...dispatchRows, ...answerRows].sort((a, b) =>
+        b.content_created_at.localeCompare(a.content_created_at)
+      )
+      return { data: combined.slice(offset, offset + limit), error: null }
+    }
+
+    // set_current_answer — added so admin hide/restore and a member's
+    // own Discovery-selection action can be exercised together against
+    // ONE coherent questionAnswers state (final pre-apply correction,
+    // item 6's cross-cutting scenario). Mirrors the real RPC exactly,
+    // including item 1/4's fix: the demotion UPDATE never touches a
+    // hidden row.
+    if (fn === 'set_current_answer') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      const answerId = params?.p_answer_id as string
+      const target = questionAnswers.find(
+        (qa) =>
+          qa.id === answerId &&
+          qa.user_id === viewerId &&
+          questions.find((q) => q.id === qa.question_id)?.slug !== null &&
+          qa.moderation_status === 'visible'
+      )
+      if (!target) {
+        return {
+          data: null,
+          error: {
+            message: 'Only a completed answer to one of the three canonical Questions can be shown in Minds.',
+            code: 'P0001',
+          },
+        }
+      }
+      // NEW (item 1/4): never demote a hidden row.
+      for (const qa of questionAnswers) {
+        if (qa.user_id === viewerId && qa.id !== answerId && qa.moderation_status === 'visible') {
+          qa.is_current = false
+        }
+      }
+      target.is_current = true
+      return { data: target, error: null }
+    }
+
+    if (fn === 'admin_list_questions') {
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      return {
+        data: questions
+          .filter((q) => q.slug !== null)
+          .slice()
+          .sort((a, b) => (a.slug ?? '').localeCompare(b.slug ?? ''))
+          .map((q) => ({
+            id: q.id,
+            slug: q.slug,
+            prompt: q.prompt,
+            is_active: q.is_active,
+            answer_count: questionAnswers.filter((qa) => qa.question_id === q.id).length,
+            first_letter_count: 0,
+          })),
+        error: null,
+      }
+    }
+
+    if (fn === 'admin_set_question_active') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      // Final pre-apply correction item 7: reject null before any
+      // lookup or state change.
+      if (params?.p_active === null || params?.p_active === undefined) {
+        return { data: null, error: { message: 'An active state is required.', code: 'P0001' } }
+      }
+      const q = questions.find((q) => q.id === (params?.p_question_id as string) && q.slug !== null)
+      if (!q) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      const active = params?.p_active as boolean
+      // Final mutation-boundary audit item 6: idempotency guard — a
+      // no-op transition is a clear error, never a fabricated audit row.
+      if (q.is_active === active) {
+        return {
+          data: null,
+          error: {
+            message: active ? 'This Question is already active.' : 'This Question is already inactive.',
+            code: 'P0001',
+          },
+        }
+      }
+      q.is_active = active
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: active ? 'question_activated' : 'question_deactivated',
+        target_type: 'question',
+        target_id: q.id,
+        target_identifier_snapshot: q.prompt,
+        reason: null,
+        metadata: { is_active: active },
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    if (fn === 'admin_update_question_prompt') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const q = questions.find((q) => q.id === (params?.p_question_id as string) && q.slug !== null)
+      if (!q) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      // Independent review item 8: must be deactivated first, not just
+      // answer_count = 0 — an active Question is still being offered.
+      if (q.is_active) {
+        return {
+          data: null,
+          error: { message: 'This Question is currently active. Deactivate it before editing the prompt.', code: 'P0001' },
+        }
+      }
+      const prompt = ((params?.p_prompt as string) ?? '').trim()
+      if (prompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
+      if (questionAnswers.some((qa) => qa.question_id === q.id)) {
+        return {
+          data: null,
+          error: { message: 'This Question already has answers and its prompt cannot be changed.', code: 'P0001' },
+        }
+      }
+      q.prompt = prompt
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_updated',
+        target_type: 'question',
+        target_id: q.id,
+        target_identifier_snapshot: prompt,
+        reason: null,
+        metadata: null,
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    if (fn === 'admin_list_content_audit') {
+      if (!isStaff(viewerId, 'moderator')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const targetType = (params?.p_target_type as string | null) ?? null
+      const targetId = (params?.p_target_id as string | null) ?? null
+      // Independent review item 2: admin may go global (null/null); a
+      // moderator-only caller must supply a specific, reported target —
+      // never a general proactive audit browse.
+      if (!isStaff(viewerId, 'admin')) {
+        if (targetType === null || targetId === null) {
+          return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+        }
+        if (!reports.some((r) => r.target_type === targetType && r.target_id === targetId)) {
+          return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+        }
+      }
+      return {
+        data: auditLog
+          .filter((a) => targetType === null || a.target_type === targetType)
+          .filter((a) => targetId === null || a.target_id === targetId)
+          .slice()
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map((a) => ({
+            id: a.id,
+            actor_identifier_snapshot: a.actor_identifier_snapshot,
+            action: a.action,
+            target_type: a.target_type,
+            target_id: a.target_id,
+            target_identifier_snapshot: a.target_identifier_snapshot,
+            reason: a.reason,
+            metadata: a.metadata,
+            created_at: a.created_at,
+          })),
         error: null,
       }
     }
@@ -388,6 +766,9 @@ export function createFakeReports(options: {
     _reports: reports,
     _auditLog: auditLog,
     _accountStatus: accountStatus,
+    _dispatches: dispatches,
+    _questions: questions,
+    _questionAnswers: questionAnswers,
     _setViewer(id: string | null) {
       viewerId = id
     },

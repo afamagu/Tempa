@@ -81,7 +81,7 @@ function NeedsAttention({ items }: { items: AttentionItem[] }) {
 function QuickActions() {
   return (
     <div className="flex flex-wrap gap-2">
-      <Link href="/admin/reports" className={secondaryButtonClass}>
+      <Link href="/admin/moderation/reports" className={secondaryButtonClass}>
         Review reports
       </Link>
       <Link href="/admin/members" className={secondaryButtonClass}>

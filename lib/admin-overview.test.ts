@@ -456,7 +456,7 @@ describe('buildAttentionItems — restrained Needs Attention list', () => {
       reportSpike: noSpike,
     })
     expect(items).toHaveLength(1)
-    expect(items[0].href).toBe('/admin/reports')
+    expect(items[0].href).toBe('/admin/moderation/reports')
     expect(items[0].label).toContain('3 open reports')
   })
 
