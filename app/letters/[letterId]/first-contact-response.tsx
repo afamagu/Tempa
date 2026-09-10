@@ -18,6 +18,7 @@ import {
   EMPTY_LETTER_DOC,
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
+import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
 
 type Mode = 'choose' | 'reply' | 'close'
 
@@ -49,6 +50,21 @@ export default function FirstContactResponse({
   const [reason, setReason] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
+
+  // Account enforcement messaging (pre-beta UX polish batch 1) — see
+  // lib/account-status.ts. Only suspended/banned block this establishing
+  // reply (reply_to_letter); restricted does not.
+  const [myStatus, setMyStatus] = useState<AccountStatus>('active')
+
+  useEffect(() => {
+    let cancelled = false
+    getMyAccountStatus(createClient()).then((status) => {
+      if (!cancelled) setMyStatus(status)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Same shared Tiptap schema as the other two letter composers
   // (writing-extensions.ts) — Letter 2 stays text-only (no Moments,
@@ -131,7 +147,13 @@ export default function FirstContactResponse({
 
       if (error) {
         console.error('[letters] first-contact reply failed', { message: error.message, code: error.code })
-        setReplyError('Could not send your reply. Please try again.')
+        // suspended/banned fully block this reply, sharing one
+        // deliberately vague RPC message with "not found"/blocked-pair
+        // (see reply_to_letter's own comment) — accountBlockedMessage
+        // only fires from the caller's OWN already-known status, never
+        // by decoding that shared message, so an unrelated failure
+        // still shows the existing generic copy.
+        setReplyError(accountBlockedMessage(myStatus) ?? 'Could not send your reply. Please try again.')
         return
       }
 

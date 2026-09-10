@@ -22,6 +22,7 @@ import {
   writeFirstContactDraft,
   clearFirstContactDraft,
 } from '@/lib/letter-editor-draft'
+import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
 
 // Length-policy audit (2026-09-05): was a locally hard-coded 4000,
 // independent of the Question-answer cap — now the SAME canonical
@@ -68,6 +69,23 @@ export default function FirstLetterComposer({
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Account enforcement messaging (pre-beta UX polish batch 1) — the
+  // CALLER's own status only (see getMyAccountStatus's own doc
+  // comment), fetched once on mount purely so a blocked send can show
+  // calm, accurate copy instead of the generic retry-implying fallback.
+  // Never used to gate rendering the composer itself — send_first_letter
+  // remains the actual authority on whether the attempt succeeds.
+  const [myStatus, setMyStatus] = useState<AccountStatus>('active')
+
+  useEffect(() => {
+    let cancelled = false
+    getMyAccountStatus(createClient()).then((status) => {
+      if (!cancelled) setMyStatus(status)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -143,7 +161,16 @@ export default function FirstLetterComposer({
         if (sendError.code === '23505') {
           setError(`You've already written to ${recipientPseudonym}.`)
         } else {
-          setError('Could not send your letter. Please try again.')
+          // restricted/suspended/banned all fully block a first-contact
+          // letter (send_first_letter), sharing one deliberately vague
+          // RPC message with "recipient does not exist"/blocked-pair so
+          // none of those is distinguishable from the others (see that
+          // RPC's own comment) — accountBlockedMessage only ever fires
+          // here from the caller's OWN already-known status, never by
+          // decoding that shared message, so it can't affect what a
+          // genuinely unrelated failure (recipient truly gone, or
+          // blocked) still shows.
+          setError(accountBlockedMessage(myStatus) ?? 'Could not send your letter. Please try again.')
         }
         return
       }

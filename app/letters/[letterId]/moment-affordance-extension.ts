@@ -28,7 +28,11 @@ export type MomentAffordanceOptions = {
    * canSendPhoto in moments-composer.tsx) — the affordance simply never
    * renders rather than opening onto a dead end. */
   enabled: boolean
-  onRequestPhoto: (paragraphIndex: number) => void
+  /** anchorRect is the tapped ⊕'s own bounding rect at click time (see
+   * MomentSourceMenu, moment-source-menu.tsx) — lets the source menu
+   * open spatially anchored to the actual control instead of pinned to
+   * the bottom of a possibly very long composer. */
+  onRequestPhoto: (paragraphIndex: number, anchorRect: DOMRect) => void
 }
 
 /**
@@ -165,7 +169,10 @@ export const MomentAffordance = Extension.create<MomentAffordanceOptions>({
                 // stays the same.
                 element.addEventListener('click', (event) => {
                   event.preventDefault()
-                  extensionOptions.onRequestPhoto(Number(element.dataset.paragraphIndex))
+                  extensionOptions.onRequestPhoto(
+                    Number(element.dataset.paragraphIndex),
+                    (event.currentTarget as HTMLElement).getBoundingClientRect()
+                  )
                 })
                 widgetCache.set(node, { tier, element })
               }

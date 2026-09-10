@@ -21,6 +21,7 @@ function letter(overrides: Partial<ArchiveLetter> = {}): ArchiveLetter {
     closedBy: null,
     closeReason: null,
     momentCounts: { photo: 0, postcard: 0 },
+    hasLetterPostcard: false,
     ...overrides,
   }
 }
@@ -54,5 +55,53 @@ describe('ArchiveList — excerpt sits on the shared authored-paper surface', ()
       />
     )
     expect(html).toContain('Evening Quill')
+  })
+})
+
+// Letterbox Postcard indicator (pre-beta UX polish batch 1) — a distinct
+// icon for letter.hasLetterPostcard, shown alongside (never instead of)
+// the existing photo indicator, using the NEW letter-level Postcard flag
+// rather than the old momentCounts.postcard (historical inline Moment
+// Postcards).
+describe('ArchiveList — Postcard indicator', () => {
+  function renderCard(overrides: Partial<ArchiveLetter> = {}) {
+    return renderToStaticMarkup(
+      <ArchiveList
+        letters={[letter(overrides)]}
+        viewerId="user-b"
+        otherUserId="user-a"
+        otherPseudonym="Evening Quill"
+        viewerPseudonym="You"
+      />
+    )
+  }
+
+  it('shows neither indicator for a plain text letter', () => {
+    const html = renderCard()
+    expect(html).not.toContain('Contains photos')
+    expect(html).not.toContain('Contains a Postcard')
+  })
+
+  it('shows only the Postcard indicator when hasLetterPostcard is true and there is no photo', () => {
+    const html = renderCard({ hasLetterPostcard: true })
+    expect(html).toContain('Contains a Postcard')
+    expect(html).not.toContain('Contains photos')
+  })
+
+  it('shows only the photo indicator when only a Photo Moment is present', () => {
+    const html = renderCard({ momentCounts: { photo: 1, postcard: 0 } })
+    expect(html).toContain('Contains photos')
+    expect(html).not.toContain('Contains a Postcard')
+  })
+
+  it('shows both indicators together when a letter has a photo and a letter-level Postcard', () => {
+    const html = renderCard({ momentCounts: { photo: 1, postcard: 0 }, hasLetterPostcard: true })
+    expect(html).toContain('Contains photos')
+    expect(html).toContain('Contains a Postcard')
+  })
+
+  it('never treats the OLD momentCounts.postcard (historical inline Moment Postcards) as the new letter-level Postcard', () => {
+    const html = renderCard({ momentCounts: { photo: 0, postcard: 3 }, hasLetterPostcard: false })
+    expect(html).not.toContain('Contains a Postcard')
   })
 })

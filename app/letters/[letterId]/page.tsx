@@ -375,6 +375,21 @@ export default async function LetterPage({
               <ClosureRecommendations letterId={target.id} />
             </div>
           )}
+
+          {/* Bottom-of-letter return nav (pre-beta UX polish batch 1) —
+              the same destination/context as the top back link, so a
+              reader who reaches the end of a very long letter never has
+              to scroll back up just to return to the correspondence.
+              Deliberately an ordinary in-flow link, not sticky/floating. */}
+          <div className="mt-10 border-t border-foreground/10 pt-4">
+            <Link
+              href={`/letters/with/${otherPartyId}`}
+              className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
+            >
+              <BackArrowIcon />
+              Back to {otherPseudonym}
+            </Link>
+          </div>
         </main>
       </div>
 

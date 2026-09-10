@@ -1,8 +1,9 @@
 'use client'
 
-import { Suspense, useRef, useState, type FormEvent } from 'react'
+import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeInternalPath } from '@/lib/safe-redirect'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
 
 /**
@@ -72,6 +73,15 @@ function SignInForm() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [joinIntent, setJoinIntent] = useState(() => searchParams.get('intent') === 'join')
 
+  // Return-to-requested-page after sign-in (pre-beta UX polish batch 1)
+  // — sanitized here too (not only server-side in the auth callback)
+  // purely so an already-invalid `next` never gets forwarded onto the
+  // OAuth/magic-link redirect URL at all; the callback route's own
+  // sanitizeInternalPath call remains the actual security boundary,
+  // since a client-supplied query param is never trusted merely
+  // because this page generated the original link.
+  const nextPath = sanitizeInternalPath(searchParams.get('next'))
+
   // Pre-beta email auth bot protection (2026-09-15) — Turnstile is scoped
   // to this email/magic-link form only, never the Google button below
   // (Google's own account-creation friction already gates that path; see
@@ -86,6 +96,40 @@ function SignInForm() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaError, setCaptchaError] = useState(false)
   const turnstileRef = useRef<TurnstileWidgetHandle>(null)
+
+  // Magic-link "check your email" recovery (pre-beta UX polish batch 1)
+  // — a member who never receives the email previously had no path
+  // forward from this screen at all. `resending`/`resendError` are
+  // deliberately separate from `status`/`errorMessage`: a Resend
+  // attempt (success or failure) must never flip the screen away from
+  // "Check your email" back to the form. cooldownEndsAt drives a plain
+  // 1s-tick countdown — client-side only, purely to stop obvious
+  // hammering; Supabase's own server-side rate limiting on signInWithOtp
+  // remains the actual enforcement regardless of what this UI allows.
+  const [resending, setResending] = useState(false)
+  const [resendError, setResendError] = useState('')
+  const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+
+  useEffect(() => {
+    if (cooldownEndsAt === null) return
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((cooldownEndsAt - Date.now()) / 1000))
+      setResendCooldown(remaining)
+    }
+    tick()
+    const interval = window.setInterval(tick, 1000)
+    return () => window.clearInterval(interval)
+  }, [cooldownEndsAt])
+
+  // The one place the callback URL is built, for both the magic-link
+  // form and Google — so `next` can never be appended inconsistently
+  // between the two paths (Resend below reuses this too).
+  function authCallbackUrl(): string {
+    const url = new URL('/auth/callback', window.location.origin)
+    if (nextPath) url.searchParams.set('next', nextPath)
+    return url.toString()
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -107,7 +151,7 @@ function SignInForm() {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: authCallbackUrl(),
           // Supabase's own native CAPTCHA support (docs: "Enable CAPTCHA
           // Protection") — harmless to send even before CAPTCHA is
           // switched on in the Supabase dashboard (GoTrue simply ignores
@@ -125,6 +169,7 @@ function SignInForm() {
         setErrorMessage(getAuthErrorMessage(error))
       } else {
         setStatus('sent')
+        setCooldownEndsAt(Date.now() + 60_000)
       }
     } catch {
       setStatus('error')
@@ -139,6 +184,56 @@ function SignInForm() {
     }
   }
 
+  async function handleResend() {
+    if (resending || resendCooldown > 0) return
+
+    if (turnstileEnabled && !captchaToken) {
+      setResendError('Please complete the verification check, then try again.')
+      return
+    }
+
+    setResending(true)
+    setResendError('')
+
+    const supabase = createClient()
+
+    try {
+      // The exact same signInWithOtp call as the initial send — no
+      // second implementation of "send a magic link," only a second
+      // trigger for it. Supabase's own cooldown/rate-limit behavior
+      // applies identically regardless of which button called this.
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: authCallbackUrl(),
+          captchaToken: captchaToken ?? undefined,
+        },
+      })
+
+      if (error) {
+        setResendError(getAuthErrorMessage(error))
+      } else {
+        setCooldownEndsAt(Date.now() + 60_000)
+      }
+    } catch {
+      setResendError('Something went wrong. Please check your connection and try again.')
+    } finally {
+      setCaptchaToken(null)
+      turnstileRef.current?.reset()
+      setResending(false)
+    }
+  }
+
+  function handleUseDifferentEmail() {
+    setStatus('idle')
+    setEmail('')
+    setErrorMessage('')
+    setResendError('')
+    setCooldownEndsAt(null)
+    setResendCooldown(0)
+    setCaptchaToken(null)
+  }
+
   async function handleGoogleSignIn() {
     setErrorMessage('')
     setGoogleLoading(true)
@@ -147,7 +242,7 @@ function SignInForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: authCallbackUrl(),
       },
     })
 
@@ -182,10 +277,55 @@ function SignInForm() {
         </div>
 
         {status === 'sent' ? (
-          <p className="text-sm">
-            Check <span className="font-medium">{email}</span> for a magic
-            link to sign in.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm">
+              Check <span className="font-medium">{email}</span> for a magic
+              link to sign in.
+            </p>
+
+            {/* A fresh Turnstile challenge for Resend — the initial
+                send's own widget already unmounted along with the form
+                branch below, and a token is single-use regardless. */}
+            {turnstileSiteKey && (
+              <TurnstileWidget
+                ref={turnstileRef}
+                siteKey={turnstileSiteKey}
+                onVerify={(token) => {
+                  setCaptchaToken(token)
+                  setCaptchaError(false)
+                }}
+                onExpire={() => setCaptchaToken(null)}
+                onError={() => {
+                  setCaptchaToken(null)
+                  setCaptchaError(true)
+                }}
+              />
+            )}
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending || resendCooldown > 0 || (turnstileEnabled && !captchaToken)}
+                className="font-medium underline decoration-foreground/30 underline-offset-4 hover:text-foreground disabled:cursor-default disabled:text-muted disabled:no-underline"
+              >
+                {resending
+                  ? 'Resending…'
+                  : resendCooldown > 0
+                    ? `Resend magic link (${resendCooldown}s)`
+                    : 'Resend magic link'}
+              </button>
+              <button
+                type="button"
+                onClick={handleUseDifferentEmail}
+                className="text-muted underline decoration-foreground/30 underline-offset-4 hover:text-foreground"
+              >
+                Use a different email
+              </button>
+            </div>
+
+            {resendError && <p className="text-sm text-red-600">{resendError}</p>}
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             <input

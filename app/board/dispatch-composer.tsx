@@ -35,9 +35,11 @@ import {
   type PublishDispatchError,
 } from '@/lib/dispatches'
 import { processImageForUpload } from '@/lib/image-processing'
+import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
 import { DispatchPhotoMoment } from './dispatch-photo-moment-node'
 import { MomentAffordance } from '@/app/letters/[letterId]/moment-affordance-extension'
 import PhotoSourceInputs, { selectPhotoSourceRef } from '@/app/letters/[letterId]/photo-source-inputs'
+import MomentSourceMenu from '@/app/letters/[letterId]/moment-source-menu'
 import TopicInput from './topic-input'
 
 const TITLE_MAX_CHARS = 70
@@ -129,8 +131,24 @@ export default function DispatchComposer({
   const [topics, setTopics] = useState<string[]>(existingDispatch?.topics ?? [])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Account enforcement messaging (pre-beta UX polish batch 1) — see
+  // lib/account-status.ts. publish_dispatch fully blocks restricted,
+  // suspended, and banned alike (all three share one generic RPC
+  // message), so unlike moments-composer.tsx's narrower case, the
+  // three-way accountBlockedMessage applies directly here.
+  const [myStatus, setMyStatus] = useState<AccountStatus>('active')
+
+  useEffect(() => {
+    let cancelled = false
+    getMyAccountStatus(createClient()).then((status) => {
+      if (!cancelled) setMyStatus(status)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
-  const [openPickerIndex, setOpenPickerIndex] = useState<number | null>(null)
+  const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -144,7 +162,7 @@ export default function DispatchComposer({
       DispatchPhotoMoment,
       MomentAffordance.configure({
         enabled: true,
-        onRequestPhoto: (index) => setOpenPickerIndex(index),
+        onRequestPhoto: (index, anchorRect) => setOpenPicker({ index, anchorRect }),
       }),
     ],
     content: isEdit && existingDispatch ? dispatchBodyToDoc(existingDispatch.body, existingDispatch.moments) : EMPTY_LETTER_DOC,
@@ -242,9 +260,9 @@ export default function DispatchComposer({
   }
 
   function chooseSource(useCamera: boolean) {
-    if (openPickerIndex === null) return
-    pendingTargetRef.current = openPickerIndex
-    setOpenPickerIndex(null)
+    if (openPicker === null) return
+    pendingTargetRef.current = openPicker.index
+    setOpenPicker(null)
     selectPhotoSourceRef(useCamera, libraryInputRef, cameraInputRef).current?.click()
   }
 
@@ -327,7 +345,12 @@ export default function DispatchComposer({
           hint: submitError?.hint,
         })
         const devDetail = process.env.NODE_ENV === 'development' ? formatDevErrorDetail(submitError) : ''
-        setError(`${genericErrorMessage}${devDetail}`)
+        // Account enforcement messaging (pre-beta UX polish batch 1) —
+        // restricted/suspended/banned all fully block publish_dispatch,
+        // so the caller's own already-known status (never decoded from
+        // the RPC's shared generic message) can replace the generic
+        // retry-implying fallback outright when it applies.
+        setError(`${accountBlockedMessage(myStatus) ?? genericErrorMessage}${devDetail}`)
         return
       }
 
@@ -374,18 +397,13 @@ export default function DispatchComposer({
 
         {uploadingIndex !== null && <p className={helperTextClass}>Adding photo…</p>}
 
-        {openPickerIndex !== null && (
-          <div className="fixed inset-x-0 bottom-0 z-50 space-y-2 rounded-t-lg border-t border-foreground/10 bg-background p-4 shadow-lg">
-            <button type="button" onClick={() => chooseSource(false)} className={secondaryButtonClass}>
-              Choose from library
-            </button>
-            <button type="button" onClick={() => chooseSource(true)} className={secondaryButtonClass}>
-              Take a photo
-            </button>
-            <button type="button" onClick={() => setOpenPickerIndex(null)} className={helperTextClass}>
-              Cancel
-            </button>
-          </div>
+        {openPicker !== null && (
+          <MomentSourceMenu
+            anchorRect={openPicker.anchorRect}
+            onChooseLibrary={() => chooseSource(false)}
+            onChooseCamera={() => chooseSource(true)}
+            onCancel={() => setOpenPicker(null)}
+          />
         )}
 
         <div className="space-y-1.5">

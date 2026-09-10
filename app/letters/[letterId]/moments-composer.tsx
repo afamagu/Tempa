@@ -31,12 +31,20 @@ import {
   clearLetterPostcardDraft,
 } from '@/lib/letter-editor-draft'
 import { readLetterDraft, clearLetterDraft } from '@/lib/letter-draft'
+import {
+  getMyAccountStatus,
+  accountBlockedMessage,
+  RESTRICTED_ATTACHMENT_MESSAGE,
+  CORRESPONDENCE_CLOSED_MESSAGE,
+  type AccountStatus,
+} from '@/lib/account-status'
 import { baseWritingExtensions } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { PhotoMoment } from './photo-moment-node'
 import { PostcardMoment } from './postcard-moment-node'
 import { MomentAffordance } from './moment-affordance-extension'
 import PhotoSourceInputs, { selectPhotoSourceRef } from './photo-source-inputs'
+import MomentSourceMenu from './moment-source-menu'
 import { processImageForUpload } from '@/lib/image-processing'
 import PostcardPicker from './postcard-picker'
 import PostcardComposerSlot from './postcard-composer-slot'
@@ -160,6 +168,22 @@ export default function MomentsComposer({
 
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Account enforcement messaging (pre-beta UX polish batch 1) — see
+  // lib/account-status.ts's own doc comment. Fetched once on mount,
+  // purely to pick a calmer message when a send this status actually
+  // blocks fails — write_letter/reply_to_letter remain the sole
+  // authority on whether the attempt itself succeeds.
+  const [myStatus, setMyStatus] = useState<AccountStatus>('active')
+
+  useEffect(() => {
+    let cancelled = false
+    getMyAccountStatus(createClient()).then((status) => {
+      if (!cancelled) setMyStatus(status)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   // WRITE → PREVIEW → SEND (2026-09-08): the composer's own primary
   // action no longer sends directly — it opens this full reading state
   // instead. Live-repair checkpoint (2026-09-08), Part D: opening it is
@@ -175,7 +199,7 @@ export default function MomentsComposer({
   const [previewMoments, setPreviewMoments] = useState<Moment[] | null>(null)
   const [preparingPreview, setPreparingPreview] = useState(false)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
-  const [openPickerIndex, setOpenPickerIndex] = useState<number | null>(null)
+  const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
   // A photo that's been uploaded and is awaiting the member's
   // confirmation on the "first photo" explanation before it's actually
   // inserted as a Moment — only ever populated when isFirstPhotoRequest.
@@ -218,7 +242,7 @@ export default function MomentsComposer({
       PostcardMoment,
       MomentAffordance.configure({
         enabled: momentsQualified && canSendPhoto,
-        onRequestPhoto: (index) => setOpenPickerIndex(index),
+        onRequestPhoto: (index, anchorRect) => setOpenPicker({ index, anchorRect }),
       }),
     ],
     content: EMPTY_LETTER_DOC,
@@ -415,9 +439,9 @@ export default function MomentsComposer({
   }
 
   function chooseSource(useCamera: boolean) {
-    if (openPickerIndex === null) return
-    pendingTargetRef.current = openPickerIndex
-    setOpenPickerIndex(null)
+    if (openPicker === null) return
+    pendingTargetRef.current = openPicker.index
+    setOpenPicker(null)
     // selectPhotoSourceRef (photo-source-inputs.tsx) is the one place
     // this mapping is decided — never re-decided inline here, so it
     // can't quietly diverge from what's actually under test.
@@ -530,6 +554,34 @@ export default function MomentsComposer({
           momentCount: momentDrafts.length,
           hasPostcard: Boolean(postcardPayload),
         })
+        // Account enforcement messaging (pre-beta UX polish batch 1) —
+        // priority order matters here:
+        //  1. suspended/banned fully block Write Anytime — the
+        //     caller's OWN already-known status (never decoded from
+        //     the RPC's shared message) is entitled to a calm, direct
+        //     explanation.
+        //  2. write_letter's own 'Correspondence not found.' text is
+        //     deliberately shared by blocked-pair AND suspended/banned
+        //     AND genuine not-found, so it can never be decoded to
+        //     reveal WHICH — mapped to equally neutral TEMPA wording
+        //     instead of the generic retry-implying fallback.
+        //  3. restricted blocks ONLY a Moment/Postcard attachment here
+        //     (see write_letter's own restricted-only checks), never
+        //     plain text — so this is the one status that must NOT use
+        //     accountBlockedMessage's "restricted from sending
+        //     letters" claim, which would be inaccurate for this
+        //     composer.
+        //  4. anything else keeps the existing generic fallback (with
+        //     dev-only detail), unchanged.
+        let enforcedMessage: string | null = null
+        if (myStatus === 'suspended' || myStatus === 'banned') {
+          enforcedMessage = accountBlockedMessage(myStatus)
+        } else if (sendError.message === 'Correspondence not found.') {
+          enforcedMessage = CORRESPONDENCE_CLOSED_MESSAGE
+        } else if (myStatus === 'restricted' && (momentDrafts.length > 0 || postcardPayload)) {
+          enforcedMessage = RESTRICTED_ATTACHMENT_MESSAGE
+        }
+
         // The user-facing copy stays generic in production — same
         // established convention as question-answer.tsx's handlePublish
         // and profile-form.tsx — but in development the actual
@@ -539,7 +591,7 @@ export default function MomentsComposer({
         // about write_letter, its RAISE EXCEPTION paths, or what gets
         // sent.
         setError(
-          'Could not send your letter. Please try again.' +
+          (enforcedMessage ?? 'Could not send your letter. Please try again.') +
             (process.env.NODE_ENV === 'development'
               ? ` (${sendError.code ?? 'no code'}: ${sendError.message}${
                   sendError.details ? ` — ${sendError.details}` : ''
@@ -627,32 +679,18 @@ export default function MomentsComposer({
 
       {uploadingIndex !== null && <p className={helperTextClass}>Adding photo…</p>}
 
-      {/* A plain, bottom-anchored choice — not positioned near the tapped
-          ⊕, deliberately: an inline button is too small a target to
-          reliably anchor a menu against on every screen size, and a
-          fixed sheet is a well-understood, robust mobile pattern.
-          Postcard-alignment audit (2026-09-13): Cancel previously sat
-          immediately adjacent to the two actions in the same vertical
-          stack — explicitly rejected. An ordinary flex row with `ml-auto`
-          (no absolute positioning) pushes it to the far edge on roomy
-          screens while `flex-wrap` lets it drop to its own line rather
-          than overflow on narrow ones. "Add a postcard" is gone entirely
-          — a NEW Postcard is never created from here anymore (see
-          PostcardComposerSlot above). */}
-      {openPickerIndex !== null && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-foreground/10 bg-background p-4 shadow-lg">
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => chooseSource(false)} className={secondaryButtonClass}>
-              Choose from library
-            </button>
-            <button type="button" onClick={() => chooseSource(true)} className={secondaryButtonClass}>
-              Take a photo
-            </button>
-            <button type="button" onClick={() => setOpenPickerIndex(null)} className={`${helperTextClass} ml-auto`}>
-              Cancel
-            </button>
-          </div>
-        </div>
+      {/* Moment menu anchoring fix (pre-beta UX polish batch 1) —
+          spatially anchored to the tapped ⊕ itself (see
+          moment-source-menu.tsx) rather than pinned to the bottom of a
+          possibly very long letter, where a mobile writer could tap ⊕
+          far up the page and never notice anything opened. */}
+      {openPicker !== null && (
+        <MomentSourceMenu
+          anchorRect={openPicker.anchorRect}
+          onChooseLibrary={() => chooseSource(false)}
+          onChooseCamera={() => chooseSource(true)}
+          onCancel={() => setOpenPicker(null)}
+        />
       )}
 
       {postcardPickerOpen && (

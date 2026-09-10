@@ -262,19 +262,18 @@ describe('MomentsComposer — Letter-Level Postcards (A/C/F)', () => {
     expect(source).not.toMatch(/postcardDraft(s)?:\s*LetterPostcardDraft\[\]/)
   })
 
-  it('F. "Add a postcard" no longer appears inside the ⊕ Moments action sheet — Photo functionality only', () => {
+  it('F. "Add a postcard" no longer appears inside the ⊕ Moments picker — Photo functionality only', () => {
     // Isolated by literal string position (never a fragile regex over
-    // the whole sheet's JSX) — everything between the ⊕ sheet's own
+    // the whole picker's JSX) — everything between the ⊕ picker's own
     // opening marker and the NEW, unrelated postcard-picker block that
     // immediately follows it in source.
-    const sheetStart = source.indexOf('{openPickerIndex !== null && (')
-    const sheetEnd = source.indexOf('{postcardPickerOpen && (')
-    expect(sheetStart).toBeGreaterThan(-1)
-    expect(sheetEnd).toBeGreaterThan(sheetStart)
-    const sheet = source.slice(sheetStart, sheetEnd)
-    expect(sheet).not.toContain('Add a postcard')
-    expect(sheet).toContain('Choose from library')
-    expect(sheet).toContain('Take a photo')
+    const pickerStart = source.indexOf('{openPicker !== null && (')
+    const pickerEnd = source.indexOf('{postcardPickerOpen && (')
+    expect(pickerStart).toBeGreaterThan(-1)
+    expect(pickerEnd).toBeGreaterThan(pickerStart)
+    const picker = source.slice(pickerStart, pickerEnd)
+    expect(picker).not.toContain('Add a postcard')
+    expect(picker).toContain('<MomentSourceMenu')
   })
 
   it('a NEW Postcard is never inserted into ProseMirror — no postcardMoment.create call remains in this file', () => {
@@ -298,32 +297,28 @@ describe('MomentsComposer — Letter-Level Postcards (A/C/F)', () => {
   })
 })
 
-// G. Moments sheet Cancel alignment — explicitly rejected: Cancel stuck
-// immediately adjacent to the other actions in a vertical stack. Fixed
-// with an ordinary flex row and `ml-auto`, never absolute positioning.
-describe('MomentsComposer — Moments sheet Cancel alignment (G)', () => {
-  function sheetSource() {
-    const sheetStart = source.indexOf('{openPickerIndex !== null && (')
-    const sheetEnd = source.indexOf('{postcardPickerOpen && (')
-    return source.slice(sheetStart, sheetEnd)
-  }
-
-  it('uses an ordinary flex row for the sheet actions, never absolute positioning for Cancel', () => {
-    const sheet = sheetSource()
-    expect(sheet).toContain('flex flex-wrap items-center gap-2')
-    expect(sheet).not.toContain('className="absolute')
+// Moment menu anchoring fix (pre-beta UX polish batch 1) — the ⊕
+// picker no longer pins itself to the bottom of the composer; it opens
+// spatially anchored to whichever ⊕ control was actually tapped, via
+// the shared MomentSourceMenu (moment-source-menu.tsx), so a writer far
+// down a long letter can't miss that it opened.
+describe('MomentsComposer — Moment menu anchored to the tapped control', () => {
+  it('captures the tapped ⊕\'s own bounding rect and stores it alongside the paragraph index', () => {
+    expect(source).toContain('onRequestPhoto: (index, anchorRect) => setOpenPicker({ index, anchorRect })')
   })
 
-  it('Cancel is pushed to the far edge via ml-auto, an ordinary flex spacer — never a fragile absolute position', () => {
-    expect(source).toContain("`${helperTextClass} ml-auto`")
+  it('renders the picker anchored to that rect, never a fixed bottom sheet', () => {
+    // Scoped to the ⊕ picker block only — the file's UNRELATED
+    // postcard-picker sheet (a different, untouched feature) still
+    // legitimately uses a fixed bottom sheet of its own.
+    const pickerStart = source.indexOf('{openPicker !== null && (')
+    const pickerEnd = source.indexOf('{postcardPickerOpen && (')
+    const picker = source.slice(pickerStart, pickerEnd)
+    expect(picker).toContain('anchorRect={openPicker.anchorRect}')
+    expect(picker).not.toContain('fixed inset-x-0 bottom-0')
   })
 
-  it('Cancel is the last action in source order, after both Choose from library and Take a photo', () => {
-    const chooseIndex = source.indexOf('Choose from library')
-    const cameraIndex = source.indexOf('Take a photo')
-    const cancelIndex = source.lastIndexOf('Cancel')
-    expect(chooseIndex).toBeGreaterThan(-1)
-    expect(cameraIndex).toBeGreaterThan(chooseIndex)
-    expect(cancelIndex).toBeGreaterThan(cameraIndex)
+  it('wires Cancel/outside-click dismissal through the shared menu\'s onCancel callback', () => {
+    expect(source).toContain('onCancel={() => setOpenPicker(null)}')
   })
 })

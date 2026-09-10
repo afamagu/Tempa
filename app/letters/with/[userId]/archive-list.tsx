@@ -8,10 +8,7 @@ import FormattedText from '@/app/letters/formatted-text'
 // stroke-icon convention (viewBox 0 0 24 24, strokeWidth 1.5). Shown
 // only when this specific letter contains at least one Photo Moment —
 // never a combined photo+postcard count the way the old Letterbox row
-// indicator was. letter.momentCounts.postcard already exists on the
-// data (see attachMomentCounts in lib/letters.ts) so a future postcard
-// icon has a place to hang here without another data-layer change,
-// but no such icon is built this checkpoint.
+// indicator was.
 function PhotoIcon() {
   return (
     <svg
@@ -27,6 +24,35 @@ function PhotoIcon() {
       <rect x="3.5" y="5.5" width="17" height="14" rx="1.5" />
       <circle cx="9" cy="11" r="2" />
       <path d="m5 17 4.5-4.5c.6-.6 1.4-.6 2 0L15 16l1.5-1.5c.6-.6 1.4-.6 2 0L21 17" />
+    </svg>
+  )
+}
+
+// Letterbox Postcard indicator (pre-beta UX polish batch 1) — a small
+// TRADITIONAL HORIZONTAL postcard: a wide outlined card, a tiny stamp
+// square at the upper right, and two short address lines beneath it.
+// Deliberately never PhotoIcon's tall 9:16-ish photo-frame silhouette
+// (this one is wide, not tall), never a phone (no rounded-corner
+// vertical body/notch), and never a video/player glyph (no play
+// triangle) — see letter.hasLetterPostcard in lib/letters.ts, sourced
+// from the NEW letter-level Postcard table, never the old inline
+// Moment Postcard rows momentCounts.postcard counts.
+function PostcardIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3 w-3 text-foreground/45"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+      <rect x="15.5" y="8" width="4" height="3.2" rx="0.4" />
+      <path d="M5 13h6" />
+      <path d="M5 15.5h4" />
     </svg>
   )
 }
@@ -94,9 +120,18 @@ function ArchiveCard({
         </p>
       </div>
 
-      {letter.momentCounts.photo > 0 && (
-        <div className="mt-auto flex justify-end pt-1">
-          <PhotoIcon />
+      {(letter.momentCounts.photo > 0 || letter.hasLetterPostcard) && (
+        <div className="mt-auto flex justify-end gap-1 pt-1">
+          {letter.momentCounts.photo > 0 && (
+            <span role="img" aria-label="Contains photos" title="Contains photos">
+              <PhotoIcon />
+            </span>
+          )}
+          {letter.hasLetterPostcard && (
+            <span role="img" aria-label="Contains a Postcard" title="Contains a Postcard">
+              <PostcardIcon />
+            </span>
+          )}
         </div>
       )}
     </Link>

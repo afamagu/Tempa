@@ -1391,7 +1391,17 @@ export async function getLetterboxPeople(
 // all of them.
 // ============================================================
 
-export type ArchiveLetter = Letter & { momentCounts: MomentCounts }
+export type ArchiveLetter = Letter & {
+  momentCounts: MomentCounts
+  /** Whether this letter carries a letter-level Postcard (letter_postcards
+   * — Letter-Level Postcards V1, 2026-09-14) — deliberately NOT the same
+   * thing as momentCounts.postcard, which counts the OLD inline
+   * moments.type='postcard' rows from before that migration. Drives the
+   * Letterbox Postcard indicator (archive-list.tsx); see
+   * attachLetterPostcardFlags's own doc comment for why these two are
+   * never conflated. */
+  hasLetterPostcard: boolean
+}
 
 /** Pure: which of a pair's correspondence ids are visible to the
  * viewer — every episode with this person, minus whichever the viewer
@@ -1408,10 +1418,32 @@ export function visibleCorrespondenceIdsForPair(
 export function attachMomentCounts(
   letters: Letter[],
   momentCounts: Map<string, MomentCounts>
-): ArchiveLetter[] {
+): (Letter & { momentCounts: MomentCounts })[] {
   return letters.map((letter) => ({
     ...letter,
     momentCounts: momentCounts.get(letter.id) ?? { photo: 0, postcard: 0 },
+  }))
+}
+
+/**
+ * Pure: layers the letter-level-Postcard presence flag on top of
+ * attachMomentCounts' own output. Kept as a SEPARATE pass (not folded
+ * into attachMomentCounts itself) specifically so the two data sources
+ * stay visibly distinct at the call site — letterPostcardLetterIds must
+ * come from getLetterPostcardsForLetters (the new letter_postcards
+ * table), never from the `moments` table's historical type='postcard'
+ * rows attachMomentCounts already reads, which is a different, older
+ * feature (inline Postcard Moments, retired for new composition — see
+ * moments-composer.tsx's own doc comment) and must never be shown as if
+ * it were a new letter-level Postcard.
+ */
+export function attachLetterPostcardFlags(
+  letters: (Letter & { momentCounts: MomentCounts })[],
+  letterPostcardLetterIds: Set<string>
+): ArchiveLetter[] {
+  return letters.map((letter) => ({
+    ...letter,
+    hasLetterPostcard: letterPostcardLetterIds.has(letter.id),
   }))
 }
 
@@ -1481,12 +1513,18 @@ export async function getLetterArchiveWithUser(
     .order('created_at', { ascending: false })
 
   const letters = (data ?? []).map((row) => toLetter(row as LetterRow))
-  const momentCounts = await getMomentCountsForLetters(
-    supabase,
-    letters.map((l) => l.id)
-  )
+  const letterIds = letters.map((l) => l.id)
+  const [momentCounts, letterPostcards] = await Promise.all([
+    getMomentCountsForLetters(supabase, letterIds),
+    // Letterbox Postcard indicator (pre-beta UX polish batch 1) — the
+    // NEW letter-level Postcard table, deliberately a separate query
+    // from getMomentCountsForLetters above (which reads the OLD
+    // moments.type='postcard' rows) — see attachLetterPostcardFlags's
+    // own doc comment for why these must never be conflated.
+    getLetterPostcardsForLetters(supabase, letterIds),
+  ])
 
-  return attachMomentCounts(letters, momentCounts)
+  return attachLetterPostcardFlags(attachMomentCounts(letters, momentCounts), new Set(letterPostcards.keys()))
 }
 
 export type MomentCounts = { photo: number; postcard: number }

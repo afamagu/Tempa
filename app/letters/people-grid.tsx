@@ -79,8 +79,14 @@ export default function PeopleGrid({
     return <p className={helperTextClass}>{emptyStateCopy(filter, hasAnyPeopleAtAll)}</p>
   }
 
+  // Desktop layout preference (pre-beta UX polish batch 1) — a single
+  // stacked horizontal correspondence row, replacing the previous
+  // sm:grid-cols-2 lg:grid-cols-3 narrow-card grid. Each card is
+  // already an internally horizontal row (avatar + text); this just
+  // stops them from being squeezed three-across on a wide screen.
+  // Mobile is unaffected — it was already grid-cols-1.
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3">
       {people.map((person) => (
         <Link
           key={person.userId}

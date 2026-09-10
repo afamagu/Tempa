@@ -196,6 +196,21 @@ export default async function DispatchPage({
                 initialPosition={initialPosition}
               />
             </div>
+
+            {/* Bottom-of-letter return nav (pre-beta UX polish batch 1) —
+                the same destination as the top back link, so a reader who
+                reaches the end of a very long Dispatch never has to
+                scroll back up to return to the Board. Deliberately an
+                ordinary in-flow link, not sticky/floating. */}
+            <div className="border-t border-foreground/10 pt-4">
+              <Link
+                href="/board"
+                className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
+              >
+                <BackArrowIcon />
+                Back to The Board
+              </Link>
+            </div>
           </div>
         </div>
       </main>
