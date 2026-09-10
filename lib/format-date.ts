@@ -62,3 +62,15 @@ export function formatDatePlain(iso: string): string {
     year: 'numeric',
   })
 }
+
+/** "Sep 3" — no year, no time. For a compact axis label (a chart's
+ * first/last day) where formatDatePlain's year would be redundant
+ * clutter. `T00:00:00` anchors a bare `date`-typed value (e.g. the
+ * admin overview daily-series RPC's own `day` column, "2026-09-03"
+ * with no time component) to the LOCAL calendar day it names, rather
+ * than letting the bare-date/UTC-midnight parse roll it back a day in
+ * a negative-offset timezone. */
+export function formatDateShort(isoDate: string): string {
+  const date = isoDate.includes('T') ? new Date(isoDate) : new Date(`${isoDate}T00:00:00`)
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}

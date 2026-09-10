@@ -39,7 +39,7 @@ export default async function AdminReportDetailPage({ params }: { params: Promis
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/admin" className="text-[14px] text-foreground/70 transition-colors hover:text-foreground">
+        <Link href="/admin/reports" className="text-[14px] text-foreground/70 transition-colors hover:text-foreground">
           ← Report queue
         </Link>
       </div>

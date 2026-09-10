@@ -40,6 +40,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <p className={sectionLabelClass}>TEMPA / Admin</p>
           <nav className="flex gap-4 text-[14px] font-medium text-foreground/70">
             <Link href="/admin" className="transition-colors hover:text-foreground">
+              Overview
+            </Link>
+            <Link href="/admin/reports" className="transition-colors hover:text-foreground">
               Reports
             </Link>
             <Link href="/admin/members" className="transition-colors hover:text-foreground">
