@@ -33,7 +33,7 @@ export default function DispatchBody({
    * forced to supply a no-op. */
   paragraphAttrs?: (index: number) => Record<string, string | number>
 }) {
-  const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string } | null>(null)
+  const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string; momentId: string } | null>(null)
 
   const { isRich, body: cleanBody } = stripRichBodyMarker(body)
   const paragraphs = splitParagraphs(cleanBody)
@@ -69,7 +69,13 @@ export default function DispatchBody({
               {moment?.imageUrl && (
                 <PhotoMomentToken
                   src={moment.imageUrl}
-                  onOpen={() => setOpenPhoto({ src: moment.imageUrl as string, alt: 'A photo shared in this Dispatch' })}
+                  onOpen={() =>
+                    setOpenPhoto({
+                      src: moment.imageUrl as string,
+                      alt: 'A photo shared in this Dispatch',
+                      momentId: moment.id,
+                    })
+                  }
                 />
               )}
             </p>
@@ -78,7 +84,12 @@ export default function DispatchBody({
       </div>
 
       {openPhoto && (
-        <PhotoMomentViewer src={openPhoto.src} alt={openPhoto.alt} onClose={() => setOpenPhoto(null)} />
+        <PhotoMomentViewer
+          src={openPhoto.src}
+          alt={openPhoto.alt}
+          momentId={openPhoto.momentId}
+          onClose={() => setOpenPhoto(null)}
+        />
       )}
     </>
   )

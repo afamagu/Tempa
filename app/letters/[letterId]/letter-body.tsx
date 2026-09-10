@@ -53,7 +53,7 @@ export default function LetterBody({
     otherPseudonym: string
   }
 }) {
-  const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string } | null>(null)
+  const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string; momentId: string } | null>(null)
   // Stripped ONCE against the whole raw body, before paragraph
   // splitting — the rich-body marker only ever sits at position 0 of
   // the whole value (see stripRichBodyMarker's own doc comment), so
@@ -77,7 +77,9 @@ export default function LetterBody({
                 {moment?.type === 'photo' && photoUrl && (
                   <PhotoMomentToken
                     src={photoUrl}
-                    onOpen={() => setOpenPhoto({ src: photoUrl, alt: 'A photo shared in this letter' })}
+                    onOpen={() =>
+                      setOpenPhoto({ src: photoUrl, alt: 'A photo shared in this letter', momentId: moment.id })
+                    }
                   />
                 )}
               </p>
@@ -103,7 +105,12 @@ export default function LetterBody({
       </div>
 
       {openPhoto && (
-        <PhotoMomentViewer src={openPhoto.src} alt={openPhoto.alt} onClose={() => setOpenPhoto(null)} />
+        <PhotoMomentViewer
+          src={openPhoto.src}
+          alt={openPhoto.alt}
+          momentId={openPhoto.momentId}
+          onClose={() => setOpenPhoto(null)}
+        />
       )}
     </>
   )

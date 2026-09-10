@@ -5,6 +5,7 @@ import { iconButtonClass } from '@/app/profile/ui'
 import Tooltip from '@/app/profile/tooltip'
 import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
 import BlockButton from '@/app/block-button'
+import ReportButton from '@/app/report-button'
 import type { BlockScope } from '@/lib/blocking'
 
 function MenuIcon() {
@@ -23,19 +24,19 @@ const itemClass =
 /**
  * A restrained per-letter overflow menu, comparable in interaction
  * discipline to Gmail — every entry here either does something real
- * (Remove from my Letterbox, Block — Safety & Trust Checkpoint 1B) or
- * is visibly, honestly disabled rather than half-built (Send a
- * physical copy, Translate, Report — reporting is a separate, later
- * checkpoint, deliberately not built alongside blocking). Reply lives
- * as its own prominent action on the page, not buried in this menu —
- * see app/letters/[letterId]/page.tsx.
+ * (Remove from my Letterbox, Block, Report — pre-beta minimum safety
+ * build) or is visibly, honestly disabled rather than half-built (Send a
+ * physical copy, Translate). Reply lives as its own prominent action on
+ * the page, not buried in this menu — see app/letters/[letterId]/page.tsx.
  */
 export default function LetterActionMenu({
+  letterId,
   correspondenceId,
   otherPartyId,
   otherPseudonym,
   initialBlockScope = null,
 }: {
+  letterId: string
   correspondenceId: string
   otherPartyId: string
   otherPseudonym: string
@@ -70,16 +71,14 @@ export default function LetterActionMenu({
       </Tooltip>
 
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-foreground/10 bg-background p-1.5 shadow-md">
+        <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-foreground/10 bg-background p-1.5 shadow-md">
           <button type="button" disabled className={itemClass} title="Send a physical copy — not available yet">
             Send a physical copy
           </button>
           <button type="button" disabled className={itemClass} title="Translate — coming later">
             Translate
           </button>
-          <button type="button" disabled className={itemClass} title="Reporting isn't available yet">
-            Report
-          </button>
+          <ReportButton targetType="letter" targetId={letterId} triggerClassName={itemClass} />
           <RemoveFromLetterbox correspondenceIds={[correspondenceId]} triggerClassName={itemClass} />
           <div className="my-1 border-t border-foreground/10" />
           <BlockButton

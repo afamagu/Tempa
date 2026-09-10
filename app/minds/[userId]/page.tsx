@@ -20,6 +20,7 @@ import {
 import AppShell from '@/app/app-shell'
 import Mindform from '@/app/mindform'
 import BlockButton from '@/app/block-button'
+import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
 import ProfileAnswer from './profile-answer'
 import DispatchCard from '../../board/dispatch-card'
@@ -232,7 +233,7 @@ export default async function PublicProfilePage({
                 </Link>
               ) : null}
 
-              <div>
+              <div className="flex flex-wrap items-center gap-4">
                 <BlockButton
                   blockedId={profile.id}
                   blockedPseudonym={profile.pseudonym}
@@ -240,6 +241,7 @@ export default async function PublicProfilePage({
                   initialScope={blockScope}
                   fullBlockRedirect="/minds"
                 />
+                <ReportButton targetType="profile" targetId={profile.id} triggerClassName={quietLinkClass} />
               </div>
             </div>
           )}

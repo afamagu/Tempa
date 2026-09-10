@@ -299,6 +299,7 @@ export default async function LetterPage({
                   {formatDateTimeFull(target.createdAt)}
                 </span>
                 <LetterActionMenu
+                  letterId={target.id}
                   correspondenceId={target.correspondenceId}
                   otherPartyId={otherPartyId}
                   otherPseudonym={otherPseudonym}

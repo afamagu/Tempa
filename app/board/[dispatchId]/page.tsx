@@ -15,15 +15,35 @@ import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import { sectionTitleClass, metadataTextClass } from '@/app/profile/ui'
 import { formatDateTimeFull } from '@/lib/format-date'
+import { iconButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import Mindform from '@/app/mindform'
 import CountryFlag from '@/app/country-flag'
+import ReportButton from '@/app/report-button'
 import MomentHint from '../moment-hint'
 import TopicChips from '../topic-chips'
 import KeepButton from '../keep-button'
 import ShareDispatchButton from '../share-dispatch-button'
 import DispatchReader from './dispatch-reader'
 import AuthorActionsMenu from './author-actions-menu'
+
+function FlagIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M5 3v18" />
+      <path d="M5 4h13l-3 4 3 4H5" />
+    </svg>
+  )
+}
 
 function BackArrowIcon() {
   return (
@@ -139,12 +159,24 @@ export default async function DispatchPage({
                     momentImagePaths={editableMoments.map((m) => m.imagePath)}
                   />
                 ) : (
-                  <KeepButton
-                    viewerId={user.id}
-                    keptUserId={dispatch.authorId}
-                    keptPseudonym={dispatch.authorPseudonym}
-                    initiallyKept={kept}
-                  />
+                  <>
+                    <KeepButton
+                      viewerId={user.id}
+                      keptUserId={dispatch.authorId}
+                      keptPseudonym={dispatch.authorPseudonym}
+                      initiallyKept={kept}
+                    />
+                    <div className="relative">
+                      <ReportButton
+                        targetType="dispatch"
+                        targetId={dispatch.id}
+                        triggerClassName={iconButtonClass}
+                        triggerLabel={<FlagIcon />}
+                        triggerAriaLabel="Report this Dispatch"
+                        panelClassName="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-foreground/10 bg-background p-3 shadow-md"
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             </div>
