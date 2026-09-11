@@ -1,16 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import {
   helperTextClass,
   quietLinkClass,
   proseHeadingClass,
   proseBodyClass,
   contextQuestionClass,
-  compactSecondaryButtonClass,
 } from '@/app/profile/ui'
 import { formatDatePlain } from '@/lib/format-date'
 import type { LibraryQuestion, MyQuestionAnswer } from '@/lib/questions'
@@ -25,18 +21,18 @@ function excerpt(text: string, maxChars = 240) {
 
 // QUESTION + DATE: system/context styling, outside the writing surface.
 // ANSWER: darker inset human-writing surface. Same grammar as a letter.
+//
+// Question Slots checkpoint — the old "Show in Minds" manual toggle
+// (set_current_answer) is REMOVED from this surface entirely. Primary
+// Minds/Profile representation is no longer a member choice at all —
+// it is always and only the answer to whichever Question currently
+// holds position #1 (answer.isPrimary). Exposing a control that no
+// longer actually determines that would be actively misleading. The
+// set_current_answer RPC and is_current column are left completely
+// unchanged server-side (see lib/questions.ts's own header comment)
+// purely for backward compatibility with historical data — nothing in
+// the member-facing UI reads or writes is_current anymore.
 function AnsweredQuestionRow({ answer }: { answer: MyQuestionAnswer }) {
-  const router = useRouter()
-  const [settingCurrent, setSettingCurrent] = useState(false)
-
-  async function showInMinds() {
-    setSettingCurrent(true)
-    const supabase = createClient()
-    const { error } = await supabase.rpc('set_current_answer', { p_answer_id: answer.id })
-    setSettingCurrent(false)
-    if (!error) router.refresh()
-  }
-
   return (
     <div className="border-b border-foreground/10 py-6 first:pt-0 last:border-b-0">
       <Link href={`/question/${answer.questionId}`} className="block hover:opacity-90">
@@ -49,18 +45,7 @@ function AnsweredQuestionRow({ answer }: { answer: MyQuestionAnswer }) {
         </div>
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        {answer.isCurrent ? (
-          <span className={helperTextClass}>Shown in Minds</span>
-        ) : (
-          <button
-            type="button"
-            onClick={showInMinds}
-            disabled={settingCurrent}
-            className={compactSecondaryButtonClass}
-          >
-            {settingCurrent ? 'Updating…' : 'Show in Minds'}
-          </button>
-        )}
+        {answer.isPrimary && <span className={helperTextClass}>Your primary Minds answer</span>}
         {/* Admin Phase 2A-1 — only ever true for the answer's own
             author (question_answers' RLS excludes a hidden row from
             everyone else entirely); a calm, private notice, never a
@@ -87,19 +72,14 @@ function EligibleQuestionRow({ question }: { question: LibraryQuestion }) {
 /**
  * Minds' "My answers" and "Answer a Question" content.
  *
- * Question source-of-truth correction: "Answer a Question" used to
- * always show the same fixed three canonical Questions, each already
- * marked Answered/Not yet answered, so a member could revisit any of
- * them at any time — the only way to "answer something new" WAS to
- * revisit one of the three. Now that the library can hold many
- * Questions, `questions` here is already the up-to-three, unanswered,
- * family-diverse ELIGIBLE set (lib/questions.ts's
- * getEligibleQuestions) — genuinely new things to try, never something
+ * Question Slots checkpoint: "Answer a Question" shows the current,
+ * explicitly Admin-positioned #1/#2/#3 Questions (lib/questions.ts's
+ * getEligibleQuestions), in that order, minus anything this member has
+ * already answered — genuinely new things to try, never something
  * already answered. Revisiting/editing an existing answer is "My
- * answers"' job now (it always was, for the completed half): each
- * answer's own prompt links to the same write page
- * (app/question/[questionId]/page.tsx), pre-filled with the existing
- * body, so editing keeps working exactly as before.
+ * answers"' job (each answer's own prompt links to the same write page,
+ * app/question/[questionId]/page.tsx, pre-filled with the existing
+ * body).
  */
 export default function QuestionWorkspace({
   tab,

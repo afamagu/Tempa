@@ -57,13 +57,20 @@ export default function ProfileAnswer({
   id,
   prompt,
   body,
-  isCurrent,
+  isPrimary = false,
   showReport,
 }: {
   id: string
   prompt: string
   body: string
-  isCurrent: boolean
+  /** Question Slots checkpoint — true exactly when this answer's
+   * Question currently holds position #1. Renamed from the old
+   * `isCurrent` (member-choosable, no longer meaningful for Minds
+   * primary-answer status — see lib/questions.ts's own header
+   * comment). Optional/defaults false so the "other answers"
+   * disclosure (never primary by construction) doesn't need to pass
+   * it explicitly. */
+  isPrimary?: boolean
   showReport: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -103,7 +110,7 @@ export default function ProfileAnswer({
         )}
       </div>
 
-      {isCurrent && <p className={`mt-2 ${metadataTextClass}`}>Shown in Minds</p>}
+      {isPrimary && <p className={`mt-2 ${metadataTextClass}`}>Primary Minds answer</p>}
     </div>
   )
 }

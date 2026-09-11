@@ -6,14 +6,15 @@ import type { LibraryQuestion, MyQuestionAnswer } from '@/lib/questions'
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ rpc: async () => ({ error: null }) }) }))
 
-// Question source-of-truth correction: "Answer a Question" now receives
-// an already-eligible (active, unanswered) set from getEligibleQuestions
-// — up to three, never carrying an `answer` field, since anything
-// already answered was excluded before this component ever sees it.
+// Question Slots checkpoint: "Answer a Question" now receives the
+// current #1/#2/#3 positioned set from getEligibleQuestions, minus
+// anything already answered — never carrying an `answer` field, since
+// anything already answered was excluded before this component ever
+// sees it.
 const ELIGIBLE_QUESTIONS: LibraryQuestion[] = [
-  { id: 'q-private-ritual', prompt: "Is there something you return to when no one's watching?", family: 'reflection' },
-  { id: 'q-place-outsiders', prompt: "What's something about the place you're from a stranger would never guess?", family: 'everyday' },
-  { id: 'q-ordinary-worth', prompt: "What's something ordinary you'd fight to protect?", family: 'imagination' },
+  { id: 'q-private-ritual', prompt: "Is there something you return to when no one's watching?", position: 1 },
+  { id: 'q-place-outsiders', prompt: "What's something about the place you're from a stranger would never guess?", position: 2 },
+  { id: 'q-ordinary-worth', prompt: "What's something ordinary you'd fight to protect?", position: 3 },
 ]
 
 describe('QuestionWorkspace — zero-answer state (the exact live-test crash scenario)', () => {
@@ -49,6 +50,7 @@ describe('QuestionWorkspace — "My answers" own-history view (Admin Phase 2A-1,
       body: 'A visible answer body.',
       updatedAt: '2026-09-01T00:00:00Z',
       isCurrent: true,
+      isPrimary: true,
       moderationStatus: 'visible',
     },
   ]
@@ -57,6 +59,17 @@ describe('QuestionWorkspace — "My answers" own-history view (Admin Phase 2A-1,
     const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" answers={ANSWERED} />)
     expect(html).not.toContain('Hidden by TEMPA')
     expect(html).toContain('A visible answer body.')
+  })
+
+  it('shows "Your primary Minds answer" only for the answer whose Question currently holds position #1 — never a manual "Show in Minds" toggle', () => {
+    const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" answers={ANSWERED} />)
+    expect(html).toContain('Your primary Minds answer')
+    expect(html).not.toContain('Show in Minds')
+
+    const notPrimary: MyQuestionAnswer[] = [{ ...ANSWERED[0], isPrimary: false }]
+    const htmlNotPrimary = renderToStaticMarkup(<QuestionWorkspace tab="answers" answers={notPrimary} />)
+    expect(htmlNotPrimary).not.toContain('Your primary Minds answer')
+    expect(htmlNotPrimary).not.toContain('Show in Minds')
   })
 
   it('a hidden own answer still renders (own-history access preserved) AND shows a private "Hidden by TEMPA" notice, never a public tombstone', () => {
@@ -87,6 +100,7 @@ describe('QuestionWorkspace — "My answers" own-history view (Admin Phase 2A-1,
       body: `Body ${i}`,
       updatedAt: '2026-09-01T00:00:00Z',
       isCurrent: i === 0,
+      isPrimary: i === 0,
       moderationStatus: 'visible' as const,
     }))
     const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" answers={many} />)

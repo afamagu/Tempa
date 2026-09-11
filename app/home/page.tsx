@@ -19,6 +19,8 @@ import {
 import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
 import { getHomeBoardDispatches, getFirstMomentThumbnails } from '@/lib/dispatches'
 import { getActiveAnnouncement } from '@/lib/announcements'
+import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
+import AnnouncementBody from '@/app/announcement-body'
 import { sectionLabelClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MailInTransitIcon from '@/app/mail-in-transit-icon'
@@ -93,6 +95,9 @@ export default async function HomePage() {
   ])
 
   const activeAnnouncement = await getActiveAnnouncement(supabase)
+  const announcementImageUrl = activeAnnouncement?.heroImagePath
+    ? (await resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath)).url
+    : null
 
   const boardThumbnails = await getFirstMomentThumbnails(
     supabase,
@@ -181,11 +186,28 @@ export default async function HomePage() {
     <AppShell active="home" waitingLetterCount={waitingCount}>
       <main className="min-h-screen p-6">
         <div className="mx-auto w-full max-w-md py-10">
+          {/* Premium Announcement Publishing checkpoint — a restrained
+              editorial TEMPA object, not a system notice: 3:2 hero,
+              title, subtitle, structured body. No carousel, no
+              ad-banner styling, no giant CTA. Exactly one at a time
+              (getActiveAnnouncement's own deterministic ranking). */}
           {activeAnnouncement && (
-            <div className="mb-6">
-              <SystemMessage variant="notice" title={activeAnnouncement.title}>
-                {activeAnnouncement.body}
-              </SystemMessage>
+            <div className="mb-8 space-y-3 border-b border-foreground/10 pb-8">
+              {announcementImageUrl && (
+                <div className="aspect-[3/2] w-full overflow-hidden rounded-md">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={announcementImageUrl} alt="" className="h-full w-full object-cover" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <h2 className="font-serif text-2xl font-medium leading-tight text-foreground">
+                  {activeAnnouncement.title}
+                </h2>
+                {activeAnnouncement.subtitle && (
+                  <p className="font-serif italic text-foreground/70">{activeAnnouncement.subtitle}</p>
+                )}
+              </div>
+              <AnnouncementBody doc={activeAnnouncement.contentJson} />
             </div>
           )}
 

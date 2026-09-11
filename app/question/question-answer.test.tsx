@@ -152,10 +152,10 @@ describe('QuestionAnswer — view mode (already has a saved answer)', () => {
         questionId="q-1"
         prompt="A prompt"
         initialAnswer="My existing answer."
-        initialIsCurrent
+        isPositionOne
       />
     )
     expect(html).not.toContain('Answer saved.')
-    expect(html).not.toContain('now featured in Minds')
+    expect(html).not.toContain('now your primary Minds answer')
   })
 })

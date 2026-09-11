@@ -34,10 +34,10 @@ export default async function QuestionWritePage({
     getEligibleQuestions(supabase, user.id),
   ])
 
-  // Question source-of-truth correction: "next" is no longer a fixed-
-  // order wraparound over 3 canonical slugs — it's simply the first
-  // other currently-eligible (active, unanswered, family-diverse)
-  // Question, or null once nothing else is left.
+  // "Next" is simply the first other currently-eligible (positioned,
+  // unanswered) Question in #1/#2/#3 order, or null once nothing else
+  // is left — no fixed-order wraparound needed with only 3 possible
+  // slots.
   const nextQuestion = nextEligibleQuestion(eligibleQuestions, question.id)
 
   return (
@@ -46,8 +46,8 @@ export default async function QuestionWritePage({
       questionId={question.id}
       prompt={question.prompt}
       isActive={question.isActive}
+      isPositionOne={question.position === 1}
       initialAnswer={answer?.body ?? null}
-      initialIsCurrent={answer?.is_current ?? false}
       nextQuestion={nextQuestion}
     />
   )

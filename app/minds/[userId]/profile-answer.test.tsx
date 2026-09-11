@@ -22,7 +22,7 @@ describe('isLongAnswer (pure)', () => {
 
 describe('ProfileAnswer', () => {
   it('the Question is not permanently/visibly displayed — no popover content rendered until activated', () => {
-    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent={false} showReport={false} />)
+    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport={false} />)
     // Tooltip only renders its visible role="tooltip" content once its
     // internal `visible` state is true — untouched (collapsed) on
     // initial render, so the prompt is not shown as a heading/paragraph
@@ -31,30 +31,34 @@ describe('ProfileAnswer', () => {
   })
 
   it('the info control still carries an accessible label naming the Question — present for assistive tech even while visually collapsed', () => {
-    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent={false} showReport={false} />)
+    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport={false} />)
     expect(html).toContain(`aria-label="The Question: ${PROMPT}"`)
   })
 
   it('a short answer shows in full with no Read more control', () => {
-    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent={false} showReport={false} />)
+    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport={false} />)
     expect(html).toContain(SHORT_BODY)
     expect(html).not.toContain('Read more')
   })
 
   it('a long answer is clamped and offers Read more, but the full text is still present in the DOM (CSS-clamped, never sliced)', () => {
-    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={LONG_BODY} isCurrent={false} showReport={false} />)
+    const html = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={LONG_BODY} showReport={false} />)
     expect(html).toContain('line-clamp-4')
     expect(html).toContain(LONG_BODY)
     expect(html).toContain('Read more')
     expect(html).toContain('aria-expanded="false"')
   })
 
-  it('shows "Shown in Minds" only for the current answer', () => {
-    const current = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent showReport={false} />)
-    expect(current).toContain('Shown in Minds')
+  it('shows "Primary Minds answer" only when isPrimary is true', () => {
+    const primary = renderToStaticMarkup(
+      <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isPrimary showReport={false} />
+    )
+    expect(primary).toContain('Primary Minds answer')
 
-    const notCurrent = renderToStaticMarkup(<ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent={false} showReport={false} />)
-    expect(notCurrent).not.toContain('Shown in Minds')
+    const notPrimary = renderToStaticMarkup(
+      <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport={false} />
+    )
+    expect(notPrimary).not.toContain('Primary Minds answer')
   })
 })
 
@@ -65,14 +69,14 @@ describe('ProfileAnswer', () => {
 describe('ProfileAnswer — Report action (Admin Phase 2A-1)', () => {
   it('renders a Report control when showReport is true (viewing someone else\'s answer)', () => {
     const html = renderToStaticMarkup(
-      <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent={false} showReport />
+      <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport />
     )
     expect(html).toContain('Report this answer')
   })
 
   it('renders no Report control when showReport is false (viewing your own answer)', () => {
     const html = renderToStaticMarkup(
-      <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isCurrent={false} showReport={false} />
+      <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport={false} />
     )
     expect(html).not.toContain('Report this answer')
   })

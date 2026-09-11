@@ -48,7 +48,7 @@ export default function QuestionAnswer({
   questionId,
   prompt,
   initialAnswer,
-  initialIsCurrent = false,
+  isPositionOne = false,
   isActive = true,
   nextQuestion = null,
 }: {
@@ -56,18 +56,17 @@ export default function QuestionAnswer({
   questionId: string
   prompt: string
   initialAnswer: string | null
-  /** Whether THIS Question's answer is the member's current
-   * Shown-in-Minds answer, as of page load — the baseline
-   * questionSaveConfirmationCopy compares against to tell "this save
-   * just became featured" apart from "this was already featured" (see
-   * publish_question_answer's own doc comment, docs/sql/2026-09-03-
-   * publish-question-answer-canonical.sql: only a member's first-ever
-   * canonical answer is auto-promoted; every later save leaves
-   * is_current untouched). */
-  initialIsCurrent?: boolean
+  /** Question Slots checkpoint — whether THIS Question currently holds
+   * position #1, the permanent flagship. The confirmation copy for a
+   * member's very first save here is the only save ever announced as
+   * "now your primary Minds answer" (lib/questions.ts's
+   * questionSaveConfirmationCopy) — deliberately never based on
+   * is_current, which no longer determines Minds primary-answer
+   * status under the new model. */
+  isPositionOne?: boolean
   isActive?: boolean
-  /** The next currently-eligible Question (active, unanswered by this
-   * member), or null when none remain — computed server-side
+  /** The next currently-eligible Question (positioned, unanswered by
+   * this member), or null when none remain — computed server-side
    * (lib/questions.ts's nextEligibleQuestion). Only ever offered once
    * there's a saved answer to show (never during active editing, so
    * Next can't discard unsaved text). */
@@ -79,7 +78,7 @@ export default function QuestionAnswer({
     initialAnswer || !isActive ? 'view' : 'edit'
   )
   const [publishedBody, setPublishedBody] = useState(initialAnswer)
-  const [isCurrent, setIsCurrent] = useState(initialIsCurrent)
+  const hadExistingAnswer = initialAnswer !== null
   const [body, setBody] = useState(
     () => readDraft(questionId, userId) ?? initialAnswer ?? ''
   )
@@ -145,15 +144,14 @@ export default function QuestionAnswer({
 
     const supabase = createClient()
     const trimmed = body.trim()
-    const wasCurrent = isCurrent
 
-    // Demoting the previous current answer and promoting this one must be
-    // atomic: either both happen or neither does. That's enforced inside a
-    // single database function (one round trip, one transaction), not by
-    // sequencing two separate client calls. This saves a Question
-    // answer into the member's OWN question_answers collection — never
-    // a letter, never a recipient, never Mail Call/Letterbox activity.
-    const { data: savedAnswer, error: publishError } = await supabase.rpc('publish_question_answer', {
+    // publish_question_answer's own is_current promotion logic still
+    // runs server-side unchanged (kept for backward compatibility —
+    // see lib/questions.ts's own header discussion), but this
+    // component no longer reads or displays it: primary-answer status
+    // is entirely a function of Question position now, computed below
+    // from isPositionOne alone.
+    const { error: publishError } = await supabase.rpc('publish_question_answer', {
       p_question_id: questionId,
       p_body: trimmed,
     })
@@ -182,9 +180,7 @@ export default function QuestionAnswer({
       // ignore
     }
 
-    const nowCurrent = savedAnswer?.is_current ?? wasCurrent
-    setIsCurrent(nowCurrent)
-    setConfirmation(questionSaveConfirmationCopy(wasCurrent, nowCurrent))
+    setConfirmation(questionSaveConfirmationCopy(isPositionOne, hadExistingAnswer))
 
     setPublishedBody(trimmed)
     setBody(trimmed)

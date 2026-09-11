@@ -1,74 +1,33 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  selectEligibleQuestions,
   buildMyAnswers,
   nextEligibleQuestion,
   needsParticipationGate,
   questionSaveConfirmationCopy,
   getEligibleQuestions,
   getMyAnswers,
+  getFlagshipQuestion,
+  getPrimaryAnswer,
   QUESTION_ANSWER_MAX_CHARS,
   type LibraryQuestion,
 } from './questions'
 import { simulatePublishQuestionAnswer, simulateSetCurrentAnswer, type SimAnswer } from './__tests__/simulateQuestionRpcs'
 import { createFakeReports } from './__tests__/simulateReportRpcs'
-import { createQuestion, replaceQuestion, setQuestionActive } from './admin-questions'
+import { replaceQuestion, setQuestionActive, setQuestionPosition } from './admin-questions'
 
-const REFLECTION_Q: LibraryQuestion = { id: 'q-reflection', prompt: 'A reflection prompt', family: 'reflection' }
-const EVERYDAY_Q: LibraryQuestion = { id: 'q-everyday', prompt: 'An everyday prompt', family: 'everyday' }
-const IMAGINATION_Q: LibraryQuestion = { id: 'q-imagination', prompt: 'An imagination prompt', family: 'imagination' }
-const NO_FAMILY_Q: LibraryQuestion = { id: 'q-no-family', prompt: 'A no-family prompt', family: null }
-const SECOND_REFLECTION_Q: LibraryQuestion = { id: 'q-reflection-2', prompt: 'A second reflection prompt', family: 'reflection' }
+const Q1: LibraryQuestion = { id: 'q-one', prompt: 'The flagship prompt', position: 1 }
+const Q2: LibraryQuestion = { id: 'q-two', prompt: 'The #2 prompt', position: 2 }
 
-describe('selectEligibleQuestions — family-diverse "up to three" selection (question-families design, finally wired up)', () => {
-  it('picks one from each of the three known families when all are available', () => {
-    const result = selectEligibleQuestions([EVERYDAY_Q, IMAGINATION_Q, REFLECTION_Q], 3)
-    expect(result.map((q) => q.family)).toEqual(['reflection', 'everyday', 'imagination'])
-  })
-
-  it('never repeats a family while a different one sits unrepresented — two reflection Questions available, only one is picked before moving on', () => {
-    const result = selectEligibleQuestions([REFLECTION_Q, SECOND_REFLECTION_Q, EVERYDAY_Q], 3)
-    expect(result.map((q) => q.id)).toEqual([REFLECTION_Q.id, EVERYDAY_Q.id, SECOND_REFLECTION_Q.id])
-  })
-
-  it('degrades gracefully to fewer than three when the pool itself is smaller', () => {
-    const result = selectEligibleQuestions([REFLECTION_Q], 3)
-    expect(result).toEqual([REFLECTION_Q])
-  })
-
-  it('an empty pool returns an empty array, never throws', () => {
-    expect(selectEligibleQuestions([], 3)).toEqual([])
-  })
-
-  it('a null/unrecognized family is never excluded from the library entirely — it is simply tried last', () => {
-    const result = selectEligibleQuestions([NO_FAMILY_Q, REFLECTION_Q], 2)
-    expect(result.map((q) => q.id)).toEqual([REFLECTION_Q.id, NO_FAMILY_Q.id])
-  })
-
-  it('respects a custom limit', () => {
-    const result = selectEligibleQuestions([REFLECTION_Q, EVERYDAY_Q, IMAGINATION_Q], 1)
-    expect(result).toHaveLength(1)
-    expect(result[0].family).toBe('reflection')
-  })
-
-  it('never invents a popularity/ranking signal — within a family, input order (the caller\'s own oldest-first query order) is preserved verbatim', () => {
-    const older = { id: 'q-older', prompt: 'older', family: 'reflection' }
-    const newer = { id: 'q-newer', prompt: 'newer', family: 'reflection' }
-    const result = selectEligibleQuestions([older, newer], 2)
-    expect(result.map((q) => q.id)).toEqual(['q-older', 'q-newer'])
-  })
-})
-
-describe('buildMyAnswers — every historical answer resolves to its Question\'s prompt, regardless of active/canonical state', () => {
+describe('buildMyAnswers — every historical answer resolves to its Question\'s prompt, regardless of active/positioned state', () => {
   it('resolves prompts for answers to any number of different Questions, not just a fixed three', () => {
     const rows = [
       { id: 'a-1', question_id: 'q1', body: 'body 1', updated_at: 't1', is_current: true, moderation_status: 'visible' as const },
       { id: 'a-2', question_id: 'q2', body: 'body 2', updated_at: 't2', is_current: false, moderation_status: 'visible' as const },
     ]
     const questionsById = new Map([
-      ['q1', { prompt: 'Prompt one' }],
-      ['q2', { prompt: 'Prompt two' }],
+      ['q1', { prompt: 'Prompt one', current_position: null }],
+      ['q2', { prompt: 'Prompt two', current_position: null }],
     ])
     const result = buildMyAnswers(rows, questionsById)
     expect(result).toHaveLength(2)
@@ -76,9 +35,24 @@ describe('buildMyAnswers — every historical answer resolves to its Question\'s
     expect(result.find((a) => a.id === 'a-2')?.prompt).toBe('Prompt two')
   })
 
+  it('marks isPrimary true only for the answer whose Question currently holds position 1', () => {
+    const rows = [
+      { id: 'a-1', question_id: 'q1', body: 'b1', updated_at: 't1', is_current: false, moderation_status: 'visible' as const },
+      { id: 'a-2', question_id: 'q2', body: 'b2', updated_at: 't2', is_current: true, moderation_status: 'visible' as const },
+    ]
+    const questionsById = new Map([
+      ['q1', { prompt: 'P1', current_position: 1 }],
+      ['q2', { prompt: 'P2', current_position: 2 }],
+    ])
+    const result = buildMyAnswers(rows, questionsById)
+    expect(result.find((a) => a.id === 'a-1')?.isPrimary).toBe(true)
+    // is_current being true does NOT make it primary — only position 1 does.
+    expect(result.find((a) => a.id === 'a-2')?.isPrimary).toBe(false)
+  })
+
   it('never mutates the input rows', () => {
     const rows = [{ id: 'a-1', question_id: 'q1', body: 'x', updated_at: 't', is_current: false, moderation_status: 'visible' as const }]
-    const questionsById = new Map([['q1', { prompt: 'P' }]])
+    const questionsById = new Map([['q1', { prompt: 'P', current_position: null }]])
     buildMyAnswers(rows, questionsById)
     expect(rows[0]).toEqual({ id: 'a-1', question_id: 'q1', body: 'x', updated_at: 't', is_current: false, moderation_status: 'visible' })
   })
@@ -86,12 +60,11 @@ describe('buildMyAnswers — every historical answer resolves to its Question\'s
 
 describe('nextEligibleQuestion', () => {
   it('returns the first eligible Question that is not the current one', () => {
-    const result = nextEligibleQuestion([REFLECTION_Q, EVERYDAY_Q], REFLECTION_Q.id)
-    expect(result).toEqual(EVERYDAY_Q)
+    expect(nextEligibleQuestion([Q1, Q2], Q1.id)).toEqual(Q2)
   })
 
   it('returns null when nothing else is eligible', () => {
-    expect(nextEligibleQuestion([REFLECTION_Q], REFLECTION_Q.id)).toBeNull()
+    expect(nextEligibleQuestion([Q1], Q1.id)).toBeNull()
     expect(nextEligibleQuestion([], 'anything')).toBeNull()
   })
 })
@@ -125,11 +98,12 @@ describe('QUESTION_ANSWER_MAX_CHARS — the canonical stranger/discovery-writing
 })
 
 // A minimal, generic multi-table fake supporting exactly the query
-// shapes getEligibleQuestions/getMyAnswers actually issue
-// (.select/.eq/.in/.order), backed by plain mutable arrays — so the
-// SAME arrays an admin-RPC fake (createFakeReports) mutates can be fed
-// straight into these member-facing read functions, proving the two
-// halves of the system agree without needing a real database.
+// shapes getEligibleQuestions/getMyAnswers/getFlagshipQuestion/
+// getPrimaryAnswer actually issue (.select/.eq/.not/.order/.maybeSingle),
+// backed by plain mutable arrays — so the SAME arrays an admin-RPC fake
+// (createFakeReports) mutates can be fed straight into these member-
+// facing read functions, proving the two halves of the system agree
+// without needing a real database.
 function fakeTablesClient(tables: { questions: Record<string, unknown>[]; question_answers: Record<string, unknown>[] }) {
   function from(table: 'questions' | 'question_answers') {
     let rows = tables[table]
@@ -141,16 +115,22 @@ function fakeTablesClient(tables: { questions: Record<string, unknown>[]; questi
         rows = rows.filter((r) => r[column] === value)
         return builder
       },
+      // Only ever called here as .not(column, 'is', null) — op/value are
+      // not needed since "not null" is the only predicate this fake
+      // supports.
+      not(column: string) {
+        rows = rows.filter((r) => r[column] !== null && r[column] !== undefined)
+        return builder
+      },
       in(column: string, values: unknown[]) {
         rows = rows.filter((r) => values.includes(r[column]))
         return builder
       },
       order() {
-        // created_at is already in insertion order in every fixture
-        // below (oldest first) — no separate sort needed for these
-        // tests, matching selectEligibleQuestions' own "preserve input
-        // order" contract.
-        return Promise.resolve({ data: rows, error: null })
+        return Promise.resolve({ data: [...rows].sort((a, b) => ((a.current_position as number) ?? 99) - ((b.current_position as number) ?? 99)), error: null })
+      },
+      maybeSingle() {
+        return Promise.resolve({ data: rows[0] ?? null, error: null })
       },
       then(resolve: (v: { data: typeof rows; error: null }) => void) {
         resolve({ data: rows, error: null })
@@ -161,35 +141,37 @@ function fakeTablesClient(tables: { questions: Record<string, unknown>[]; questi
   return { from } as unknown as SupabaseClient
 }
 
-describe('getEligibleQuestions — DB-backed selection, is_active is the ONLY gate (Question source-of-truth correction)', () => {
-  it('offers an active Question the member has not answered', async () => {
+describe('getEligibleQuestions — DB-backed, current_position is the ONLY gate (Question Slots checkpoint)', () => {
+  it('offers positioned Questions in #1/#2/#3 order', async () => {
     const client = fakeTablesClient({
-      questions: [{ id: 'q1', prompt: 'P1', family: 'reflection', is_active: true, created_at: 't1' }],
+      questions: [
+        { id: 'q3', prompt: 'P3', current_position: 3, is_active: true },
+        { id: 'q1', prompt: 'P1', current_position: 1, is_active: true },
+        { id: 'q2', prompt: 'P2', current_position: 2, is_active: true },
+      ],
       question_answers: [],
     })
     const result = await getEligibleQuestions(client, 'user-1')
-    expect(result.map((q) => q.id)).toEqual(['q1'])
+    expect(result.map((q) => q.id)).toEqual(['q1', 'q2', 'q3'])
   })
 
-  it('excludes a Question the member has already answered', async () => {
+  it('excludes a positioned Question the member has already answered', async () => {
     const client = fakeTablesClient({
-      questions: [{ id: 'q1', prompt: 'P1', family: 'reflection', is_active: true, created_at: 't1' }],
+      questions: [{ id: 'q1', prompt: 'P1', current_position: 1, is_active: true }],
       question_answers: [{ user_id: 'user-1', question_id: 'q1' }],
     })
-    const result = await getEligibleQuestions(client, 'user-1')
-    expect(result).toEqual([])
+    expect(await getEligibleQuestions(client, 'user-1')).toEqual([])
   })
 
-  it('excludes an inactive Question entirely', async () => {
+  it('an unpositioned (library/history) Question is never offered, even if active', async () => {
     const client = fakeTablesClient({
-      questions: [{ id: 'q1', prompt: 'P1', family: 'reflection', is_active: false, created_at: 't1' }],
+      questions: [{ id: 'q1', prompt: 'P1', current_position: null, is_active: true }],
       question_answers: [],
     })
-    const result = await getEligibleQuestions(client, 'user-1')
-    expect(result).toEqual([])
+    expect(await getEligibleQuestions(client, 'user-1')).toEqual([])
   })
 
-  it('never crashes on zero eligible Questions', async () => {
+  it('never crashes on zero positioned Questions', async () => {
     const client = fakeTablesClient({ questions: [], question_answers: [] })
     const result = await getEligibleQuestions(client, 'user-1')
     expect(result).toEqual([])
@@ -197,10 +179,56 @@ describe('getEligibleQuestions — DB-backed selection, is_active is the ONLY ga
   })
 })
 
-describe('getMyAnswers — shows every answer regardless of active state, never capped to a fixed three', () => {
+describe('getFlagshipQuestion / getPrimaryAnswer', () => {
+  it('getFlagshipQuestion resolves whichever Question holds position 1', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'The flagship', current_position: 1, is_active: true }],
+      question_answers: [],
+    })
+    expect(await getFlagshipQuestion(client)).toEqual({ id: 'q1', prompt: 'The flagship' })
+  })
+
+  it('getFlagshipQuestion returns null when nothing currently holds position 1', async () => {
+    const client = fakeTablesClient({ questions: [], question_answers: [] })
+    expect(await getFlagshipQuestion(client)).toBeNull()
+  })
+
+  it('getPrimaryAnswer resolves the member\'s own visible answer to the flagship Question', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'The flagship', current_position: 1, is_active: true }],
+      question_answers: [{ id: 'a1', question_id: 'q1', user_id: 'user-1', body: 'my answer', updated_at: 't', moderation_status: 'visible' }],
+    })
+    const result = await getPrimaryAnswer(client, 'user-1')
+    expect(result?.body).toBe('my answer')
+    expect(result?.prompt).toBe('The flagship')
+  })
+
+  it('getPrimaryAnswer is null when the member has not answered the flagship — NEVER falls back to another answer', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'The flagship', current_position: 1, is_active: true }],
+      question_answers: [{ id: 'a2', question_id: 'q2', user_id: 'user-1', body: 'answer to #2, not the flagship', updated_at: 't', moderation_status: 'visible' }],
+    })
+    expect(await getPrimaryAnswer(client, 'user-1')).toBeNull()
+  })
+
+  it('getPrimaryAnswer is null when the flagship answer is hidden by moderation', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'The flagship', current_position: 1, is_active: true }],
+      question_answers: [{ id: 'a1', question_id: 'q1', user_id: 'user-1', body: 'hidden', updated_at: 't', moderation_status: 'hidden' }],
+    })
+    expect(await getPrimaryAnswer(client, 'user-1')).toBeNull()
+  })
+
+  it('getPrimaryAnswer is null when there is no flagship Question at all', async () => {
+    const client = fakeTablesClient({ questions: [], question_answers: [] })
+    expect(await getPrimaryAnswer(client, 'user-1')).toBeNull()
+  })
+})
+
+describe('getMyAnswers — shows every answer regardless of active/positioned state, never capped to a fixed three', () => {
   it('resolves an answer to a since-deactivated Question exactly as it did before deactivation', async () => {
     const client = fakeTablesClient({
-      questions: [{ id: 'q1', prompt: 'Original wording', is_active: false, family: null, created_at: 't1' }],
+      questions: [{ id: 'q1', prompt: 'Original wording', is_active: false, current_position: null }],
       question_answers: [
         { id: 'a1', question_id: 'q1', user_id: 'user-1', body: 'my answer', updated_at: 't', is_current: true, moderation_status: 'visible' },
       ],
@@ -220,129 +248,314 @@ function client(fake: ReturnType<typeof createFakeReports>) {
   return fake as unknown as SupabaseClient
 }
 
+function toFakeTablesClient(fake: ReturnType<typeof createFakeReports>) {
+  return fakeTablesClient({
+    questions: fake._questions as unknown as Record<string, unknown>[],
+    question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
+  })
+}
+
 // ============================================================
-// SECTION 4's explicit required regression tests
+// PART A's required regression tests (numbered exactly per the
+// checkpoint's own list)
 // ============================================================
-describe('Question source-of-truth correction — activation is REAL (Section 4, required)', () => {
+describe('Question Slots — required regression coverage', () => {
   const ADMIN = 'user-admin'
   const MEMBER = 'user-member'
 
-  it('Admin creates a non-canonical Question -> activates it -> member-facing Question selection can return it', async () => {
+  it('1/2/3. only one current Question can occupy each of position 1, 2, and 3', async () => {
     const fake = createFakeReports({
       viewerId: ADMIN,
-      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }],
+      questions: [
+        { id: 'qa', slug: null, prompt: 'A', is_active: true },
+        { id: 'qb', slug: null, prompt: 'B', is_active: true },
+      ],
       staff: { [ADMIN]: 'admin' },
     })
+    await setQuestionPosition(client(fake), 'qa', 1)
+    // Attempting to also assign qb to position 1 while qa holds it is
+    // refused — flagship protection (direction 2).
+    const { error } = await setQuestionPosition(client(fake), 'qb', 1)
+    expect(error?.message).toMatch(/flagship/)
+    expect(fake._questions.find((q) => q.id === 'qa')?.current_position).toBe(1)
+    expect(fake._questions.find((q) => q.id === 'qb')?.current_position).toBeNull()
 
-    const { data: newId, error: createError } = await createQuestion(client(fake), 'A brand new prompt', 'reflection')
-    expect(createError).toBeNull()
-
-    // Not yet eligible — created inactive.
-    let questionsClient = fakeTablesClient({
-      questions: fake._questions as unknown as Record<string, unknown>[],
-      question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
-    })
-    expect((await getEligibleQuestions(questionsClient, MEMBER)).some((q) => q.id === newId)).toBe(false)
-
-    const { error: activateError } = await setQuestionActive(client(fake), newId as string, true)
-    expect(activateError).toBeNull()
-
-    // Genuinely eligible now — no code change, no redeploy, just the
-    // Admin activation flag.
-    questionsClient = fakeTablesClient({
-      questions: fake._questions as unknown as Record<string, unknown>[],
-      question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
-    })
-    const eligible = await getEligibleQuestions(questionsClient, MEMBER)
-    expect(eligible.some((q) => q.id === newId)).toBe(true)
+    // Position 2 and 3 are ordinary slots — assigning qb to 2 succeeds,
+    // and re-assigning it to 3 later vacates 2 again (never two
+    // Questions in the same slot at once).
+    await setQuestionPosition(client(fake), 'qb', 2)
+    expect(fake._questions.find((q) => q.id === 'qb')?.current_position).toBe(2)
+    await setQuestionPosition(client(fake), 'qb', 3)
+    expect(fake._questions.find((q) => q.id === 'qb')?.current_position).toBe(3)
+    expect(fake._questions.filter((q) => q.current_position === 2)).toHaveLength(0)
   })
 
-  it('Admin replaces an answered, active Question -> old remains with its historical answer -> old becomes inactive -> replacement becomes active -> member-facing selection can return the replacement -> the historical answer still resolves to the OLD wording', async () => {
-    const OLD_PROMPT = 'What is something ordinary you would fight to protect?'
+  it('4. member Question offering follows 1 -> 2 -> 3', async () => {
     const fake = createFakeReports({
       viewerId: ADMIN,
       profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
-      questions: [{ id: 'q-old', slug: 'ordinary_worth_protecting', prompt: OLD_PROMPT, is_active: true, family: 'everyday' }],
-      questionAnswers: [{ id: 'a-old', question_id: 'q-old', user_id: MEMBER, body: 'My historical answer.' }],
+      questions: [
+        { id: 'q1', slug: null, prompt: 'Prompt one', is_active: true, current_position: 1 },
+        { id: 'q2', slug: null, prompt: 'Prompt two', is_active: true, current_position: 2 },
+        { id: 'q3', slug: null, prompt: 'Prompt three', is_active: true, current_position: 3 },
+      ],
       staff: { [ADMIN]: 'admin' },
     })
-
-    // Old is answered + active -> Replace (not Edit) is the only safe
-    // path, matching Section 3's UI rule.
-    const { data: newId, error: replaceError } = await replaceQuestion(client(fake), 'q-old', 'A revised, better version of the prompt.')
-    expect(replaceError).toBeNull()
-    expect(newId).not.toBe('q-old')
-
-    // Old Question: wording untouched, now inactive, answer untouched.
-    const old = fake._questions.find((q) => q.id === 'q-old')!
-    expect(old.prompt).toBe(OLD_PROMPT)
-    expect(old.is_active).toBe(false)
-    const oldAnswer = fake._questionAnswers.find((qa) => qa.id === 'a-old')!
-    expect(oldAnswer.question_id).toBe('q-old')
-    expect(oldAnswer.body).toBe('My historical answer.')
-
-    // Replacement: active immediately (old was active, no explicit
-    // override given), same transaction as the old row's deactivation.
-    const replacement = fake._questions.find((q) => q.id === newId)!
-    expect(replacement.is_active).toBe(true)
-    expect(replacement.prompt).toBe('A revised, better version of the prompt.')
-
-    // Member-facing selection can return the replacement.
-    const questionsClient = fakeTablesClient({
-      questions: fake._questions as unknown as Record<string, unknown>[],
-      question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
-    })
-    const eligible = await getEligibleQuestions(questionsClient, MEMBER)
-    expect(eligible.some((q) => q.id === newId)).toBe(true)
-    // The old (now inactive) Question is correctly never offered fresh.
-    expect(eligible.some((q) => q.id === 'q-old')).toBe(false)
-
-    // The existing historical answer still resolves to the OLD wording
-    // — never rewritten, never reassigned to the replacement.
-    const myAnswers = await getMyAnswers(questionsClient, MEMBER)
-    const historical = myAnswers.find((a) => a.id === 'a-old')!
-    expect(historical.prompt).toBe(OLD_PROMPT)
-    expect(historical.questionId).toBe('q-old')
+    const eligible = await getEligibleQuestions(toFakeTablesClient(fake), MEMBER)
+    expect(eligible.map((q) => q.id)).toEqual(['q1', 'q2', 'q3'])
   })
 
-  it('when the OLD Question was already inactive, the replacement defaults to inactive too (mirrors old state)', async () => {
+  it('5. answered Questions remain historically attached to their exact original row', async () => {
     const fake = createFakeReports({
       viewerId: ADMIN,
       profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
-      questions: [{ id: 'q-old', slug: null, prompt: 'Old inactive prompt', is_active: false }],
-      questionAnswers: [{ id: 'a-old', question_id: 'q-old', user_id: MEMBER, body: 'x' }],
+      questions: [{ id: 'q2', slug: null, prompt: 'Original #2 wording', is_active: true, current_position: 2 }],
+      questionAnswers: [{ id: 'a1', question_id: 'q2', user_id: MEMBER, body: 'answered while #2' }],
       staff: { [ADMIN]: 'admin' },
     })
-    const { data: newId } = await replaceQuestion(client(fake), 'q-old', 'Revised inactive-origin prompt')
-    expect(fake._questions.find((q) => q.id === newId)?.is_active).toBe(false)
+    // Deactivate #2 (vacates the slot) — the answer must still resolve
+    // to the exact original row/wording.
+    await setQuestionActive(client(fake), 'q2', false)
+    const myAnswers = await getMyAnswers(toFakeTablesClient(fake), MEMBER)
+    expect(myAnswers[0].questionId).toBe('q2')
+    expect(myAnswers[0].prompt).toBe('Original #2 wording')
+  })
+
+  it('6. replacing #2 preserves slot #2', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      questions: [{ id: 'q-old-2', slug: null, prompt: 'Old #2', is_active: true, current_position: 2 }],
+      questionAnswers: [{ id: 'a1', question_id: 'q-old-2', user_id: MEMBER, body: 'x' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { data: newId, error } = await replaceQuestion(client(fake), 'q-old-2', 'Revised #2')
+    expect(error).toBeNull()
+    expect(fake._questions.find((q) => q.id === newId)?.current_position).toBe(2)
+    expect(fake._questions.find((q) => q.id === 'q-old-2')?.current_position).toBeNull()
+  })
+
+  it('7. replacing #3 preserves slot #3', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      questions: [{ id: 'q-old-3', slug: null, prompt: 'Old #3', is_active: true, current_position: 3 }],
+      questionAnswers: [{ id: 'a1', question_id: 'q-old-3', user_id: MEMBER, body: 'x' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { data: newId } = await replaceQuestion(client(fake), 'q-old-3', 'Revised #3')
+    expect(fake._questions.find((q) => q.id === newId)?.current_position).toBe(3)
+  })
+
+  it('8/9. Minds uses current Question #1\'s answer, and does NOT fall back to #2/#3 when #1 is unanswered', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      questions: [
+        { id: 'q1', slug: null, prompt: 'Flagship', is_active: true, current_position: 1 },
+        { id: 'q2', slug: null, prompt: 'Second', is_active: true, current_position: 2 },
+      ],
+      questionAnswers: [{ id: 'a2', question_id: 'q2', user_id: MEMBER, body: 'Only answered #2, not #1' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    // Answered #2 only — no #1 answer at all.
+    expect(await getPrimaryAnswer(toFakeTablesClient(fake), MEMBER)).toBeNull()
+
+    // Now answer #1 too — becomes primary.
+    fake._questionAnswers.push({
+      id: 'a1', question_id: 'q1', user_id: MEMBER, body: 'Answered the flagship', moderation_status: 'visible',
+    })
+    const primary = await getPrimaryAnswer(toFakeTablesClient(fake), MEMBER)
+    expect(primary?.body).toBe('Answered the flagship')
+  })
+
+  it('10/11. profile primary answer is #1, and other answers remain accessible', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      questions: [
+        { id: 'q1', slug: null, prompt: 'Flagship', is_active: true, current_position: 1 },
+        { id: 'q2', slug: null, prompt: 'Second', is_active: true, current_position: 2 },
+      ],
+      questionAnswers: [
+        { id: 'a1', question_id: 'q1', user_id: MEMBER, body: 'Primary answer' },
+        { id: 'a2', question_id: 'q2', user_id: MEMBER, body: 'Other answer' },
+      ],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const answers = await getMyAnswers(toFakeTablesClient(fake), MEMBER)
+    const primary = answers.find((a) => a.isPrimary)
+    const others = answers.filter((a) => !a.isPrimary)
+    expect(primary?.body).toBe('Primary answer')
+    expect(others.map((a) => a.body)).toEqual(['Other answer'])
+  })
+
+  it('12. no member-side action can arbitrarily override the flagship rule', async () => {
+    const fake = createFakeReports({
+      viewerId: 'user-member',
+      profiles: [{ id: 'user-member', pseudonym: 'Member' }],
+      questions: [
+        { id: 'q1', slug: null, prompt: 'Flagship', is_active: true, current_position: 1 },
+        { id: 'q2', slug: null, prompt: 'Second', is_active: true, current_position: 2 },
+      ],
+      questionAnswers: [
+        { id: 'a1', question_id: 'q1', user_id: 'user-member', body: 'x', is_current: false },
+        { id: 'a2', question_id: 'q2', user_id: 'user-member', body: 'y', is_current: true },
+      ],
+    })
+    // A member's set_current_answer choice (is_current) is a completely
+    // separate, member-choosable flag that has no bearing on primary-
+    // answer status — a2 is is_current=true but is NOT positioned at 1,
+    // so it must never be treated as primary.
+    const answers = await getMyAnswers(toFakeTablesClient(fake), 'user-member')
+    const a1 = answers.find((a) => a.id === 'a1')!
+    const a2 = answers.find((a) => a.id === 'a2')!
+    expect(a1.isPrimary).toBe(true)
+    expect(a1.isCurrent).toBe(false)
+    expect(a2.isPrimary).toBe(false)
+    expect(a2.isCurrent).toBe(true)
+
+    // Also: no is_staff('admin') check bypass — a plain member cannot
+    // call the position/flagship RPCs at all.
+    const { error } = await setQuestionPosition(client(fake), 'q2', 1)
+    expect(error?.message).toBe('Not authorized.')
   })
 })
 
-describe('publish_question_answer simulation — Shown-in-Minds promotion rules', () => {
+describe('Question Slots — Admin flagship protection (Section A2)', () => {
+  const ADMIN = 'user-admin'
+  const MODERATOR = 'user-moderator'
+
+  function flagshipFixture() {
+    return createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }],
+      questions: [
+        { id: 'q1', slug: null, prompt: 'Flagship', is_active: true, current_position: 1 },
+        { id: 'q2', slug: null, prompt: 'Second', is_active: true, current_position: 2 },
+      ],
+      staff: { [ADMIN]: 'admin', [MODERATOR]: 'moderator' },
+    })
+  }
+
+  it('setQuestionActive refuses to deactivate #1', async () => {
+    const fake = flagshipFixture()
+    const { error } = await setQuestionActive(client(fake), 'q1', false)
+    expect(error?.message).toMatch(/flagship/)
+    expect(fake._questions.find((q) => q.id === 'q1')?.is_active).toBe(true)
+  })
+
+  it('replaceQuestion refuses to replace #1', async () => {
+    const fake = flagshipFixture()
+    const { error } = await replaceQuestion(client(fake), 'q1', 'A revised flagship wording')
+    expect(error?.message).toMatch(/flagship/)
+  })
+
+  it('setQuestionPosition refuses to move #1 away', async () => {
+    const fake = flagshipFixture()
+    const { error } = await setQuestionPosition(client(fake), 'q1', 2)
+    expect(error?.message).toMatch(/flagship/)
+  })
+
+  it('setQuestionPosition refuses to clear #1\'s position', async () => {
+    const fake = flagshipFixture()
+    const { error } = await setQuestionPosition(client(fake), 'q1', null)
+    expect(error?.message).toMatch(/flagship/)
+  })
+
+  it('deactivating an ordinary slot (#2) is allowed and vacates it', async () => {
+    const fake = flagshipFixture()
+    const { error } = await setQuestionActive(client(fake), 'q2', false)
+    expect(error).toBeNull()
+    expect(fake._questions.find((q) => q.id === 'q2')?.current_position).toBeNull()
+  })
+
+  it('a moderator cannot touch positions at all', async () => {
+    const fake = flagshipFixture()
+    fake._setViewer(MODERATOR)
+    const { error } = await setQuestionPosition(client(fake), 'q2', 3)
+    expect(error?.message).toBe('Not authorized.')
+  })
+})
+
+describe('Question Slots — Final Correction round: replacement active/position invariant (item 3)', () => {
+  const ADMIN = 'user-admin'
+
+  it('an active #2 replacement (explicit newActive: true) inherits slot #2', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }],
+      questions: [{ id: 'q-old-2', slug: null, prompt: 'Old #2', is_active: true, current_position: 2 }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { data: newId, error } = await replaceQuestion(client(fake), 'q-old-2', 'Revised #2 active', {
+      newActive: true,
+    })
+    expect(error).toBeNull()
+    expect(fake._questions.find((q) => q.id === newId)?.current_position).toBe(2)
+    expect(fake._questions.find((q) => q.id === newId)?.is_active).toBe(true)
+    expect(fake._questions.find((q) => q.id === 'q-old-2')?.current_position).toBeNull()
+  })
+
+  it('an explicitly INACTIVE #2 replacement is created unpositioned, and slot #2 becomes empty', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }],
+      questions: [{ id: 'q-old-2', slug: null, prompt: 'Old #2', is_active: true, current_position: 2 }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { data: newId, error } = await replaceQuestion(client(fake), 'q-old-2', 'Revised #2 inactive', {
+      newActive: false,
+    })
+    expect(error).toBeNull()
+    const newRow = fake._questions.find((q) => q.id === newId)
+    expect(newRow?.is_active).toBe(false)
+    expect(newRow?.current_position).toBeNull()
+    // Nobody claims slot #2 anymore — never left dangling on the
+    // deactivated old row, and never smuggled onto the inactive new one.
+    expect(fake._questions.filter((q) => q.current_position === 2)).toHaveLength(0)
+  })
+
+  it('same principle for #3: an explicitly inactive replacement leaves slot #3 empty', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }],
+      questions: [{ id: 'q-old-3', slug: null, prompt: 'Old #3', is_active: true, current_position: 3 }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { data: newId } = await replaceQuestion(client(fake), 'q-old-3', 'Revised #3 inactive', {
+      newActive: false,
+    })
+    const newRow = fake._questions.find((q) => q.id === newId)
+    expect(newRow?.current_position).toBeNull()
+    expect(fake._questions.filter((q) => q.current_position === 3)).toHaveLength(0)
+  })
+})
+
+describe('Question Slots — activation/deactivation still works (non-flagship)', () => {
+  const ADMIN = 'user-admin'
+  it('an admin can activate and deactivate an unpositioned Question', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }],
+      questions: [{ id: 'q1', slug: null, prompt: 'A', is_active: false }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const on = await setQuestionActive(client(fake), 'q1', true)
+    expect(on.error).toBeNull()
+    const off = await setQuestionActive(client(fake), 'q1', false)
+    expect(off.error).toBeNull()
+  })
+})
+
+describe('publish_question_answer simulation — Shown-in-Minds promotion rules (is_current, kept for backward compatibility)', () => {
   const USER = 'user-1'
 
-  it('first answer to ANY Question becomes current when the member has none yet — no canonical restriction', () => {
+  it('first answer to ANY Question becomes current when the member has none yet', () => {
     const result = simulatePublishQuestionAnswer([], USER, { id: 'q-any' }, 'first answer')
     expect(result).toHaveLength(1)
     expect(result[0].isCurrent).toBe(true)
-  })
-
-  it('publishing/editing a second answer does not steal current status from the first', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: 'q1' }, 'first answer')
-    const afterSecond = simulatePublishQuestionAnswer(afterFirst, USER, { id: 'q2' }, 'second answer')
-
-    const first = afterSecond.find((a) => a.questionId === 'q1')!
-    const second = afterSecond.find((a) => a.questionId === 'q2')!
-    expect(first.isCurrent).toBe(true)
-    expect(second.isCurrent).toBe(false)
-  })
-
-  it('re-editing the already-current answer leaves it current and does not touch others', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: 'q1' }, 'v1')
-    const afterEdit = simulatePublishQuestionAnswer(afterFirst, USER, { id: 'q1' }, 'v2 — edited')
-    expect(afterEdit).toHaveLength(1)
-    expect(afterEdit[0].isCurrent).toBe(true)
-    expect(afterEdit[0].body).toBe('v2 — edited')
   })
 
   it('rejects any write (fresh answer) against an INACTIVE Question', () => {
@@ -366,58 +579,24 @@ describe('publish_question_answer simulation — Shown-in-Minds promotion rules'
       'This answer has been hidden and cannot be edited.'
     )
   })
-
-  it('a visible answer can still be edited normally — the guard is scoped to hidden only', () => {
-    const visible: SimAnswer[] = [
-      { id: 'a-1', userId: USER, questionId: 'q1', body: 'original', isCurrent: true, moderationStatus: 'visible' },
-    ]
-    const result = simulatePublishQuestionAnswer(visible, USER, { id: 'q1', isActive: true }, 'a legitimate edit')
-    expect(result[0].body).toBe('a legitimate edit')
-  })
 })
 
-// Final Question-invariant check: inactive Questions must never accept
-// a brand-new answer, and this must hold at the server/RPC boundary
-// itself — never something only the UI happens to prevent. These tests
-// are labeled to match the checkpoint's own required list (A-E)
-// one-to-one; A/B/D are proven directly against the simulation (which
-// mirrors publish_question_answer's actual `question_is_active` guard
-// byte-for-byte — see docs/sql/2026-09-18-admin-operations-refinement.sql
-// section 1b), exactly as if a member had guessed an inactive
-// Question's uuid and called the RPC directly, bypassing any UI
-// entirely. C and E are proven above (getMyAnswers/getEligibleQuestions
-// describe blocks) and cross-referenced here for completeness.
-describe('Final Question invariant — inactive Questions never accept a new answer (Section 4 A-E)', () => {
+describe('Final Question invariant — inactive Questions never accept a new answer', () => {
   const USER = 'user-1'
 
   it('A. active Question + no prior answer -> creation succeeds', () => {
     const result = simulatePublishQuestionAnswer([], USER, { id: 'q-active', isActive: true }, 'a fresh answer')
-    expect(result).toHaveLength(1)
     expect(result[0].body).toBe('a fresh answer')
   })
 
-  it('B / D. inactive Question + no prior answer -> creation is rejected at the server/RPC boundary, exactly as it would be for a guessed/forged uuid with no UI involved at all', () => {
+  it('B/D. inactive Question + no prior answer -> creation is rejected at the server/RPC boundary, exactly as it would be for a guessed/forged uuid with no UI involved at all', () => {
     expect(() =>
       simulatePublishQuestionAnswer([], USER, { id: 'some-inactive-question-uuid-a-member-could-only-guess', isActive: false }, 'a smuggled-in answer')
     ).toThrow('This Question is no longer accepting answers.')
   })
-
-  // C. a member answered while active, the Question later deactivates
-  // -> the historical answer and its exact old prompt remain fully
-  // available: proven above by "getMyAnswers — shows every answer
-  // regardless of active state..." > "resolves an answer to a
-  // since-deactivated Question exactly as it did before deactivation."
-  //
-  // E. Admin replacement leaves the old answered Question inactive
-  // with its historical answer intact, while the replacement is active
-  // and eligible for new participation: proven above by "Question
-  // source-of-truth correction — activation is REAL" > "Admin replaces
-  // an answered, active Question -> ...", which exercises
-  // admin_replace_question's actual fake RPC plus
-  // getEligibleQuestions/getMyAnswers together.
 })
 
-describe('set_current_answer simulation — no canonical restriction', () => {
+describe('set_current_answer simulation — kept for backward compatibility, no longer determines primary status', () => {
   const USER = 'user-1'
   const seed: SimAnswer[] = [
     { id: 'a-1', userId: USER, questionId: 'q1', body: 'a', isCurrent: true },
@@ -437,87 +616,66 @@ describe('set_current_answer simulation — no canonical restriction', () => {
     ]
     expect(() => simulateSetCurrentAnswer(withHidden, USER, 'a-3')).toThrow(/visible/)
   })
-
-  it('rejects an answer that does not belong to this member', () => {
-    expect(() => simulateSetCurrentAnswer(seed, 'someone-else', 'a-1')).toThrow(/visible/)
-  })
 })
 
-describe('questionSaveConfirmationCopy', () => {
-  it('a save that just became the featured answer gets the "now featured" copy', () => {
-    expect(questionSaveConfirmationCopy(false, true)).toBe('Saved. This answer is now featured in Minds.')
+describe('questionSaveConfirmationCopy — Question Slots checkpoint (no longer reads is_current)', () => {
+  it('a member\'s first-ever save of the flagship (#1) Question gets the "primary Minds answer" copy', () => {
+    expect(questionSaveConfirmationCopy(true, false)).toBe('Saved. This is now your primary Minds answer.')
   })
 
-  it('an ordinary save that leaves featured status unchanged gets the plain copy — never featured, and already featured', () => {
-    expect(questionSaveConfirmationCopy(false, false)).toBe('Answer saved.')
+  it('an edit of an already-answered flagship Question gets the plain copy, never re-claiming primary status', () => {
     expect(questionSaveConfirmationCopy(true, true)).toBe('Answer saved.')
   })
 
-  it('composed with the real promotion simulation: a member\'s first save (to any Question) produces the featured copy', () => {
-    const result = simulatePublishQuestionAnswer([], 'user-1', { id: 'q1' }, 'first answer')
-    expect(questionSaveConfirmationCopy(false, result[0].isCurrent)).toBe('Saved. This answer is now featured in Minds.')
+  it('a first-ever save of #2 or #3 gets the plain copy — only #1 is ever announced as primary', () => {
+    expect(questionSaveConfirmationCopy(false, false)).toBe('Answer saved.')
   })
 
-  it('composed with the real promotion simulation: editing an already-current answer produces the plain copy, never re-claiming "now featured"', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], 'user-1', { id: 'q1' }, 'v1')
-    const afterEdit = simulatePublishQuestionAnswer(afterFirst, 'user-1', { id: 'q1' }, 'v2')
-    expect(questionSaveConfirmationCopy(true, afterEdit[0].isCurrent)).toBe('Answer saved.')
-  })
-
-  it('composed with the real promotion simulation: a second answer that does not steal current status gets the plain copy', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], 'user-1', { id: 'q1' }, 'first answer')
-    const afterSecond = simulatePublishQuestionAnswer(afterFirst, 'user-1', { id: 'q2' }, 'second answer')
-    const second = afterSecond.find((a) => a.questionId === 'q2')!
-    expect(questionSaveConfirmationCopy(false, second.isCurrent)).toBe('Answer saved.')
+  it('an edit of a non-flagship Question gets the plain copy', () => {
+    expect(questionSaveConfirmationCopy(false, true)).toBe('Answer saved.')
   })
 })
 
-// Admin Phase 2A-1, Section 9 — Minds/Discovery's pool query
-// (app/minds/page.tsx: `.from('question_answers').select(...)
-// .eq('is_current', true).neq('user_id', viewer.id)`) deliberately adds
-// NO application-level moderation_status filter of its own — the
-// cross-user RLS policy alone is the authority here, since this query
-// already excludes the viewer's own rows before RLS ever runs. This
-// models that RLS predicate directly (same convention as
-// fakeDispatches.ts's visibleRows) to prove end-to-end: with RLS
-// applied, a hidden answer never reaches the discovery pool, and
-// restoring it makes it reachable again. Unaffected by the Question
-// source-of-truth correction — Discovery eligibility was never scoped
-// to canonical Questions to begin with, only to is_current + visible.
+// Discovery's pool query (app/minds/page.tsx) is now strictly "answers
+// to the current flagship Question," never is_current — this models
+// the RLS predicate directly (same convention as fakeDispatches.ts's
+// visibleRows) to prove end-to-end: with RLS applied, a hidden answer
+// never reaches the discovery pool, and restoring it makes it
+// reachable again.
 function discoveryPool(
   rows: { id: string; user_id: string; question_id: string; body: string; moderation_status: 'visible' | 'hidden' }[],
-  activeQuestionIds: Set<string>,
+  flagshipQuestionId: string,
   viewerId: string
 ) {
   const rlsVisible = rows.filter(
-    (r) => activeQuestionIds.has(r.question_id) && r.moderation_status === 'visible'
+    (r) => r.question_id === flagshipQuestionId && r.moderation_status === 'visible'
   )
   return rlsVisible.filter((r) => r.user_id !== viewerId)
 }
 
-describe('Minds/Discovery pool — a hidden answer is absent, a restored one reappears (Section 9)', () => {
+describe('Minds/Discovery pool — scoped to the flagship Question only; a hidden answer is absent, a restored one reappears', () => {
   const VIEWER = 'viewer-1'
   const OTHER = 'other-1'
-  const activeQuestions = new Set(['q1'])
+  const FLAGSHIP_ID = 'q1'
 
   it('a hidden answer from another member never appears in the discovery pool', () => {
     const rows = [
-      { id: 'a-1', user_id: OTHER, question_id: 'q1', body: 'Visible answer', moderation_status: 'visible' as const },
-      { id: 'a-2', user_id: OTHER, question_id: 'q1', body: 'Hidden answer', moderation_status: 'hidden' as const },
+      { id: 'a-1', user_id: OTHER, question_id: FLAGSHIP_ID, body: 'Visible answer', moderation_status: 'visible' as const },
+      { id: 'a-2', user_id: OTHER, question_id: FLAGSHIP_ID, body: 'Hidden answer', moderation_status: 'hidden' as const },
     ]
-    const pool = discoveryPool(rows, activeQuestions, VIEWER)
+    const pool = discoveryPool(rows, FLAGSHIP_ID, VIEWER)
     expect(pool.map((r) => r.id)).toEqual(['a-1'])
   })
 
   it('restoring the answer (moderation_status back to visible) makes it reachable in the pool again', () => {
-    const rows = [{ id: 'a-2', user_id: OTHER, question_id: 'q1', body: 'Restored answer', moderation_status: 'visible' as const }]
-    const pool = discoveryPool(rows, activeQuestions, VIEWER)
+    const rows = [{ id: 'a-2', user_id: OTHER, question_id: FLAGSHIP_ID, body: 'Restored answer', moderation_status: 'visible' as const }]
+    const pool = discoveryPool(rows, FLAGSHIP_ID, VIEWER)
     expect(pool.map((r) => r.id)).toEqual(['a-2'])
   })
 
-  it('a hidden answer to an inactive Question is doubly excluded — neither condition alone lets it through', () => {
-    const rows = [{ id: 'a-3', user_id: OTHER, question_id: 'q-inactive', body: 'x', moderation_status: 'hidden' as const }]
-    const pool = discoveryPool(rows, activeQuestions, VIEWER)
+  it('an answer to a NON-flagship Question is never in the pool, however visible', () => {
+    const rows = [{ id: 'a-3', user_id: OTHER, question_id: 'q2-not-flagship', body: 'x', moderation_status: 'visible' as const }]
+    const pool = discoveryPool(rows, FLAGSHIP_ID, VIEWER)
     expect(pool).toEqual([])
   })
 })

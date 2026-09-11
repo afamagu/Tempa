@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
+import { getEligibleQuestions, getMyAnswers, getFlagshipQuestion, needsParticipationGate } from '@/lib/questions'
 import {
   getWaitingLetterCount,
   getActiveCorrespondencePartnerIds,
@@ -144,19 +144,24 @@ export default async function MindsPage({
     )
   }
 
-  // Locked rule: every member with a current canonical answer stays
-  // discoverable in Minds with no expiration, until they deliberately
-  // choose a different one. Question source-of-truth correction:
-  // is_current can now be true on ANY Question's row (set_current_answer
-  // no longer requires canonical/slug membership), so its prompt is no
-  // longer guaranteed to be one of the (up to 3) eligibleQuestions —
-  // resolved via its own targeted lookup below instead.
+  // Question Slots checkpoint (Section A4) — Discovery's pool is now
+  // strictly "answers to the current flagship Question (#1)," never
+  // is_current (member-choosable, and no longer what determines Minds
+  // eligibility at all). A member who hasn't answered #1 — even if
+  // they have a perfectly good #2/#3 answer, even if is_current
+  // happens to point elsewhere — is simply not in this pool. No
+  // fallback, ever.
+  const flagship = await getFlagshipQuestion(supabase)
+
   const [{ data: answers }, excludedPartnerIds, contactedAnswerIds] = await Promise.all([
-    supabase
-      .from('question_answers')
-      .select('id, user_id, question_id, body')
-      .eq('is_current', true)
-      .neq('user_id', user.id),
+    flagship
+      ? supabase
+          .from('question_answers')
+          .select('id, user_id, question_id, body')
+          .eq('question_id', flagship.id)
+          .eq('moderation_status', 'visible')
+          .neq('user_id', user.id)
+      : Promise.resolve({ data: [] as { id: string; user_id: string; question_id: string; body: string }[] }),
     getActiveCorrespondencePartnerIds(supabase, user.id),
     getContactedAnswerIds(supabase, user.id),
   ])
@@ -165,17 +170,9 @@ export default async function MindsPage({
     (a) => !excludedPartnerIds.has(a.user_id) && !contactedAnswerIds.has(a.id)
   )
 
-  const currentAnswerQuestionIds = [...new Set(eligible.map((a) => a.question_id))]
-  const promptByQuestionId = new Map<string, string>()
-  if (currentAnswerQuestionIds.length > 0) {
-    const { data: promptRows } = await supabase
-      .from('questions')
-      .select('id, prompt')
-      .in('id', currentAnswerQuestionIds)
-    for (const q of promptRows ?? []) {
-      promptByQuestionId.set(q.id, q.prompt)
-    }
-  }
+  // Every entry in this pool answers the SAME Question (the flagship),
+  // so there is exactly one prompt to resolve, not a per-answer lookup.
+  const flagshipPrompt = flagship?.prompt ?? ''
 
   const userIds = [...new Set(eligible.map((a) => a.user_id))]
   const profilesById = new Map<
@@ -226,7 +223,7 @@ export default async function MindsPage({
     country: a.profile.country,
     genderDisplay: genderDisplay(a.profile.gender, a.profile.gender_custom),
     ageRange: a.profile.age_range,
-    prompt: promptByQuestionId.get(a.question_id) ?? '',
+    prompt: flagshipPrompt,
   }))
 
   const moreHref = `/minds?${buildQuery({

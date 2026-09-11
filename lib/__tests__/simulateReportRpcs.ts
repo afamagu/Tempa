@@ -31,6 +31,9 @@ export type FakeQuestion = {
   is_active: boolean
   family?: string | null
   created_at?: string
+  /** Question Slots checkpoint — 1 (permanent flagship), 2, 3, or
+   * undefined/null for an unpositioned library Question. */
+  current_position?: 1 | 2 | 3 | null
 }
 export type FakeQuestionAnswer = {
   id: string
@@ -100,6 +103,7 @@ export function createFakeReports(options: {
   for (const qa of questionAnswers) if (qa.is_current === undefined) qa.is_current = false
   for (const q of questions) if (q.family === undefined) q.family = null
   for (const q of questions) if (q.created_at === undefined) q.created_at = new Date().toISOString()
+  for (const q of questions) if (q.current_position === undefined) q.current_position = null
 
   const reports: FakeReport[] = []
   const accountStatus = new Map<string, { status: string; reason: string | null; changed_by: string; changed_at: string }>()
@@ -601,13 +605,21 @@ export function createFakeReports(options: {
       return {
         data: questions
           .slice()
-          .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+          .sort((a, b) => {
+            const aPos = a.current_position ?? null
+            const bPos = b.current_position ?? null
+            if (aPos === null && bPos !== null) return 1
+            if (aPos !== null && bPos === null) return -1
+            if (aPos !== null && bPos !== null) return aPos - bPos
+            return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+          })
           .map((q) => ({
             id: q.id,
             slug: q.slug,
             family: q.family ?? null,
             prompt: q.prompt,
             is_active: q.is_active,
+            current_position: q.current_position ?? null,
             answer_count: questionAnswers.filter((qa) => qa.question_id === q.id).length,
             first_letter_count: 0,
             created_at: q.created_at ?? null,
@@ -644,6 +656,15 @@ export function createFakeReports(options: {
       if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
       const old = questions.find((q) => q.id === (params?.p_question_id as string))
       if (!old) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      // Question Slots checkpoint: flagship protection — Replace always
+      // deactivates (or would evict the position of) the old Question,
+      // which is exactly the casual mutation forbidden for #1.
+      if (old.current_position === 1) {
+        return {
+          data: null,
+          error: { message: 'Question #1 is the permanent flagship and cannot be replaced from here.', code: 'P0001' },
+        }
+      }
       const newPrompt = ((params?.p_new_prompt as string) ?? '').trim()
       if (newPrompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
       // Question source-of-truth correction, item 3: mirrors the OLD
@@ -656,7 +677,18 @@ export function createFakeReports(options: {
           ? oldActiveAtCallTime
           : Boolean(params?.p_new_active)
       const deactivateOld = params?.p_deactivate_old === undefined ? true : Boolean(params?.p_deactivate_old)
-      if (deactivateOld) old.is_active = false
+      // Final Correction round, item 3: the slot is carried forward to
+      // the replacement only when the old row is being deactivated
+      // (freeing it) AND the replacement will itself be ACTIVE — a
+      // Question may only occupy #1/#2/#3 while active. Carrying the
+      // slot onto an explicitly-inactive replacement would violate
+      // questions_current_position_requires_active; the slot is simply
+      // left empty in that case instead.
+      const carriedPosition = deactivateOld && newActive ? (old.current_position ?? null) : null
+      if (deactivateOld) {
+        old.is_active = false
+        old.current_position = null
+      }
       const newId = `q-replaced-${questions.length + 1}`
       questions.push({
         id: newId,
@@ -665,6 +697,7 @@ export function createFakeReports(options: {
         is_active: newActive,
         family: old.family ?? null,
         created_at: new Date().toISOString(),
+        current_position: carriedPosition,
       })
       auditLog.push({
         id: `audit-${auditLog.length + 1}`,
@@ -680,6 +713,7 @@ export function createFakeReports(options: {
           replaced_prompt: old.prompt,
           old_deactivated: deactivateOld,
           new_active: newActive,
+          carried_position: carriedPosition,
         },
         created_at: new Date().toISOString(),
       })
@@ -708,7 +742,21 @@ export function createFakeReports(options: {
           },
         }
       }
+      // Question Slots checkpoint: flagship protection — #1 can never
+      // be casually deactivated from this control.
+      if (q.current_position === 1 && !active) {
+        return {
+          data: null,
+          error: {
+            message: 'Question #1 is the permanent flagship and cannot be deactivated from here.',
+            code: 'P0001',
+          },
+        }
+      }
+      const vacatedPosition = active ? null : (q.current_position ?? null)
       q.is_active = active
+      // Deactivating always vacates the slot in the same step.
+      if (!active) q.current_position = null
       auditLog.push({
         id: `audit-${auditLog.length + 1}`,
         actor_id: viewerId,
@@ -718,7 +766,68 @@ export function createFakeReports(options: {
         target_id: q.id,
         target_identifier_snapshot: q.prompt,
         reason: null,
-        metadata: { is_active: active },
+        metadata: { is_active: active, vacated_position: vacatedPosition },
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    if (fn === 'admin_set_question_position') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const position = params?.p_position as 1 | 2 | 3 | null | undefined
+      if (position !== null && position !== undefined && ![1, 2, 3].includes(position)) {
+        return { data: null, error: { message: 'Position must be 1, 2, 3, or null.', code: 'P0001' } }
+      }
+      const q = questions.find((q) => q.id === (params?.p_question_id as string))
+      if (!q) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      const currentPosition = q.current_position ?? null
+      const targetPosition = position ?? null
+
+      // Flagship protection, direction 1: #1 cannot be moved away.
+      if (currentPosition === 1 && targetPosition !== 1) {
+        return {
+          data: null,
+          error: { message: 'Question #1 is the permanent flagship and cannot be moved or unassigned from here.', code: 'P0001' },
+        }
+      }
+
+      if (targetPosition !== null && !q.is_active) {
+        return { data: null, error: { message: 'Only an active Question may be assigned a current position.', code: 'P0001' } }
+      }
+
+      if (targetPosition === null) {
+        if (currentPosition === null) {
+          return { data: null, error: { message: 'This Question does not currently hold a position.', code: 'P0001' } }
+        }
+        q.current_position = null
+      } else {
+        if (currentPosition === targetPosition) {
+          return { data: null, error: { message: 'This Question already holds that position.', code: 'P0001' } }
+        }
+        const occupant = questions.find((other) => other.current_position === targetPosition)
+        // Flagship protection, direction 2: a different Question
+        // already holding #1 can never be silently evicted.
+        if (occupant && targetPosition === 1) {
+          return {
+            data: null,
+            error: { message: 'Question #1 is the permanent flagship and cannot be evicted from here.', code: 'P0001' },
+          }
+        }
+        if (occupant) occupant.current_position = null
+        q.current_position = targetPosition
+      }
+
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_position_set',
+        target_type: 'question',
+        target_id: q.id,
+        target_identifier_snapshot: q.prompt,
+        reason: null,
+        metadata: { previous_position: currentPosition, new_position: targetPosition },
         created_at: new Date().toISOString(),
       })
       return { data: null, error: null }

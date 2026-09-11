@@ -1,195 +1,118 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { updateAnnouncement, publishAnnouncement, archiveAnnouncement, type AdminAnnouncement } from '@/lib/announcements'
-import { secondaryButtonClass, destructiveButtonClass, primaryButtonClass, inputClass, fieldLabelClass } from '@/app/profile/ui'
+import { archiveAnnouncement, deriveAnnouncementState, type AdminAnnouncement } from '@/lib/announcements'
+import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
+import { secondaryButtonClass, destructiveButtonClass } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableTextClass, adminBadgeClass } from '@/app/admin/admin-ui'
 import { formatDateTimeFull } from '@/lib/format-date'
+import AnnouncementBody from '@/app/announcement-body'
+import AnnouncementComposer from './announcement-composer'
 
-const STATUS_LABEL: Record<AdminAnnouncement['status'], string> = {
+const STATE_LABEL: Record<ReturnType<typeof deriveAnnouncementState>, string> = {
   draft: 'Draft',
-  published: 'Published',
+  scheduled: 'Scheduled',
+  live: 'Live',
+  expired: 'Expired',
   archived: 'Archived',
 }
 
-function toLocalInputValue(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
+/**
+ * One Announcement's admin row (Section B7) — thumbnail, title,
+ * derived state, start/end, and state-appropriate actions. Never a
+ * hard-delete control for published history — Deactivate (archive) is
+ * the only destructive-feeling action, and it only ever moves a row to
+ * 'archived', never removes it.
+ */
 export default function AnnouncementRow({ announcement }: { announcement: AdminAnnouncement }) {
   const router = useRouter()
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(announcement.title)
-  const [body, setBody] = useState(announcement.body)
-  const [startsAt, setStartsAt] = useState(toLocalInputValue(announcement.startsAt))
-  const [endsAt, setEndsAt] = useState(toLocalInputValue(announcement.endsAt))
+  const [previewing, setPreviewing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function saveEdit() {
-    if (title.trim().length === 0 || body.trim().length === 0) {
-      setError('A title and body are required.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    const supabase = createClient()
-    const { error: actionError } = await updateAnnouncement(
-      supabase,
-      announcement.id,
-      title,
-      body,
-      startsAt ? new Date(startsAt).toISOString() : null,
-      endsAt ? new Date(endsAt).toISOString() : null
-    )
-    setBusy(false)
-    if (actionError) {
-      setError('Could not save this announcement. Please try again.')
-      return
-    }
-    setEditing(false)
-    router.refresh()
-  }
+  const state = deriveAnnouncementState(announcement.status, announcement.startsAt, announcement.endsAt)
 
-  async function handlePublish() {
-    setBusy(true)
-    setError(null)
-    const { error: actionError } = await publishAnnouncement(createClient(), announcement.id)
-    setBusy(false)
-    if (actionError) {
-      setError('Could not publish this announcement. Please try again.')
-      return
+  useEffect(() => {
+    let cancelled = false
+    if (announcement.heroImagePath) {
+      resolveAnnouncementImageUrl(createClient(), announcement.heroImagePath).then(({ url }) => {
+        if (!cancelled) setThumbnailUrl(url)
+      })
     }
-    router.refresh()
-  }
+    return () => {
+      cancelled = true
+    }
+  }, [announcement.heroImagePath])
 
-  async function handleArchive() {
+  async function handleDeactivate() {
     setBusy(true)
     setError(null)
     const { error: actionError } = await archiveAnnouncement(createClient(), announcement.id)
     setBusy(false)
     if (actionError) {
-      setError('Could not unpublish this announcement. Please try again.')
+      setError('Could not deactivate this announcement. Please try again.')
       return
     }
     router.refresh()
   }
 
+  if (editing) {
+    return <AnnouncementComposer initial={announcement} onDone={() => setEditing(false)} />
+  }
+
   return (
-    <div className="space-y-2 rounded-md border border-foreground/10 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          {editing ? (
-            <div className="space-y-2">
-              <div>
-                <label className={fieldLabelClass} htmlFor={`title-${announcement.id}`}>
-                  Title
-                </label>
-                <input
-                  id={`title-${announcement.id}`}
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={fieldLabelClass} htmlFor={`body-${announcement.id}`}>
-                  Body
-                </label>
-                <textarea
-                  id={`body-${announcement.id}`}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={3}
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <div>
-                  <label className={fieldLabelClass} htmlFor={`starts-${announcement.id}`}>
-                    Starts (optional)
-                  </label>
-                  <input
-                    id={`starts-${announcement.id}`}
-                    type="datetime-local"
-                    value={startsAt}
-                    onChange={(e) => setStartsAt(e.target.value)}
-                    className={`mt-1 ${inputClass}`}
-                  />
-                </div>
-                <div>
-                  <label className={fieldLabelClass} htmlFor={`ends-${announcement.id}`}>
-                    Ends (optional)
-                  </label>
-                  <input
-                    id={`ends-${announcement.id}`}
-                    type="datetime-local"
-                    value={endsAt}
-                    onChange={(e) => setEndsAt(e.target.value)}
-                    className={`mt-1 ${inputClass}`}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className={adminTableTextClass}>{announcement.title}</p>
-              <p className={`mt-1 whitespace-pre-wrap ${adminTableTextClass}`}>{announcement.body}</p>
-            </>
+    <div className="space-y-3 rounded-md border border-foreground/10 p-4">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="aspect-[3/2] w-24 shrink-0 overflow-hidden rounded-md border border-foreground/10 bg-surface-shell">
+          {thumbnailUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" />
           )}
         </div>
-        <span className={adminBadgeClass}>{STATUS_LABEL[announcement.status]}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={adminTableTextClass}>{announcement.title}</p>
+            <span className={adminBadgeClass}>{STATE_LABEL[state]}</span>
+          </div>
+          {announcement.subtitle && <p className={adminMetadataClass}>{announcement.subtitle}</p>}
+          <p className={adminMetadataClass}>
+            {announcement.startsAt ? `Starts ${formatDateTimeFull(announcement.startsAt)}` : 'Starts immediately'}
+            {announcement.endsAt ? ` · Ends ${formatDateTimeFull(announcement.endsAt)}` : ' · No end set'}
+          </p>
+        </div>
       </div>
-
-      <p className={adminMetadataClass}>
-        Created {formatDateTimeFull(announcement.createdAt)}
-        {announcement.startsAt ? ` · starts ${formatDateTimeFull(announcement.startsAt)}` : ''}
-        {announcement.endsAt ? ` · ends ${formatDateTimeFull(announcement.endsAt)}` : ''}
-      </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {previewing && (
+        <div className="mx-auto max-w-sm space-y-3 rounded-md border border-foreground/10 p-4">
+          {thumbnailUrl && (
+            <div className="aspect-[3/2] overflow-hidden rounded-md">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <p className="font-serif text-xl font-medium text-foreground">{announcement.title}</p>
+          {announcement.subtitle && <p className="font-serif italic text-foreground/70">{announcement.subtitle}</p>}
+          <AnnouncementBody doc={announcement.contentJson} />
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        {editing ? (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false)
-                setTitle(announcement.title)
-                setBody(announcement.body)
-                setError(null)
-              }}
-              disabled={busy}
-              className={secondaryButtonClass}
-            >
-              Cancel
-            </button>
-            <button type="button" onClick={saveEdit} disabled={busy} className={primaryButtonClass}>
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" onClick={() => setEditing(true)} disabled={busy} className={secondaryButtonClass}>
-              Edit
-            </button>
-            {announcement.status !== 'published' ? (
-              <button type="button" onClick={handlePublish} disabled={busy} className={primaryButtonClass}>
-                {busy ? 'Working…' : 'Publish'}
-              </button>
-            ) : (
-              <button type="button" onClick={handleArchive} disabled={busy} className={destructiveButtonClass}>
-                {busy ? 'Working…' : 'Unpublish'}
-              </button>
-            )}
-          </>
+        <button type="button" onClick={() => setPreviewing((v) => !v)} className={secondaryButtonClass}>
+          {previewing ? 'Hide preview' : 'Preview'}
+        </button>
+        <button type="button" onClick={() => setEditing(true)} className={secondaryButtonClass}>
+          Edit
+        </button>
+        {(state === 'live' || state === 'scheduled') && (
+          <button type="button" onClick={handleDeactivate} disabled={busy} className={destructiveButtonClass}>
+            {busy ? 'Working…' : 'Deactivate'}
+          </button>
         )}
       </div>
     </div>

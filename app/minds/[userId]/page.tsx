@@ -23,6 +23,7 @@ import BlockButton from '@/app/block-button'
 import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
 import ProfileAnswer from './profile-answer'
+import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
 
 function genderDisplay(gender: string | null, genderCustom: string | null) {
@@ -128,27 +129,26 @@ export default async function PublicProfilePage({
   // shown twice on the same profile.
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
 
-  // Main writing section: every Question answer this member has ever
-  // written, writing primary throughout — never just the current one
-  // plus a "more" list. Question source-of-truth correction: this used
-  // to show only the 3 canonical answers in a fixed slug order; now
-  // that a member may have answered any number of library Questions,
-  // every answer is shown (most recently written/edited first — a
-  // neutral, existing field, never an invented ranking signal).
-  const answers = [...rawAnswers].sort(
-    (a, b) => b.updatedAt.localeCompare(a.updatedAt)
-  )
-  const currentAnswer = answers.find((a) => a.isCurrent) ?? null
+  // Question Slots checkpoint (Section A4) — the PRIMARY answer is
+  // always and only the answer to whichever Question currently holds
+  // position #1, never an arbitrary/most-recent/is_current answer.
+  // Everything else this member has answered is "other answers,"
+  // sorted most-recently-written first (a neutral, existing field,
+  // never an invented ranking signal), behind a restrained disclosure.
+  const primaryAnswer = rawAnswers.find((a) => a.isPrimary) ?? null
+  const otherAnswers = rawAnswers
+    .filter((a) => !a.isPrimary)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   const alreadyCorresponding = activePartnerIds.has(userId)
-  const currentAnswerAlreadyContacted = currentAnswer
-    ? contactedAnswerIds.has(currentAnswer.id)
+  const primaryAnswerAlreadyContacted = primaryAnswer
+    ? contactedAnswerIds.has(primaryAnswer.id)
     : false
   const showWriteToMind = canWriteToMind({
     isSelf,
     alreadyCorresponding,
-    hasCurrentAnswer: currentAnswer !== null,
-    currentAnswerAlreadyContacted,
+    hasCurrentAnswer: primaryAnswer !== null,
+    currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted,
   })
 
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
@@ -179,7 +179,7 @@ export default async function PublicProfilePage({
             </div>
           </div>
 
-          {answers.length > 0 && (
+          {primaryAnswer && (
             <div className="space-y-6">
               {/* A 'hidden' answer only ever reaches this array for the
                   answer's own author — question_answers' cross-user RLS
@@ -188,24 +188,23 @@ export default async function PublicProfilePage({
                   own-context" Decision 2/9 describes: a calm, private
                   notice on the author's own profile view, never a
                   public tombstone. */}
-              {answers.map((a) =>
-                a.moderationStatus === 'hidden' ? (
-                  <div key={a.id} className="rounded-md border border-foreground/10 p-4">
-                    <p className={metadataTextClass}>Hidden by TEMPA.</p>
-                  </div>
-                ) : (
-                  <ProfileAnswer
-                    key={a.id}
-                    id={a.id}
-                    prompt={a.prompt}
-                    body={a.body}
-                    isCurrent={a.isCurrent}
-                    showReport={!isSelf}
-                  />
-                )
+              {primaryAnswer.moderationStatus === 'hidden' ? (
+                <div className="rounded-md border border-foreground/10 p-4">
+                  <p className={metadataTextClass}>Hidden by TEMPA.</p>
+                </div>
+              ) : (
+                <ProfileAnswer
+                  id={primaryAnswer.id}
+                  prompt={primaryAnswer.prompt}
+                  body={primaryAnswer.body}
+                  isPrimary
+                  showReport={!isSelf}
+                />
               )}
             </div>
           )}
+
+          <OtherAnswersDisclosure answers={otherAnswers} showReport={!isSelf} />
 
           {/* Pinned Dispatch — shown only when this person has pinned
               one, always ahead of their other recent writing. Never a
@@ -242,9 +241,9 @@ export default async function PublicProfilePage({
 
           {!isSelf && (
             <div className="space-y-3">
-              {showWriteToMind && currentAnswer ? (
+              {showWriteToMind && primaryAnswer ? (
                 <Link
-                  href={`/write/${profile.id}?a=${currentAnswer.id}`}
+                  href={`/write/${profile.id}?a=${primaryAnswer.id}`}
                   className={primaryButtonClass}
                 >
                   Write to this mind
