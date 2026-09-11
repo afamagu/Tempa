@@ -7,7 +7,7 @@ type Destination = { href: string; label: string; matchPrefix?: string }
 
 const DESTINATIONS: Destination[] = [
   { href: '/admin', label: 'Overview' },
-  { href: '/admin/moderation', label: 'Moderation', matchPrefix: '/admin/moderation' },
+  { href: '/admin/moderation/reports', label: 'Moderation', matchPrefix: '/admin/moderation' },
   { href: '/admin/members', label: 'Members' },
   { href: '/admin/content', label: 'Content', matchPrefix: '/admin/content' },
 ]
