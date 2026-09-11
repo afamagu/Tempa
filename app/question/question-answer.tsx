@@ -16,7 +16,7 @@ import {
 import {
   questionSaveConfirmationCopy,
   QUESTION_ANSWER_MAX_CHARS,
-  type CanonicalQuestion,
+  type LibraryQuestion,
 } from '@/lib/questions'
 import { insertAtCursor } from '@/lib/textarea-insert'
 import EmojiPicker from '@/app/letters/emoji-picker'
@@ -66,12 +66,12 @@ export default function QuestionAnswer({
    * is_current untouched). */
   initialIsCurrent?: boolean
   isActive?: boolean
-  /** The next unanswered canonical Question in canonical order, or
-   * null when this Question isn't canonical or none remain — computed
-   * server-side (lib/questions.ts's nextUnansweredCanonicalQuestion).
-   * Only ever offered once there's a saved answer to show (never
-   * during active editing, so Next can't discard unsaved text). */
-  nextQuestion?: CanonicalQuestion | null
+  /** The next currently-eligible Question (active, unanswered by this
+   * member), or null when none remain — computed server-side
+   * (lib/questions.ts's nextEligibleQuestion). Only ever offered once
+   * there's a saved answer to show (never during active editing, so
+   * Next can't discard unsaved text). */
+  nextQuestion?: LibraryQuestion | null
 }) {
   const router = useRouter()
 

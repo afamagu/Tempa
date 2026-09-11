@@ -36,12 +36,12 @@ export default function AdminNav() {
     <>
       {/* Desktop / tablet — restrained horizontal nav, unchanged shape
           from Phase 1, just one more destination. */}
-      <nav className="hidden gap-4 text-[14px] font-medium text-foreground/70 sm:flex">
+      <nav className="hidden gap-4 text-[16px] font-medium text-foreground/70 sm:flex">
         {DESTINATIONS.map((dest) => (
           <Link
             key={dest.href}
             href={dest.href}
-            className={`transition-colors hover:text-foreground ${
+            className={`rounded-md px-1 py-2 transition-colors hover:text-foreground ${
               isActive(pathname, dest) ? 'text-foreground' : ''
             }`}
           >
@@ -65,7 +65,7 @@ export default function AdminNav() {
               key={dest.href}
               href={dest.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[13px] font-medium transition-colors ${
                 active ? 'text-accent' : 'text-foreground/60'
               }`}
             >

@@ -1,55 +1,30 @@
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { searchMembers } from '@/lib/admin'
-import { sectionTitleClass, helperTextClass, inputClass, secondaryButtonClass, metadataTextClass } from '@/app/profile/ui'
+import { listMembers } from '@/lib/admin'
+import { sectionTitleClass } from '@/app/profile/ui'
+import { adminMetadataClass } from '@/app/admin/admin-ui'
+import MembersDirectory from './members-directory'
 
 /**
- * Member search — pseudonym only, per the checkpoint's own "Minimum
- * admin-side build." A plain GET form (?q=) so it works without any
- * client-side state; results link straight to the member detail screen.
+ * Admin Operations Refinement checkpoint — a professional default
+ * Members directory. Previously this screen showed nothing until a
+ * search was typed; it now server-fetches the first page (newest
+ * members first, 25 per page) so there's no empty/blank state on open.
+ * All subsequent search/filter/pagination happens client-side via
+ * MembersDirectory, which always re-queries admin_list_members with a
+ * fresh limit/offset — never a client-side "fetch all then filter,"
+ * so this remains usable at any member count.
  */
-export default async function AdminMembersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>
-}) {
-  const { q } = await searchParams
+export default async function AdminMembersPage() {
   const supabase = await createClient()
-  const results = q && q.trim().length > 0 ? (await searchMembers(supabase, q)).data : []
+  const { data: initialMembers, error } = await listMembers(supabase, { limit: 25, offset: 0 })
 
   return (
     <div className="space-y-6">
-      <h1 className={sectionTitleClass}>Member search</h1>
-
-      <form className="flex gap-2">
-        <input
-          type="text"
-          name="q"
-          defaultValue={q ?? ''}
-          placeholder="Search by pseudonym"
-          className={inputClass}
-        />
-        <button type="submit" className={secondaryButtonClass}>
-          Search
-        </button>
-      </form>
-
-      {q && results.length === 0 && <p className={helperTextClass}>No members found.</p>}
-
-      {results.length > 0 && (
-        <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10">
-          {results.map((m) => (
-            <Link
-              key={m.id}
-              href={`/admin/members/${m.id}`}
-              className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-foreground/[.03]"
-            >
-              <p className="text-[15px] text-foreground">{m.pseudonym}</p>
-              {m.country && <p className={metadataTextClass}>{m.country}</p>}
-            </Link>
-          ))}
-        </div>
-      )}
+      <div className="space-y-1">
+        <h1 className={sectionTitleClass}>Members</h1>
+        <p className={adminMetadataClass}>Newest members first. Search, filter, or page through the directory.</p>
+      </div>
+      <MembersDirectory initialMembers={initialMembers} initialError={error?.message ?? null} />
     </div>
   )
 }

@@ -69,6 +69,60 @@ describe('QuestionAnswer — edit mode (no answer yet)', () => {
   })
 })
 
+// Final Question-invariant check: inactive Questions must never expose
+// a loophole for starting a brand-new answer. The server/RPC boundary
+// (publish_question_answer's `question_is_active` guard,
+// docs/sql/2026-09-18-admin-operations-refinement.sql section 1b) is
+// the real enforcement and is proven separately in lib/questions.test.ts's
+// publish_question_answer simulation tests — these tests prove the
+// direct-route UI never even offers the writable form in the first
+// place ("do not rely on UI hiding" cuts both ways: the UI must also
+// not dangle a control that can only ever fail).
+describe('QuestionAnswer — inactive Question, no existing answer (direct-route invariant)', () => {
+  it('shows a quiet "no longer open, you haven\'t answered it" state — never a writable textarea', () => {
+    const html = renderToStaticMarkup(
+      <QuestionAnswer userId="user-1" questionId="q-1" prompt="A prompt" initialAnswer={null} isActive={false} />
+    )
+    expect(html).toContain('This Question is no longer open')
+    expect(html).toContain("you haven&#x27;t answered it")
+    expect(html).not.toContain('<textarea')
+    expect(html).not.toContain('Save answer')
+  })
+
+  it('still offers a way back to My answers — never a dead end', () => {
+    const html = renderToStaticMarkup(
+      <QuestionAnswer userId="user-1" questionId="q-1" prompt="A prompt" initialAnswer={null} isActive={false} />
+    )
+    expect(html).toContain('href="/minds?view=answers"')
+  })
+})
+
+describe('QuestionAnswer — inactive Question, member already has an answer (historical access preserved)', () => {
+  it('the historical answer is still readable — deactivation never erases a member\'s own record of it', () => {
+    const html = renderToStaticMarkup(
+      <QuestionAnswer
+        userId="user-1"
+        questionId="q-1"
+        prompt="A prompt"
+        initialAnswer="My historical answer."
+        isActive={false}
+      />
+    )
+    expect(html).toContain('My historical answer.')
+    expect(html).toContain('This Question is no longer open')
+  })
+})
+
+describe('QuestionAnswer — active Question, no existing answer (the one case that MUST allow writing)', () => {
+  it('renders the writable textarea and Save answer control', () => {
+    const html = renderToStaticMarkup(
+      <QuestionAnswer userId="user-1" questionId="q-1" prompt="A prompt" initialAnswer={null} isActive />
+    )
+    expect(html).toContain('<textarea')
+    expect(html).toContain('Save answer')
+  })
+})
+
 describe('QuestionAnswer — view mode (already has a saved answer)', () => {
   it('renders "Edit answer" and "Back to my answers", never any letter-composer text', () => {
     const html = renderToStaticMarkup(

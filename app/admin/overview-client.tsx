@@ -113,7 +113,7 @@ function ChartsSection({ series }: { series: DailySeriesPoint[] }) {
               type="button"
               onClick={() => setWindowDays(d)}
               aria-pressed={windowDays === d}
-              className={`rounded px-2 py-1 text-[12px] font-medium transition-colors ${
+              className={`rounded px-2 py-1 text-[14px] font-medium transition-colors ${
                 windowDays === d ? 'bg-accent text-accent-foreground' : 'text-muted hover:text-foreground'
               }`}
             >
@@ -151,7 +151,7 @@ function SecondarySignals({ counts }: { counts: OverviewCounts }) {
           <div key={item.label}>
             <p className="text-[16px] font-medium text-foreground">{item.value.toLocaleString()}</p>
             <p className={helperTextClass}>{item.label}</p>
-            {item.sub && <p className="text-[11px] text-muted">{item.sub}</p>}
+            {item.sub && <p className="text-[13px] text-muted">{item.sub}</p>}
           </div>
         ))}
       </div>

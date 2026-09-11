@@ -79,6 +79,20 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(detailSource).toContain('href="/admin/moderation/reports"')
   })
 
+  it('Admin Operations Refinement: /admin/content/announcements is a Server Component with no competing auth check of its own', () => {
+    const announcementsPageSource = readFileSync(
+      path.join(__dirname, 'content', 'announcements', 'page.tsx'),
+      'utf8'
+    )
+    expect(announcementsPageSource.trimStart().startsWith("'use client'")).toBe(false)
+    expect(announcementsPageSource).not.toContain('isStaff')
+    expect(announcementsPageSource).not.toContain('redirect(')
+  })
+
+  it('the Admin nav still points Moderation at the working canonical route, not the bare 404ing index', () => {
+    expect(adminNavSource).toContain("href: '/admin/moderation/reports'")
+  })
+
   it('old /admin/reports paths redirect permanently to the new Moderation location', () => {
     const configSource = readFileSync(path.join(__dirname, '..', '..', 'next.config.ts'), 'utf8')
     expect(configSource).toContain('source: "/admin/reports"')

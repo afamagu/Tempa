@@ -16,8 +16,9 @@ import {
   letterPreviewText,
   isRichBody,
 } from '@/lib/letters'
-import { getCanonicalQuestions, getCanonicalAnswers, needsParticipationGate } from '@/lib/questions'
+import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
 import { getHomeBoardDispatches, getFirstMomentThumbnails } from '@/lib/dispatches'
+import { getActiveAnnouncement } from '@/lib/announcements'
 import { sectionLabelClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MailInTransitIcon from '@/app/mail-in-transit-icon'
@@ -76,8 +77,8 @@ export default async function HomePage() {
     contactedAnswerIds,
     incomingInTransitRaw,
     hiddenCorrespondenceIds,
-    canonicalQuestions,
-    canonicalAnswers,
+    eligibleQuestions,
+    myAnswers,
     boardShelf,
   ] = await Promise.all([
     getMyLetters(supabase, user.id),
@@ -86,10 +87,12 @@ export default async function HomePage() {
     getContactedAnswerIds(supabase, user.id),
     getIncomingMailInTransit(supabase),
     getHiddenCorrespondenceIds(supabase, user.id),
-    getCanonicalQuestions(supabase),
-    getCanonicalAnswers(supabase, user.id),
+    getEligibleQuestions(supabase, user.id),
+    getMyAnswers(supabase, user.id),
     getHomeBoardDispatches(supabase, user.id),
   ])
+
+  const activeAnnouncement = await getActiveAnnouncement(supabase)
 
   const boardThumbnails = await getFirstMomentThumbnails(
     supabase,
@@ -104,7 +107,7 @@ export default async function HomePage() {
   const allLetters = excludeHiddenLetters(allLettersRaw, hiddenCorrespondenceIds)
   const incomingInTransit = excludeHiddenMailInTransit(incomingInTransitRaw, hiddenCorrespondenceIds)
   const mailOnTheWay = hasIncomingMailInTransit(incomingInTransit)
-  const needsAnswer = needsParticipationGate(canonicalQuestions.length, canonicalAnswers.length)
+  const needsAnswer = needsParticipationGate(eligibleQuestions.length, myAnswers.length)
 
   const awaitingReply = deriveArrivals(allLetters, user.id)
   // A root letter's own `status` flips to 'replied' the instant its
@@ -178,6 +181,14 @@ export default async function HomePage() {
     <AppShell active="home" waitingLetterCount={waitingCount}>
       <main className="min-h-screen p-6">
         <div className="mx-auto w-full max-w-md py-10">
+          {activeAnnouncement && (
+            <div className="mb-6">
+              <SystemMessage variant="notice" title={activeAnnouncement.title}>
+                {activeAnnouncement.body}
+              </SystemMessage>
+            </div>
+          )}
+
           <div className="space-y-6">
             <p className={sectionLabelClass}>Arrivals</p>
 

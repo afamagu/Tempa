@@ -1,13 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import {
-  getCanonicalQuestions,
-  getAllCanonicalQuestions,
-  getCanonicalAnswers,
-  mergeCanonicalQuestionState,
-  needsParticipationGate,
-} from '@/lib/questions'
+import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
 import {
   getWaitingLetterCount,
   getActiveCorrespondencePartnerIds,
@@ -120,36 +114,30 @@ export default async function MindsPage({
     redirect('/sign-in')
   }
 
-  const [waitingCount, canonicalQuestions, canonicalAnswers] = await Promise.all([
+  const [waitingCount, eligibleQuestions, myAnswers] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
-    getCanonicalQuestions(supabase),
-    getCanonicalAnswers(supabase, user.id),
+    getEligibleQuestions(supabase, user.id),
+    getMyAnswers(supabase, user.id),
   ])
   // Encouragement, never a gate: a quiet dot on the "Answer a Question"
   // tab (both branches below) plus an openable, dismissible notice on
   // Explore specifically (see QuestionIncompleteNotice) — replaces the
   // old forced redirect into the Question flow, which discarded
   // wherever the member actually meant to go.
-  const needsAnswer = needsParticipationGate(canonicalQuestions.length, canonicalAnswers.length)
+  const needsAnswer = needsParticipationGate(eligibleQuestions.length, myAnswers.length)
 
   if (view !== 'explore') {
-    // "My answers" must keep showing a member's answer to a since-
-    // deactivated canonical Question (Admin Phase 2A-1, Decision 4) —
-    // merged against the FULL canonical set, not just the currently
-    // active/offered one. "Answer a Question" (the 'new' tab) stays on
-    // the active-only set, so a deactivated Question is never offered
-    // to write against.
-    const questionsForTab =
-      view === 'answers' ? await getAllCanonicalQuestions(supabase) : canonicalQuestions
-    const questions = mergeCanonicalQuestionState(questionsForTab, canonicalAnswers)
-
     return (
       <AppShell active="minds" waitingLetterCount={waitingCount}>
         <main className="min-h-screen flex justify-center p-6">
           <div className="w-full max-w-2xl space-y-8 py-10">
             <h1 className={sectionTitleClass}>Minds</h1>
             <MindsTabs view={view} needsAnswer={needsAnswer} />
-            <QuestionWorkspace tab={view === 'answer' ? 'new' : 'answers'} questions={questions} />
+            <QuestionWorkspace
+              tab={view === 'answer' ? 'new' : 'answers'}
+              questions={eligibleQuestions}
+              answers={myAnswers}
+            />
           </div>
         </main>
       </AppShell>
@@ -158,12 +146,11 @@ export default async function MindsPage({
 
   // Locked rule: every member with a current canonical answer stays
   // discoverable in Minds with no expiration, until they deliberately
-  // choose a different one. Under the canonical model, is_current can
-  // only ever be true on a canonical-Question row (enforced by
-  // set_current_answer and publish_question_answer — see
-  // docs/sql/2026-09-03-canonical-questions.sql), so every eligible
-  // answer here is guaranteed to reference one of canonicalQuestions;
-  // no separate lookup for its prompt is needed.
+  // choose a different one. Question source-of-truth correction:
+  // is_current can now be true on ANY Question's row (set_current_answer
+  // no longer requires canonical/slug membership), so its prompt is no
+  // longer guaranteed to be one of the (up to 3) eligibleQuestions —
+  // resolved via its own targeted lookup below instead.
   const [{ data: answers }, excludedPartnerIds, contactedAnswerIds] = await Promise.all([
     supabase
       .from('question_answers')
@@ -178,7 +165,17 @@ export default async function MindsPage({
     (a) => !excludedPartnerIds.has(a.user_id) && !contactedAnswerIds.has(a.id)
   )
 
-  const promptByQuestionId = new Map(canonicalQuestions.map((q) => [q.id, q.prompt]))
+  const currentAnswerQuestionIds = [...new Set(eligible.map((a) => a.question_id))]
+  const promptByQuestionId = new Map<string, string>()
+  if (currentAnswerQuestionIds.length > 0) {
+    const { data: promptRows } = await supabase
+      .from('questions')
+      .select('id, prompt')
+      .in('id', currentAnswerQuestionIds)
+    for (const q of promptRows ?? []) {
+      promptByQuestionId.set(q.id, q.prompt)
+    }
+  }
 
   const userIds = [...new Set(eligible.map((a) => a.user_id))]
   const profilesById = new Map<

@@ -113,7 +113,7 @@ export default async function PublicContentReviewPage({
                 </div>
                 <Link
                   href={item.contentType === 'dispatch' ? `/board/${item.id}` : `/minds/${item.authorId}`}
-                  className="shrink-0 text-[12px] font-medium text-foreground/60 underline decoration-foreground/25 underline-offset-4 hover:text-foreground"
+                  className="shrink-0 text-[14px] font-medium text-foreground/60 underline decoration-foreground/25 underline-offset-4 hover:text-foreground"
                 >
                   Open
                 </Link>

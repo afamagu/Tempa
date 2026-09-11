@@ -131,6 +131,23 @@ describe('reportContent — thin RPC wrapper (pre-beta minimum safety build)', (
     expect(error?.message).toBe('Letter not found.')
   })
 
+  it('the frozen evidence snapshot for a Letter contains the body, sender pseudonym, and the letter\'s own created_at — never a live pointer back to the letter itself', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [
+        { id: REPORTER, pseudonym: 'Reporter' },
+        { id: SENDER, pseudonym: 'Sender' },
+      ],
+      letters: [{ id: 'letter-1', sender_id: SENDER, recipient_id: REPORTER, body: 'Something upsetting.', created_at: '2026-09-01T12:00:00Z' }],
+    })
+    await reportContent(client(fake), 'letter', 'letter-1', 'harassment', '')
+    expect(fake._reports[0].evidence_snapshot).toEqual({
+      body: 'Something upsetting.',
+      sender_pseudonym: 'Sender',
+      letter_created_at: '2026-09-01T12:00:00Z',
+    })
+  })
+
   it('reported_user_id for a photo Moment is derived from the letter it belongs to, not supplied by the caller', async () => {
     const fake = createFakeReports({
       viewerId: REPORTER,

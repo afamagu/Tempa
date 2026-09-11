@@ -59,7 +59,7 @@ export default function OverviewChart({
               )
             })}
           </svg>
-          <div className="flex justify-between text-[11px] text-muted">
+          <div className="flex justify-between text-[13px] text-muted">
             <span>{formatDateShort(points[0].day)}</span>
             <span>{formatDateShort(points[points.length - 1].day)}</span>
           </div>

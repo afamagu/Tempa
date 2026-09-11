@@ -44,6 +44,24 @@ export type MemberSearchResult = {
   country: string | null
 }
 
+export type MemberListRow = {
+  id: string
+  pseudonym: string
+  country: string | null
+  status: AccountStatus
+  createdAt: string | null
+}
+
+export type MemberListOptions = {
+  query?: string
+  status?: AccountStatus
+  country?: string
+  joinedAfter?: string
+  joinedBefore?: string
+  limit?: number
+  offset?: number
+}
+
 export type MemberDetail = {
   id: string
   pseudonym: string
@@ -86,10 +104,27 @@ export async function isStaff(
   return Boolean(data)
 }
 
+export type ReportListOptions = {
+  status?: 'open' | 'reviewed'
+  targetType?: ReportTargetType
+  limit?: number
+  offset?: number
+}
+
+/** Admin Operations Refinement checkpoint — the report queue is now
+ * server-paginated with optional status/target-type filters (previously
+ * a hard, unpaginated `limit 50` with nothing beyond it ever reachable).
+ * Never fetches more than one page's worth of rows. */
 export async function listReports(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  options: ReportListOptions = {}
 ): Promise<{ data: ReportQueueRow[]; error: AdminError }> {
-  const { data, error } = await supabase.rpc('admin_list_reports')
+  const { data, error } = await supabase.rpc('admin_list_reports', {
+    p_status: options.status ?? null,
+    p_target_type: options.targetType ?? null,
+    p_limit: options.limit ?? 30,
+    p_offset: options.offset ?? 0,
+  })
   if (error) return { data: [], error: { message: error.message, code: error.code } }
   const rows = (data ?? []) as {
     id: string
@@ -182,6 +217,41 @@ export async function searchMembers(
   const { data, error } = await supabase.rpc('admin_search_members', { p_query: query })
   if (error) return { data: [], error: { message: error.message, code: error.code } }
   return { data: (data ?? []) as MemberSearchResult[], error: null }
+}
+
+/** Admin Operations Refinement checkpoint — the default, server-paginated
+ * Members directory: with no query, returns the newest members first;
+ * with a query, narrows by pseudonym; status/country/join-date filters
+ * combine with either. Never fetches more than one page's worth of
+ * rows, and clamps limit/offset server-side regardless of what's passed
+ * (see admin_list_members). Replaces searchMembers as the Members page's
+ * primary data source — searchMembers is kept unchanged for anything
+ * still depending on its exact minimal shape. */
+export async function listMembers(
+  supabase: SupabaseClient,
+  options: MemberListOptions = {}
+): Promise<{ data: MemberListRow[]; error: AdminError }> {
+  const { data, error } = await supabase.rpc('admin_list_members', {
+    p_query: options.query ?? null,
+    p_status: options.status ?? null,
+    p_country: options.country ?? null,
+    p_joined_after: options.joinedAfter ?? null,
+    p_joined_before: options.joinedBefore ?? null,
+    p_limit: options.limit ?? 25,
+    p_offset: options.offset ?? 0,
+  })
+  if (error) return { data: [], error: { message: error.message, code: error.code } }
+  const rows = (data ?? []) as { id: string; pseudonym: string; country: string | null; status: AccountStatus; created_at: string | null }[]
+  return {
+    data: rows.map((r) => ({
+      id: r.id,
+      pseudonym: r.pseudonym,
+      country: r.country,
+      status: r.status,
+      createdAt: r.created_at,
+    })),
+    error: null,
+  }
 }
 
 export async function getMember(

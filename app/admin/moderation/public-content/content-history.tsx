@@ -34,7 +34,7 @@ export default function ContentHistory({ contentType, contentId }: { contentType
       <button
         type="button"
         onClick={toggle}
-        className="text-[12px] font-medium text-foreground/60 underline decoration-foreground/25 underline-offset-4 hover:text-foreground"
+        className="text-[14px] font-medium text-foreground/60 underline decoration-foreground/25 underline-offset-4 hover:text-foreground"
       >
         {open ? 'Hide history' : 'History'}
       </button>
@@ -44,7 +44,7 @@ export default function ContentHistory({ contentType, contentId }: { contentType
           {!loading && rows?.length === 0 && <p className={helperTextClass}>No moderation history yet.</p>}
           {!loading &&
             rows?.map((r) => (
-              <div key={r.id} className="text-[12px] text-foreground/70">
+              <div key={r.id} className="text-[14px] text-foreground/70">
                 <span className="font-medium text-foreground">{r.actorIdentifierSnapshot}</span>{' '}
                 {r.action.replace('_', ' ')} — {formatDateTimeFull(r.createdAt)}
                 {r.reason && <span className="block text-foreground/60">{r.reason}</span>}

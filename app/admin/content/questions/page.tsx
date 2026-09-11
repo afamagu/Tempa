@@ -1,19 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { listQuestions } from '@/lib/admin-questions'
-import { sectionTitleClass, helperTextClass } from '@/app/profile/ui'
+import { sectionTitleClass } from '@/app/profile/ui'
+import { adminMetadataClass } from '@/app/admin/admin-ui'
 import QuestionRow from './question-row'
+import CreateQuestionForm from './create-question-form'
 
 /**
- * Admin Command Center Phase 2A-1 — Questions management. Admin-only
- * (admin_list_questions requires is_staff('admin') server-side).
- * Scoped to the 3 canonical Questions only. No Create control — the
- * member runtime only ever offers the fixed CANONICAL_QUESTION_SLUGS
- * set (lib/questions.ts); an admin-created row would never actually
- * reach a member under the current architecture, so building a Create
- * button here would be exactly the kind of control that looks
- * functional but silently does nothing. See the Phase 2A-1 design
- * discussion for the exact runtime change (a DB-driven offering query)
- * that would need to land first.
+ * Admin Command Center — Questions library management. Admin-only
+ * (admin_list_questions requires is_staff('admin') server-side). Lists
+ * the FULL Questions library, not just the 3 canonical ones — Create
+ * and Replace here build out the library; they do not, on their own,
+ * change what members are currently offered (see lib/admin-questions.ts).
  */
 export default async function AdminQuestionsPage() {
   const supabase = await createClient()
@@ -21,18 +18,22 @@ export default async function AdminQuestionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className={sectionTitleClass}>Questions</h1>
-        <p className={helperTextClass}>
-          TEMPA&rsquo;s three canonical Questions. Activating or deactivating changes what&rsquo;s offered to
-          members immediately; a prompt can only be edited before it has any answers.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className={sectionTitleClass}>Questions</h1>
+          <p className={adminMetadataClass}>
+            Activating or deactivating changes what&rsquo;s offered to members immediately. A prompt can only be
+            edited before it has any answers — an answered Question can be Replaced with revised wording instead,
+            which never rewrites or reassigns its historical answers.
+          </p>
+        </div>
+        <CreateQuestionForm />
       </div>
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
 
       {questions.length === 0 ? (
-        <p className={helperTextClass}>No canonical Questions found.</p>
+        <p className={adminMetadataClass}>No Questions found.</p>
       ) : (
         <div className="space-y-3">
           {questions.map((q) => (

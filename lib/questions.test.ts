@@ -1,157 +1,122 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  pickCanonicalQuestions,
-  buildCanonicalAnswers,
-  mergeCanonicalQuestionState,
+  selectEligibleQuestions,
+  buildMyAnswers,
+  nextEligibleQuestion,
   needsParticipationGate,
   questionSaveConfirmationCopy,
-  nextUnansweredCanonicalQuestion,
-  getCanonicalQuestions,
-  getAllCanonicalQuestions,
-  CANONICAL_QUESTION_SLUGS,
+  getEligibleQuestions,
+  getMyAnswers,
   QUESTION_ANSWER_MAX_CHARS,
-  type CanonicalQuestion,
-  type CanonicalQuestionState,
+  type LibraryQuestion,
 } from './questions'
 import { simulatePublishQuestionAnswer, simulateSetCurrentAnswer, type SimAnswer } from './__tests__/simulateQuestionRpcs'
+import { createFakeReports } from './__tests__/simulateReportRpcs'
+import { createQuestion, replaceQuestion, setQuestionActive } from './admin-questions'
 
-const PRIVATE_RITUAL = { id: 'q-private-ritual', slug: 'private_ritual', prompt: 'Is there something you return to when no one\'s watching?' }
-const PLACE_OUTSIDERS = { id: 'q-place-outsiders', slug: 'place_outsiders_miss', prompt: 'What\'s something about your home a stranger would never guess?' }
-const ORDINARY_WORTH = { id: 'q-ordinary-worth', slug: 'ordinary_worth_protecting', prompt: 'What\'s something ordinary you\'d fight to protect?' }
-const HISTORICAL = { id: 'q-historical', slug: null, prompt: 'What is something you understand differently now than you did five years ago?' }
+const REFLECTION_Q: LibraryQuestion = { id: 'q-reflection', prompt: 'A reflection prompt', family: 'reflection' }
+const EVERYDAY_Q: LibraryQuestion = { id: 'q-everyday', prompt: 'An everyday prompt', family: 'everyday' }
+const IMAGINATION_Q: LibraryQuestion = { id: 'q-imagination', prompt: 'An imagination prompt', family: 'imagination' }
+const NO_FAMILY_Q: LibraryQuestion = { id: 'q-no-family', prompt: 'A no-family prompt', family: null }
+const SECOND_REFLECTION_Q: LibraryQuestion = { id: 'q-reflection-2', prompt: 'A second reflection prompt', family: 'reflection' }
 
-const THREE_CANONICAL: CanonicalQuestion[] = [PRIVATE_RITUAL, PLACE_OUTSIDERS, ORDINARY_WORTH].map((q) => ({
-  id: q.id,
-  slug: q.slug as CanonicalQuestion['slug'],
-  prompt: q.prompt,
-}))
-
-describe('pickCanonicalQuestions', () => {
-  it('returns exactly the three canonical Questions, in fixed slug order, regardless of row order', () => {
-    const rows = [ORDINARY_WORTH, HISTORICAL, PRIVATE_RITUAL, PLACE_OUTSIDERS]
-    const result = pickCanonicalQuestions(rows)
-
-    expect(result).toHaveLength(3)
-    expect(result.map((q) => q.slug)).toEqual([...CANONICAL_QUESTION_SLUGS])
-    expect(result.find((q) => q.id === HISTORICAL.id)).toBeUndefined()
+describe('selectEligibleQuestions — family-diverse "up to three" selection (question-families design, finally wired up)', () => {
+  it('picks one from each of the three known families when all are available', () => {
+    const result = selectEligibleQuestions([EVERYDAY_Q, IMAGINATION_Q, REFLECTION_Q], 3)
+    expect(result.map((q) => q.family)).toEqual(['reflection', 'everyday', 'imagination'])
   })
 
-  it('degrades gracefully (never throws) when a canonical slug is simply missing from the rows', () => {
-    const rows = [PRIVATE_RITUAL, HISTORICAL]
-    const result = pickCanonicalQuestions(rows)
+  it('never repeats a family while a different one sits unrepresented — two reflection Questions available, only one is picked before moving on', () => {
+    const result = selectEligibleQuestions([REFLECTION_Q, SECOND_REFLECTION_Q, EVERYDAY_Q], 3)
+    expect(result.map((q) => q.id)).toEqual([REFLECTION_Q.id, EVERYDAY_Q.id, SECOND_REFLECTION_Q.id])
+  })
+
+  it('degrades gracefully to fewer than three when the pool itself is smaller', () => {
+    const result = selectEligibleQuestions([REFLECTION_Q], 3)
+    expect(result).toEqual([REFLECTION_Q])
+  })
+
+  it('an empty pool returns an empty array, never throws', () => {
+    expect(selectEligibleQuestions([], 3)).toEqual([])
+  })
+
+  it('a null/unrecognized family is never excluded from the library entirely — it is simply tried last', () => {
+    const result = selectEligibleQuestions([NO_FAMILY_Q, REFLECTION_Q], 2)
+    expect(result.map((q) => q.id)).toEqual([REFLECTION_Q.id, NO_FAMILY_Q.id])
+  })
+
+  it('respects a custom limit', () => {
+    const result = selectEligibleQuestions([REFLECTION_Q, EVERYDAY_Q, IMAGINATION_Q], 1)
     expect(result).toHaveLength(1)
-    expect(result[0].slug).toBe('private_ritual')
+    expect(result[0].family).toBe('reflection')
+  })
+
+  it('never invents a popularity/ranking signal — within a family, input order (the caller\'s own oldest-first query order) is preserved verbatim', () => {
+    const older = { id: 'q-older', prompt: 'older', family: 'reflection' }
+    const newer = { id: 'q-newer', prompt: 'newer', family: 'reflection' }
+    const result = selectEligibleQuestions([older, newer], 2)
+    expect(result.map((q) => q.id)).toEqual(['q-older', 'q-newer'])
   })
 })
 
-describe('buildCanonicalAnswers — old Question answers remain untouched', () => {
-  it('excludes every historical (non-canonical) answer row entirely, never reading or altering it', () => {
+describe('buildMyAnswers — every historical answer resolves to its Question\'s prompt, regardless of active/canonical state', () => {
+  it('resolves prompts for answers to any number of different Questions, not just a fixed three', () => {
     const rows = [
-      { id: 'a-1', question_id: PRIVATE_RITUAL.id, body: 'canonical body', updated_at: '2026-09-01', is_current: true, moderation_status: 'visible' as const },
-      { id: 'a-2', question_id: HISTORICAL.id, body: 'historical body — must never appear', updated_at: '2020-01-01', is_current: false, moderation_status: 'visible' as const },
+      { id: 'a-1', question_id: 'q1', body: 'body 1', updated_at: 't1', is_current: true, moderation_status: 'visible' as const },
+      { id: 'a-2', question_id: 'q2', body: 'body 2', updated_at: 't2', is_current: false, moderation_status: 'visible' as const },
     ]
-    const result = buildCanonicalAnswers(THREE_CANONICAL, rows)
-
-    expect(result).toHaveLength(1)
-    expect(result[0].questionId).toBe(PRIVATE_RITUAL.id)
-    expect(result.some((a) => a.body.includes('historical body'))).toBe(false)
-    // The historical row itself is untouched by this call — the input
-    // array still contains it exactly as given, proving no mutation.
-    expect(rows[1]).toEqual({
-      id: 'a-2',
-      question_id: HISTORICAL.id,
-      body: 'historical body — must never appear',
-      updated_at: '2020-01-01',
-      is_current: false,
-      moderation_status: 'visible',
-    })
-  })
-})
-
-describe('mergeCanonicalQuestionState — Answer a Question completed/uncompleted state', () => {
-  it('always returns all three, pairing answered ones and leaving the rest null', () => {
-    const answers = buildCanonicalAnswers(THREE_CANONICAL, [
-      { id: 'a-1', question_id: PLACE_OUTSIDERS.id, body: 'x', updated_at: 't', is_current: false, moderation_status: 'visible' },
+    const questionsById = new Map([
+      ['q1', { prompt: 'Prompt one' }],
+      ['q2', { prompt: 'Prompt two' }],
     ])
-    const result = mergeCanonicalQuestionState(THREE_CANONICAL, answers)
+    const result = buildMyAnswers(rows, questionsById)
+    expect(result).toHaveLength(2)
+    expect(result.find((a) => a.id === 'a-1')?.prompt).toBe('Prompt one')
+    expect(result.find((a) => a.id === 'a-2')?.prompt).toBe('Prompt two')
+  })
 
-    expect(result).toHaveLength(3)
-    expect(result.find((s) => s.slug === 'place_outsiders_miss')?.answer?.id).toBe('a-1')
-    expect(result.find((s) => s.slug === 'private_ritual')?.answer).toBeNull()
-    expect(result.find((s) => s.slug === 'ordinary_worth_protecting')?.answer).toBeNull()
+  it('never mutates the input rows', () => {
+    const rows = [{ id: 'a-1', question_id: 'q1', body: 'x', updated_at: 't', is_current: false, moderation_status: 'visible' as const }]
+    const questionsById = new Map([['q1', { prompt: 'P' }]])
+    buildMyAnswers(rows, questionsById)
+    expect(rows[0]).toEqual({ id: 'a-1', question_id: 'q1', body: 'x', updated_at: 't', is_current: false, moderation_status: 'visible' })
   })
 })
 
-function stateFor(answeredSlugs: (typeof CANONICAL_QUESTION_SLUGS)[number][]): CanonicalQuestionState[] {
-  return THREE_CANONICAL.map((q) => ({
-    ...q,
-    answer: answeredSlugs.includes(q.slug)
-      ? { id: `a-${q.slug}`, questionId: q.id, slug: q.slug, prompt: q.prompt, body: 'x', updatedAt: 't', isCurrent: false, moderationStatus: 'visible' }
-      : null,
-  }))
-}
-
-describe('nextUnansweredCanonicalQuestion', () => {
-  it('#1 being answered, #2 unanswered -> Next is #2', () => {
-    const result = nextUnansweredCanonicalQuestion(PRIVATE_RITUAL.id, stateFor(['private_ritual']))
-    expect(result?.slug).toBe('place_outsiders_miss')
+describe('nextEligibleQuestion', () => {
+  it('returns the first eligible Question that is not the current one', () => {
+    const result = nextEligibleQuestion([REFLECTION_Q, EVERYDAY_Q], REFLECTION_Q.id)
+    expect(result).toEqual(EVERYDAY_Q)
   })
 
-  it('#2 already answered, #3 unanswered -> Next is #3, not simply "next slug" from #1', () => {
-    const result = nextUnansweredCanonicalQuestion(PRIVATE_RITUAL.id, stateFor(['private_ritual', 'place_outsiders_miss']))
-    expect(result?.slug).toBe('ordinary_worth_protecting')
-  })
-
-  it('wraps around: editing #2 while #1 is unanswered and #3 is answered -> Next is #1', () => {
-    const result = nextUnansweredCanonicalQuestion(PLACE_OUTSIDERS.id, stateFor(['place_outsiders_miss', 'ordinary_worth_protecting']))
-    expect(result?.slug).toBe('private_ritual')
-  })
-
-  it('revisiting a completed answer when nothing else remains unanswered -> null (no Next)', () => {
-    const result = nextUnansweredCanonicalQuestion(
-      PRIVATE_RITUAL.id,
-      stateFor(['private_ritual', 'place_outsiders_miss', 'ordinary_worth_protecting'])
-    )
-    expect(result).toBeNull()
-  })
-
-  it('a non-canonical (historical) question id -> null', () => {
-    const result = nextUnansweredCanonicalQuestion(HISTORICAL.id, stateFor([]))
-    expect(result).toBeNull()
+  it('returns null when nothing else is eligible', () => {
+    expect(nextEligibleQuestion([REFLECTION_Q], REFLECTION_Q.id)).toBeNull()
+    expect(nextEligibleQuestion([], 'anything')).toBeNull()
   })
 })
 
 describe('needsParticipationGate', () => {
-  it('zero completed canonical answers triggers the gate', () => {
+  it('zero completed answers triggers the gate when something is eligible', () => {
     expect(needsParticipationGate(3, 0)).toBe(true)
   })
 
-  it('one completed canonical answer satisfies the gate (never requires all three)', () => {
+  it('one completed answer satisfies the gate', () => {
     expect(needsParticipationGate(3, 1)).toBe(false)
-    expect(needsParticipationGate(3, 3)).toBe(false)
+    expect(needsParticipationGate(0, 3)).toBe(false)
   })
 
-  it('never gates when canonical Questions are not live in this database yet', () => {
+  it('never gates when nothing is eligible and nothing has been answered', () => {
     expect(needsParticipationGate(0, 0)).toBe(false)
   })
 })
 
-// Length-policy audit (2026-09-05 live-test report): confirms the
-// actual live cap (matches the question_answers_body_max_length check
-// constraint), and that the first-contact letter composer
-// (app/write/[recipientId]/first-letter-composer.tsx) computes its own
-// "over limit" boundary identically to this one canonical value —
-// imported directly, never re-hardcoded — so the two can never
-// silently drift.
 describe('QUESTION_ANSWER_MAX_CHARS — the canonical stranger/discovery-writing cap', () => {
   it('remains 2000, unchanged by this checkpoint', () => {
     expect(QUESTION_ANSWER_MAX_CHARS).toBe(2000)
   })
 
   it('a body at exactly the cap is not over it; one character more is', () => {
-    // Mirrors both question-answer.tsx's and first-letter-composer.tsx's
-    // own `charCount > MAX_CHARS` derivation exactly.
     const atCap = 'x'.repeat(QUESTION_ANSWER_MAX_CHARS)
     const overCap = 'x'.repeat(QUESTION_ANSWER_MAX_CHARS + 1)
     expect(atCap.length > QUESTION_ANSWER_MAX_CHARS).toBe(false)
@@ -159,54 +124,325 @@ describe('QUESTION_ANSWER_MAX_CHARS — the canonical stranger/discovery-writing
   })
 })
 
+// A minimal, generic multi-table fake supporting exactly the query
+// shapes getEligibleQuestions/getMyAnswers actually issue
+// (.select/.eq/.in/.order), backed by plain mutable arrays — so the
+// SAME arrays an admin-RPC fake (createFakeReports) mutates can be fed
+// straight into these member-facing read functions, proving the two
+// halves of the system agree without needing a real database.
+function fakeTablesClient(tables: { questions: Record<string, unknown>[]; question_answers: Record<string, unknown>[] }) {
+  function from(table: 'questions' | 'question_answers') {
+    let rows = tables[table]
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        rows = rows.filter((r) => r[column] === value)
+        return builder
+      },
+      in(column: string, values: unknown[]) {
+        rows = rows.filter((r) => values.includes(r[column]))
+        return builder
+      },
+      order() {
+        // created_at is already in insertion order in every fixture
+        // below (oldest first) — no separate sort needed for these
+        // tests, matching selectEligibleQuestions' own "preserve input
+        // order" contract.
+        return Promise.resolve({ data: rows, error: null })
+      },
+      then(resolve: (v: { data: typeof rows; error: null }) => void) {
+        resolve({ data: rows, error: null })
+      },
+    }
+    return builder
+  }
+  return { from } as unknown as SupabaseClient
+}
+
+describe('getEligibleQuestions — DB-backed selection, is_active is the ONLY gate (Question source-of-truth correction)', () => {
+  it('offers an active Question the member has not answered', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'P1', family: 'reflection', is_active: true, created_at: 't1' }],
+      question_answers: [],
+    })
+    const result = await getEligibleQuestions(client, 'user-1')
+    expect(result.map((q) => q.id)).toEqual(['q1'])
+  })
+
+  it('excludes a Question the member has already answered', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'P1', family: 'reflection', is_active: true, created_at: 't1' }],
+      question_answers: [{ user_id: 'user-1', question_id: 'q1' }],
+    })
+    const result = await getEligibleQuestions(client, 'user-1')
+    expect(result).toEqual([])
+  })
+
+  it('excludes an inactive Question entirely', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'P1', family: 'reflection', is_active: false, created_at: 't1' }],
+      question_answers: [],
+    })
+    const result = await getEligibleQuestions(client, 'user-1')
+    expect(result).toEqual([])
+  })
+
+  it('never crashes on zero eligible Questions', async () => {
+    const client = fakeTablesClient({ questions: [], question_answers: [] })
+    const result = await getEligibleQuestions(client, 'user-1')
+    expect(result).toEqual([])
+    expect(needsParticipationGate(result.length, 0)).toBe(false)
+  })
+})
+
+describe('getMyAnswers — shows every answer regardless of active state, never capped to a fixed three', () => {
+  it('resolves an answer to a since-deactivated Question exactly as it did before deactivation', async () => {
+    const client = fakeTablesClient({
+      questions: [{ id: 'q1', prompt: 'Original wording', is_active: false, family: null, created_at: 't1' }],
+      question_answers: [
+        { id: 'a1', question_id: 'q1', user_id: 'user-1', body: 'my answer', updated_at: 't', is_current: true, moderation_status: 'visible' },
+      ],
+    })
+    const result = await getMyAnswers(client, 'user-1')
+    expect(result).toHaveLength(1)
+    expect(result[0].prompt).toBe('Original wording')
+  })
+
+  it('an account with no answers gets an empty array, not an error', async () => {
+    const client = fakeTablesClient({ questions: [], question_answers: [] })
+    expect(await getMyAnswers(client, 'user-1')).toEqual([])
+  })
+})
+
+function client(fake: ReturnType<typeof createFakeReports>) {
+  return fake as unknown as SupabaseClient
+}
+
+// ============================================================
+// SECTION 4's explicit required regression tests
+// ============================================================
+describe('Question source-of-truth correction — activation is REAL (Section 4, required)', () => {
+  const ADMIN = 'user-admin'
+  const MEMBER = 'user-member'
+
+  it('Admin creates a non-canonical Question -> activates it -> member-facing Question selection can return it', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+
+    const { data: newId, error: createError } = await createQuestion(client(fake), 'A brand new prompt', 'reflection')
+    expect(createError).toBeNull()
+
+    // Not yet eligible — created inactive.
+    let questionsClient = fakeTablesClient({
+      questions: fake._questions as unknown as Record<string, unknown>[],
+      question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
+    })
+    expect((await getEligibleQuestions(questionsClient, MEMBER)).some((q) => q.id === newId)).toBe(false)
+
+    const { error: activateError } = await setQuestionActive(client(fake), newId as string, true)
+    expect(activateError).toBeNull()
+
+    // Genuinely eligible now — no code change, no redeploy, just the
+    // Admin activation flag.
+    questionsClient = fakeTablesClient({
+      questions: fake._questions as unknown as Record<string, unknown>[],
+      question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
+    })
+    const eligible = await getEligibleQuestions(questionsClient, MEMBER)
+    expect(eligible.some((q) => q.id === newId)).toBe(true)
+  })
+
+  it('Admin replaces an answered, active Question -> old remains with its historical answer -> old becomes inactive -> replacement becomes active -> member-facing selection can return the replacement -> the historical answer still resolves to the OLD wording', async () => {
+    const OLD_PROMPT = 'What is something ordinary you would fight to protect?'
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      questions: [{ id: 'q-old', slug: 'ordinary_worth_protecting', prompt: OLD_PROMPT, is_active: true, family: 'everyday' }],
+      questionAnswers: [{ id: 'a-old', question_id: 'q-old', user_id: MEMBER, body: 'My historical answer.' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+
+    // Old is answered + active -> Replace (not Edit) is the only safe
+    // path, matching Section 3's UI rule.
+    const { data: newId, error: replaceError } = await replaceQuestion(client(fake), 'q-old', 'A revised, better version of the prompt.')
+    expect(replaceError).toBeNull()
+    expect(newId).not.toBe('q-old')
+
+    // Old Question: wording untouched, now inactive, answer untouched.
+    const old = fake._questions.find((q) => q.id === 'q-old')!
+    expect(old.prompt).toBe(OLD_PROMPT)
+    expect(old.is_active).toBe(false)
+    const oldAnswer = fake._questionAnswers.find((qa) => qa.id === 'a-old')!
+    expect(oldAnswer.question_id).toBe('q-old')
+    expect(oldAnswer.body).toBe('My historical answer.')
+
+    // Replacement: active immediately (old was active, no explicit
+    // override given), same transaction as the old row's deactivation.
+    const replacement = fake._questions.find((q) => q.id === newId)!
+    expect(replacement.is_active).toBe(true)
+    expect(replacement.prompt).toBe('A revised, better version of the prompt.')
+
+    // Member-facing selection can return the replacement.
+    const questionsClient = fakeTablesClient({
+      questions: fake._questions as unknown as Record<string, unknown>[],
+      question_answers: fake._questionAnswers as unknown as Record<string, unknown>[],
+    })
+    const eligible = await getEligibleQuestions(questionsClient, MEMBER)
+    expect(eligible.some((q) => q.id === newId)).toBe(true)
+    // The old (now inactive) Question is correctly never offered fresh.
+    expect(eligible.some((q) => q.id === 'q-old')).toBe(false)
+
+    // The existing historical answer still resolves to the OLD wording
+    // — never rewritten, never reassigned to the replacement.
+    const myAnswers = await getMyAnswers(questionsClient, MEMBER)
+    const historical = myAnswers.find((a) => a.id === 'a-old')!
+    expect(historical.prompt).toBe(OLD_PROMPT)
+    expect(historical.questionId).toBe('q-old')
+  })
+
+  it('when the OLD Question was already inactive, the replacement defaults to inactive too (mirrors old state)', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: MEMBER, pseudonym: 'Member' }],
+      questions: [{ id: 'q-old', slug: null, prompt: 'Old inactive prompt', is_active: false }],
+      questionAnswers: [{ id: 'a-old', question_id: 'q-old', user_id: MEMBER, body: 'x' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { data: newId } = await replaceQuestion(client(fake), 'q-old', 'Revised inactive-origin prompt')
+    expect(fake._questions.find((q) => q.id === newId)?.is_active).toBe(false)
+  })
+})
+
 describe('publish_question_answer simulation — Shown-in-Minds promotion rules', () => {
   const USER = 'user-1'
 
-  it('first canonical answer becomes current when the member has none yet', () => {
-    const result = simulatePublishQuestionAnswer([], USER, { id: PRIVATE_RITUAL.id, isCanonical: true }, 'first answer')
+  it('first answer to ANY Question becomes current when the member has none yet — no canonical restriction', () => {
+    const result = simulatePublishQuestionAnswer([], USER, { id: 'q-any' }, 'first answer')
     expect(result).toHaveLength(1)
     expect(result[0].isCurrent).toBe(true)
   })
 
-  it('publishing/editing a second canonical answer does not steal current status from the first', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: PRIVATE_RITUAL.id, isCanonical: true }, 'first answer')
-    const afterSecond = simulatePublishQuestionAnswer(
-      afterFirst,
-      USER,
-      { id: PLACE_OUTSIDERS.id, isCanonical: true },
-      'second answer'
-    )
+  it('publishing/editing a second answer does not steal current status from the first', () => {
+    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: 'q1' }, 'first answer')
+    const afterSecond = simulatePublishQuestionAnswer(afterFirst, USER, { id: 'q2' }, 'second answer')
 
-    const first = afterSecond.find((a) => a.questionId === PRIVATE_RITUAL.id)!
-    const second = afterSecond.find((a) => a.questionId === PLACE_OUTSIDERS.id)!
+    const first = afterSecond.find((a) => a.questionId === 'q1')!
+    const second = afterSecond.find((a) => a.questionId === 'q2')!
     expect(first.isCurrent).toBe(true)
     expect(second.isCurrent).toBe(false)
   })
 
   it('re-editing the already-current answer leaves it current and does not touch others', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: PRIVATE_RITUAL.id, isCanonical: true }, 'v1')
-    const afterEdit = simulatePublishQuestionAnswer(
-      afterFirst,
-      USER,
-      { id: PRIVATE_RITUAL.id, isCanonical: true },
-      'v2 — edited'
-    )
+    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: 'q1' }, 'v1')
+    const afterEdit = simulatePublishQuestionAnswer(afterFirst, USER, { id: 'q1' }, 'v2 — edited')
     expect(afterEdit).toHaveLength(1)
     expect(afterEdit[0].isCurrent).toBe(true)
     expect(afterEdit[0].body).toBe('v2 — edited')
   })
 
-  it('publishing/editing a historical (non-canonical) answer never sets is_current', () => {
-    const result = simulatePublishQuestionAnswer([], USER, { id: HISTORICAL.id, isCanonical: false }, 'historical edit')
-    expect(result[0].isCurrent).toBe(false)
+  it('rejects any write (fresh answer) against an INACTIVE Question', () => {
+    expect(() => simulatePublishQuestionAnswer([], USER, { id: 'q1', isActive: false }, 'body')).toThrow(
+      'This Question is no longer accepting answers.'
+    )
+  })
+
+  it('rejects an EDIT of an existing answer once its Question is deactivated', () => {
+    const afterFirst = simulatePublishQuestionAnswer([], USER, { id: 'q1', isActive: true }, 'v1')
+    expect(() =>
+      simulatePublishQuestionAnswer(afterFirst, USER, { id: 'q1', isActive: false }, 'v2 — attempted edit while inactive')
+    ).toThrow('This Question is no longer accepting answers.')
+  })
+
+  it('rejects editing your own answer while it is HIDDEN by moderation', () => {
+    const hidden: SimAnswer[] = [
+      { id: 'a-1', userId: USER, questionId: 'q1', body: 'original', isCurrent: true, moderationStatus: 'hidden' },
+    ]
+    expect(() => simulatePublishQuestionAnswer(hidden, USER, { id: 'q1', isActive: true }, 'trying to sneak an edit through')).toThrow(
+      'This answer has been hidden and cannot be edited.'
+    )
+  })
+
+  it('a visible answer can still be edited normally — the guard is scoped to hidden only', () => {
+    const visible: SimAnswer[] = [
+      { id: 'a-1', userId: USER, questionId: 'q1', body: 'original', isCurrent: true, moderationStatus: 'visible' },
+    ]
+    const result = simulatePublishQuestionAnswer(visible, USER, { id: 'q1', isActive: true }, 'a legitimate edit')
+    expect(result[0].body).toBe('a legitimate edit')
   })
 })
 
-// Question-answer vs letter-composer separation checkpoint (2026-09-05)
-// — saving a Question answer is never a letter: no recipient, no
-// correspondence, no Mail Call. This is the confirmation-copy half of
-// that; the underlying promotion rules it reads (was/now current) are
-// already proven above by the publish_question_answer simulation.
+// Final Question-invariant check: inactive Questions must never accept
+// a brand-new answer, and this must hold at the server/RPC boundary
+// itself — never something only the UI happens to prevent. These tests
+// are labeled to match the checkpoint's own required list (A-E)
+// one-to-one; A/B/D are proven directly against the simulation (which
+// mirrors publish_question_answer's actual `question_is_active` guard
+// byte-for-byte — see docs/sql/2026-09-18-admin-operations-refinement.sql
+// section 1b), exactly as if a member had guessed an inactive
+// Question's uuid and called the RPC directly, bypassing any UI
+// entirely. C and E are proven above (getMyAnswers/getEligibleQuestions
+// describe blocks) and cross-referenced here for completeness.
+describe('Final Question invariant — inactive Questions never accept a new answer (Section 4 A-E)', () => {
+  const USER = 'user-1'
+
+  it('A. active Question + no prior answer -> creation succeeds', () => {
+    const result = simulatePublishQuestionAnswer([], USER, { id: 'q-active', isActive: true }, 'a fresh answer')
+    expect(result).toHaveLength(1)
+    expect(result[0].body).toBe('a fresh answer')
+  })
+
+  it('B / D. inactive Question + no prior answer -> creation is rejected at the server/RPC boundary, exactly as it would be for a guessed/forged uuid with no UI involved at all', () => {
+    expect(() =>
+      simulatePublishQuestionAnswer([], USER, { id: 'some-inactive-question-uuid-a-member-could-only-guess', isActive: false }, 'a smuggled-in answer')
+    ).toThrow('This Question is no longer accepting answers.')
+  })
+
+  // C. a member answered while active, the Question later deactivates
+  // -> the historical answer and its exact old prompt remain fully
+  // available: proven above by "getMyAnswers — shows every answer
+  // regardless of active state..." > "resolves an answer to a
+  // since-deactivated Question exactly as it did before deactivation."
+  //
+  // E. Admin replacement leaves the old answered Question inactive
+  // with its historical answer intact, while the replacement is active
+  // and eligible for new participation: proven above by "Question
+  // source-of-truth correction — activation is REAL" > "Admin replaces
+  // an answered, active Question -> ...", which exercises
+  // admin_replace_question's actual fake RPC plus
+  // getEligibleQuestions/getMyAnswers together.
+})
+
+describe('set_current_answer simulation — no canonical restriction', () => {
+  const USER = 'user-1'
+  const seed: SimAnswer[] = [
+    { id: 'a-1', userId: USER, questionId: 'q1', body: 'a', isCurrent: true },
+    { id: 'a-2', userId: USER, questionId: 'q2', body: 'b', isCurrent: false },
+  ]
+
+  it('switches current status between two answers, to any Questions', () => {
+    const result = simulateSetCurrentAnswer(seed, USER, 'a-2')
+    expect(result.find((a) => a.id === 'a-1')?.isCurrent).toBe(false)
+    expect(result.find((a) => a.id === 'a-2')?.isCurrent).toBe(true)
+  })
+
+  it('rejects a HIDDEN answer', () => {
+    const withHidden: SimAnswer[] = [
+      ...seed,
+      { id: 'a-3', userId: USER, questionId: 'q3', body: 'c', isCurrent: false, moderationStatus: 'hidden' },
+    ]
+    expect(() => simulateSetCurrentAnswer(withHidden, USER, 'a-3')).toThrow(/visible/)
+  })
+
+  it('rejects an answer that does not belong to this member', () => {
+    expect(() => simulateSetCurrentAnswer(seed, 'someone-else', 'a-1')).toThrow(/visible/)
+  })
+})
+
 describe('questionSaveConfirmationCopy', () => {
   it('a save that just became the featured answer gets the "now featured" copy', () => {
     expect(questionSaveConfirmationCopy(false, true)).toBe('Saved. This answer is now featured in Minds.')
@@ -217,133 +453,37 @@ describe('questionSaveConfirmationCopy', () => {
     expect(questionSaveConfirmationCopy(true, true)).toBe('Answer saved.')
   })
 
-  it('composed with the real promotion simulation: a member\'s first canonical save produces the featured copy', () => {
-    const result = simulatePublishQuestionAnswer([], 'user-1', { id: PRIVATE_RITUAL.id, isCanonical: true }, 'first answer')
+  it('composed with the real promotion simulation: a member\'s first save (to any Question) produces the featured copy', () => {
+    const result = simulatePublishQuestionAnswer([], 'user-1', { id: 'q1' }, 'first answer')
     expect(questionSaveConfirmationCopy(false, result[0].isCurrent)).toBe('Saved. This answer is now featured in Minds.')
   })
 
   it('composed with the real promotion simulation: editing an already-current answer produces the plain copy, never re-claiming "now featured"', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], 'user-1', { id: PRIVATE_RITUAL.id, isCanonical: true }, 'v1')
-    const afterEdit = simulatePublishQuestionAnswer(afterFirst, 'user-1', { id: PRIVATE_RITUAL.id, isCanonical: true }, 'v2')
+    const afterFirst = simulatePublishQuestionAnswer([], 'user-1', { id: 'q1' }, 'v1')
+    const afterEdit = simulatePublishQuestionAnswer(afterFirst, 'user-1', { id: 'q1' }, 'v2')
     expect(questionSaveConfirmationCopy(true, afterEdit[0].isCurrent)).toBe('Answer saved.')
   })
 
   it('composed with the real promotion simulation: a second answer that does not steal current status gets the plain copy', () => {
-    const afterFirst = simulatePublishQuestionAnswer([], 'user-1', { id: PRIVATE_RITUAL.id, isCanonical: true }, 'first answer')
-    const afterSecond = simulatePublishQuestionAnswer(
-      afterFirst,
-      'user-1',
-      { id: PLACE_OUTSIDERS.id, isCanonical: true },
-      'second answer'
-    )
-    const second = afterSecond.find((a) => a.questionId === PLACE_OUTSIDERS.id)!
+    const afterFirst = simulatePublishQuestionAnswer([], 'user-1', { id: 'q1' }, 'first answer')
+    const afterSecond = simulatePublishQuestionAnswer(afterFirst, 'user-1', { id: 'q2' }, 'second answer')
+    const second = afterSecond.find((a) => a.questionId === 'q2')!
     expect(questionSaveConfirmationCopy(false, second.isCurrent)).toBe('Answer saved.')
-  })
-})
-
-// Admin Phase 2A-1 (Decision 3) — the getCanonicalQuestions query fix,
-// exercised end-to-end through a tiny fake `.from('questions')
-// .select().in().eq('is_active', true)` chain rather than through the
-// pure pickCanonicalQuestions helper alone, so this proves the actual
-// query filter is wired up, not just that the pure post-processing
-// degrades gracefully.
-function fakeQuestionsClient(rows: { id: string; slug: string | null; prompt: string; is_active: boolean }[]) {
-  function from() {
-    let filtered = rows
-    const builder = {
-      select() {
-        return builder
-      },
-      in(column: string, values: string[]) {
-        filtered = filtered.filter((r) => values.includes((r as Record<string, unknown>)[column] as string))
-        return builder
-      },
-      eq(column: string, value: unknown) {
-        filtered = filtered.filter((r) => (r as Record<string, unknown>)[column] === value)
-        return Promise.resolve({ data: filtered, error: null })
-      },
-      then(resolve: (v: { data: typeof filtered; error: null }) => void) {
-        resolve({ data: filtered, error: null })
-      },
-    }
-    return builder
-  }
-  return { from } as unknown as SupabaseClient
-}
-
-const [SLUG_1, SLUG_2, SLUG_3] = CANONICAL_QUESTION_SLUGS
-
-describe('getCanonicalQuestions — offering query is canonical slug AND is_active = true (Decision 3)', () => {
-  it('all 3 active: all 3 are offered, in canonical order', async () => {
-    const client = fakeQuestionsClient([
-      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: true },
-      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: true },
-      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: true },
-    ])
-    const result = await getCanonicalQuestions(client)
-    expect(result.map((q) => q.slug)).toEqual([SLUG_1, SLUG_2, SLUG_3])
-  })
-
-  it('2 active, 1 deactivated: only the 2 active ones are offered — the deactivated slug is not offered to answer fresh', async () => {
-    const client = fakeQuestionsClient([
-      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: true },
-      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: false },
-      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: true },
-    ])
-    const result = await getCanonicalQuestions(client)
-    expect(result.map((q) => q.slug)).toEqual([SLUG_1, SLUG_3])
-  })
-
-  it('1 active, 2 deactivated: exactly 1 is offered — does not crash or pad back up to 3', async () => {
-    const client = fakeQuestionsClient([
-      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: false },
-      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: true },
-      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: false },
-    ])
-    const result = await getCanonicalQuestions(client)
-    expect(result.map((q) => q.slug)).toEqual([SLUG_2])
-  })
-
-  it('0 active: an empty array, not an error, not a crash — every real consumer already treats this as "nothing to offer"', async () => {
-    const client = fakeQuestionsClient([
-      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: false },
-      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: false },
-      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: false },
-    ])
-    const result = await getCanonicalQuestions(client)
-    expect(result).toEqual([])
-
-    // The two pure consumers this feeds must not throw or misbehave
-    // against zero canonical Questions.
-    expect(needsParticipationGate(result.length, 0)).toBe(false)
-    expect(() => mergeCanonicalQuestionState(result, [])).not.toThrow()
-    expect(mergeCanonicalQuestionState(result, [])).toEqual([])
-  })
-
-  it('getAllCanonicalQuestions ignores is_active entirely — used only to resolve id/prompt for own-history, never for what is offered fresh', async () => {
-    const client = fakeQuestionsClient([
-      { id: 'q1', slug: SLUG_1, prompt: 'P1', is_active: false },
-      { id: 'q2', slug: SLUG_2, prompt: 'P2', is_active: false },
-      { id: 'q3', slug: SLUG_3, prompt: 'P3', is_active: false },
-    ])
-    const result = await getAllCanonicalQuestions(client)
-    expect(result.map((q) => q.slug)).toEqual([SLUG_1, SLUG_2, SLUG_3])
   })
 })
 
 // Admin Phase 2A-1, Section 9 — Minds/Discovery's pool query
 // (app/minds/page.tsx: `.from('question_answers').select(...)
 // .eq('is_current', true).neq('user_id', viewer.id)`) deliberately adds
-// NO application-level moderation_status filter of its own — per the
-// migration's own documented reasoning (docs/sql/2026-09-10-admin-
-// moderation-and-questions.sql section 3), the cross-user RLS policy
-// alone is the authority here, since this query already excludes the
-// viewer's own rows before RLS ever runs, so there is no author-
-// exception leak to defend against the way Dispatches' Board/Home feeds
-// have. This models that RLS predicate directly (same convention as
+// NO application-level moderation_status filter of its own — the
+// cross-user RLS policy alone is the authority here, since this query
+// already excludes the viewer's own rows before RLS ever runs. This
+// models that RLS predicate directly (same convention as
 // fakeDispatches.ts's visibleRows) to prove end-to-end: with RLS
 // applied, a hidden answer never reaches the discovery pool, and
-// restoring it makes it reachable again.
+// restoring it makes it reachable again. Unaffected by the Question
+// source-of-truth correction — Discovery eligibility was never scoped
+// to canonical Questions to begin with, only to is_current + visible.
 function discoveryPool(
   rows: { id: string; user_id: string; question_id: string; body: string; moderation_status: 'visible' | 'hidden' }[],
   activeQuestionIds: Set<string>,
@@ -379,112 +519,5 @@ describe('Minds/Discovery pool — a hidden answer is absent, a restored one rea
     const rows = [{ id: 'a-3', user_id: OTHER, question_id: 'q-inactive', body: 'x', moderation_status: 'hidden' as const }]
     const pool = discoveryPool(rows, activeQuestions, VIEWER)
     expect(pool).toEqual([])
-  })
-})
-
-describe('set_current_answer simulation', () => {
-  const USER = 'user-1'
-  const seed: SimAnswer[] = [
-    { id: 'a-1', userId: USER, questionId: PRIVATE_RITUAL.id, isCanonical: true, body: 'a', isCurrent: true },
-    { id: 'a-2', userId: USER, questionId: PLACE_OUTSIDERS.id, isCanonical: true, body: 'b', isCurrent: false },
-    { id: 'a-3', userId: USER, questionId: HISTORICAL.id, isCanonical: false, body: 'c', isCurrent: false },
-  ]
-
-  it('switches current status between two canonical answers', () => {
-    const result = simulateSetCurrentAnswer(seed, USER, 'a-2')
-    expect(result.find((a) => a.id === 'a-1')?.isCurrent).toBe(false)
-    expect(result.find((a) => a.id === 'a-2')?.isCurrent).toBe(true)
-  })
-
-  it('rejects a historical/non-canonical answer', () => {
-    expect(() => simulateSetCurrentAnswer(seed, USER, 'a-3')).toThrow(/canonical/)
-  })
-
-  it('independent review item 5: rejects a HIDDEN canonical answer, reusing the same error as the non-canonical case', () => {
-    const withHidden: SimAnswer[] = [
-      ...seed,
-      { id: 'a-4', userId: USER, questionId: ORDINARY_WORTH.id, isCanonical: true, body: 'd', isCurrent: false, moderationStatus: 'hidden' },
-    ]
-    expect(() => simulateSetCurrentAnswer(withHidden, USER, 'a-4')).toThrow(/canonical/)
-  })
-})
-
-describe('publish_question_answer simulation — independent review items 5 and 8', () => {
-  const USER = 'user-1'
-
-  it('rejects any write (fresh answer) against an INACTIVE Question', () => {
-    expect(() =>
-      simulatePublishQuestionAnswer([], USER, { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: false }, 'body')
-    ).toThrow('This Question is no longer accepting answers.')
-  })
-
-  it('rejects an EDIT of an existing answer once its Question is deactivated', () => {
-    const afterFirst = simulatePublishQuestionAnswer(
-      [],
-      USER,
-      { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
-      'v1'
-    )
-    expect(() =>
-      simulatePublishQuestionAnswer(
-        afterFirst,
-        USER,
-        { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: false },
-        'v2 — attempted edit while inactive'
-      )
-    ).toThrow('This Question is no longer accepting answers.')
-  })
-
-  it('an active Question accepts writes normally — the guard is scoped to inactive only', () => {
-    const result = simulatePublishQuestionAnswer(
-      [],
-      USER,
-      { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
-      'v1'
-    )
-    expect(result[0].body).toBe('v1')
-  })
-
-  it('rejects editing your own answer while it is HIDDEN by moderation', () => {
-    const hidden: SimAnswer[] = [
-      {
-        id: 'a-1',
-        userId: USER,
-        questionId: PRIVATE_RITUAL.id,
-        isCanonical: true,
-        body: 'original',
-        isCurrent: true,
-        moderationStatus: 'hidden',
-      },
-    ]
-    expect(() =>
-      simulatePublishQuestionAnswer(
-        hidden,
-        USER,
-        { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
-        'trying to sneak an edit through'
-      )
-    ).toThrow('This answer has been hidden and cannot be edited.')
-  })
-
-  it('a visible answer can still be edited normally — the guard is scoped to hidden only', () => {
-    const visible: SimAnswer[] = [
-      {
-        id: 'a-1',
-        userId: USER,
-        questionId: PRIVATE_RITUAL.id,
-        isCanonical: true,
-        body: 'original',
-        isCurrent: true,
-        moderationStatus: 'visible',
-      },
-    ]
-    const result = simulatePublishQuestionAnswer(
-      visible,
-      USER,
-      { id: PRIVATE_RITUAL.id, isCanonical: true, isActive: true },
-      'a legitimate edit'
-    )
-    expect(result[0].body).toBe('a legitimate edit')
   })
 })

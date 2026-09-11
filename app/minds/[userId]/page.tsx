@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getCanonicalAnswers, CANONICAL_QUESTION_SLUGS } from '@/lib/questions'
+import { getMyAnswers } from '@/lib/questions'
 import {
   getWaitingLetterCount,
   getActiveCorrespondencePartnerIds,
@@ -113,7 +113,7 @@ export default async function PublicProfilePage({
   // navigation requirement: a member may browse Minds, open a profile,
   // and read someone's published answer with nothing else required.
   const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope] = await Promise.all([
-    getCanonicalAnswers(supabase, userId),
+    getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
     getPublishedDispatchesByAuthor(supabase, userId),
@@ -128,13 +128,15 @@ export default async function PublicProfilePage({
   // shown twice on the same profile.
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
 
-  // Main writing section: every completed canonical answer, writing
-  // primary throughout — never just the current one plus a "more"
-  // list. Historical (non-canonical) answers are preserved but
-  // deliberately not shown here at all (see checkpoint notes). Fixed
-  // canonical order, not database return order.
+  // Main writing section: every Question answer this member has ever
+  // written, writing primary throughout — never just the current one
+  // plus a "more" list. Question source-of-truth correction: this used
+  // to show only the 3 canonical answers in a fixed slug order; now
+  // that a member may have answered any number of library Questions,
+  // every answer is shown (most recently written/edited first — a
+  // neutral, existing field, never an invented ranking signal).
   const answers = [...rawAnswers].sort(
-    (a, b) => CANONICAL_QUESTION_SLUGS.indexOf(a.slug) - CANONICAL_QUESTION_SLUGS.indexOf(b.slug)
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt)
   )
   const currentAnswer = answers.find((a) => a.isCurrent) ?? null
 

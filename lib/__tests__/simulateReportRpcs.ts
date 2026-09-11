@@ -6,7 +6,7 @@
 // migration is prepared but not executed). The SQL migration text is
 // the actual authority for exact wording/behavior.
 
-export type FakeProfile = { id: string; pseudonym: string }
+export type FakeProfile = { id: string; pseudonym: string; country?: string | null; created_at?: string }
 export type FakeLetter = { id: string; sender_id: string; recipient_id: string; body: string; created_at?: string }
 export type FakeDispatch = {
   id: string
@@ -24,7 +24,14 @@ export type FakeDispatchMoment = { id: string; dispatch_id: string; image_path: 
 
 // Admin Phase 2A-1 — canonical Questions + their answers, for
 // question_answer reportability/hide-restore/Questions-admin.
-export type FakeQuestion = { id: string; slug: string | null; prompt: string; is_active: boolean }
+export type FakeQuestion = {
+  id: string
+  slug: string | null
+  prompt: string
+  is_active: boolean
+  family?: string | null
+  created_at?: string
+}
 export type FakeQuestionAnswer = {
   id: string
   question_id: string
@@ -91,6 +98,8 @@ export function createFakeReports(options: {
   for (const d of dispatches) if (d.moderation_status === undefined) d.moderation_status = 'visible'
   for (const qa of questionAnswers) if (qa.moderation_status === undefined) qa.moderation_status = 'visible'
   for (const qa of questionAnswers) if (qa.is_current === undefined) qa.is_current = false
+  for (const q of questions) if (q.family === undefined) q.family = null
+  for (const q of questions) if (q.created_at === undefined) q.created_at = new Date().toISOString()
 
   const reports: FakeReport[] = []
   const accountStatus = new Map<string, { status: string; reason: string | null; changed_by: string; changed_at: string }>()
@@ -140,7 +149,11 @@ export function createFakeReports(options: {
         const l = letters.find((l) => l.id === targetId && (l.sender_id === viewerId || l.recipient_id === viewerId))
         if (l) {
           reportedUserId = l.sender_id
-          evidence = { body: l.body, sender_pseudonym: pseudonymOf(l.sender_id) }
+          evidence = {
+            body: l.body,
+            sender_pseudonym: pseudonymOf(l.sender_id),
+            letter_created_at: l.created_at ?? new Date().toISOString(),
+          }
         }
       } else if (targetType === 'dispatch') {
         const d = dispatches.find(
@@ -287,24 +300,71 @@ export function createFakeReports(options: {
 
     if (fn === 'admin_list_reports') {
       if (!isStaff(viewerId)) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
-      return {
-        data: reports
-          .slice()
-          .sort((a, b) => b.created_at.localeCompare(a.created_at))
-          .map((r) => ({
-            id: r.id,
-            target_type: r.target_type,
-            target_id: r.target_id,
-            reason: r.reason,
-            status: r.status,
-            created_at: r.created_at,
-            reporter_user_id: r.reporter_user_id,
-            reporter_pseudonym: pseudonymOf(r.reporter_user_id),
-            reported_user_id: r.reported_user_id,
-            reported_pseudonym: pseudonymOf(r.reported_user_id),
-          })),
-        error: null,
+      const status = (params?.p_status as string | null) ?? null
+      const targetType = (params?.p_target_type as string | null) ?? null
+      if (status !== null && !['open', 'reviewed'].includes(status)) {
+        return { data: null, error: { message: 'Invalid status filter.', code: 'P0001' } }
       }
+      if (
+        targetType !== null &&
+        !['profile', 'letter', 'dispatch', 'photo_moment', 'question_answer'].includes(targetType)
+      ) {
+        return { data: null, error: { message: 'Invalid target type filter.', code: 'P0001' } }
+      }
+      const limit = Math.min(Math.max((params?.p_limit as number) ?? 30, 1), 50)
+      const offset = Math.max((params?.p_offset as number) ?? 0, 0)
+      const filtered = reports
+        .filter((r) => status === null || r.status === status)
+        .filter((r) => targetType === null || r.target_type === targetType)
+        .slice()
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((r) => ({
+          id: r.id,
+          target_type: r.target_type,
+          target_id: r.target_id,
+          reason: r.reason,
+          status: r.status,
+          created_at: r.created_at,
+          reporter_user_id: r.reporter_user_id,
+          reporter_pseudonym: pseudonymOf(r.reporter_user_id),
+          reported_user_id: r.reported_user_id,
+          reported_pseudonym: pseudonymOf(r.reported_user_id),
+        }))
+      return { data: filtered.slice(offset, offset + limit), error: null }
+    }
+
+    if (fn === 'admin_list_members') {
+      if (!isStaff(viewerId)) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const status = (params?.p_status as string | null) ?? null
+      if (status !== null && !['active', 'restricted', 'suspended', 'banned'].includes(status)) {
+        return { data: null, error: { message: 'Invalid account status filter.', code: 'P0001' } }
+      }
+      const query = ((params?.p_query as string | null) ?? '').trim().toLowerCase()
+      const country = (params?.p_country as string | null) ?? null
+      const joinedAfter = (params?.p_joined_after as string | null) ?? null
+      const joinedBefore = (params?.p_joined_before as string | null) ?? null
+      const limit = Math.min(Math.max((params?.p_limit as number) ?? 25, 1), 100)
+      const offset = Math.max((params?.p_offset as number) ?? 0, 0)
+
+      const filtered = profiles
+        .filter((p) => query.length === 0 || p.pseudonym.toLowerCase().includes(query))
+        .filter((p) => {
+          const s = accountStatus.get(p.id)?.status ?? 'active'
+          return status === null || s === status
+        })
+        .filter((p) => country === null || p.country === country)
+        .filter((p) => joinedAfter === null || (p.created_at ?? '') >= joinedAfter)
+        .filter((p) => joinedBefore === null || (p.created_at ?? '') <= joinedBefore)
+        .slice()
+        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+        .map((p) => ({
+          id: p.id,
+          pseudonym: p.pseudonym,
+          country: p.country ?? null,
+          status: accountStatus.get(p.id)?.status ?? 'active',
+          created_at: p.created_at ?? null,
+        }))
+      return { data: filtered.slice(offset, offset + limit), error: null }
     }
 
     if (fn === 'admin_get_report') {
@@ -511,18 +571,17 @@ export function createFakeReports(options: {
     if (fn === 'set_current_answer') {
       if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
       const answerId = params?.p_answer_id as string
+      // Question source-of-truth correction: no canonical/slug
+      // restriction — any of the member's own visible answers, to any
+      // Question, may become their one featured Minds answer.
       const target = questionAnswers.find(
-        (qa) =>
-          qa.id === answerId &&
-          qa.user_id === viewerId &&
-          questions.find((q) => q.id === qa.question_id)?.slug !== null &&
-          qa.moderation_status === 'visible'
+        (qa) => qa.id === answerId && qa.user_id === viewerId && qa.moderation_status === 'visible'
       )
       if (!target) {
         return {
           data: null,
           error: {
-            message: 'Only a completed answer to one of the three canonical Questions can be shown in Minds.',
+            message: 'Only one of your own, visible answers can be shown in Minds.',
             code: 'P0001',
           },
         }
@@ -541,19 +600,90 @@ export function createFakeReports(options: {
       if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
       return {
         data: questions
-          .filter((q) => q.slug !== null)
           .slice()
-          .sort((a, b) => (a.slug ?? '').localeCompare(b.slug ?? ''))
+          .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
           .map((q) => ({
             id: q.id,
             slug: q.slug,
+            family: q.family ?? null,
             prompt: q.prompt,
             is_active: q.is_active,
             answer_count: questionAnswers.filter((qa) => qa.question_id === q.id).length,
             first_letter_count: 0,
+            created_at: q.created_at ?? null,
           })),
         error: null,
       }
+    }
+
+    if (fn === 'admin_create_question') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const prompt = ((params?.p_prompt as string) ?? '').trim()
+      if (prompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
+      const family = ((params?.p_family as string | null) ?? null) || null
+      const newId = `q-created-${questions.length + 1}`
+      questions.push({ id: newId, slug: null, prompt, is_active: false, family, created_at: new Date().toISOString() })
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_created',
+        target_type: 'question',
+        target_id: newId,
+        target_identifier_snapshot: prompt,
+        reason: null,
+        metadata: { family },
+        created_at: new Date().toISOString(),
+      })
+      return { data: newId, error: null }
+    }
+
+    if (fn === 'admin_replace_question') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const old = questions.find((q) => q.id === (params?.p_question_id as string))
+      if (!old) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      const newPrompt = ((params?.p_new_prompt as string) ?? '').trim()
+      if (newPrompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
+      // Question source-of-truth correction, item 3: mirrors the OLD
+      // Question's active state at call time unless the admin
+      // explicitly overrides it — computed BEFORE the old row is
+      // touched below.
+      const oldActiveAtCallTime = old.is_active
+      const newActive =
+        params?.p_new_active === null || params?.p_new_active === undefined
+          ? oldActiveAtCallTime
+          : Boolean(params?.p_new_active)
+      const deactivateOld = params?.p_deactivate_old === undefined ? true : Boolean(params?.p_deactivate_old)
+      if (deactivateOld) old.is_active = false
+      const newId = `q-replaced-${questions.length + 1}`
+      questions.push({
+        id: newId,
+        slug: null,
+        prompt: newPrompt,
+        is_active: newActive,
+        family: old.family ?? null,
+        created_at: new Date().toISOString(),
+      })
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_replaced',
+        target_type: 'question',
+        target_id: newId,
+        target_identifier_snapshot: newPrompt,
+        reason: null,
+        metadata: {
+          replaced_question_id: old.id,
+          replaced_prompt: old.prompt,
+          old_deactivated: deactivateOld,
+          new_active: newActive,
+        },
+        created_at: new Date().toISOString(),
+      })
+      return { data: newId, error: null }
     }
 
     if (fn === 'admin_set_question_active') {
@@ -564,7 +694,7 @@ export function createFakeReports(options: {
       if (params?.p_active === null || params?.p_active === undefined) {
         return { data: null, error: { message: 'An active state is required.', code: 'P0001' } }
       }
-      const q = questions.find((q) => q.id === (params?.p_question_id as string) && q.slug !== null)
+      const q = questions.find((q) => q.id === (params?.p_question_id as string))
       if (!q) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
       const active = params?.p_active as boolean
       // Final mutation-boundary audit item 6: idempotency guard — a
@@ -597,7 +727,7 @@ export function createFakeReports(options: {
     if (fn === 'admin_update_question_prompt') {
       if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
       if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
-      const q = questions.find((q) => q.id === (params?.p_question_id as string) && q.slug !== null)
+      const q = questions.find((q) => q.id === (params?.p_question_id as string))
       if (!q) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
       // Independent review item 8: must be deactivated first, not just
       // answer_count = 0 — an active Question is still being offered.

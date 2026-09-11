@@ -5,13 +5,16 @@ export type ActiveQuestion = {
   prompt: string
 }
 
-// Tempa's three permanent canonical Questions — every member sees the
-// exact same three, never rotated, never drawn from a larger library.
-// Order here is the only display order that matters anywhere in the
-// app; `questions.slug` (docs/sql/2026-09-03-canonical-questions.sql)
-// is the stable identifier the app keys off instead of a raw uuid, so
-// a fresh environment can be reseeded without any code change as long
-// as the same three slugs are used.
+/**
+ * The 3 originally-seeded Questions' stable slugs
+ * (docs/sql/2026-09-03-canonical-questions.sql). Question source-of-
+ * truth correction: these NO LONGER gate member-reachability anywhere
+ * — `is_active` is the only gate now (see getEligibleQuestions below).
+ * The constant is kept only because slug remains a legitimate, stable
+ * identifier for these 3 specific rows (a future curator may still use
+ * a slug the same way for a new seeded Question); nothing in this file
+ * branches on membership in this array anymore.
+ */
 export const CANONICAL_QUESTION_SLUGS = [
   'private_ritual',
   'place_outsiders_miss',
@@ -28,109 +31,118 @@ export type CanonicalSlug = (typeof CANONICAL_QUESTION_SLUGS)[number]
  * Question is the canonical source: the first-contact letter composer
  * (app/write/[recipientId]/first-letter-composer.tsx) imports this
  * SAME constant rather than hard-coding a second independent number,
- * so the two values can never silently drift apart. Both surfaces are
- * writing shown to, or sent to, someone who hasn't agreed to hear from
- * you yet — a stranger reading Minds, or a stranger receiving an
- * unsolicited Letter 1 — which is the actual product rationale for
- * capping length at all here.
- *
- * Deliberately NOT used once a correspondence is established (Write
- * Anytime, Letter 3+) or for the reply that establishes one (Letter 2,
- * app/letters/[letterId]/first-contact-response.tsx) — TEMPA has no
- * product-level maximum length for an ordinary letter between two
- * people who have each chosen to correspond.
+ * so the two values can never silently drift apart.
  */
 export const QUESTION_ANSWER_MAX_CHARS = 2000
 
-export type CanonicalQuestion = {
+/** Internal curation grouping (questions.family — added 2026-09-01,
+ * free text). Not a CHECK-enforced enum; the three the app currently
+ * knows how to prioritize are 'reflection' | 'everyday' | 'imagination'
+ * (in that order), but a null/unknown family is never excluded from
+ * the library entirely — it's simply picked last, after every
+ * recognized family has had its turn. */
+const KNOWN_FAMILY_ORDER = ['reflection', 'everyday', 'imagination']
+
+export type LibraryQuestion = {
   id: string
-  slug: CanonicalSlug
   prompt: string
+  family: string | null
 }
 
 /**
- * Pure: fixes the canonical Questions' display order and drops
- * anything that isn't one of the three known slugs (every historical/
- * retired Question has `slug = null` and is silently excluded here,
- * never touched). Split out from getCanonicalQuestions so "exactly
- * these three, in this order" is unit-testable without a database.
+ * Pure: the actual "up to three, family-diverse" selection Answer a
+ * Question rotation was always meant to do (see docs/sql/2026-09-01-
+ * question-families.sql's own design comment — the family column was
+ * added for exactly this, but nothing ever read it at runtime until
+ * this Question source-of-truth correction). `rows` should already be
+ * is_active-only and already exclude anything the member has answered
+ * — this function's only job is picking a family-diverse subset, never
+ * filtering by activity/answered-state itself, so it stays trivially
+ * testable without a database.
+ *
+ * Algorithm: group by family (unrecognized/null family is its own
+ * bucket, tried last); walk recognized families in KNOWN_FAMILY_ORDER,
+ * then any other family alphabetically, then the null bucket, taking
+ * one Question per pass; repeat passes until `limit` is reached or
+ * every bucket is empty. Within a bucket, `rows`' own order is
+ * preserved (the caller queries oldest-first — see
+ * getEligibleQuestions — so this never invents a popularity/ranking
+ * signal of its own). Never throws; degrades to fewer than `limit`
+ * when the pool itself has fewer than `limit` Questions.
  */
-export function pickCanonicalQuestions(
-  rows: { id: string; slug: string | null; prompt: string }[]
-): CanonicalQuestion[] {
-  const bySlug = new Map(rows.filter((r) => r.slug).map((r) => [r.slug as string, r]))
-  return CANONICAL_QUESTION_SLUGS.map((slug) => bySlug.get(slug)).filter(
-    (r): r is { id: string; slug: string; prompt: string } => Boolean(r)
-  ).map((r) => ({ id: r.id, slug: r.slug as CanonicalSlug, prompt: r.prompt }))
+export function selectEligibleQuestions(
+  rows: LibraryQuestion[],
+  limit = 3
+): LibraryQuestion[] {
+  const byFamily = new Map<string, LibraryQuestion[]>()
+  for (const q of rows) {
+    const key = q.family ?? ''
+    if (!byFamily.has(key)) byFamily.set(key, [])
+    byFamily.get(key)!.push(q)
+  }
+
+  const familyKeys = [...byFamily.keys()].sort((a, b) => {
+    if (a === '') return 1
+    if (b === '') return -1
+    const ai = KNOWN_FAMILY_ORDER.indexOf(a)
+    const bi = KNOWN_FAMILY_ORDER.indexOf(b)
+    if (ai !== -1 && bi !== -1) return ai - bi
+    if (ai !== -1) return -1
+    if (bi !== -1) return 1
+    return a.localeCompare(b)
+  })
+
+  const selected: LibraryQuestion[] = []
+  let tookOne = true
+  while (selected.length < limit && tookOne) {
+    tookOne = false
+    for (const key of familyKeys) {
+      if (selected.length >= limit) break
+      const bucket = byFamily.get(key)!
+      const next = bucket.shift()
+      if (next) {
+        selected.push(next)
+        tookOne = true
+      }
+    }
+  }
+  return selected
 }
 
 /**
- * The canonical Questions currently OFFERED to members, in fixed
- * display order — up to three, but genuinely fewer whenever an admin
- * has deactivated one (Admin Phase 2A-1). `is_active` was previously
- * ignored here entirely (a known, now-fixed inconsistency: deactivating
- * a canonical Question already stopped its existing answers from being
- * publicly visible, via question_answers' own RLS, but never actually
- * stopped it from still being offered to write a NEW answer against).
- * Every caller of this function already treats its return value's
- * actual length as authoritative rather than assuming exactly three —
- * confirmed by inspection before this change shipped: needsParticipationGate
- * and nextUnansweredCanonicalQuestion both degrade correctly for 2, 1,
- * or 0 results, and QuestionWorkspace/MindsPage render purely by
- * iterating whatever array they're given. Degrades to an empty array
- * (rather than throwing) if `questions.slug` hasn't been added yet or
- * the three rows haven't been seeded — every caller treats an empty
- * result as "canonical Questions aren't live in this database yet,"
- * never as "this member has no Questions."
+ * The Questions currently OFFERED to answer fresh: up to three, active,
+ * excluding anything this member has already answered, preferring
+ * family diversity (selectEligibleQuestions above). This is the
+ * genuine database-backed replacement for the old hardcoded-three
+ * CANONICAL_QUESTION_SLUGS gate — an Admin-activated Question (created
+ * or replaced via admin_create_question/admin_replace_question)
+ * appears here as soon as it's active, with no further code change or
+ * deploy required. Degrades to an empty array (never throws) when the
+ * library has nothing eligible left for this member.
  */
-export async function getCanonicalQuestions(
-  supabase: SupabaseClient
-): Promise<CanonicalQuestion[]> {
-  const { data, error } = await supabase
-    .from('questions')
-    .select('id, slug, prompt')
-    .in('slug', CANONICAL_QUESTION_SLUGS as unknown as string[])
-    .eq('is_active', true)
+export async function getEligibleQuestions(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<LibraryQuestion[]> {
+  const [{ data: activeRows }, { data: answeredRows }] = await Promise.all([
+    supabase
+      .from('questions')
+      .select('id, prompt, family')
+      .eq('is_active', true)
+      .order('created_at', { ascending: true }),
+    supabase.from('question_answers').select('question_id').eq('user_id', userId),
+  ])
 
-  if (error || !data) return []
-  return pickCanonicalQuestions(data)
+  const answeredIds = new Set((answeredRows ?? []).map((r) => r.question_id as string))
+  const pool = (activeRows ?? []).filter((q) => !answeredIds.has(q.id))
+  return selectEligibleQuestions(pool, 3)
 }
 
-/**
- * ALL three canonical Question rows, active or not — deliberately the
- * ONE place `is_active` is never consulted. Used only to resolve
- * id/prompt for getCanonicalAnswers below, which must keep surfacing a
- * member's own historical answer to a since-deactivated canonical
- * Question wherever the product has an own-history/profile view (the
- * public profile page, Minds' own "My answers" tab) — never to decide
- * what's offered to answer fresh, which stays getCanonicalQuestions'
- * job alone. Whether an individual ANSWER row actually comes back for
- * a given caller is entirely down to question_answers' own RLS: its
- * self-select policy (untouched by Admin Phase 2A-1) already grants a
- * member their own row regardless of is_active/moderation_status, while
- * the cross-user policy still requires both — so fetching against this
- * wider, unfiltered id set is what lets RLS itself draw the
- * self-vs-other distinction correctly, without this function needing
- * to know who's asking.
- */
-export async function getAllCanonicalQuestions(
-  supabase: SupabaseClient
-): Promise<CanonicalQuestion[]> {
-  const { data, error } = await supabase
-    .from('questions')
-    .select('id, slug, prompt')
-    .in('slug', CANONICAL_QUESTION_SLUGS as unknown as string[])
-
-  if (error || !data) return []
-  return pickCanonicalQuestions(data)
-}
-
-export type CanonicalAnswer = {
+export type MyQuestionAnswer = {
   /** The question_answers row's own id — what set_current_answer and
    * the write flow key off, distinct from questionId. */
   id: string
   questionId: string
-  slug: CanonicalSlug
   prompt: string
   body: string
   updatedAt: string
@@ -144,16 +156,19 @@ export type CanonicalAnswer = {
 }
 
 /**
- * Pure: pairs this member's question_answers rows with the canonical
- * Questions they belong to, and — critically — filters out every row
- * whose question isn't canonical. A historical/retired answer is
- * simply never inspected here, never included in the result; nothing
- * about it is read, mutated, or lost. Split out for direct testing
- * ("old answers remain untouched by the canonical view") without a
- * database.
+ * Pure: pairs a member's raw question_answers rows with the prompt of
+ * the Question each belongs to. Unlike the old buildCanonicalAnswers,
+ * this does NOT filter by canonical/slug membership at all — a
+ * member's answer to ANY Question in the library is real, historical
+ * content of theirs and is always included here, regardless of whether
+ * that Question is still active or was ever "canonical." The only row
+ * ever dropped is one whose parent Question can't be resolved at all
+ * (e.g. `questionsById` wasn't given it) — which in practice never
+ * happens, since a Question can never be hard-deleted while it still
+ * has answers (see admin_replace_question/admin_create_question —
+ * neither RPC nor any other code path deletes a questions row).
  */
-export function buildCanonicalAnswers(
-  canonicalQuestions: CanonicalQuestion[],
+export function buildMyAnswers(
   answerRows: {
     id: string
     question_id: string
@@ -161,121 +176,87 @@ export function buildCanonicalAnswers(
     updated_at: string
     is_current: boolean
     moderation_status: 'visible' | 'hidden'
-  }[]
-): CanonicalAnswer[] {
-  const byQuestionId = new Map(canonicalQuestions.map((q) => [q.id, q]))
+  }[],
+  questionsById: Map<string, { prompt: string }>
+): MyQuestionAnswer[] {
   return answerRows
-    .filter((row) => byQuestionId.has(row.question_id))
-    .map((row) => {
-      const q = byQuestionId.get(row.question_id)!
-      return {
-        id: row.id,
-        questionId: row.question_id,
-        slug: q.slug,
-        prompt: q.prompt,
-        body: row.body,
-        updatedAt: row.updated_at,
-        isCurrent: row.is_current,
-        moderationStatus: row.moderation_status,
-      }
-    })
+    .filter((row) => questionsById.has(row.question_id))
+    .map((row) => ({
+      id: row.id,
+      questionId: row.question_id,
+      prompt: questionsById.get(row.question_id)!.prompt,
+      body: row.body,
+      updatedAt: row.updated_at,
+      isCurrent: row.is_current,
+      moderationStatus: row.moderation_status,
+    }))
 }
 
 /**
- * This member's answers to the three canonical Questions only —
- * distinct from every historical answer they may also have, which
- * this deliberately never returns (see buildCanonicalAnswers). Resolves
- * against getAllCanonicalQuestions (active or not — see that function's
- * own doc comment for why), so this always returns a member's complete
- * canonical answer history; a caller building the "what's still
- * available to answer fresh" view must itself intersect the result
- * against getCanonicalQuestions' active-only set (see
- * app/minds/page.tsx's own "answer" vs "answers" tab handling).
+ * Every Question-answer this member has ever written, to ANY Question
+ * in the library — "My answers" own history, complete, regardless of
+ * whether the underlying Question is still active. This replaces
+ * getCanonicalAnswers + getAllCanonicalQuestions' old combination: a
+ * historical answer to a since-deactivated (or since-replaced) Question
+ * keeps showing here exactly as it did before, with no separate
+ * "resolve the full canonical set first" step needed, because nothing
+ * here is scoped to a small fixed set to begin with.
  */
-export async function getCanonicalAnswers(
+export async function getMyAnswers(
   supabase: SupabaseClient,
   userId: string
-): Promise<CanonicalAnswer[]> {
-  const canonical = await getAllCanonicalQuestions(supabase)
-  if (canonical.length === 0) return []
-
-  const { data } = await supabase
+): Promise<MyQuestionAnswer[]> {
+  const { data: answerRows } = await supabase
     .from('question_answers')
     .select('id, question_id, body, updated_at, is_current, moderation_status')
     .eq('user_id', userId)
-    .in(
-      'question_id',
-      canonical.map((q) => q.id)
-    )
 
-  return buildCanonicalAnswers(canonical, data ?? [])
+  if (!answerRows || answerRows.length === 0) return []
+
+  const questionIds = [...new Set(answerRows.map((r) => r.question_id))]
+  const { data: questionRows } = await supabase
+    .from('questions')
+    .select('id, prompt')
+    .in('id', questionIds)
+
+  const questionsById = new Map((questionRows ?? []).map((q) => [q.id, { prompt: q.prompt }]))
+  return buildMyAnswers(answerRows, questionsById)
 }
 
-export type CanonicalQuestionState = CanonicalQuestion & { answer: CanonicalAnswer | null }
-
 /**
- * Pure: pairs each of the three canonical Questions with this
- * member's answer to it (or null if not yet answered) — "Answer a
- * Question"'s completed/uncompleted state, always all three, in fixed
- * order, regardless of answer order.
+ * Pure: whichever eligible Question comes first, excluding the one the
+ * member just answered/is currently viewing. Replaces the old fixed-
+ * order-with-wraparound nextUnansweredCanonicalQuestion — with a real,
+ * growable library the notion of "next in canonical order" no longer
+ * applies; `eligible` (from getEligibleQuestions, already unanswered +
+ * active + family-diverse) is itself the candidate set, so this is
+ * just "the first one that isn't the current page's own Question."
  */
-export function mergeCanonicalQuestionState(
-  questions: CanonicalQuestion[],
-  answers: CanonicalAnswer[]
-): CanonicalQuestionState[] {
-  const byQuestionId = new Map(answers.map((a) => [a.questionId, a]))
-  return questions.map((q) => ({ ...q, answer: byQuestionId.get(q.id) ?? null }))
+export function nextEligibleQuestion(
+  eligible: LibraryQuestion[],
+  currentQuestionId: string
+): LibraryQuestion | null {
+  return eligible.find((q) => q.id !== currentQuestionId) ?? null
 }
 
 /**
- * Pure: the next unanswered canonical Question after `currentQuestionId`
- * in fixed canonical order, wrapping around rather than just "the next
- * slug" — the immediately-following Question may already be answered
- * (e.g. editing #1 while #2 is done and #3 isn't should offer #3), and
- * an already-completed Question being revisited must still point at
- * whichever canonical Question is genuinely still unanswered, in
- * canonical order, wherever it falls. Returns null when
- * currentQuestionId isn't canonical, or every other canonical Question
- * is already answered.
- */
-export function nextUnansweredCanonicalQuestion(
-  currentQuestionId: string,
-  questions: CanonicalQuestionState[]
-): CanonicalQuestion | null {
-  const current = questions.find((q) => q.id === currentQuestionId)
-  if (!current) return null
-
-  const bySlug = new Map(questions.map((q) => [q.slug, q]))
-  const currentOrderIndex = CANONICAL_QUESTION_SLUGS.indexOf(current.slug)
-
-  for (let step = 1; step < CANONICAL_QUESTION_SLUGS.length; step++) {
-    const slug = CANONICAL_QUESTION_SLUGS[(currentOrderIndex + step) % CANONICAL_QUESTION_SLUGS.length]
-    const candidate = bySlug.get(slug)
-    if (candidate && candidate.answer === null) {
-      return { id: candidate.id, slug: candidate.slug, prompt: candidate.prompt }
-    }
-  }
-  return null
-}
-
-/**
- * Pure: whether a member still needs to answer a canonical Question —
- * one completed answer is enough, never all three, and this is never
- * true at all when canonical Questions aren't live in this database yet
- * (canonicalQuestionCount === 0). Despite the name, this no longer
- * gates any navigation (see app/minds/page.tsx,
- * app/minds/[userId]/page.tsx, app/write/[recipientId]/page.tsx) — it
- * now drives only the non-blocking "Answer a Question" indicator on
- * /minds (the dot on its tab, and QuestionIncompleteNotice). Browsing
- * Minds, opening a profile, reading a published answer, and starting a
- * first letter are never blocked by this being true.
+ * Pure: whether a member still needs to answer a Question — one
+ * completed answer is enough, never a specific count, and this is
+ * never true at all when there's nothing currently eligible to offer
+ * (eligibleQuestionCount === 0). Despite the name, this no longer gates
+ * any navigation (see app/minds/page.tsx, app/minds/[userId]/page.tsx,
+ * app/write/[recipientId]/page.tsx) — it now drives only the non-
+ * blocking "Answer a Question" indicator on /minds (the dot on its
+ * tab, and QuestionIncompleteNotice). Browsing Minds, opening a
+ * profile, reading a published answer, and starting a first letter are
+ * never blocked by this being true.
  */
 export function needsParticipationGate(
-  canonicalQuestionCount: number,
-  completedCanonicalAnswerCount: number
+  eligibleQuestionCount: number,
+  completedAnswerCount: number
 ): boolean {
-  if (canonicalQuestionCount === 0) return false
-  return completedCanonicalAnswerCount === 0
+  if (eligibleQuestionCount === 0 && completedAnswerCount === 0) return false
+  return completedAnswerCount === 0
 }
 
 /**
@@ -284,10 +265,10 @@ export function needsParticipationGate(
  * Minds) answer" from an ordinary save. Never conflates saving a
  * Question answer with sending a letter — there is no recipient, no
  * correspondence, and no Mail Call involved in either case, only
- * publish_question_answer's own is_current promotion rule (see
- * docs/sql/2026-09-03-publish-question-answer-canonical.sql: a
- * member's first-ever canonical answer is auto-featured; every later
- * save leaves an existing featured answer alone). `wasCurrent` is the
+ * publish_question_answer's own is_current promotion rule: a member's
+ * first-ever answer (to ANY active Question, since the Question
+ * source-of-truth correction) is auto-featured; every later save
+ * leaves an existing featured answer alone. `wasCurrent` is the
  * answer's own is_current value BEFORE this save; `nowCurrent` is what
  * the RPC returned AFTER it — only a false-to-true transition counts
  * as "just became featured," never an edit of an already-featured

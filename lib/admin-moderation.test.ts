@@ -270,9 +270,7 @@ describe('final pre-apply correction item 6 — the exact cross-cutting hidden-a
     // Step 7: no member RPC can mutate A while hidden — set_current_answer
     // itself refuses to target a hidden row directly.
     const trySetHidden = await client(fake).rpc('set_current_answer', { p_answer_id: 'a' })
-    expect(trySetHidden.error?.message).toBe(
-      'Only a completed answer to one of the three canonical Questions can be shown in Minds.'
-    )
+    expect(trySetHidden.error?.message).toBe('Only one of your own, visible answers can be shown in Minds.')
 
     // Step 8: restoring Answer A makes it visible but leaves is_current
     // false — restore never reselects it.

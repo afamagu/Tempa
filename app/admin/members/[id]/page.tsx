@@ -29,7 +29,7 @@ export default async function AdminMemberDetailPage({ params }: { params: Promis
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/admin/members" className="text-[14px] text-foreground/70 transition-colors hover:text-foreground">
+        <Link href="/admin/members" className="text-[15px] text-foreground/70 transition-colors hover:text-foreground">
           ← Member search
         </Link>
       </div>
@@ -59,7 +59,7 @@ export default async function AdminMemberDetailPage({ params }: { params: Promis
                 href={`/admin/moderation/reports/${r.id}`}
                 className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-foreground/[.03]"
               >
-                <p className="text-[14px] text-foreground">
+                <p className="text-[15px] text-foreground">
                   {REASON_LABELS[r.reason] ?? r.reason} — reported by {r.otherPseudonym}
                 </p>
                 <p className={metadataTextClass}>{formatDateTimeFull(r.createdAt)}</p>
@@ -81,7 +81,7 @@ export default async function AdminMemberDetailPage({ params }: { params: Promis
                 href={`/admin/moderation/reports/${r.id}`}
                 className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-foreground/[.03]"
               >
-                <p className="text-[14px] text-foreground">
+                <p className="text-[15px] text-foreground">
                   {REASON_LABELS[r.reason] ?? r.reason} — about {r.otherPseudonym}
                 </p>
                 <p className={metadataTextClass}>{formatDateTimeFull(r.createdAt)}</p>
@@ -99,7 +99,7 @@ export default async function AdminMemberDetailPage({ params }: { params: Promis
           <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10">
             {audit.map((a) => (
               <div key={a.id} className="px-4 py-2.5">
-                <p className="text-[14px] text-foreground">
+                <p className="text-[15px] text-foreground">
                   {a.actorIdentifierSnapshot} — {a.action.replace('_', ' ')}
                 </p>
                 {a.reason && <p className={metadataTextClass}>{a.reason}</p>}

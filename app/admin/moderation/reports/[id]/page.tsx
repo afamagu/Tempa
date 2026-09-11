@@ -115,6 +115,13 @@ export default async function AdminReportDetailPage({ params }: { params: Promis
               <p className={contextQuestionClass}>{String(evidence.prompt ?? '')}</p>
               <p className={`mt-2 whitespace-pre-wrap ${proseBodyClass}`}>{String(evidence.body ?? '')}</p>
             </>
+          ) : report.targetType === 'letter' ? (
+            <>
+              {typeof evidence.letter_created_at === 'string' && (
+                <p className={helperTextClass}>Written {formatDateTimeFull(evidence.letter_created_at)}</p>
+              )}
+              <p className={`mt-2 whitespace-pre-wrap ${proseBodyClass}`}>{String(evidence.body ?? '')}</p>
+            </>
           ) : (
             <>
               {typeof evidence.title === 'string' && (
