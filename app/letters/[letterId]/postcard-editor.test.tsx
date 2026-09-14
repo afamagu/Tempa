@@ -3,15 +3,31 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import PostcardEditor from './postcard-editor'
-import { POSTCARD_CATALOG, REVEAL_LINE_MAX_LENGTH, POSTCARD_BACK_MESSAGE_MAX_LENGTH } from '@/lib/moments'
+import { REVEAL_LINE_MAX_LENGTH, POSTCARD_BACK_MESSAGE_MAX_LENGTH } from '@/lib/moments'
+import type { PostcardCatalogEntry } from '@/lib/postcards'
 
 const SOURCE_PATH = path.join(__dirname, 'postcard-editor.tsx')
 const source = readFileSync(SOURCE_PATH, 'utf8')
+
+const ESSAOUIRA: PostcardCatalogEntry = {
+  key: 'essaouira',
+  title: 'Essaouira',
+  countryCode: 'MA',
+  location: 'Atlantic Morocco',
+  collection: 'Atlantic Morocco Collection',
+  postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+  footerText: 'Tempa Postcard · Atlantic Morocco Collection',
+  frontImagePath: '/postcards/essaouira.jpg',
+  motionSrc: '/postcards/essaouira-living.mp4',
+  durationSeconds: 10.04,
+  revealLineAlignment: null,
+}
 
 function render(overrides: Partial<Parameters<typeof PostcardEditor>[0]> = {}) {
   return renderToStaticMarkup(
     <PostcardEditor
       draft={{ postcardKey: 'essaouira', revealLine: '', backMessage: '' }}
+      catalogEntry={ESSAOUIRA}
       senderPseudonym="Morning Larch"
       onChange={() => {}}
       onChangePostcard={() => {}}
@@ -29,7 +45,7 @@ function render(overrides: Partial<Parameters<typeof PostcardEditor>[0]> = {}) {
 describe('PostcardEditor — Part 7. reuses the real Postcard visual shell', () => {
   it('renders the real, unmodified PostcardObject for the front/flip preview', () => {
     const html = render()
-    expect(html).toContain(POSTCARD_CATALOG.essaouira.frontImagePath)
+    expect(html).toContain(ESSAOUIRA.frontImagePath)
     expect(html).toContain('postcard-perspective')
     expect(html).toContain('Turn over')
   })
@@ -109,6 +125,18 @@ describe('PostcardEditor — Part 8. calm actions, nothing sends from here', () 
     expect(html).toContain('Done')
   })
 
+  // Release Polish Pass — Remove is reversible (an unsent draft can
+  // simply be re-attached), so it must never use the red/destructive
+  // treatment reserved for genuinely destructive, consequential
+  // actions elsewhere.
+  it('Remove is toned down — no red/destructive styling', () => {
+    const html = render()
+    const removeIndex = html.indexOf('>Remove<')
+    const buttonStart = html.lastIndexOf('<button', removeIndex)
+    const buttonMarkup = html.slice(buttonStart, removeIndex)
+    expect(buttonMarkup).not.toMatch(/text-red|border-red/)
+  })
+
   it('has no RPC/Supabase send logic of its own', () => {
     expect(source).not.toContain('supabase')
     expect(source).not.toContain('.rpc(')
@@ -158,10 +186,9 @@ describe('PostcardEditor — Escape-to-close (production back-editing UX defect)
 })
 
 describe('PostcardEditor — senderPseudonym (pre-migration audit correction, Part 5)', () => {
-  it('shows the real sending member\'s pseudonym, never the catalog\'s fictional demo sender', () => {
+  it('shows the real sending member\'s pseudonym', () => {
     const html = render({ senderPseudonym: 'Evening Quill' })
     expect(html).toContain('Evening Quill')
-    expect(html).not.toContain('Youssef')
   })
 })
 
@@ -185,9 +212,12 @@ describe('PostcardEditor — D/G. writing surfaces are real controlled inputs, n
   })
 })
 
-describe('PostcardEditor — an unrecognized postcardKey shows an honest unavailable message rather than crashing', () => {
-  it('renders a plain message and no PostcardObject when the key is invalid', () => {
-    const html = render({ draft: { postcardKey: 'not-a-real-key', revealLine: '', backMessage: '' } })
+describe('PostcardEditor — Admin Phase 2A-2: a catalogEntry of null shows an honest unavailable message rather than crashing', () => {
+  it('renders a plain message and no PostcardObject when the active catalogue no longer has this key', () => {
+    const html = render({
+      draft: { postcardKey: 'no-longer-active', revealLine: '', backMessage: '' },
+      catalogEntry: null,
+    })
     expect(html).toContain('no longer available')
     expect(html).not.toContain('postcard-perspective')
   })

@@ -201,3 +201,58 @@ export function simulateWriteLetter(
     status: 'sent',
   }
 }
+
+export class PostcardValidationError extends Error {}
+
+export type SimPostcardCatalogEntry = { key: string; isActive: boolean }
+export type SimPostcardVersion = { postcardKey: string; isCurrent: boolean }
+
+/** Admin Phase 2A-2 — mirrors the identical p_postcard validation block
+ * duplicated verbatim in both write_letter and reply_to_letter
+ * (docs/sql/2026-09-14-letter-level-postcards.sql, ~lines 649-706 and
+ * ~981-1013): same order, same messages. Resolves the current version
+ * for the given key and returns the trimmed payload on success; throws
+ * on the FIRST failing check, matching the SQL's own early-exit `raise
+ * exception` order exactly. Returns null when no Postcard was
+ * attempted at all (p_postcard is null), mirroring `has_postcard :=
+ * p_postcard is not null`. Deliberately does not model the surrounding
+ * moments_qualified_for_viewer/account-status gates — those are
+ * already covered by simulateMomentsQualifiedForViewer and this
+ * codebase's own account-status simulators elsewhere; this function is
+ * scoped purely to the Postcard-specific validation the live migration
+ * introduced. */
+export function simulatePostcardValidation(
+  catalog: SimPostcardCatalogEntry[],
+  versions: SimPostcardVersion[],
+  postcard: { postcardKey: string | null; revealLine: string | null; backMessage: string | null } | null
+): { postcardKey: string; revealLine: string | null; backMessage: string } | null {
+  if (postcard === null) return null
+
+  const key = postcard.postcardKey
+  if (key === null || key.trim().length === 0) {
+    throw new PostcardValidationError('A Postcard requires a postcard key.')
+  }
+
+  if (!catalog.some((c) => c.key === key && c.isActive)) {
+    throw new PostcardValidationError('Unknown postcard.')
+  }
+
+  const currentVersion = versions.find((v) => v.postcardKey === key && v.isCurrent)
+  if (!currentVersion) {
+    throw new PostcardValidationError('This postcard has no current version available.')
+  }
+
+  if (postcard.revealLine !== null && postcard.revealLine.length > 32) {
+    throw new PostcardValidationError("A Postcard's Reveal Line is too long.")
+  }
+
+  const trimmedBackMessage = (postcard.backMessage ?? '').trim()
+  if (trimmedBackMessage.length === 0) {
+    throw new PostcardValidationError('A Postcard needs its own written message before it can be sent.')
+  }
+  if (trimmedBackMessage.length > 200) {
+    throw new PostcardValidationError("A Postcard's back message is too long.")
+  }
+
+  return { postcardKey: key, revealLine: postcard.revealLine, backMessage: trimmedBackMessage }
+}

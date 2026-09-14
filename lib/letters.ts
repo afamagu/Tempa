@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Moment, MomentType } from './moments'
+import type { Moment, MomentType, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 import { splitParagraphs } from './moments'
 import { stripRichBodyMarker } from './letter-editor-doc'
 
@@ -1004,21 +1004,33 @@ export async function getMomentsForLetters(
 // ============================================================
 // LETTER-LEVEL POSTCARDS V1 (2026-09-13) — the NEW letterhead-enclosure
 // Postcard, durably stored in its own table (public.letter_postcards,
-// docs/sql/2026-09-14-letter-level-postcards.sql — prepared, not yet
-// applied), completely separate from the `moments` table above. A
+// docs/sql/2026-09-14-letter-level-postcards.sql — APPLIED LIVE AND
+// VERIFIED; a real production letter-level Postcard has been sent
+// successfully), completely separate from the `moments` table above. A
 // historical Moment postcard (type='postcard' in the query above) keeps
 // reading and rendering exactly as it always has; this section is
-// purely additive alongside it.
+// purely additive alongside it. Widened by docs/sql/2026-09-21-
+// postcard-admin-and-keepsakes.sql (Admin Phase 2A-2) to carry every
+// presentation field (title/location/collection/postmark/footer text),
+// not just artwork — see PostcardBaseContent, lib/moments.ts.
 // ============================================================
 
-/** The sending letter's own FROZEN asset identity — see
- * resolveLetterPostcardDisplay's own doc comment (lib/moments.ts) for
- * how this replaces the catalog's current artwork for delivered
- * rendering. `revealLineAlignment` is stored as plain text in Postgres
- * (constrained by the table's own CHECK to the same known set
- * PostcardRevealLineAlignment defines) — cast at the point of use rather
- * than re-validated here, since the database already guarantees it. */
+/** The sending letter's own FROZEN presentation identity — every field
+ * a delivered Postcard actually renders, snapshotted once at Send and
+ * never touched again regardless of what the catalogue's CURRENT entry
+ * later becomes (Admin Phase 2A-2 widened postcard_versions to carry
+ * title/location/collection/postmark/footer text alongside the
+ * original artwork fields). `revealLineAlignment` is stored as plain
+ * text in Postgres (constrained by the table's own CHECK to the same
+ * known set PostcardRevealLineAlignment defines) — cast at the point of
+ * use rather than re-validated here, since the database already
+ * guarantees it. */
 export type LetterPostcardVersion = {
+  title: string
+  location: string
+  collection: string
+  postmarkText: string
+  footerText: string
   frontImagePath: string
   motionSrc: string | null
   durationSeconds: number | null
@@ -1062,6 +1074,11 @@ export type LetterPostcardRow = {
   sender_pseudonym_snapshot: string
   postcard_versions: {
     postcard_key: string
+    title: string
+    location: string
+    collection: string
+    postmark_text: string
+    footer_text: string
     front_image_path: string
     motion_src: string | null
     duration_seconds: number | null
@@ -1103,6 +1120,11 @@ export function mapLetterPostcardRows(rows: LetterPostcardRow[]): Map<string, Le
           backMessage: row.back_message,
           senderPseudonymSnapshot: row.sender_pseudonym_snapshot,
           version: {
+            title: row.postcard_versions.title,
+            location: row.postcard_versions.location,
+            collection: row.postcard_versions.collection,
+            postmarkText: row.postcard_versions.postmark_text,
+            footerText: row.postcard_versions.footer_text,
             frontImagePath: row.postcard_versions.front_image_path,
             motionSrc: row.postcard_versions.motion_src,
             durationSeconds: row.postcard_versions.duration_seconds,
@@ -1111,6 +1133,30 @@ export function mapLetterPostcardRows(rows: LetterPostcardRow[]): Map<string, Le
         },
       ])
   )
+}
+
+/** Converts a delivered letter's own FROZEN version into the generic
+ * base content shape lib/moments.ts's resolveLetterPostcardDisplay
+ * merges sender overrides onto — used by the delivered reader/Preview's
+ * historical rendering. Living Reveal is present only when the frozen
+ * version actually carries a motion asset, exactly like a
+ * PostcardBaseContent with no `living` at all. */
+export function letterPostcardToBaseContent(version: LetterPostcardVersion): PostcardBaseContent {
+  return {
+    title: version.title,
+    location: version.location,
+    collection: version.collection,
+    frontImagePath: version.frontImagePath,
+    postmarkText: version.postmarkText,
+    footerText: version.footerText,
+    living: version.motionSrc
+      ? {
+          motionSrc: version.motionSrc,
+          durationSeconds: version.durationSeconds ?? undefined,
+          revealLineAlignment: (version.revealLineAlignment as PostcardRevealLineAlignment | null) ?? undefined,
+        }
+      : undefined,
+  }
 }
 
 /**
@@ -1131,7 +1177,7 @@ export async function getLetterPostcardsForLetters(
   const { data, error } = await supabase
     .from('letter_postcards')
     .select(
-      'letter_id, reveal_line, back_message, sender_pseudonym_snapshot, postcard_versions(postcard_key, front_image_path, motion_src, duration_seconds, reveal_line_alignment)'
+      'letter_id, reveal_line, back_message, sender_pseudonym_snapshot, postcard_versions(postcard_key, title, location, collection, postmark_text, footer_text, front_image_path, motion_src, duration_seconds, reveal_line_alignment)'
     )
     .in('letter_id', letterIds)
 
@@ -1219,6 +1265,14 @@ export type LetterboxPerson = {
   /** Whether the viewer has sent at least one VISIBLE letter to this
    * person, in any episode — the "Sent" filter's entire definition. */
   hasSentAny: boolean
+  /** Release Polish Pass — whether the single most recent VISIBLE
+   * letter with this person (the same one latestExcerpt/activityAt
+   * describe) was sent BY the viewer, i.e. "I'm the one waiting on a
+   * reply." Derived from data the existing query already fetches
+   * (sender_id) — no new query. Powers deriveLetterboxCardStatus's
+   * "Waiting for a reply" state; false whenever the sender is unknown
+   * or was actually the other person. */
+  lastLetterFromViewer: boolean
 }
 
 /**
@@ -1234,13 +1288,14 @@ export function buildLetterboxPeople(
   userId: string,
   correspondences: { id: string; participant_low: string; participant_high: string }[],
   hiddenCorrespondenceIds: Set<string>,
-  latestLetterByCorrespondence: Map<string, { createdAt: string; body: string }>,
+  latestLetterByCorrespondence: Map<string, { createdAt: string; body: string; senderId?: string }>,
   unreadCountByCorrespondence: Map<string, number>,
   sentCorrespondenceIds: Set<string>,
   profilesById: Map<string, { pseudonym: string; country: string; age_range: string }>
 ): LetterboxPerson[] {
   const activityByPerson = new Map<string, number>()
   const excerptByPerson = new Map<string, string>()
+  const lastSenderByPerson = new Map<string, string | undefined>()
   const unreadByPerson = new Map<string, number>()
   const sentByPerson = new Map<string, boolean>()
 
@@ -1255,6 +1310,7 @@ export function buildLetterboxPeople(
       if (existing === undefined || activityAt > existing) {
         activityByPerson.set(otherId, activityAt)
         excerptByPerson.set(otherId, latest.body)
+        lastSenderByPerson.set(otherId, latest.senderId)
       }
     }
 
@@ -1279,10 +1335,39 @@ export function buildLetterboxPeople(
       unreadCount: unreadByPerson.get(otherId) ?? 0,
       latestExcerpt: excerptByPerson.get(otherId) ?? null,
       hasSentAny: sentByPerson.get(otherId) ?? false,
+      lastLetterFromViewer: lastSenderByPerson.get(otherId) === userId,
     })
   }
 
   return people.sort((a, b) => b.activityAt - a.activityAt)
+}
+
+export type LetterboxCardStatus =
+  | { kind: 'new'; count: number }
+  | { kind: 'waiting_for_reply' }
+  | { kind: 'last_exchanged'; activityAt: number }
+
+/**
+ * Release Polish Pass — Letterbox's own responsive correspondence-card
+ * grid needs one quiet status line per card, derived entirely from
+ * data the card already has (never a new query): an unread incoming
+ * letter takes priority ("New letter" — the corner UnreadBadge already
+ * carries the count separately), then "the viewer's own last letter
+ * here hasn't been replied to yet," and finally a plain "last
+ * exchanged" date as the quiet default.
+ *
+ * Deliberately does NOT fold "mail in transit" into this same status —
+ * a letter already delivered-and-unread and a SEPARATE letter still
+ * travelling toward the viewer are two independent, simultaneously-
+ * true facts (not a single mutually-exclusive state), so the caller
+ * renders "Mail on the way" as its own always-independent line
+ * whenever mailInTransitPersonIds says so, exactly as it always has,
+ * alongside whatever this function returns.
+ */
+export function deriveLetterboxCardStatus(person: LetterboxPerson): LetterboxCardStatus {
+  if (person.unreadCount > 0) return { kind: 'new', count: person.unreadCount }
+  if (person.lastLetterFromViewer) return { kind: 'waiting_for_reply' }
+  return { kind: 'last_exchanged', activityAt: person.activityAt }
 }
 
 export type LetterboxFilter = 'all' | 'new' | 'sent'
@@ -1334,14 +1419,18 @@ export async function getLetterboxPeople(
     .in('correspondence_id', visibleIds)
     .order('created_at', { ascending: false })
 
-  const latestLetterByCorrespondence = new Map<string, { createdAt: string; body: string }>()
+  const latestLetterByCorrespondence = new Map<string, { createdAt: string; body: string; senderId?: string }>()
   const unreadCountByCorrespondence = new Map<string, number>()
   const sentCorrespondenceIds = new Set<string>()
   for (const row of letterRows ?? []) {
     // Rows arrive newest-first (order by created_at desc above), so the
     // first row seen per correspondence is already its latest.
     if (!latestLetterByCorrespondence.has(row.correspondence_id)) {
-      latestLetterByCorrespondence.set(row.correspondence_id, { createdAt: row.created_at, body: row.body })
+      latestLetterByCorrespondence.set(row.correspondence_id, {
+        createdAt: row.created_at,
+        body: row.body,
+        senderId: row.sender_id,
+      })
     }
     if (row.recipient_id === userId && row.is_unread) {
       unreadCountByCorrespondence.set(

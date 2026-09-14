@@ -48,7 +48,7 @@ export default function QuestionAnswer({
   questionId,
   prompt,
   initialAnswer,
-  isPositionOne = false,
+  isFlagship = false,
   isActive = true,
   nextQuestion = null,
 }: {
@@ -56,14 +56,14 @@ export default function QuestionAnswer({
   questionId: string
   prompt: string
   initialAnswer: string | null
-  /** Question Slots checkpoint — whether THIS Question currently holds
-   * position #1, the permanent flagship. The confirmation copy for a
-   * member's very first save here is the only save ever announced as
-   * "now your primary Minds answer" (lib/questions.ts's
-   * questionSaveConfirmationCopy) — deliberately never based on
-   * is_current, which no longer determines Minds primary-answer
-   * status under the new model. */
-  isPositionOne?: boolean
+  /** Whether THIS Question is currently the Flagship — a separate,
+   * admin-chosen bit of state, never permanently tied to a slot. The
+   * confirmation copy for a member's very first save here is the only
+   * save ever announced as "now your primary Minds answer"
+   * (lib/questions.ts's questionSaveConfirmationCopy) — deliberately
+   * never based on is_current, which no longer determines Minds
+   * primary-answer status under the new model. */
+  isFlagship?: boolean
   isActive?: boolean
   /** The next currently-eligible Question (positioned, unanswered by
    * this member), or null when none remain — computed server-side
@@ -149,8 +149,8 @@ export default function QuestionAnswer({
     // runs server-side unchanged (kept for backward compatibility —
     // see lib/questions.ts's own header discussion), but this
     // component no longer reads or displays it: primary-answer status
-    // is entirely a function of Question position now, computed below
-    // from isPositionOne alone.
+    // is entirely a function of Flagship status now, computed below
+    // from isFlagship alone.
     const { error: publishError } = await supabase.rpc('publish_question_answer', {
       p_question_id: questionId,
       p_body: trimmed,
@@ -180,7 +180,7 @@ export default function QuestionAnswer({
       // ignore
     }
 
-    setConfirmation(questionSaveConfirmationCopy(isPositionOne, hadExistingAnswer))
+    setConfirmation(questionSaveConfirmationCopy(isFlagship, hadExistingAnswer))
 
     setPublishedBody(trimmed)
     setBody(trimmed)

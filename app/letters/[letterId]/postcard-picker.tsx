@@ -1,47 +1,46 @@
-import { helperTextClass, sectionLabelClass } from '@/app/profile/ui'
-import { POSTCARD_CATALOG, type PostcardData } from '@/lib/moments'
+'use client'
+
+import { useState } from 'react'
+import { helperTextClass, sectionLabelClass, inputClass } from '@/app/profile/ui'
+import { filterPostcardCatalog, type PostcardCatalogEntry } from '@/lib/postcards'
 
 /**
- * Tempa's own postcard catalog — never the device photo library. This
- * checkpoint's catalog is a single Featured card, but the section
- * architecture (Featured / My Postcards / Places / Collections) is
- * built out now so a real catalog, ownership, and — later, separately —
- * a paid tier can slot in without a picker redesign. No currency/store
- * logic exists yet; every section below is either populated from the
- * static catalog or an honest "nothing here yet" placeholder.
+ * Tempa's own postcard catalog — never the device photo library. Admin
+ * Phase 2A-2 — `postcards` is the live, ACTIVE DB-backed catalogue
+ * (lib/postcards.ts's getActivePostcards), fetched once by the caller
+ * (moments-composer.tsx) rather than a hand-maintained TypeScript list:
+ * a Postcard added entirely through Admin appears here with zero
+ * picker changes.
+ *
+ * Release Polish Pass — simplified into an honest catalogue for first
+ * release: the previous Featured/My Postcards/Places/Collections
+ * section scaffolding (three of which were permanent "nothing here
+ * yet" placeholders) read as an unfinished product and is removed.
+ * Received Keepsakes are deliberately NOT surfaced as a "My Postcards"
+ * section here — receiving a Postcard never implies the recipient now
+ * "owns" a design they may send; that would blur Keepsakes (a
+ * received-mail archive) with the send-time catalogue. A restrained
+ * search field (matching the same fields as Admin's own catalogue
+ * search) is added ahead of the catalogue eventually holding scores of
+ * Postcards.
  */
-function PickerSection({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="space-y-2">
-      <p className={sectionLabelClass}>{title}</p>
-      {children}
-    </div>
-  )
-}
-
 function PostcardCard({
   postcard,
   onSelect,
 }: {
-  postcard: PostcardData
+  postcard: PostcardCatalogEntry
   onSelect: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-28 shrink-0 flex-col items-start gap-1 rounded-md border border-foreground/15 p-2 text-left transition-colors hover:border-accent"
+      className="flex flex-col items-start gap-1 rounded-md border border-foreground/15 p-2 text-left transition-colors hover:border-accent"
     >
       <img
         src={postcard.frontImagePath}
         alt=""
-        className="h-16 w-full rounded object-cover"
+        className="h-20 w-full rounded object-cover"
       />
       <span className="truncate text-[12px] font-medium text-foreground">{postcard.title}</span>
       <span className="truncate text-[11px] text-muted">{postcard.location}</span>
@@ -50,35 +49,46 @@ function PostcardCard({
 }
 
 export default function PostcardPicker({
+  postcards,
   onSelect,
   onCancel,
 }: {
+  /** The live, active DB catalogue — fetched by the caller. An empty
+   * array (fetch still pending, or genuinely nothing active yet) shows
+   * an honest empty state rather than stale hard-coded cards. */
+  postcards: PostcardCatalogEntry[]
   onSelect: (postcardKey: string) => void
   onCancel: () => void
 }) {
-  const featured = Object.entries(POSTCARD_CATALOG)
+  const [query, setQuery] = useState('')
+  const filtered = filterPostcardCatalog(postcards, query)
 
   return (
     <div className="mx-auto w-full max-w-sm space-y-4 rounded-md border border-foreground/10 p-4">
-      <PickerSection title="Featured">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {featured.map(([key, postcard]) => (
-            <PostcardCard key={key} postcard={postcard} onSelect={() => onSelect(key)} />
+      <p className={sectionLabelClass}>Postcards</p>
+
+      {postcards.length > 0 && (
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search Postcards…"
+          aria-label="Search Postcards"
+          className={inputClass}
+        />
+      )}
+
+      {postcards.length === 0 ? (
+        <p className={helperTextClass}>No postcards available right now.</p>
+      ) : filtered.length === 0 ? (
+        <p className={helperTextClass}>No Postcards match &ldquo;{query.trim()}&rdquo;.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {filtered.map((postcard) => (
+            <PostcardCard key={postcard.key} postcard={postcard} onSelect={() => onSelect(postcard.key)} />
           ))}
         </div>
-      </PickerSection>
-
-      <PickerSection title="My Postcards">
-        <p className={helperTextClass}>You don&apos;t have any Postcards yet.</p>
-      </PickerSection>
-
-      <PickerSection title="Places">
-        <p className={helperTextClass}>More coming soon.</p>
-      </PickerSection>
-
-      <PickerSection title="Collections">
-        <p className={helperTextClass}>More coming soon.</p>
-      </PickerSection>
+      )}
 
       <button type="button" onClick={onCancel} className={helperTextClass}>
         Cancel

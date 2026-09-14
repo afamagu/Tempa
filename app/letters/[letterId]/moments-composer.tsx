@@ -9,6 +9,7 @@ import { TextSelection } from '@tiptap/pm/state'
 import { createClient } from '@/lib/supabase/client'
 import { helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import { toMomentRpcPayload, type Moment, type LetterPostcardDraft } from '@/lib/moments'
+import { getActivePostcards, type PostcardCatalogEntry } from '@/lib/postcards'
 import {
   docToPlainBody,
   docToMomentDrafts,
@@ -216,6 +217,12 @@ export default function MomentsComposer({
   const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
   const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
+  // Admin Phase 2A-2 — the live, ACTIVE DB-backed catalogue
+  // (lib/postcards.ts), fetched once on mount. This, not the static
+  // POSTCARD_CATALOG, is now the source of truth for what the picker
+  // offers and what the composer-slot/editor/Preview resolve
+  // draft.postcardKey against.
+  const [activePostcards, setActivePostcards] = useState<PostcardCatalogEntry[]>([])
   // Production back-editing UX defect (2026-09-15) — true only when the
   // editor is opened via Preview's own blocked-Send control/thumbnail
   // (the sender specifically needs to write the back right now); reset
@@ -331,6 +338,22 @@ export default function MomentsComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Admin Phase 2A-2 — fetched once on mount, independent of the
+  // Postcard draft's own restore above: the picker/composer-slot/editor
+  // all need the live active catalogue regardless of whether a Postcard
+  // is already attached. A key that's since been deactivated simply
+  // won't be found in this list (handled by postcardCatalogEntry below),
+  // never a crash.
+  useEffect(() => {
+    let cancelled = false
+    getActivePostcards(createClient()).then((postcards) => {
+      if (!cancelled) setActivePostcards(postcards)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // The ONE place a Postcard edit is both applied to state AND
   // persisted — deliberately not a `useEffect` keyed on `postcardDraft`
   // changing, which would ALSO fire the instant the restore effect
@@ -379,6 +402,14 @@ export default function MomentsComposer({
   // reading, not the send action itself, so a blank back never blocks
   // opening it — only the actual Send button inside LetterPreview.
   const postcardNeedsMessage = Boolean(postcardDraft && postcardDraft.backMessage.trim().length === 0)
+
+  // Admin Phase 2A-2 — resolved once here, passed down to the
+  // composer-slot/editor/Preview so none of them repeat this lookup
+  // against the live catalogue independently. Null when nothing is
+  // attached, or when the attached key is no longer active.
+  const postcardCatalogEntry = postcardDraft
+    ? (activePostcards.find((p) => p.key === postcardDraft.postcardKey) ?? null)
+    : null
 
   // Inserts a real photoMoment node at the end of the paragraph at
   // `paragraphIndex`, found fresh in the CURRENT document — the upload
@@ -664,6 +695,7 @@ export default function MomentsComposer({
           document, never inline prose. */}
       <PostcardComposerSlot
         draft={postcardDraft}
+        catalogEntry={postcardCatalogEntry}
         disabled={!momentsQualified}
         onAdd={() => setPostcardPickerOpen(true)}
         onEdit={() => {
@@ -695,13 +727,14 @@ export default function MomentsComposer({
 
       {postcardPickerOpen && (
         <div className="fixed inset-x-0 bottom-0 z-50 bg-background p-4 shadow-lg">
-          <PostcardPicker onSelect={choosePostcard} onCancel={() => setPostcardPickerOpen(false)} />
+          <PostcardPicker postcards={activePostcards} onSelect={choosePostcard} onCancel={() => setPostcardPickerOpen(false)} />
         </div>
       )}
 
       {postcardEditorOpen && postcardDraft && (
         <PostcardEditor
           draft={postcardDraft}
+          catalogEntry={postcardCatalogEntry}
           senderPseudonym={senderPseudonym}
           onChange={setPostcardDraftAndPersist}
           onChangePostcard={() => {
@@ -784,6 +817,7 @@ export default function MomentsComposer({
           body={docToPlainBody(docJSON)}
           moments={previewMoments}
           postcard={postcardDraft}
+          postcardCatalogEntry={postcardCatalogEntry}
           senderPseudonym={senderPseudonym}
           recipientPseudonym={recipientPseudonym}
           onClose={() => setPreviewMoments(null)}

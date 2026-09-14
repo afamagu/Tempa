@@ -13,9 +13,41 @@ function person(overrides: Partial<LetterboxPerson> = {}): LetterboxPerson {
     unreadCount: 0,
     latestExcerpt: 'A short excerpt of the most recent letter.',
     hasSentAny: false,
+    lastLetterFromViewer: false,
     ...overrides,
   }
 }
+
+// Release Polish Pass — restores the responsive correspondence-CARD
+// grid (person is the primary object) after a prior pass had collapsed
+// it into a single-column stack of horizontal rows.
+describe('PeopleGrid — responsive card grid', () => {
+  it('lays out as a 1/2/3-column responsive grid, never a single-column stack only', () => {
+    const html = renderToStaticMarkup(
+      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+    )
+    expect(html).toMatch(/class="[^"]*grid-cols-1[^"]*sm:grid-cols-2[^"]*lg:grid-cols-3[^"]*"/)
+  })
+
+  it('the pseudonym is visually dominant — larger, bolder text than the metadata beneath it', () => {
+    const html = renderToStaticMarkup(
+      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+    )
+    expect(html).toMatch(/class="[^"]*text-\[17px\][^"]*font-semibold[^"]*"[^>]*>Evening Quill/)
+  })
+
+  it('shows country and age range as quiet metadata beneath the pseudonym', () => {
+    const html = renderToStaticMarkup(
+      <PeopleGrid
+        people={[person({ country: 'South Africa', ageRange: '25-34' })]}
+        hasAnyPeopleAtAll
+        filter="all"
+        mailInTransitPersonIds={new Set()}
+      />
+    )
+    expect(html).toContain('South Africa · 25-34')
+  })
+})
 
 describe('PeopleGrid — row content', () => {
   it('shows pseudonym and the latest visible excerpt', () => {
@@ -26,15 +58,17 @@ describe('PeopleGrid — row content', () => {
     expect(html).toContain('A short excerpt of the most recent letter.')
   })
 
-  // Board usability visual follow-up (2026-09-09): every excerpt of
-  // member-authored writing sits on the same bg-surface-shell surface
-  // as the full letter/Dispatch/answer readers — identity/date/badges
-  // stay on the ordinary card background.
-  it('wraps the excerpt in the shared bg-surface-shell authored-paper surface', () => {
+  // Release Polish Pass — Letterbox deliberately moves AWAY from the
+  // shared bg-surface-shell "filled strip" excerpt treatment (still
+  // used elsewhere, e.g. BoardShelfCard) toward a plain, subordinate
+  // serif line — the recent-letter line should read as a quiet aside,
+  // not a Gmail-style preview strip.
+  it('the excerpt is plain subordinate serif text, never wrapped in the bg-surface-shell filled-strip surface', () => {
     const html = renderToStaticMarkup(
       <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
     )
-    expect(html).toMatch(/class="[^"]*bg-surface-shell[^"]*"[^>]*>[\s\S]*A short excerpt of the most recent letter\./)
+    expect(html).not.toContain('bg-surface-shell')
+    expect(html).toMatch(/class="[^"]*font-serif[^"]*italic[^"]*"[^>]*>[\s\S]*A short excerpt/)
   })
 
   it('the row itself links to the archive, never the public profile', () => {
@@ -119,6 +153,39 @@ describe('PeopleGrid — excerpt stays a preview, never an unrestricted body', (
   })
 })
 
+describe('PeopleGrid — status line (New letter / Waiting for a reply / Last exchanged)', () => {
+  it('shows "New letter" when there is an unread letter', () => {
+    const html = renderToStaticMarkup(
+      <PeopleGrid people={[person({ unreadCount: 1 })]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+    )
+    expect(html).toContain('New letter')
+  })
+
+  it('shows "Waiting for a reply" when the viewer sent the last letter and nothing is unread', () => {
+    const html = renderToStaticMarkup(
+      <PeopleGrid
+        people={[person({ unreadCount: 0, lastLetterFromViewer: true })]}
+        hasAnyPeopleAtAll
+        filter="all"
+        mailInTransitPersonIds={new Set()}
+      />
+    )
+    expect(html).toContain('Waiting for a reply')
+  })
+
+  it('falls back to "Last exchanged {date}" otherwise', () => {
+    const html = renderToStaticMarkup(
+      <PeopleGrid
+        people={[person({ unreadCount: 0, lastLetterFromViewer: false })]}
+        hasAnyPeopleAtAll
+        filter="all"
+        mailInTransitPersonIds={new Set()}
+      />
+    )
+    expect(html).toContain('Last exchanged')
+  })
+})
+
 describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
   it('unread badge and transit badge can both render for the same person without merging into one', () => {
     const html = renderToStaticMarkup(
@@ -133,7 +200,7 @@ describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
     expect(html).toContain('Mail on the way')
   })
 
-  it('a person with no unread and no transit mail shows neither badge', () => {
+  it('a person with no unread and no transit mail shows neither the badge nor the transit line', () => {
     const html = renderToStaticMarkup(
       <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
     )

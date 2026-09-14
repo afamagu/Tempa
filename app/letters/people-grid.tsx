@@ -4,8 +4,14 @@ import MailInTransitIcon from '@/app/mail-in-transit-icon'
 import SystemMessage from '@/app/system-message'
 import FormattedText from '@/app/letters/formatted-text'
 import { helperTextClass, metadataTextClass } from '@/app/profile/ui'
-import { formatDateTimeCompact } from '@/lib/format-date'
-import { letterPreviewText, isRichBody, type LetterboxFilter, type LetterboxPerson } from '@/lib/letters'
+import { formatDateShort } from '@/lib/format-date'
+import {
+  letterPreviewText,
+  isRichBody,
+  deriveLetterboxCardStatus,
+  type LetterboxFilter,
+  type LetterboxPerson,
+} from '@/lib/letters'
 
 /**
  * A small, restrained unread-count badge — same visual language as
@@ -23,11 +29,27 @@ function UnreadBadge({ count }: { count: number }) {
   return (
     <span
       aria-label={`${count} unread letter${count === 1 ? '' : 's'}`}
-      className="absolute right-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-medium text-accent-foreground"
+      className="absolute right-2 top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-medium text-accent-foreground"
     >
       {count > 99 ? '99+' : count}
     </span>
   )
+}
+
+/** Release Polish Pass — the one quiet status line deriveLetterboxCardStatus
+ * produces (New letter / Waiting for a reply / Last exchanged {date}).
+ * "Mail on the way" is rendered separately, unconditionally, alongside
+ * this — see deriveLetterboxCardStatus's own doc comment for why the
+ * two are independent rather than one mutually-exclusive state. */
+function CardStatusLine({ person }: { person: LetterboxPerson }) {
+  const status = deriveLetterboxCardStatus(person)
+  if (status.kind === 'new') {
+    return <p className="text-[13px] font-medium text-accent">New letter</p>
+  }
+  if (status.kind === 'waiting_for_reply') {
+    return <p className={metadataTextClass}>Waiting for a reply</p>
+  }
+  return <p className={metadataTextClass}>Last exchanged {formatDateShort(new Date(status.activityAt).toISOString())}</p>
 }
 
 function emptyStateCopy(filter: LetterboxFilter, hasAnyPeopleAtAll: boolean): string {
@@ -38,21 +60,27 @@ function emptyStateCopy(filter: LetterboxFilter, hasAnyPeopleAtAll: boolean): st
 }
 
 /**
- * Letterbox Level 1's entire visible surface: a restrained, near-
- * square grid of people, address-book style — not a social feed.
- * Avatar, pseudonym, a compact excerpt of the most recent VISIBLE
- * letter, its viewer-local date/time, and — only when genuinely
- * nonzero — an unread badge and/or an explicit "Mail on the way"
- * system-voice line (SystemMessage, app/system-message.tsx, quiet
- * variant) — kept visually distinct from the excerpt above it rather
- * than a tiny icon-only badge, per the system-voice/Mail-on-the-way
- * presentation checkpoint. A card is a preview/navigation surface, never a
- * excerpt is the letter's first paragraph (letterPreviewText,
- * lib/letters.ts), CSS-clamped to two lines on top of that — long and
- * short letters must produce approximately the same card height.
- * Ordering is whatever order `people` already arrives in
- * (getLetterboxPeople sorts newest-activity first) — grid flow alone
- * puts the newest person upper-left.
+ * Letterbox Level 1's entire visible surface: a responsive
+ * correspondence-CARD grid, address-book style — the PERSON is the
+ * primary object, never an individual message row. 3 cards per row on
+ * a large desktop, 2 on tablet, 1 on phone (Release Polish Pass —
+ * restores this grid after a prior pass had collapsed it into a
+ * single-column stack of horizontal rows, which read too much like a
+ * generic email inbox).
+ *
+ * Each card leads with the pseudonym at real visual weight, quiet
+ * country/age-range metadata beneath it, ONE subordinate serif excerpt
+ * line from the most recent VISIBLE letter (letterPreviewText,
+ * lib/letters.ts — first paragraph only, CSS-clamped to two lines on
+ * top of that so long and short letters produce approximately the same
+ * card height), and a single quiet status line
+ * (deriveLetterboxCardStatus) — deliberately plain text, not another
+ * filled bg-surface-shell strip, so the excerpt reads as a quiet
+ * aside rather than a Gmail-style preview strip. The corner unread
+ * badge and the independent "Mail on the way" line (SystemMessage,
+ * quiet variant) are unchanged from before. Ordering is whatever order
+ * `people` already arrives in (getLetterboxPeople sorts newest-
+ * activity first) — grid flow alone puts the newest person first.
  */
 export default function PeopleGrid({
   people,
@@ -79,45 +107,39 @@ export default function PeopleGrid({
     return <p className={helperTextClass}>{emptyStateCopy(filter, hasAnyPeopleAtAll)}</p>
   }
 
-  // Desktop layout preference (pre-beta UX polish batch 1) — a single
-  // stacked horizontal correspondence row, replacing the previous
-  // sm:grid-cols-2 lg:grid-cols-3 narrow-card grid. Each card is
-  // already an internally horizontal row (avatar + text); this just
-  // stops them from being squeezed three-across on a wide screen.
-  // Mobile is unaffected — it was already grid-cols-1.
   return (
-    <div className="grid grid-cols-1 gap-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {people.map((person) => (
         <Link
           key={person.userId}
           href={`/letters/with/${person.userId}`}
-          className="relative flex items-center gap-3 rounded-md border border-foreground/10 p-3 transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]"
+          className="relative flex flex-col gap-2.5 rounded-md border border-foreground/10 p-4 transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]"
         >
           <UnreadBadge count={person.unreadCount} />
-          <Mindform identifier={person.userId} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="truncate text-[14px] font-medium text-foreground">{person.pseudonym}</p>
-              <span className={`shrink-0 ${metadataTextClass}`}>
-                {formatDateTimeCompact(new Date(person.activityAt).toISOString())}
-              </span>
+
+          <div className="flex items-center gap-3">
+            <Mindform identifier={person.userId} size="lg" />
+            <div className="min-w-0">
+              <p className="truncate text-[17px] font-semibold text-foreground">{person.pseudonym}</p>
+              <p className={`truncate ${metadataTextClass}`}>
+                {[person.country, person.ageRange].filter(Boolean).join(' · ')}
+              </p>
             </div>
-            {person.latestExcerpt && (
-              <div className="mt-0.5 rounded bg-surface-shell p-2">
-                <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[13px] leading-snug text-foreground/70">
-                  <FormattedText
-                    text={letterPreviewText(person.latestExcerpt)}
-                    isRich={isRichBody(person.latestExcerpt)}
-                  />
-                </p>
-              </div>
-            )}
+          </div>
+
+          {person.latestExcerpt && (
+            <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[14px] italic leading-snug text-foreground/60">
+              <FormattedText text={letterPreviewText(person.latestExcerpt)} isRich={isRichBody(person.latestExcerpt)} />
+            </p>
+          )}
+
+          <div className="mt-auto space-y-1 pt-1">
+            <CardStatusLine person={person} />
             {mailInTransitPersonIds.has(person.userId) && (
               <SystemMessage
                 variant="quiet"
                 icon={<MailInTransitIcon className="h-3 w-3 text-foreground/50" />}
                 title="Mail on the way"
-                className="mt-1"
               />
             )}
           </div>

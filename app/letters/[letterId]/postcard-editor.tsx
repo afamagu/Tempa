@@ -5,7 +5,7 @@ import PostcardObject from '@/app/letters/postcard-object'
 import {
   helperTextClass,
   secondaryButtonClass,
-  destructiveButtonClass,
+  tertiaryButtonClass,
   primaryButtonClass,
   inputClass,
   sectionLabelClass,
@@ -16,6 +16,7 @@ import {
   POSTCARD_BACK_MESSAGE_MAX_LENGTH,
   type LetterPostcardDraft,
 } from '@/lib/moments'
+import { postcardEntryToBaseContent, type PostcardCatalogEntry } from '@/lib/postcards'
 
 /**
  * Letter-level Postcards V1 (2026-09-13) — the composer's own Postcard
@@ -49,6 +50,7 @@ import {
  */
 export default function PostcardEditor({
   draft,
+  catalogEntry,
   senderPseudonym,
   onChange,
   onChangePostcard,
@@ -57,6 +59,13 @@ export default function PostcardEditor({
   startOnBack,
 }: {
   draft: LetterPostcardDraft
+  /** Admin Phase 2A-2 — the live, active DB catalogue entry matching
+   * draft.postcardKey, resolved by the caller (moments-composer.tsx)
+   * from lib/postcards.ts's getActivePostcards. Null when the key is no
+   * longer in the active catalogue (e.g. deactivated mid-draft) — shown
+   * as the same honest "no longer available" message as an unknown key
+   * always has been. */
+  catalogEntry: PostcardCatalogEntry | null
   /** Pre-migration audit correction (2026-09-14) — the real sending
    * member's own pseudonym, shown as the Postcard's "— <name>"
    * signature (never the catalog's own fictional demo name). See
@@ -75,11 +84,13 @@ export default function PostcardEditor({
    * `initialShowingBack`. */
   startOnBack?: boolean
 }) {
-  const postcard = resolveLetterPostcardDisplay(draft.postcardKey, {
-    revealLine: draft.revealLine,
-    backMessage: draft.backMessage,
-    senderPseudonym,
-  })
+  const postcard = catalogEntry
+    ? resolveLetterPostcardDisplay(postcardEntryToBaseContent(catalogEntry), {
+        revealLine: draft.revealLine,
+        backMessage: draft.backMessage,
+        senderPseudonym,
+      })
+    : null
 
   // Production back-editing UX defect (2026-09-15) — this editor can now
   // be reopened from inside LetterPreview (its blocked-Send control, or
@@ -152,7 +163,12 @@ export default function PostcardEditor({
           <button type="button" onClick={onChangePostcard} className={secondaryButtonClass}>
             Change postcard
           </button>
-          <button type="button" onClick={onRemove} className={destructiveButtonClass}>
+          {/* Release Polish Pass — toned down from destructiveButtonClass
+              (red): removing an unsent Postcard DRAFT is fully
+              reversible (the sender can just re-attach one), so red is
+              reserved for genuinely destructive, consequential actions
+              elsewhere — this is tertiary, not alarming. */}
+          <button type="button" onClick={onRemove} className={tertiaryButtonClass}>
             Remove
           </button>
           <button type="button" onClick={onDone} className={`${primaryButtonClass} ml-auto`}>

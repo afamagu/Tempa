@@ -20,7 +20,6 @@ import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/li
 import { getHomeBoardDispatches, getFirstMomentThumbnails } from '@/lib/dispatches'
 import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
-import AnnouncementBody from '@/app/announcement-body'
 import { sectionLabelClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MailInTransitIcon from '@/app/mail-in-transit-icon'
@@ -30,6 +29,7 @@ import QuestionIncompleteNotice from '@/app/minds/question-incomplete-notice'
 import RecommendedMindCard, { type RecommendedMind } from './recommended-mind-card'
 import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
+import AnnouncementTeaser from './announcement-teaser'
 
 const RECOMMENDED_COUNT = 6
 
@@ -188,27 +188,16 @@ export default async function HomePage() {
         <div className="mx-auto w-full max-w-md py-10">
           {/* Premium Announcement Publishing checkpoint — a restrained
               editorial TEMPA object, not a system notice: 3:2 hero,
-              title, subtitle, structured body. No carousel, no
-              ad-banner styling, no giant CTA. Exactly one at a time
-              (getActiveAnnouncement's own deterministic ranking). */}
+              title, subtitle. No carousel, no ad-banner styling, no
+              giant CTA. Exactly one at a time (getActiveAnnouncement's
+              own deterministic ranking).
+              Release Polish Pass correction — Home shows a compact
+              TEASER only (eyebrow, hero, title, subtitle, a short
+              clamped excerpt, "Read announcement →"), never the full
+              body inline; the full editorial rendering (unchanged)
+              lives on its own /announcement page now. */}
           {activeAnnouncement && (
-            <div className="mb-8 space-y-3 border-b border-foreground/10 pb-8">
-              {announcementImageUrl && (
-                <div className="aspect-[3/2] w-full overflow-hidden rounded-md">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={announcementImageUrl} alt="" className="h-full w-full object-cover" />
-                </div>
-              )}
-              <div className="space-y-1">
-                <h2 className="font-serif text-2xl font-medium leading-tight text-foreground">
-                  {activeAnnouncement.title}
-                </h2>
-                {activeAnnouncement.subtitle && (
-                  <p className="font-serif italic text-foreground/70">{activeAnnouncement.subtitle}</p>
-                )}
-              </div>
-              <AnnouncementBody doc={activeAnnouncement.contentJson} />
-            </div>
+            <AnnouncementTeaser announcement={activeAnnouncement} imageUrl={announcementImageUrl} />
           )}
 
           <div className="space-y-6">

@@ -13,6 +13,13 @@
   --muted: #726a59; /* muted warm grey / taupe, for secondary text */
   --accent: #5b6b47; /* restrained moss / olive */
   --accent-foreground: #f7f2e7;
+  /* Release Polish Pass — the ONE restrained secondary accent family,
+     for informational/status states only (never a second "brand"
+     color): a muted warm clay/ochre tone, deliberately never bright
+     orange and never used where red (genuinely destructive) belongs.
+     Kept close in warmth/saturation to --accent so it reads as a
+     sibling of the palette, not an unrelated hue. */
+  --clay: #9c6b47;
   /* A quieter, slightly cooler neutral than --background, derived from
      it rather than picked as a new arbitrary color — used only as the
      correspondence workspace's outer surface (see the letter reader),
@@ -28,6 +35,7 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-clay: var(--clay);
   --color-surface-shell: var(--surface-shell);
   --font-sans: var(--font-geist-sans);
   --font-serif: var(--font-newsreader);

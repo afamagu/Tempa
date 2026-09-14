@@ -44,7 +44,11 @@ export default async function LettersPage() {
   return (
     <AppShell active="letters" waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center px-4 py-8 sm:px-8">
-        <div className="w-full max-w-4xl">
+        {/* Release Polish Pass — widened from max-w-4xl so the restored
+            3-column card grid has comfortable room at desktop widths
+            (a "collections/people" surface, per this pass's own
+            content-width guidance — wider than a reading measure). */}
+        <div className="w-full max-w-5xl">
           <h1 className={`mb-6 ${systemHeadingClass}`}>Letterbox</h1>
           <LetterboxSearch people={people} mailInTransitPersonIds={mailInTransitPersonIds} />
         </div>

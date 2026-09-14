@@ -152,7 +152,7 @@ describe('QuestionAnswer — view mode (already has a saved answer)', () => {
         questionId="q-1"
         prompt="A prompt"
         initialAnswer="My existing answer."
-        isPositionOne
+        isFlagship
       />
     )
     expect(html).not.toContain('Answer saved.')

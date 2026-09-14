@@ -46,7 +46,7 @@ export default async function QuestionWritePage({
       questionId={question.id}
       prompt={question.prompt}
       isActive={question.isActive}
-      isPositionOne={question.position === 1}
+      isFlagship={question.isFlagship}
       initialAnswer={answer?.body ?? null}
       nextQuestion={nextQuestion}
     />

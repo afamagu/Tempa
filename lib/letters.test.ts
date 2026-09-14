@@ -15,6 +15,8 @@ import {
   hasIncomingMailInTransit,
   incomingMailInTransitPersonIds,
   mapLetterPostcardRows,
+  letterPostcardToBaseContent,
+  deriveLetterboxCardStatus,
   type Letter,
   type LetterboxPerson,
   type IncomingMailInTransit,
@@ -466,6 +468,94 @@ describe('buildLetterboxPeople', () => {
 
     expect(result[0].hasSentAny).toBe(false)
   })
+
+  // Release Polish Pass — powers Letterbox's own "Waiting for a reply"
+  // status line.
+  it('lastLetterFromViewer: true when the most recent visible letter with this person was sent by the viewer', () => {
+    const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
+    const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a', senderId: VIEWER }]])
+
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+
+    expect(result[0].lastLetterFromViewer).toBe(true)
+  })
+
+  it('lastLetterFromViewer: false when the most recent visible letter with this person was sent by them', () => {
+    const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
+    const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a', senderId: ELVIS }]])
+
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+
+    expect(result[0].lastLetterFromViewer).toBe(false)
+  })
+
+  it('lastLetterFromViewer: reflects the MOST RECENT episode\'s sender, not an earlier one', () => {
+    const correspondences = [
+      { id: 'c-old', participant_low: ELVIS, participant_high: VIEWER },
+      { id: 'c-new', participant_low: ELVIS, participant_high: VIEWER },
+    ]
+    const latest = new Map([
+      ['c-old', { createdAt: '2026-01-01T00:00:00Z', body: 'old', senderId: VIEWER }],
+      ['c-new', { createdAt: '2026-08-01T00:00:00Z', body: 'new', senderId: ELVIS }],
+    ])
+
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+
+    expect(result[0].lastLetterFromViewer).toBe(false)
+  })
+
+  it('lastLetterFromViewer: false (never throws) when senderId is simply unknown', () => {
+    const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
+    const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }]])
+
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+
+    expect(result[0].lastLetterFromViewer).toBe(false)
+  })
+})
+
+// Release Polish Pass — Letterbox's responsive correspondence-card
+// status line: New letter / Waiting for a reply / Last exchanged
+// {date}, in that priority order. "Mail on the way" is deliberately
+// NOT one of this function's outputs — it's a separate, independent
+// fact the caller renders alongside whatever this returns (see the
+// function's own doc comment for why).
+describe('deriveLetterboxCardStatus', () => {
+  function person(overrides: Partial<LetterboxPerson> = {}): LetterboxPerson {
+    return {
+      userId: 'user-1',
+      pseudonym: 'Evening Quill',
+      country: 'South Africa',
+      ageRange: '25-34',
+      activityAt: new Date('2026-09-08T00:00:00Z').getTime(),
+      unreadCount: 0,
+      latestExcerpt: 'hi',
+      hasSentAny: false,
+      lastLetterFromViewer: false,
+      ...overrides,
+    }
+  }
+
+  it('an unread letter takes priority over "waiting for a reply"', () => {
+    expect(deriveLetterboxCardStatus(person({ unreadCount: 2, lastLetterFromViewer: true }))).toEqual({
+      kind: 'new',
+      count: 2,
+    })
+  })
+
+  it('"waiting for a reply" when the viewer sent the last letter and nothing is unread', () => {
+    expect(deriveLetterboxCardStatus(person({ lastLetterFromViewer: true }))).toEqual({
+      kind: 'waiting_for_reply',
+    })
+  })
+
+  it('falls back to "last exchanged" with the activity date otherwise', () => {
+    const activityAt = new Date('2026-09-08T00:00:00Z').getTime()
+    expect(deriveLetterboxCardStatus(person({ activityAt }))).toEqual({
+      kind: 'last_exchanged',
+      activityAt,
+    })
+  })
 })
 
 describe('filterLetterboxPeople', () => {
@@ -479,6 +569,7 @@ describe('filterLetterboxPeople', () => {
       unreadCount: 2,
       latestExcerpt: 'hi',
       hasSentAny: false,
+      lastLetterFromViewer: false,
     },
     {
       userId: 'has-sent',
@@ -489,6 +580,7 @@ describe('filterLetterboxPeople', () => {
       unreadCount: 0,
       latestExcerpt: 'hi',
       hasSentAny: true,
+      lastLetterFromViewer: false,
     },
     {
       userId: 'neither',
@@ -499,6 +591,7 @@ describe('filterLetterboxPeople', () => {
       unreadCount: 0,
       latestExcerpt: 'hi',
       hasSentAny: false,
+      lastLetterFromViewer: false,
     },
   ]
 
@@ -812,6 +905,11 @@ describe('mapLetterPostcardRows', () => {
   function versionRow(overrides: Partial<NonNullable<LetterPostcardRow['postcard_versions']>> = {}) {
     return {
       postcard_key: 'essaouira',
+      title: 'Essaouira',
+      location: 'Atlantic Morocco',
+      collection: 'Atlantic Morocco Collection',
+      postmark_text: 'ESSAOUIRA\nATLANTIC MOROCCO',
+      footer_text: 'Tempa Postcard · Atlantic Morocco Collection',
       front_image_path: '/postcards/essaouira.jpg',
       motion_src: '/postcards/essaouira-living.mp4',
       duration_seconds: 10.04,
@@ -839,12 +937,25 @@ describe('mapLetterPostcardRows', () => {
       backMessage: 'Made it here at last.',
       senderPseudonymSnapshot: 'Evening Quill',
       version: {
+        title: 'Essaouira',
+        location: 'Atlantic Morocco',
+        collection: 'Atlantic Morocco Collection',
+        postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+        footerText: 'Tempa Postcard · Atlantic Morocco Collection',
         frontImagePath: '/postcards/essaouira.jpg',
         motionSrc: '/postcards/essaouira-living.mp4',
         durationSeconds: 10.04,
         revealLineAlignment: null,
       },
     })
+  })
+
+  it('Admin Phase 2A-2 — carries the frozen title/location/collection/postmarkText/footerText through as the version object', () => {
+    const result = mapLetterPostcardRows([
+      postcardRow({ postcard_versions: versionRow({ title: 'A Later Edited Title', location: 'Somewhere Else' }) }),
+    ])
+    expect(result.get('letter-1')?.version.title).toBe('A Later Edited Title')
+    expect(result.get('letter-1')?.version.location).toBe('Somewhere Else')
   })
 
   it('a null reveal_line becomes an empty string, matching the draft shape convention', () => {
@@ -909,6 +1020,11 @@ describe('mapLetterPostcardRows', () => {
       }),
     ])
     expect(result.get('letter-1')?.version).toEqual({
+      title: 'Essaouira',
+      location: 'Atlantic Morocco',
+      collection: 'Atlantic Morocco Collection',
+      postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+      footerText: 'Tempa Postcard · Atlantic Morocco Collection',
       frontImagePath: '/postcards/essaouira-v2.jpg',
       motionSrc: '/postcards/essaouira-v2-living.mp4',
       durationSeconds: 8.2,
@@ -922,5 +1038,51 @@ describe('mapLetterPostcardRows', () => {
     ])
     expect(result.get('letter-1')?.version.motionSrc).toBeNull()
     expect(result.get('letter-1')?.version.durationSeconds).toBeNull()
+  })
+
+  // Admin Phase 2A-2 — letterPostcardToBaseContent is the delivered
+  // reader's own half of the "resolve base content, then merge sender
+  // overrides" split (lib/moments.ts's resolveLetterPostcardDisplay no
+  // longer does any lookup of its own).
+  describe('letterPostcardToBaseContent', () => {
+    it('carries every frozen presentation field straight through', () => {
+      const base = letterPostcardToBaseContent({
+        title: 'Essaouira',
+        location: 'Atlantic Morocco',
+        collection: 'Atlantic Morocco Collection',
+        postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+        footerText: 'Tempa Postcard · Atlantic Morocco Collection',
+        frontImagePath: '/postcards/essaouira.jpg',
+        motionSrc: '/postcards/essaouira-living.mp4',
+        durationSeconds: 10.04,
+        revealLineAlignment: 'top-center',
+      })
+      expect(base.title).toBe('Essaouira')
+      expect(base.location).toBe('Atlantic Morocco')
+      expect(base.collection).toBe('Atlantic Morocco Collection')
+      expect(base.postmarkText).toBe('ESSAOUIRA\nATLANTIC MOROCCO')
+      expect(base.footerText).toBe('Tempa Postcard · Atlantic Morocco Collection')
+      expect(base.frontImagePath).toBe('/postcards/essaouira.jpg')
+      expect(base.living).toEqual({
+        motionSrc: '/postcards/essaouira-living.mp4',
+        durationSeconds: 10.04,
+        revealLineAlignment: 'top-center',
+      })
+    })
+
+    it('a version with no motion asset produces no living block at all', () => {
+      const base = letterPostcardToBaseContent({
+        title: 'A Static Card',
+        location: 'Nowhere',
+        collection: 'A Collection',
+        postmarkText: 'STATIC',
+        footerText: 'Tempa Postcard',
+        frontImagePath: '/postcards/static.jpg',
+        motionSrc: null,
+        durationSeconds: null,
+        revealLineAlignment: null,
+      })
+      expect(base.living).toBeUndefined()
+    })
   })
 })

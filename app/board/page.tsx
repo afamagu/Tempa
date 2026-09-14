@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
@@ -10,11 +9,12 @@ import {
   sortBoardDispatches,
   getFirstMomentThumbnails,
 } from '@/lib/dispatches'
-import { sectionTitleClass, helperTextClass, primaryButtonClass } from '@/app/profile/ui'
+import { sectionTitleClass, helperTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import DispatchCard from './dispatch-card'
 import DispatchSearch from './dispatch-search'
 import KeepButton from './keep-button'
+import WriteDispatchButton from './write-dispatch-button'
 
 /**
  * The Board — a normal vertically scrolling discovery/list page, never
@@ -75,9 +75,7 @@ export default async function BoardPage({
               <h1 className={sectionTitleClass}>The Board</h1>
               <p className={helperTextClass}>Writing shared with everyone on Tempa.</p>
             </div>
-            <Link href="/board/write" className={primaryButtonClass}>
-              Write a Dispatch
-            </Link>
+            <WriteDispatchButton />
           </div>
 
           <DispatchSearch initialQuery={query} />

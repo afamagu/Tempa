@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { resolveLetterPostcardDisplay, type PostcardRevealLineAlignment } from '@/lib/moments'
+import { resolveLetterPostcardDisplay, type PostcardBaseContent } from '@/lib/moments'
 import PostcardObject from './postcard-object'
 import PostcardThumbnail from './postcard-thumbnail'
 
@@ -35,14 +35,23 @@ import PostcardThumbnail from './postcard-thumbnail'
  * member to exactly where they were in the letter.
  */
 export default function LetterheadPostcard({
-  postcardKey,
+  base,
   revealLine,
   backMessage,
   senderPseudonym,
-  version,
   onEditRequest,
 }: {
-  postcardKey: string
+  /** Admin Phase 2A-2 — the fully-resolved presentation content this
+   * Postcard renders, ALWAYS supplied by the caller, from wherever it
+   * actually came from: the live DB catalogue's current entry
+   * (lib/postcards.ts's postcardEntryToBaseContent — Preview's own
+   * draft-preview usage, nothing sent/frozen yet) or a delivered
+   * letter's own FROZEN version (lib/letters.ts's
+   * letterPostcardToBaseContent — the exact version that shipped with
+   * that letter, forever, independent of whatever the catalogue's
+   * current entry for the same key later becomes). This component no
+   * longer does any catalogue lookup of its own. */
+  base: PostcardBaseContent
   revealLine: string
   backMessage: string
   /** Pre-migration audit correction (2026-09-14) — the REAL sending
@@ -52,19 +61,6 @@ export default function LetterheadPostcard({
    * Omitting it falls back to the catalog's own demo sender name,
    * which a real caller should never actually do. */
   senderPseudonym?: string
-  /** Thumbnail + expanded-experience checkpoint (2026-09-14), Part 9 —
-   * the sending letter's own FROZEN asset identity (getLetterPostcardsForLetters,
-   * lib/letters.ts). When given, both the closed thumbnail and the open
-   * PostcardObject render this letter's exact shipped artwork, never
-   * whatever POSTCARD_CATALOG's current entry for the same key defines
-   * today. Omitted by Preview (nothing has been sent/frozen yet — the
-   * live draft correctly shows the CURRENT catalog entry instead). */
-  version?: {
-    frontImagePath: string
-    motionSrc: string | null
-    durationSeconds: number | null
-    revealLineAlignment: string | null
-  }
   /** Production back-editing UX defect (2026-09-15) — given ONLY by
    * LetterPreview's own compose-time usage of this slot, never by the
    * delivered reader. When present, tapping the thumbnail calls this
@@ -99,22 +95,10 @@ export default function LetterheadPostcard({
   // react-hooks/set-state-in-effect without changing this timing.
   const [hasRevealedThisSession, setHasRevealedThisSession] = useState(false)
 
-  const postcard = resolveLetterPostcardDisplay(postcardKey, {
+  const postcard = resolveLetterPostcardDisplay(base, {
     revealLine,
     backMessage,
     senderPseudonym,
-    version: version
-      ? {
-          frontImagePath: version.frontImagePath,
-          motionSrc: version.motionSrc,
-          durationSeconds: version.durationSeconds,
-          // DB-stored as plain text, constrained by the table's own
-          // CHECK to this exact set — cast here rather than re-validated,
-          // since the database already guarantees it (see
-          // LetterPostcardVersion's own doc comment, lib/letters.ts).
-          revealLineAlignment: version.revealLineAlignment as PostcardRevealLineAlignment | null,
-        }
-      : undefined,
   })
 
   // Same body-scroll-lock + Escape-to-close convention already
@@ -144,8 +128,6 @@ export default function LetterheadPostcard({
     if (!open) return
     queueMicrotask(() => setHasRevealedThisSession(true))
   }, [open])
-
-  if (!postcard) return null
 
   function handleOpen() {
     if (onEditRequest) {

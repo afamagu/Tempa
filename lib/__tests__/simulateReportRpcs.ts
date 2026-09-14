@@ -31,9 +31,13 @@ export type FakeQuestion = {
   is_active: boolean
   family?: string | null
   created_at?: string
-  /** Question Slots checkpoint — 1 (permanent flagship), 2, 3, or
-   * undefined/null for an unpositioned library Question. */
+  /** 1, 2, 3, or undefined/null for an unpositioned/historical
+   * Question. Slot number never implies Flagship — see is_flagship. */
   current_position?: 1 | 2 | 3 | null
+  /** Flagship Simplification correction — a SEPARATE bit of state from
+   * current_position; defaults to false when omitted. At most one
+   * Question may ever have this true, and only while positioned. */
+  is_flagship?: boolean
 }
 export type FakeQuestionAnswer = {
   id: string
@@ -104,6 +108,7 @@ export function createFakeReports(options: {
   for (const q of questions) if (q.family === undefined) q.family = null
   for (const q of questions) if (q.created_at === undefined) q.created_at = new Date().toISOString()
   for (const q of questions) if (q.current_position === undefined) q.current_position = null
+  for (const q of questions) if (q.is_flagship === undefined) q.is_flagship = false
 
   const reports: FakeReport[] = []
   const accountStatus = new Map<string, { status: string; reason: string | null; changed_by: string; changed_at: string }>()
@@ -620,6 +625,7 @@ export function createFakeReports(options: {
             prompt: q.prompt,
             is_active: q.is_active,
             current_position: q.current_position ?? null,
+            is_flagship: q.is_flagship ?? false,
             answer_count: questionAnswers.filter((qa) => qa.question_id === q.id).length,
             first_letter_count: 0,
             created_at: q.created_at ?? null,
@@ -656,15 +662,6 @@ export function createFakeReports(options: {
       if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
       const old = questions.find((q) => q.id === (params?.p_question_id as string))
       if (!old) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
-      // Question Slots checkpoint: flagship protection — Replace always
-      // deactivates (or would evict the position of) the old Question,
-      // which is exactly the casual mutation forbidden for #1.
-      if (old.current_position === 1) {
-        return {
-          data: null,
-          error: { message: 'Question #1 is the permanent flagship and cannot be replaced from here.', code: 'P0001' },
-        }
-      }
       const newPrompt = ((params?.p_new_prompt as string) ?? '').trim()
       if (newPrompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
       // Question source-of-truth correction, item 3: mirrors the OLD
@@ -677,17 +674,18 @@ export function createFakeReports(options: {
           ? oldActiveAtCallTime
           : Boolean(params?.p_new_active)
       const deactivateOld = params?.p_deactivate_old === undefined ? true : Boolean(params?.p_deactivate_old)
-      // Final Correction round, item 3: the slot is carried forward to
-      // the replacement only when the old row is being deactivated
-      // (freeing it) AND the replacement will itself be ACTIVE — a
-      // Question may only occupy #1/#2/#3 while active. Carrying the
-      // slot onto an explicitly-inactive replacement would violate
-      // questions_current_position_requires_active; the slot is simply
-      // left empty in that case instead.
+      // Final Correction round, item 3 (carried forward, position-
+      // agnostic now — Flagship Simplification correction): the slot
+      // AND Flagship status are carried forward to the replacement only
+      // when the old row is being deactivated (freeing it) AND the
+      // replacement will itself be ACTIVE — a Question may only occupy
+      // a slot (or be Flagship) while active.
       const carriedPosition = deactivateOld && newActive ? (old.current_position ?? null) : null
+      const carriedFlagship = deactivateOld && newActive ? (old.is_flagship ?? false) : false
       if (deactivateOld) {
         old.is_active = false
         old.current_position = null
+        old.is_flagship = false
       }
       const newId = `q-replaced-${questions.length + 1}`
       questions.push({
@@ -698,6 +696,7 @@ export function createFakeReports(options: {
         family: old.family ?? null,
         created_at: new Date().toISOString(),
         current_position: carriedPosition,
+        is_flagship: carriedFlagship,
       })
       auditLog.push({
         id: `audit-${auditLog.length + 1}`,
@@ -714,6 +713,7 @@ export function createFakeReports(options: {
           old_deactivated: deactivateOld,
           new_active: newActive,
           carried_position: carriedPosition,
+          carried_flagship: carriedFlagship,
         },
         created_at: new Date().toISOString(),
       })
@@ -742,21 +742,15 @@ export function createFakeReports(options: {
           },
         }
       }
-      // Question Slots checkpoint: flagship protection — #1 can never
-      // be casually deactivated from this control.
-      if (q.current_position === 1 && !active) {
-        return {
-          data: null,
-          error: {
-            message: 'Question #1 is the permanent flagship and cannot be deactivated from here.',
-            code: 'P0001',
-          },
-        }
-      }
       const vacatedPosition = active ? null : (q.current_position ?? null)
       q.is_active = active
-      // Deactivating always vacates the slot in the same step.
-      if (!active) q.current_position = null
+      // Deactivating always vacates the slot, and clears Flagship (if
+      // held), in the same step — nothing about slot #1 is special
+      // anymore (Flagship Simplification correction).
+      if (!active) {
+        q.current_position = null
+        q.is_flagship = false
+      }
       auditLog.push({
         id: `audit-${auditLog.length + 1}`,
         actor_id: viewerId,
@@ -784,14 +778,6 @@ export function createFakeReports(options: {
       const currentPosition = q.current_position ?? null
       const targetPosition = position ?? null
 
-      // Flagship protection, direction 1: #1 cannot be moved away.
-      if (currentPosition === 1 && targetPosition !== 1) {
-        return {
-          data: null,
-          error: { message: 'Question #1 is the permanent flagship and cannot be moved or unassigned from here.', code: 'P0001' },
-        }
-      }
-
       if (targetPosition !== null && !q.is_active) {
         return { data: null, error: { message: 'Only an active Question may be assigned a current position.', code: 'P0001' } }
       }
@@ -800,21 +786,21 @@ export function createFakeReports(options: {
         if (currentPosition === null) {
           return { data: null, error: { message: 'This Question does not currently hold a position.', code: 'P0001' } }
         }
+        // Unpinning clears Flagship too, if held — nothing about slot
+        // #1 is special anymore (Flagship Simplification correction).
         q.current_position = null
+        q.is_flagship = false
       } else {
         if (currentPosition === targetPosition) {
           return { data: null, error: { message: 'This Question already holds that position.', code: 'P0001' } }
         }
         const occupant = questions.find((other) => other.current_position === targetPosition)
-        // Flagship protection, direction 2: a different Question
-        // already holding #1 can never be silently evicted.
-        if (occupant && targetPosition === 1) {
-          return {
-            data: null,
-            error: { message: 'Question #1 is the permanent flagship and cannot be evicted from here.', code: 'P0001' },
-          }
+        // Any occupied slot is simply vacated first — clearing the
+        // occupant's Flagship status too, if it held one.
+        if (occupant) {
+          occupant.current_position = null
+          occupant.is_flagship = false
         }
-        if (occupant) occupant.current_position = null
         q.current_position = targetPosition
       }
 
@@ -831,6 +817,144 @@ export function createFakeReports(options: {
         created_at: new Date().toISOString(),
       })
       return { data: null, error: null }
+    }
+
+    // Flagship Simplification correction — the three new, simple Admin
+    // primitives the simplified UI actually calls.
+
+    if (fn === 'admin_set_question_flagship') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const q = questions.find((q) => q.id === (params?.p_question_id as string))
+      if (!q) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      if (q.current_position == null) {
+        return { data: null, error: { message: 'Only a current Question may be made Flagship.', code: 'P0001' } }
+      }
+      if (q.is_flagship) {
+        return { data: null, error: { message: 'This Question is already Flagship.', code: 'P0001' } }
+      }
+      const previousFlagship = questions.find((other) => other.is_flagship)
+      if (previousFlagship) previousFlagship.is_flagship = false
+      q.is_flagship = true
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_flagship_changed',
+        target_type: 'question',
+        target_id: q.id,
+        target_identifier_snapshot: q.prompt,
+        reason: null,
+        metadata: { previous_flagship_id: previousFlagship?.id ?? null, new_flagship_id: q.id },
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    if (fn === 'admin_edit_current_question') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const old = questions.find((q) => q.id === (params?.p_question_id as string))
+      if (!old) return { data: null, error: { message: 'Question not found.', code: 'P0001' } }
+      if (old.current_position == null) {
+        return { data: null, error: { message: 'Only a current Question can be edited from here.', code: 'P0001' } }
+      }
+      const newPrompt = ((params?.p_new_prompt as string) ?? '').trim()
+      if (newPrompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
+
+      const answerCount = questionAnswers.filter((qa) => qa.question_id === old.id).length
+
+      if (answerCount === 0) {
+        old.prompt = newPrompt
+        auditLog.push({
+          id: `audit-${auditLog.length + 1}`,
+          actor_id: viewerId,
+          actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+          action: 'question_edited',
+          target_type: 'question',
+          target_id: old.id,
+          target_identifier_snapshot: newPrompt,
+          reason: null,
+          metadata: { position: old.current_position },
+          created_at: new Date().toISOString(),
+        })
+        return { data: old.id, error: null }
+      }
+
+      const carriedPosition = old.current_position
+      const carriedFlagship = old.is_flagship ?? false
+      old.is_active = false
+      old.current_position = null
+      old.is_flagship = false
+
+      const newId = `q-edited-${questions.length + 1}`
+      questions.push({
+        id: newId,
+        slug: null,
+        prompt: newPrompt,
+        is_active: true,
+        family: old.family ?? null,
+        created_at: new Date().toISOString(),
+        current_position: carriedPosition,
+        is_flagship: carriedFlagship,
+      })
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_replaced',
+        target_type: 'question',
+        target_id: newId,
+        target_identifier_snapshot: newPrompt,
+        reason: null,
+        metadata: {
+          replaced_question_id: old.id,
+          replaced_prompt: old.prompt,
+          position: carriedPosition,
+          carried_flagship: carriedFlagship,
+        },
+        created_at: new Date().toISOString(),
+      })
+      return { data: newId, error: null }
+    }
+
+    if (fn === 'admin_add_current_question') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const position = params?.p_position as 1 | 2 | 3 | null | undefined
+      if (position == null || ![1, 2, 3].includes(position)) {
+        return { data: null, error: { message: 'Position must be 1, 2, or 3.', code: 'P0001' } }
+      }
+      if (questions.some((q) => q.current_position === position)) {
+        return { data: null, error: { message: 'That slot is already occupied.', code: 'P0001' } }
+      }
+      const prompt = ((params?.p_prompt as string) ?? '').trim()
+      if (prompt.length === 0) return { data: null, error: { message: 'A prompt is required.', code: 'P0001' } }
+
+      const newId = `q-added-${questions.length + 1}`
+      questions.push({
+        id: newId,
+        slug: null,
+        prompt,
+        is_active: true,
+        family: null,
+        created_at: new Date().toISOString(),
+        current_position: position,
+        is_flagship: false,
+      })
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: 'question_added',
+        target_type: 'question',
+        target_id: newId,
+        target_identifier_snapshot: prompt,
+        reason: null,
+        metadata: { position },
+        created_at: new Date().toISOString(),
+      })
+      return { data: newId, error: null }
     }
 
     if (fn === 'admin_update_question_prompt') {

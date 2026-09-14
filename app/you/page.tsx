@@ -56,6 +56,13 @@ export default async function YouPage() {
           </Link>
 
           <Link
+            href="/you/keepsakes"
+            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
+          >
+            Keepsakes
+          </Link>
+
+          <Link
             href="/you/guide"
             className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
           >

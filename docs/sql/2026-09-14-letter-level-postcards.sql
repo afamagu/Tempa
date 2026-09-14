@@ -1,8 +1,16 @@
 -- ============================================================
 -- TEMPA — LETTER-LEVEL POSTCARDS V1
 -- PREPARED 2026-09-14. FINAL PRE-MIGRATION ARCHITECTURE CORRECTION —
--- this REPLACES every earlier same-day draft in full (none was ever
--- applied). NOT EXECUTED — review, then run in the Supabase SQL editor.
+-- this REPLACED every earlier same-day draft in full.
+-- STATUS: APPLIED LIVE AND VERIFIED. Post-migration verification
+-- passed in full (postcard_catalog/postcard_versions/letter_postcards
+-- live, both seeded catalog cards, immutable Version 1 rows,
+-- one-current-version enforcement, required RLS/policies/grants, and
+-- the Postcard-aware write_letter/reply_to_letter path); a real
+-- production letter-level Postcard has been sent successfully. Do not
+-- reapply this file, recreate its tables, or duplicate its functions —
+-- see docs/sql/2026-09-21-postcard-admin-and-keepsakes.sql for the
+-- additive follow-up migration built on top of this one.
 --
 -- REVISED 2026-09-14 (thumbnail + expanded-experience checkpoint):
 -- comment-only cleanup — a previously-discussed landscape-master

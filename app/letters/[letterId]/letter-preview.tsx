@@ -5,6 +5,7 @@ import { sectionLabelClass, metadataTextClass, helperTextClass, primaryButtonCla
 import LetterBody from './letter-body'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import type { Moment, LetterPostcardDraft } from '@/lib/moments'
+import { postcardEntryToBaseContent, type PostcardCatalogEntry } from '@/lib/postcards'
 
 /**
  * WRITE → PREVIEW → SEND, Checkpoint (2026-09-08) — a deliberate, full
@@ -43,6 +44,7 @@ export default function LetterPreview({
   body,
   moments,
   postcard,
+  postcardCatalogEntry,
   senderPseudonym,
   recipientPseudonym,
   onClose,
@@ -63,6 +65,12 @@ export default function LetterPreview({
    * and renders inline through LetterBody exactly as before — the two
    * are independent and both remain supported. */
   postcard: LetterPostcardDraft | null
+  /** Admin Phase 2A-2 — the live, active DB catalogue entry matching
+   * postcard.postcardKey, resolved by the caller (moments-composer.tsx)
+   * from lib/postcards.ts's getActivePostcards. Null (with a non-null
+   * postcard) means the key is no longer active — the Postcard slot
+   * simply doesn't render rather than showing stale/fabricated content. */
+  postcardCatalogEntry: PostcardCatalogEntry | null
   /** Pre-migration audit correction (2026-09-14) — the real sending
    * member's own pseudonym, shown on the attached Postcard's back
    * (never the catalog's fictional demo name). Unused when `postcard`
@@ -123,9 +131,9 @@ export default function LetterPreview({
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto w-full max-w-xl space-y-3">
           <p className={metadataTextClass}>To {recipientPseudonym}</p>
-          {postcard && (
+          {postcard && postcardCatalogEntry && (
             <LetterheadPostcard
-              postcardKey={postcard.postcardKey}
+              base={postcardEntryToBaseContent(postcardCatalogEntry)}
               revealLine={postcard.revealLine}
               backMessage={postcard.backMessage}
               senderPseudonym={senderPseudonym}

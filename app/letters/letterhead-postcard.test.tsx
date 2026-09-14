@@ -3,14 +3,24 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import LetterheadPostcard from './letterhead-postcard'
-import { POSTCARD_CATALOG } from '@/lib/moments'
+import type { PostcardBaseContent } from '@/lib/moments'
 
 const SOURCE_PATH = path.join(__dirname, 'letterhead-postcard.tsx')
 const source = readFileSync(SOURCE_PATH, 'utf8')
 
+const ESSAOUIRA_BASE: PostcardBaseContent = {
+  title: 'Essaouira',
+  location: 'Atlantic Morocco',
+  collection: 'Atlantic Morocco Collection',
+  frontImagePath: '/postcards/essaouira.jpg',
+  postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+  footerText: 'Tempa Postcard · Atlantic Morocco Collection',
+  living: { motionSrc: '/postcards/essaouira-living.mp4', durationSeconds: 10.04 },
+}
+
 function render(overrides: Partial<Parameters<typeof LetterheadPostcard>[0]> = {}) {
   return renderToStaticMarkup(
-    <LetterheadPostcard postcardKey="essaouira" revealLine="" backMessage="" {...overrides} />
+    <LetterheadPostcard base={ESSAOUIRA_BASE} revealLine="" backMessage="" {...overrides} />
   )
 }
 
@@ -25,11 +35,16 @@ function render(overrides: Partial<Parameters<typeof LetterheadPostcard>[0]> = {
  * per this codebase's established convention for click/effect-driven
  * state elsewhere, e.g. postcard-object.test.tsx's own "H. reduced
  * motion" and moments-composer.test.tsx's own source-level checks).
+ *
+ * Admin Phase 2A-2 — this component now takes a fully-resolved `base`
+ * (PostcardBaseContent) rather than a `postcardKey` it looked up itself;
+ * these tests supply that base directly rather than relying on the
+ * legacy static POSTCARD_CATALOG.
  */
 describe('LetterheadPostcard — A/B. closed state is a compact, still-only, portrait thumbnail', () => {
   it('A. renders the still front image only — no <video>, no Living Reveal machinery, on first render', () => {
     const html = render()
-    expect(html).toContain(POSTCARD_CATALOG.essaouira.frontImagePath)
+    expect(html).toContain(ESSAOUIRA_BASE.frontImagePath)
     expect(html).not.toContain('<video')
     expect(html).not.toMatch(/aria-label="Play the Living Reveal again"/)
   })
@@ -118,8 +133,7 @@ describe('LetterheadPostcard — A/B. same-session first-open state (repeated-au
 
   it('B. is flipped true only via an effect keyed on `open`, deferred through queueMicrotask (the established pattern for satisfying react-hooks/set-state-in-effect without changing this timing) — so only the NEXT open (a fresh mount) reads true and skips autoplay', () => {
     expect(source).toContain('queueMicrotask(() => setHasRevealedThisSession(true))')
-    const effectIndex = source.lastIndexOf('useEffect(() => {\n    if (!open) return\n    queueMicrotask')
-    expect(effectIndex).toBeGreaterThan(-1)
+    expect(source).toMatch(/useEffect\(\(\) => \{\s*if \(!open\) return\s*queueMicrotask/)
   })
 
   it('the live value (not a hardcoded false/true) is forwarded to PostcardObject, so Replay/autoplay both stay reachable rather than one being permanently disabled', () => {
@@ -129,7 +143,8 @@ describe('LetterheadPostcard — A/B. same-session first-open state (repeated-au
 
 describe('LetterheadPostcard — H. the sender-written Reveal Line reaches the expanded PostcardObject', () => {
   it('revealLine is forwarded into resolveLetterPostcardDisplay, whose result is the exact postcard the open overlay renders', () => {
-    expect(source).toContain('resolveLetterPostcardDisplay(postcardKey, {\n    revealLine,')
+    expect(source).toContain('resolveLetterPostcardDisplay(base, {')
+    expect(source).toMatch(/resolveLetterPostcardDisplay\(base, \{\s*revealLine,/)
     expect(source).toContain('<PostcardObject postcard={postcard} hasRevealedBefore={hasRevealedThisSession} />')
   })
 
@@ -248,34 +263,27 @@ describe('LetterheadPostcard — senderPseudonym forwarding (pre-migration audit
   })
 })
 
-describe('LetterheadPostcard — version-aware rendering (Part 9)', () => {
-  it('L/M. the closed thumbnail uses the frozen version\'s own front image when given, never the catalog\'s current one', () => {
-    const html = render({
-      version: {
-        frontImagePath: '/postcards/essaouira-v2.jpg',
-        motionSrc: '/postcards/essaouira-v2-living.mp4',
-        durationSeconds: 8.2,
-        revealLineAlignment: null,
-      },
-    })
+describe('LetterheadPostcard — Admin Phase 2A-2: base content comes entirely from the caller, never a catalogue lookup here', () => {
+  it('a delivered letter\'s own frozen base (a different key/title/artwork than any static catalog entry) renders exactly as given', () => {
+    const frozenBase: PostcardBaseContent = {
+      title: 'A Brand New Postcard Never In Any Static List',
+      location: 'Somewhere New',
+      collection: 'A New Collection',
+      frontImagePath: '/postcards/essaouira-v2.jpg',
+      postmarkText: 'NEW',
+      footerText: 'Tempa Postcard',
+      living: { motionSrc: '/postcards/essaouira-v2-living.mp4', durationSeconds: 8.2 },
+    }
+    const html = render({ base: frozenBase })
     expect(html).toContain('/postcards/essaouira-v2.jpg')
-    expect(html).not.toContain(POSTCARD_CATALOG.essaouira.frontImagePath)
   })
 
-  it('omitting version falls back to the catalog\'s current entry (Preview\'s own draft-preview usage, unaffected)', () => {
-    const html = render()
-    expect(html).toContain(POSTCARD_CATALOG.essaouira.frontImagePath)
+  it('this file performs no catalogue lookup of its own — no POSTCARD_CATALOG import anywhere', () => {
+    expect(source).not.toContain('POSTCARD_CATALOG')
   })
 
-  it('forwards version straight through to resolveLetterPostcardDisplay, never re-deriving asset paths itself', () => {
-    expect(source).toContain('version: version')
-  })
-})
-
-describe('LetterheadPostcard — an unknown/invalid postcardKey renders nothing rather than crashing', () => {
-  it('returns null for an unrecognized key', () => {
-    const html = render({ postcardKey: 'not-a-real-key' })
-    expect(html).toBe('')
+  it('forwards base straight through to resolveLetterPostcardDisplay, never re-deriving presentation fields itself', () => {
+    expect(source).toContain('resolveLetterPostcardDisplay(base, {')
   })
 })
 

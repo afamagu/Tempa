@@ -82,10 +82,13 @@ export async function getEligibleQuestions(
 }
 
 /**
- * The Question currently holding position #1 (the permanent flagship),
- * or null if no Question is currently assigned there. This is the
- * single source of truth for "which Question defines a member's
- * primary Minds identity" — see getPrimaryAnswer below.
+ * The current Flagship Question, or null if none is currently
+ * assigned. Flagship Simplification correction — Flagship is a
+ * separate, admin-chosen bit of state (questions.is_flagship), never
+ * tied to any particular slot number; it is NOT permanently position
+ * #1 (that was the prior, over-engineered model). This is the single
+ * source of truth for "which Question defines a member's primary
+ * Minds identity" — see getPrimaryAnswer below.
  */
 export async function getFlagshipQuestion(
   supabase: SupabaseClient
@@ -93,7 +96,7 @@ export async function getFlagshipQuestion(
   const { data } = await supabase
     .from('questions')
     .select('id, prompt')
-    .eq('current_position', 1)
+    .eq('is_flagship', true)
     .maybeSingle()
   return data ? { id: data.id, prompt: data.prompt } : null
 }
@@ -107,15 +110,17 @@ export type PrimaryAnswer = {
 }
 
 /**
- * Question Slots checkpoint (Section A4) — the member's PRIMARY
- * identity answer, for Minds cards/previews and the Profile default.
- * Deliberately NEVER falls back to #2/#3, and deliberately does NOT
- * read `is_current` at all: is_current is member-choosable and could
- * point at any answer, but "primary" is no longer a member choice —
- * it is always and only the answer to whichever Question currently
- * holds position #1. A member who hasn't answered #1 yet (or whose #1
- * answer is currently hidden by moderation) has no primary answer at
- * all — never a silent substitute from another Question.
+ * The member's PRIMARY identity answer, for Minds cards/previews and
+ * the Profile default. Deliberately NEVER falls back to another
+ * current Question, and deliberately does NOT read `is_current` at
+ * all: is_current is member-choosable and could point at any answer,
+ * but "primary" is no longer a member choice — it is always and only
+ * the answer to whichever Question is currently Flagship (dynamic,
+ * admin-chosen, never permanently tied to a slot — see
+ * getFlagshipQuestion above). A member who hasn't answered the current
+ * Flagship yet (or whose Flagship answer is currently hidden by
+ * moderation) has no primary answer at all — never a silent substitute
+ * from another current Question.
  */
 export async function getPrimaryAnswer(
   supabase: SupabaseClient,
@@ -145,8 +150,9 @@ export type MyQuestionAnswer = {
   body: string
   updatedAt: string
   isCurrent: boolean
-  /** Question Slots checkpoint — true exactly when this answer's
-   * Question currently holds position #1. This is the one true
+  /** True exactly when this answer's Question is the current Flagship
+   * (questions.is_flagship — a separate, admin-chosen bit of state,
+   * never tied to a particular slot number). This is the one true
    * "primary identity answer" flag now; `isCurrent` is retained
    * unchanged (member-choosable, still governs nothing about primary
    * identity — see this file's own header discussion) purely for
@@ -163,14 +169,13 @@ export type MyQuestionAnswer = {
 
 /**
  * Pure: pairs a member's raw question_answers rows with the prompt of
- * the Question each belongs to (and whether that Question currently
- * holds position #1). A member's answer to ANY Question in the
- * library is real, historical content of theirs and is always
- * included here, regardless of whether that Question is still active,
- * still positioned, or was ever "canonical." The only row ever dropped
- * is one whose parent Question can't be resolved at all — which in
- * practice never happens, since a Question is never hard-deleted while
- * it still has answers.
+ * the Question each belongs to (and whether that Question is currently
+ * Flagship). A member's answer to ANY Question in the library is real,
+ * historical content of theirs and is always included here, regardless
+ * of whether that Question is still active, still positioned, or was
+ * ever "canonical." The only row ever dropped is one whose parent
+ * Question can't be resolved at all — which in practice never happens,
+ * since a Question is never hard-deleted while it still has answers.
  */
 export function buildMyAnswers(
   answerRows: {
@@ -181,7 +186,7 @@ export function buildMyAnswers(
     is_current: boolean
     moderation_status: 'visible' | 'hidden'
   }[],
-  questionsById: Map<string, { prompt: string; current_position: number | null }>
+  questionsById: Map<string, { prompt: string; is_flagship: boolean }>
 ): MyQuestionAnswer[] {
   return answerRows
     .filter((row) => questionsById.has(row.question_id))
@@ -194,7 +199,7 @@ export function buildMyAnswers(
         body: row.body,
         updatedAt: row.updated_at,
         isCurrent: row.is_current,
-        isPrimary: question.current_position === 1,
+        isPrimary: question.is_flagship,
         moderationStatus: row.moderation_status,
       }
     })
@@ -220,11 +225,11 @@ export async function getMyAnswers(
   const questionIds = [...new Set(answerRows.map((r) => r.question_id))]
   const { data: questionRows } = await supabase
     .from('questions')
-    .select('id, prompt, current_position')
+    .select('id, prompt, is_flagship')
     .in('id', questionIds)
 
   const questionsById = new Map(
-    (questionRows ?? []).map((q) => [q.id, { prompt: q.prompt, current_position: q.current_position }])
+    (questionRows ?? []).map((q) => [q.id, { prompt: q.prompt, is_flagship: q.is_flagship }])
   )
   return buildMyAnswers(answerRows, questionsById)
 }
@@ -262,33 +267,40 @@ export function needsParticipationGate(
 }
 
 /**
- * Pure: the save-confirmation copy for a Question answer. Question
- * Slots checkpoint — no longer reads `is_current`/`wasCurrent` at all:
- * the ONLY save that is ever announced as "now your primary Minds
- * answer" is a member's very FIRST save of an answer to whichever
- * Question currently holds position #1 (isPositionOne). Every other
- * save — including a first answer to #2/#3, and every edit of an
- * already-answered #1 — gets the plain copy. This keeps the message
- * truthful under the new model: is_current can still silently flip
- * server-side (publish_question_answer's own unchanged promotion
+ * Pure: the save-confirmation copy for a Question answer. Does not
+ * read `is_current`/`wasCurrent` at all: the ONLY save that is ever
+ * announced as "now your primary Minds answer" is a member's very
+ * FIRST save of an answer to whichever Question is currently Flagship
+ * (isFlagship — a separate, admin-chosen bit of state, never
+ * permanently tied to a slot). Every other save — including a first
+ * answer to a non-Flagship current Question, and every edit of an
+ * already-answered Flagship Question — gets the plain copy. This keeps
+ * the message truthful under the model: is_current can still silently
+ * flip server-side (publish_question_answer's own unchanged promotion
  * rule), but that is no longer what makes an answer "featured," so it
  * is no longer what this copy announces.
  */
-export function questionSaveConfirmationCopy(isPositionOne: boolean, hadExistingAnswer: boolean): string {
-  if (isPositionOne && !hadExistingAnswer) return 'Saved. This is now your primary Minds answer.'
+export function questionSaveConfirmationCopy(isFlagship: boolean, hadExistingAnswer: boolean): string {
+  if (isFlagship && !hadExistingAnswer) return 'Saved. This is now your primary Minds answer.'
   return 'Answer saved.'
 }
 
 export async function getQuestionById(
   supabase: SupabaseClient,
   questionId: string
-): Promise<(ActiveQuestion & { isActive: boolean; position: QuestionPosition | null }) | null> {
+): Promise<(ActiveQuestion & { isActive: boolean; position: QuestionPosition | null; isFlagship: boolean }) | null> {
   const { data } = await supabase
     .from('questions')
-    .select('id, prompt, is_active, current_position')
+    .select('id, prompt, is_active, current_position, is_flagship')
     .eq('id', questionId)
     .maybeSingle()
 
   if (!data) return null
-  return { id: data.id, prompt: data.prompt, isActive: data.is_active, position: data.current_position }
+  return {
+    id: data.id,
+    prompt: data.prompt,
+    isActive: data.is_active,
+    position: data.current_position,
+    isFlagship: data.is_flagship,
+  }
 }

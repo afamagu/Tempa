@@ -8,6 +8,7 @@ import {
   POSTCARD_BACK_PLACEHOLDER,
   resolveLetterPostcardDisplay,
   type PostcardData,
+  type PostcardBaseContent,
 } from '@/lib/moments'
 
 // TEMPA Living Postcards V1, Checkpoint 1 — PostcardObject is the
@@ -650,7 +651,16 @@ describe('PostcardObject — editableBack (live UX repair, 2026-09-14)', () => {
   // this proves the empty string it now returns renders as genuinely
   // empty, not as some other fallback text.
   it('a read-only render of a still-blank NEW letter-level Postcard shows no message text — not catalog prose, not the placeholder', () => {
-    const blankPostcard = resolveLetterPostcardDisplay('essaouira', { revealLine: '', backMessage: '' })!
+    const essaouiraBase: PostcardBaseContent = {
+      title: ESSAOUIRA.title,
+      location: ESSAOUIRA.location,
+      collection: ESSAOUIRA.collection,
+      frontImagePath: ESSAOUIRA.frontImagePath,
+      postmarkText: ESSAOUIRA.postmarkText ?? '',
+      footerText: ESSAOUIRA.footerText ?? '',
+      living: ESSAOUIRA.living,
+    }
+    const blankPostcard = resolveLetterPostcardDisplay(essaouiraBase, { revealLine: '', backMessage: '' })
     const html = renderToStaticMarkup(<PostcardObject postcard={blankPostcard} />)
     expect(html).not.toContain(POSTCARD_BACK_PLACEHOLDER)
     expect(html).not.toContain(POSTCARD_CATALOG.essaouira.backMessage.split('\n\n')[0])

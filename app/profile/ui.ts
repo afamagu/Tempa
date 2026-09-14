@@ -38,6 +38,15 @@ export const primaryButtonClass =
 export const secondaryButtonClass =
   'inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]'
 
+// Release Polish Pass — the fourth rung of the button hierarchy
+// (primary / secondary / tertiary / destructive): no border, no fill,
+// quieter than secondaryButtonClass. For a reversible, low-stakes
+// action that shouldn't visually compete with — or be mistaken for —
+// a genuinely destructive one (e.g. removing an unsent Postcard draft,
+// which the sender can simply re-attach).
+export const tertiaryButtonClass =
+  'inline-flex items-center justify-center rounded-md px-4 py-2.5 text-[15px] font-medium text-foreground/60 transition-colors hover:bg-foreground/[.05] hover:text-foreground'
+
 // A quiet text action — for a link-weight action that shouldn't compete
 // visually with a bordered or filled button (e.g. "Read the complete
 // answer").

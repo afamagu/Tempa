@@ -144,13 +144,16 @@ export default async function MindsPage({
     )
   }
 
-  // Question Slots checkpoint (Section A4) — Discovery's pool is now
-  // strictly "answers to the current flagship Question (#1)," never
-  // is_current (member-choosable, and no longer what determines Minds
-  // eligibility at all). A member who hasn't answered #1 — even if
-  // they have a perfectly good #2/#3 answer, even if is_current
-  // happens to point elsewhere — is simply not in this pool. No
-  // fallback, ever.
+  // Discovery's pool is strictly "answers to the current Flagship
+  // Question," never is_current (member-choosable, and no longer what
+  // determines Minds eligibility at all). Flagship is a separate,
+  // admin-chosen bit of state (questions.is_flagship) — NEVER
+  // permanently tied to slot #1 or any other particular slot number
+  // (getFlagshipQuestion resolves it directly; this file never reads
+  // current_position to find it). A member who hasn't answered the
+  // current Flagship — even if they have a perfectly good answer to
+  // another current Question, even if is_current happens to point
+  // elsewhere — is simply not in this pool. No fallback, ever.
   const flagship = await getFlagshipQuestion(supabase)
 
   const [{ data: answers }, excludedPartnerIds, contactedAnswerIds] = await Promise.all([

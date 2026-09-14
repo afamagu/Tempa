@@ -139,9 +139,20 @@ export type PostcardData = {
   living?: PostcardLivingReveal
 }
 
-// Exactly one postcard exists in this version — the architecture
-// (postcard_key column, this catalog shape) generalizes to a future
-// catalog, but no store/economy is built now.
+// Admin Phase 2A-2 — LEGACY ONLY. This static catalog is no longer the
+// authoritative source for NEW letter-level Postcard sending; that role
+// now belongs entirely to the DB-backed catalogue (lib/postcards.ts's
+// getActivePostcards, reading public.postcard_catalog/postcard_versions
+// live). POSTCARD_CATALOG remains exclusively for resolving a
+// HISTORICAL inline `moments.type = 'postcard'` row
+// (postcard-moment-node.tsx/MomentDisplay) — a separate, untouched
+// legacy feature that predates letter-level Postcards and was never
+// migrated to the DB catalogue (it has no versioning/freezing need of
+// its own: a historical Moment postcard has always resolved its
+// artwork from this exact object, unchanged, for as long as it's
+// existed). Do not add a NEW Postcard here to make it available for
+// letter-level sending — that only ever happens through Admin
+// (lib/admin-postcards.ts), never a code change.
 export const POSTCARD_CATALOG: Record<string, PostcardData> = {
   essaouira: {
     title: 'Essaouira',
@@ -260,117 +271,91 @@ export const POSTCARD_BACK_MESSAGE_MAX_LENGTH = 200
 export const POSTCARD_BACK_PLACEHOLDER = 'Write something for them…'
 
 /**
+ * Admin Phase 2A-2 — the closed set of presentation fields a NEW
+ * letter-level Postcard actually renders, independent of WHERE they
+ * came from: either the live DB catalogue's current entry
+ * (lib/postcards.ts's postcardEntryToBaseContent — composer/Preview's
+ * own draft-preview usage, nothing sent/frozen yet) or a delivered
+ * letter's own FROZEN postcard_versions row
+ * (lib/letters.ts's letterPostcardToBaseContent — the exact version
+ * that shipped with that letter, forever). resolveLetterPostcardDisplay
+ * below no longer looks anything up itself — the caller always
+ * resolves this first, so the function has no notion of "unknown key"
+ * at all; that question is answered upstream, once, by whichever
+ * lookup actually has a real catalogue/version row to offer.
+ */
+export type PostcardBaseContent = {
+  title: string
+  location: string
+  collection: string
+  frontImagePath: string
+  postmarkText: string
+  footerText: string
+  living?: PostcardLivingReveal
+}
+
+/**
  * The ONE place a letter-level Postcard's sender-provided fields are
- * merged onto its catalog entry for DISPLAY — used identically by the
- * composer's own live editor preview (postcard-editor.tsx) and the
- * read-only letterhead slot shared by Preview and the delivered reader
- * (app/letters/letterhead-postcard.tsx), so a Postcard never looks
- * different depending on which surface is showing it. Never mutates
- * POSTCARD_CATALOG itself. Returns null for an unknown/invalid
- * postcardKey (mirrors every other `POSTCARD_CATALOG[key]` lookup in
- * this codebase, e.g. postcard-moment-node.tsx) so a caller can render
- * an honest "unavailable" state rather than crash on bad data.
+ * merged onto its resolved base content for DISPLAY — used identically
+ * by the composer's own live editor preview (postcard-editor.tsx) and
+ * the read-only letterhead slot shared by Preview and the delivered
+ * reader (app/letters/letterhead-postcard.tsx), so a Postcard never
+ * looks different depending on which surface is showing it or where
+ * its base content came from. Never mutates its `base` argument.
  *
- * A blank sender backMessage never inherits the catalog's own canned
- * demo prose (e.g. Essaouira's tutorial paragraph) — that was a real,
- * confirmed bug: Preview's own read-only "open the Postcard" experience
- * on a still-blank draft used to display it as though the sender had
- * already written something. Blank now resolves to a genuinely empty
- * string instead. POSTCARD_BACK_PLACEHOLDER is UI guidance only (the
- * editable textarea's own `placeholder` attribute, in postcard-object.tsx)
- * — it is never returned here as backMessage data, since this function's
- * result can end up as read-only Preview/delivered content, and an empty
- * string is the only value that can never be mistaken for something the
- * sender actually wrote. A SENT letter-level Postcard is server-validated
- * to always carry a real, non-blank back_message (see the pending
- * migration's own send-time requirement), so an empty backMessage here is
- * never actually reached for a genuinely delivered Postcard — only for a
- * still-blank draft.
+ * A blank sender backMessage never inherits any canned demo prose —
+ * that was a real, confirmed bug in an earlier version of this
+ * function (when `base` still came from the legacy static catalog,
+ * whose entries carried tutorial/demo prose): Preview's own read-only
+ * "open the Postcard" experience on a still-blank draft used to
+ * display it as though the sender had already written something.
+ * Blank now resolves to a genuinely empty string instead.
+ * POSTCARD_BACK_PLACEHOLDER is UI guidance only (the editable
+ * textarea's own `placeholder` attribute, in postcard-object.tsx) — it
+ * is never returned here as backMessage data. A SENT letter-level
+ * Postcard is server-validated to always carry a real, non-blank
+ * back_message, so an empty backMessage here is never actually reached
+ * for a genuinely delivered Postcard — only for a still-blank draft.
  *
- * `recipientLabel`/`recipientDetail` are ALWAYS suppressed here (never
- * spread from the catalog entry), for every letter-level Postcard,
- * draft or delivered: V1 supports no real recipient-identity display on
- * this back at all, and the catalog's own demo values (e.g. "Evening
- * Quill," a fictional tutorial recipient) are not this real recipient's
- * identity and must never appear to be — never replaced with the real
- * recipient pseudonym, an invented address, or any other detail either;
- * that region simply goes visually unused for a letter-level Postcard.
- * This function is ONLY ever used for the NEW letter-level architecture
- * — a historical `moments.type = 'postcard'` row is resolved directly
- * from POSTCARD_CATALOG by postcard-moment-node.tsx/MomentDisplay, a
- * completely separate path this function never touches, so historical
- * recipient-detail AND historical backMessage rendering are both
- * completely unaffected — this is the ONE explicit boundary between the
- * legacy and new resolution paths, deliberately kept at this resolver
- * rather than scattered as ad hoc "if new postcard" checks throughout
- * rendering components.
+ * `recipientLabel`/`recipientDetail` are ALWAYS suppressed here: V1
+ * supports no real recipient-identity display on this back at all —
+ * never replaced with the real recipient pseudonym, an invented
+ * address, or any other detail either; that region simply goes
+ * visually unused for a letter-level Postcard. This function is ONLY
+ * ever used for the NEW letter-level architecture — a historical
+ * `moments.type = 'postcard'` row is resolved directly from
+ * POSTCARD_CATALOG by postcard-moment-node.tsx/MomentDisplay, a
+ * completely separate path this function never touches.
  *
  * Pre-migration audit correction (2026-09-14) — `senderPseudonym` is a
  * SEPARATE override, deliberately NOT snapshotted anywhere: a letter-
  * level Postcard's "— <name>" line must show the REAL sending member's
  * CURRENT pseudonym, resolved exactly like every other sender-name
  * display already in this reader (resolveLetterDirection,
- * lib/letters.ts, itself dynamic — a member who later changes their
- * pseudonym already sees their own old letters' headers update too).
- * Snapshotting it here would make the Postcard's own signature
- * inconsistent with the letter header sitting right above it on the
- * exact same page. Omitted entirely (falls back to the catalog's own
- * fictional demo name, e.g. "Youssef") only for a caller that
- * genuinely has no real sender yet — this should never happen for a
- * real letter-level Postcard in production; callers must always pass
- * it once a sender identity is known.
- *
- * Thumbnail + expanded-experience checkpoint (2026-09-14) —
- * `version`, when given, is the sending letter's own FROZEN
- * postcard_versions row (getLetterPostcardsForLetters, lib/letters.ts):
- * its `frontImagePath`/Living Reveal asset REPLACE the catalog's
- * current ones entirely, so a delivered historical Postcard renders the
- * exact artwork that shipped with it, never whatever POSTCARD_CATALOG
- * currently defines for that key. Only the delivered reader passes this
- * — the composer's own live draft preview and Preview deliberately
- * never do, since nothing has been sent/frozen yet and showing the
- * CURRENT catalog entry while drafting is correct. A version with no
- * `motionSrc` describes a plain static Postcard (no Living Reveal at
- * all), exactly like a PostcardData with no `living`.
+ * lib/letters.ts, itself dynamic). Omitted entirely only for a caller
+ * that genuinely has no real sender yet — this should never happen for
+ * a real letter-level Postcard in production.
  */
 export function resolveLetterPostcardDisplay(
-  postcardKey: string,
+  base: PostcardBaseContent,
   overrides: {
     revealLine: string
     backMessage: string
     senderPseudonym?: string
-    version?: {
-      frontImagePath: string
-      motionSrc: string | null
-      durationSeconds: number | null
-      revealLineAlignment: PostcardRevealLineAlignment | null
-    }
   }
-): PostcardData | null {
-  const base = POSTCARD_CATALOG[postcardKey]
-  if (!base) return null
-
-  const frontImagePath = overrides.version?.frontImagePath ?? base.frontImagePath
-
+): PostcardData {
   const revealLine = overrides.revealLine.trim().length > 0 ? overrides.revealLine : undefined
 
-  const living = overrides.version
-    ? overrides.version.motionSrc
-      ? {
-          motionSrc: overrides.version.motionSrc,
-          revealLine,
-          revealLineAlignment: overrides.version.revealLineAlignment ?? undefined,
-          durationSeconds: overrides.version.durationSeconds ?? undefined,
-        }
-      : undefined
-    : base.living
-      ? { ...base.living, revealLine }
-      : undefined
+  const living = base.living ? { ...base.living, revealLine } : undefined
 
   return {
-    ...base,
-    frontImagePath,
-    senderName: overrides.senderPseudonym ?? base.senderName,
+    title: base.title,
+    location: base.location,
+    collection: base.collection,
+    frontImagePath: base.frontImagePath,
+    postmarkText: base.postmarkText,
+    footerText: base.footerText,
+    senderName: overrides.senderPseudonym,
     backMessage: overrides.backMessage.trim().length > 0 ? overrides.backMessage : '',
     // Never a real recipient identity for a letter-level Postcard — see
     // this function's own doc comment above.

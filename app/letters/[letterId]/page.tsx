@@ -5,6 +5,7 @@ import {
   getLetterById,
   getMomentsForLetters,
   getLetterPostcardsForLetters,
+  letterPostcardToBaseContent,
   getFirstLockedPhotoLetterMoment,
   isEffectivelyExpired,
   isEstablishedForViewer,
@@ -19,7 +20,7 @@ import { hasCompletedGuide } from '@/lib/guide'
 import { getBlockScope } from '@/lib/blocking'
 import { hasAcknowledgedCorrespondenceFeature } from '@/lib/acknowledgements'
 import { formatDateTimeFull } from '@/lib/format-date'
-import { metadataTextClass, closureTextClass } from '@/app/profile/ui'
+import { metadataTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import Mindform from '@/app/mindform'
 import MarkLetterOpened from './mark-opened'
@@ -30,6 +31,7 @@ import LetterActionMenu from './letter-action-menu'
 import LetterBody from './letter-body'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import FirstContactResponse from './first-contact-response'
+import ClosureStatusNotice from './closure-status-notice'
 import ClosureRecommendations from '@/app/letters/closure-recommendations'
 import WriteQuillButton from '@/app/letters/with/[userId]/write-quill-button'
 
@@ -239,38 +241,43 @@ export default async function LetterPage({
             />
           )}
 
-          {(momentsQualified || targetEffectiveStatus === 'closed') && (
-            <div className="mt-4 space-y-3 rounded-md border border-foreground/10 px-4 py-3">
-              {momentsQualified && correspondence && (
-                <PhotoConsent
-                  correspondenceId={correspondence.id}
-                  status={correspondence.photoConsentStatus}
-                  requestedBy={correspondence.photoConsentRequestedBy}
-                  resolvedBy={correspondence.photoConsentResolvedBy}
-                  userId={user.id}
-                  otherPseudonym={otherPseudonym}
-                  reviewPhotoHref={reviewPhotoHref}
+          {momentsQualified && correspondence && (
+            <div className="mt-4 rounded-md border border-foreground/10 px-4 py-3">
+              <PhotoConsent
+                correspondenceId={correspondence.id}
+                status={correspondence.photoConsentStatus}
+                requestedBy={correspondence.photoConsentRequestedBy}
+                resolvedBy={correspondence.photoConsentResolvedBy}
+                userId={user.id}
+                otherPseudonym={otherPseudonym}
+                reviewPhotoHref={reviewPhotoHref}
+              />
+            </div>
+          )}
+
+          {/* Release Polish Pass — the closure status now reads as quiet
+              correspondence METADATA (ClosureStatusNotice: narrow clay
+              accent rule + envelope glyph), deliberately given its own
+              separation from PhotoConsent above and the historical
+              letter below, rather than sharing one homogeneous bordered
+              box with either. */}
+          {targetEffectiveStatus === 'closed' && (
+            <div className="mt-4">
+              {targetEffectiveClosedBy === 'recipient' ? (
+                <ClosureStatusNotice
+                  title={isRecipientOfTarget ? 'You passed on this letter.' : `${otherPseudonym} passed on this letter.`}
+                  detail={target.closeReason ?? ''}
+                />
+              ) : (
+                <ClosureStatusNotice
+                  title="This letter went unanswered"
+                  detail={
+                    isRecipientOfTarget
+                      ? "You weren't able to reply within the reply window."
+                      : `${otherPseudonym} wasn't able to reply within the reply window.`
+                  }
                 />
               )}
-
-              {targetEffectiveStatus === 'closed' &&
-                (targetEffectiveClosedBy === 'recipient' ? (
-                  <>
-                    <p className={closureTextClass}>
-                      {isRecipientOfTarget
-                        ? 'You passed on this letter.'
-                        : `${otherPseudonym} passed on this letter.`}
-                    </p>
-                    <p className={closureTextClass}>{target.closeReason}</p>
-                  </>
-                ) : (
-                  <>
-                    <p className={closureTextClass}>This letter went unanswered.</p>
-                    <p className={closureTextClass}>
-                      Its recipient wasn&apos;t able to respond within the reply window.
-                    </p>
-                  </>
-                ))}
             </div>
           )}
 
@@ -317,7 +324,12 @@ export default async function LetterPage({
             {letterPostcard && (
               <div className="mt-4">
                 <LetterheadPostcard
-                  postcardKey={letterPostcard.postcardKey}
+                  // Admin Phase 2A-2 — the frozen presentation identity
+                  // that actually shipped with this letter (title,
+                  // location, collection, postmark/footer text, and
+                  // artwork), never whatever the catalogue's CURRENT
+                  // entry for the same key defines today.
+                  base={letterPostcardToBaseContent(letterPostcard.version)}
                   revealLine={letterPostcard.revealLine}
                   backMessage={letterPostcard.backMessage}
                   // Final pre-migration architecture correction
@@ -327,11 +339,6 @@ export default async function LetterPage({
                   // dynamic). A sent Postcard's own back must never
                   // silently rewrite itself if the sender later renames.
                   senderPseudonym={letterPostcard.senderPseudonymSnapshot}
-                  // Thumbnail + expanded-experience checkpoint
-                  // (2026-09-14), Part 9 — the frozen asset identity
-                  // that actually shipped with this letter, never
-                  // whatever POSTCARD_CATALOG's current entry defines.
-                  version={letterPostcard.version}
                 />
               </div>
             )}

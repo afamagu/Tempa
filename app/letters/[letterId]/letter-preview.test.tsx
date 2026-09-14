@@ -4,9 +4,24 @@ import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import LetterPreview from './letter-preview'
 import { POSTCARD_CATALOG, type Moment } from '@/lib/moments'
+import type { PostcardCatalogEntry } from '@/lib/postcards'
 
 const SOURCE_PATH = path.join(__dirname, 'letter-preview.tsx')
 const source = readFileSync(SOURCE_PATH, 'utf8')
+
+const BANGKOK: PostcardCatalogEntry = {
+  key: 'bangkokAfterRain',
+  title: 'Bangkok',
+  countryCode: 'TH',
+  location: 'Thailand after rain',
+  collection: 'Thailand After Rain Collection',
+  postmarkText: 'BANGKOK\nTHAILAND',
+  footerText: 'Tempa Postcard · Thailand After Rain Collection',
+  frontImagePath: POSTCARD_CATALOG.bangkokAfterRain.frontImagePath,
+  motionSrc: POSTCARD_CATALOG.bangkokAfterRain.living?.motionSrc ?? null,
+  durationSeconds: POSTCARD_CATALOG.bangkokAfterRain.living?.durationSeconds ?? null,
+  revealLineAlignment: null,
+}
 
 // Strips comments before a blanket scan — this file's own doc comment
 // legitimately names PostcardObject/Living Reveal/Turn over/Replay by
@@ -24,6 +39,7 @@ function renderPreview(overrides: Partial<Parameters<typeof LetterPreview>[0]> =
       body={'Dear friend,\n\nHere is a photo.'}
       moments={[]}
       postcard={null}
+      postcardCatalogEntry={null}
       senderPseudonym="Morning Larch"
       recipientPseudonym="Evening Quill"
       onClose={() => {}}
@@ -111,8 +127,9 @@ describe('LetterPreview — H/I/J. the new letter-level Postcard renders in the 
     const html = renderPreview({
       body: 'One paragraph.',
       postcard: { postcardKey: 'bangkokAfterRain', revealLine: '', backMessage: '' },
+      postcardCatalogEntry: BANGKOK,
     })
-    expect(html).toContain(POSTCARD_CATALOG.bangkokAfterRain.frontImagePath)
+    expect(html).toContain(BANGKOK.frontImagePath)
   })
 
   it('I. renders the letter-level Postcard OUTSIDE LetterBody — never as one of its own moments-array entries', () => {
@@ -256,6 +273,7 @@ describe('LetterPreview — production back-editing UX defect: an actionable pat
   it('the postcard thumbnail, when onEditPostcard is given, routes to the editor rather than opening its own read-only overlay', () => {
     const html = renderPreview({
       postcard: { postcardKey: 'bangkokAfterRain', revealLine: '', backMessage: '' },
+      postcardCatalogEntry: BANGKOK,
       onEditPostcard: () => {},
     })
     expect(html).toContain('aria-label="Edit this postcard"')

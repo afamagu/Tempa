@@ -12,6 +12,7 @@ import {
   resolveLetterPostcardDisplay,
   type MomentDraft,
   type LetterPostcardDraft,
+  type PostcardBaseContent,
 } from './moments'
 
 describe('toMomentRpcPayload', () => {
@@ -237,196 +238,140 @@ describe('POSTCARD_CATALOG.bangkokAfterRain — second canonical Living Postcard
   })
 })
 
-// Letter-Level Postcards V1 (2026-09-13) — the product decision this
-// codebase's own earlier comment (bangkokAfterRain, above) anticipated:
-// "that arrives with the future letter-level Postcard architecture."
-// resolveLetterPostcardDisplay is the ONE place a sender's own
-// revealLine/backMessage are merged onto a catalog entry for display —
-// used identically by the composer's live editor preview and the
-// read-only letterhead slot shared by Preview and the delivered reader.
+// Admin Phase 2A-2 — resolveLetterPostcardDisplay no longer looks
+// anything up itself; the caller always resolves `base` first, from
+// wherever it actually came from (the live DB catalogue for a draft in
+// progress, or a delivered letter's own frozen version). This is the
+// ONE place a sender's own revealLine/backMessage are merged onto that
+// resolved base content for display — used identically by the
+// composer's live editor preview and the read-only letterhead slot
+// shared by Preview and the delivered reader.
 describe('resolveLetterPostcardDisplay', () => {
   const blank = { revealLine: '', backMessage: '' }
 
-  it('returns null for an unknown/invalid postcardKey, mirroring every other catalog lookup in this codebase', () => {
-    expect(resolveLetterPostcardDisplay('not-a-real-key', blank)).toBeNull()
-  })
+  const essaouiraBase: PostcardBaseContent = {
+    title: 'Essaouira',
+    location: 'Atlantic Morocco',
+    collection: 'Atlantic Morocco Collection',
+    frontImagePath: '/postcards/essaouira.jpg',
+    postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+    footerText: 'Tempa Postcard · Atlantic Morocco Collection',
+    living: { motionSrc: '/postcards/essaouira-living.mp4', durationSeconds: 10.04 },
+  }
+
+  const staticBase: PostcardBaseContent = {
+    title: 'A Static Card',
+    location: 'Nowhere in particular',
+    collection: 'A Collection',
+    frontImagePath: '/postcards/static.jpg',
+    postmarkText: 'STATIC',
+    footerText: 'Tempa Postcard',
+    // No `living` — a plain static Postcard.
+  }
 
   // Placeholder semantics correction (2026-09-14) — C/D/E. The actual bug
   // this checkpoint fixes: a blank sender backMessage used to inherit
-  // the catalog's own canned demo prose, and a later (also wrong) fix
-  // returned POSTCARD_BACK_PLACEHOLDER as though it were authored
-  // content. Neither is correct — POSTCARD_BACK_PLACEHOLDER is UI
-  // guidance shown only in the editable textarea's own `placeholder`
-  // attribute; it must never come back out of the resolver as
-  // backMessage data. A blank draft resolves to a genuinely empty
-  // string instead, so a read-only render simply shows no message.
+  // canned demo prose, and a later (also wrong) fix returned
+  // POSTCARD_BACK_PLACEHOLDER as though it were authored content.
+  // Neither is correct — POSTCARD_BACK_PLACEHOLDER is UI guidance shown
+  // only in the editable textarea's own `placeholder` attribute; it
+  // must never come back out of the resolver as backMessage data. A
+  // blank draft resolves to a genuinely empty string instead, so a
+  // read-only render simply shows no message.
   it('C. with blank overrides, resolves backMessage to an empty string', () => {
-    const result = resolveLetterPostcardDisplay('essaouira', blank)
-    expect(result?.backMessage).toBe('')
-    expect(result?.living?.revealLine).toBeUndefined()
+    const result = resolveLetterPostcardDisplay(essaouiraBase, blank)
+    expect(result.backMessage).toBe('')
+    expect(result.living?.revealLine).toBeUndefined()
   })
 
   it('D. never returns POSTCARD_BACK_PLACEHOLDER as backMessage data', () => {
-    const result = resolveLetterPostcardDisplay('essaouira', blank)
-    expect(result?.backMessage).not.toBe(POSTCARD_BACK_PLACEHOLDER)
+    const result = resolveLetterPostcardDisplay(essaouiraBase, blank)
+    expect(result.backMessage).not.toBe(POSTCARD_BACK_PLACEHOLDER)
   })
 
-  it('E. with blank overrides, never falls back to the catalog entry\'s own backMessage', () => {
-    const result = resolveLetterPostcardDisplay('essaouira', blank)
-    expect(result?.backMessage).not.toBe(POSTCARD_CATALOG.essaouira.backMessage)
-  })
-
-  it('F. a sender-provided backMessage overrides everything and displays exactly, never blended with catalog prose or the placeholder', () => {
-    const result = resolveLetterPostcardDisplay('essaouira', {
+  it('F. a sender-provided backMessage overrides everything and displays exactly, never blended with the placeholder', () => {
+    const result = resolveLetterPostcardDisplay(essaouiraBase, {
       revealLine: '',
       backMessage: 'Thinking of you on this ordinary Tuesday.',
     })
-    expect(result?.backMessage).toBe('Thinking of you on this ordinary Tuesday.')
-    expect(result?.backMessage).not.toBe(POSTCARD_CATALOG.essaouira.backMessage)
-    expect(result?.backMessage).not.toBe(POSTCARD_BACK_PLACEHOLDER)
+    expect(result.backMessage).toBe('Thinking of you on this ordinary Tuesday.')
+    expect(result.backMessage).not.toBe(POSTCARD_BACK_PLACEHOLDER)
   })
 
-  // G/H — the catalog's own demo recipient identity (e.g. "Evening
-  // Quill," a fictional tutorial recipient) must never appear on a real
-  // letter-level Postcard, blank or written, regardless of what the
-  // catalog entry itself carries.
-  it('G/H. always suppresses the catalog\'s own recipientLabel/recipientDetail, blank or written', () => {
-    expect(POSTCARD_CATALOG.essaouira.recipientLabel).toBeTruthy()
-    expect(POSTCARD_CATALOG.essaouira.recipientDetail).toBeTruthy()
+  // G/H — no letter-level Postcard ever shows a real recipient identity
+  // on its back, blank or written, regardless of `base`.
+  it('G/H. always suppresses recipientLabel/recipientDetail, blank or written', () => {
+    const blankResult = resolveLetterPostcardDisplay(essaouiraBase, blank)
+    expect(blankResult.recipientLabel).toBeUndefined()
+    expect(blankResult.recipientDetail).toBeUndefined()
 
-    const blankResult = resolveLetterPostcardDisplay('essaouira', blank)
-    expect(blankResult?.recipientLabel).toBeUndefined()
-    expect(blankResult?.recipientDetail).toBeUndefined()
-
-    const writtenResult = resolveLetterPostcardDisplay('essaouira', {
+    const writtenResult = resolveLetterPostcardDisplay(essaouiraBase, {
       revealLine: '',
       backMessage: 'A real message from a real sender.',
     })
-    expect(writtenResult?.recipientLabel).toBeUndefined()
-    expect(writtenResult?.recipientDetail).toBeUndefined()
+    expect(writtenResult.recipientLabel).toBeUndefined()
+    expect(writtenResult.recipientDetail).toBeUndefined()
   })
 
-  it('never substitutes a fake address, real recipient pseudonym, or any other invented recipient detail in place of the suppressed fields', () => {
-    const result = resolveLetterPostcardDisplay('essaouira', blank)
+  it('never substitutes a fake address or any other invented recipient detail in place of the suppressed fields', () => {
+    const result = resolveLetterPostcardDisplay(essaouiraBase, blank)
     expect(result).not.toHaveProperty('recipientAddress')
-    // Suppressed means genuinely absent — not replaced with some OTHER
-    // string (a real pseudonym, "To: ...", a location) that would just
-    // be a different flavor of the same problem.
-    expect(result?.recipientLabel).toBeUndefined()
-    expect(result?.recipientDetail).toBeUndefined()
+    expect(result.recipientLabel).toBeUndefined()
+    expect(result.recipientDetail).toBeUndefined()
   })
 
-  it('a sender-provided revealLine is merged onto the catalog\'s own living data, without altering motionSrc/duration', () => {
-    const result = resolveLetterPostcardDisplay('essaouira', {
+  it('a sender-provided revealLine is merged onto base.living, without altering motionSrc/duration', () => {
+    const result = resolveLetterPostcardDisplay(essaouiraBase, {
       revealLine: 'Keep a little sea with you.',
       backMessage: '',
     })
-    expect(result?.living?.revealLine).toBe('Keep a little sea with you.')
-    expect(result?.living?.motionSrc).toBe(POSTCARD_CATALOG.essaouira.living?.motionSrc)
-    expect(result?.living?.durationSeconds).toBe(POSTCARD_CATALOG.essaouira.living?.durationSeconds)
+    expect(result.living?.revealLine).toBe('Keep a little sea with you.')
+    expect(result.living?.motionSrc).toBe(essaouiraBase.living?.motionSrc)
+    expect(result.living?.durationSeconds).toBe(essaouiraBase.living?.durationSeconds)
   })
 
-  it('never mutates POSTCARD_CATALOG itself', () => {
-    const before = JSON.parse(JSON.stringify(POSTCARD_CATALOG))
-    resolveLetterPostcardDisplay('essaouira', { revealLine: 'x', backMessage: 'y' })
-    expect(POSTCARD_CATALOG).toEqual(before)
+  it('never mutates its base argument', () => {
+    const before = JSON.parse(JSON.stringify(essaouiraBase))
+    resolveLetterPostcardDisplay(essaouiraBase, { revealLine: 'x', backMessage: 'y' })
+    expect(essaouiraBase).toEqual(before)
   })
 
-  it('a catalog entry with no living data (a future static letter-level Postcard) simply carries no living block, revealLine ignored', () => {
-    // bangkokAfterRain has living data; simulate a hypothetical static
-    // entry the same way STATIC_ESSAOUIRA does elsewhere in this suite.
-    const result = resolveLetterPostcardDisplay('bangkokAfterRain', {
+  it('base content with no living data (a plain static Postcard) simply carries no living block, revealLine ignored', () => {
+    const result = resolveLetterPostcardDisplay(staticBase, {
       revealLine: 'A line that would be ignored if this card had no living data',
       backMessage: '',
     })
-    expect(result?.living?.revealLine).toBe(
-      'A line that would be ignored if this card had no living data'
-    )
+    expect(result.living).toBeUndefined()
+  })
+
+  it('carries title/location/collection/postmarkText/footerText straight through from base, untouched', () => {
+    const result = resolveLetterPostcardDisplay(essaouiraBase, blank)
+    expect(result.title).toBe('Essaouira')
+    expect(result.location).toBe('Atlantic Morocco')
+    expect(result.collection).toBe('Atlantic Morocco Collection')
+    expect(result.postmarkText).toBe(essaouiraBase.postmarkText)
+    expect(result.footerText).toBe(essaouiraBase.footerText)
   })
 
   // Pre-migration audit correction (2026-09-14), Part 5 — the real
-  // sending member's pseudonym, never the catalog's own fictional demo
-  // sender ("Youssef"). Deliberately NOT snapshotted anywhere — see this
-  // function's own doc comment for why a live override is correct.
+  // sending member's pseudonym, never a fictional demo sender.
+  // Deliberately NOT snapshotted anywhere — see this function's own doc
+  // comment for why a live override is correct.
   describe('senderPseudonym override (audit correction, Part 5)', () => {
-    it('replaces the catalog\'s own fictional sender name when provided', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', { ...blank, senderPseudonym: 'Evening Quill' })
-      expect(result?.senderName).toBe('Evening Quill')
-      expect(result?.senderName).not.toBe(POSTCARD_CATALOG.essaouira.senderName)
+    it('is used as senderName when provided', () => {
+      const result = resolveLetterPostcardDisplay(essaouiraBase, { ...blank, senderPseudonym: 'Evening Quill' })
+      expect(result.senderName).toBe('Evening Quill')
     })
 
-    it('falls back to the catalog\'s own senderName when omitted (backward compatible — no existing caller passes it)', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', blank)
-      expect(result?.senderName).toBe(POSTCARD_CATALOG.essaouira.senderName)
+    it('is undefined when omitted — base content carries no senderName of its own to fall back to', () => {
+      const result = resolveLetterPostcardDisplay(essaouiraBase, blank)
+      expect(result.senderName).toBeUndefined()
     })
 
-    it('a card with no catalog senderName at all (bangkokAfterRain) still gets the real sender\'s name when provided', () => {
-      expect(POSTCARD_CATALOG.bangkokAfterRain.senderName).toBeUndefined()
-      const result = resolveLetterPostcardDisplay('bangkokAfterRain', { ...blank, senderPseudonym: 'Morning Larch' })
-      expect(result?.senderName).toBe('Morning Larch')
-    })
-
-    it('never mutates POSTCARD_CATALOG itself', () => {
-      const before = JSON.parse(JSON.stringify(POSTCARD_CATALOG))
-      resolveLetterPostcardDisplay('essaouira', { ...blank, senderPseudonym: 'Someone Else' })
-      expect(POSTCARD_CATALOG).toEqual(before)
-    })
-  })
-
-  // Thumbnail + expanded-experience checkpoint (2026-09-14), Part 9 —
-  // version-aware rendering: a delivered letter-level Postcard must use
-  // its OWN frozen postcard_versions asset identity, never whatever
-  // POSTCARD_CATALOG's current entry for the same key defines today.
-  describe('version override (thumbnail + expanded-experience checkpoint, Part 9)', () => {
-    const frozenVersion = {
-      frontImagePath: '/postcards/essaouira-v2.jpg',
-      motionSrc: '/postcards/essaouira-v2-living.mp4',
-      durationSeconds: 8.2,
-      revealLineAlignment: 'top-center' as const,
-    }
-
-    it('L. the frontImagePath comes from the frozen version, never the catalog\'s current entry', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', { ...blank, version: frozenVersion })
-      expect(result?.frontImagePath).toBe('/postcards/essaouira-v2.jpg')
-      expect(result?.frontImagePath).not.toBe(POSTCARD_CATALOG.essaouira.frontImagePath)
-    })
-
-    it('the Living Reveal motion asset, duration, and alignment all come from the frozen version', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', { ...blank, version: frozenVersion })
-      expect(result?.living?.motionSrc).toBe('/postcards/essaouira-v2-living.mp4')
-      expect(result?.living?.durationSeconds).toBe(8.2)
-      expect(result?.living?.revealLineAlignment).toBe('top-center')
-      expect(result?.living?.motionSrc).not.toBe(POSTCARD_CATALOG.essaouira.living?.motionSrc)
-    })
-
-    it('a sender-provided revealLine is still merged onto the frozen version\'s own living data', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', {
-        revealLine: 'Keep a little sea with you.',
-        backMessage: '',
-        version: frozenVersion,
-      })
-      expect(result?.living?.revealLine).toBe('Keep a little sea with you.')
-      expect(result?.living?.motionSrc).toBe('/postcards/essaouira-v2-living.mp4')
-    })
-
-    it('a version with no motion asset renders as a plain static Postcard — no living block at all, even if the catalog entry has one', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', {
-        ...blank,
-        version: { frontImagePath: '/postcards/essaouira-v2.jpg', motionSrc: null, durationSeconds: null, revealLineAlignment: null },
-      })
-      expect(result?.living).toBeUndefined()
-    })
-
-    it('omitting version entirely falls back to the catalog\'s own current artwork — the composer/Preview draft-preview behavior, unaffected', () => {
-      const result = resolveLetterPostcardDisplay('essaouira', blank)
-      expect(result?.frontImagePath).toBe(POSTCARD_CATALOG.essaouira.frontImagePath)
-      expect(result?.living?.motionSrc).toBe(POSTCARD_CATALOG.essaouira.living?.motionSrc)
-    })
-
-    it('never mutates POSTCARD_CATALOG itself', () => {
-      const before = JSON.parse(JSON.stringify(POSTCARD_CATALOG))
-      resolveLetterPostcardDisplay('essaouira', { ...blank, version: frozenVersion })
-      expect(POSTCARD_CATALOG).toEqual(before)
+    it('never mutates its base argument', () => {
+      const before = JSON.parse(JSON.stringify(essaouiraBase))
+      resolveLetterPostcardDisplay(essaouiraBase, { ...blank, senderPseudonym: 'Someone Else' })
+      expect(essaouiraBase).toEqual(before)
     })
   })
 })

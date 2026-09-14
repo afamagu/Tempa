@@ -1,78 +1,64 @@
 import { createClient } from '@/lib/supabase/server'
-import { listQuestions } from '@/lib/admin-questions'
+import { listQuestions, type AdminQuestion } from '@/lib/admin-questions'
 import { sectionTitleClass, sectionLabelClass } from '@/app/profile/ui'
 import { adminMetadataClass } from '@/app/admin/admin-ui'
+import CurrentQuestionSlot from './current-question-slot'
 import QuestionRow from './question-row'
-import CreateQuestionForm from './create-question-form'
 
 /**
- * Admin Command Center — Questions library management. Admin-only
- * (admin_list_questions requires is_staff('admin') server-side).
- *
- * Question Slots checkpoint (Section A5) — the page is split into
- * CURRENT QUESTIONS (whichever of #1/#2/#3 currently exist, in slot
- * order — the actual member-facing experience) and the QUESTION
- * LIBRARY / HISTORY below it (every unpositioned Question — inactive
- * history, or an active-but-not-yet-promoted library entry). The owner
- * never needs to know a slug like `private_ritual` to tell which
- * Question is #1/#2/#3 — that's exactly what the CURRENT QUESTIONS
- * badges are for.
+ * Flagship Simplification correction — replaces the prior library-
+ * centric screen entirely. TEMPA has exactly THREE current Questions;
+ * this page shows exactly those three slots as the main (and only
+ * prominent) operating surface, each with one "Edit Question" action
+ * and one Flagship radio. Everything else — every historical/replaced
+ * Question — lives behind a collapsed "View Question history"
+ * disclosure below: secondary, never presented as an operational
+ * choice.
  */
 export default async function AdminQuestionsPage() {
   const supabase = await createClient()
   const { data: questions, error } = await listQuestions(supabase)
 
-  const current = questions
-    .filter((q) => q.currentPosition !== null)
-    .sort((a, b) => (a.currentPosition ?? 0) - (b.currentPosition ?? 0))
-  const library = questions.filter((q) => q.currentPosition === null)
-
-  const occupiedPositions = new Set(current.map((q) => q.currentPosition))
-  const availablePositions = ([1, 2, 3] as const).filter((p) => !occupiedPositions.has(p))
+  const bySlot = new Map<1 | 2 | 3, AdminQuestion>(
+    questions
+      .filter((q): q is AdminQuestion & { currentPosition: 1 | 2 | 3 } => q.currentPosition !== null)
+      .map((q) => [q.currentPosition, q])
+  )
+  const history = questions
+    .filter((q) => q.currentPosition === null)
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className={sectionTitleClass}>Questions</h1>
-          <p className={adminMetadataClass}>
-            The current member experience is driven by three explicit slots — #1 is the permanent flagship, #2
-            and #3 rotate. A prompt can only be edited before it has any answers — an answered Question is
-            Replaced with revised wording instead, which never rewrites or reassigns its historical answers.
-          </p>
-        </div>
-        <CreateQuestionForm />
+      <div className="space-y-1">
+        <h1 className={sectionTitleClass}>Questions</h1>
+        <p className={adminMetadataClass}>
+          TEMPA offers exactly three current Questions. Exactly one is Flagship — it alone defines every
+          member&rsquo;s primary Minds answer.
+        </p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
 
       <div className="space-y-3">
         <p className={sectionLabelClass}>Current Questions</p>
-        {current.length === 0 ? (
-          <p className={adminMetadataClass}>
-            No Question currently holds a slot. Assign one from the library below to populate #1/#2/#3.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {current.map((q) => (
-              <QuestionRow key={q.id} question={q} availablePositions={availablePositions} />
-            ))}
-          </div>
-        )}
+        <div className="space-y-3">
+          {([1, 2, 3] as const).map((position) => (
+            <CurrentQuestionSlot key={position} position={position} question={bySlot.get(position) ?? null} />
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-3">
-        <p className={sectionLabelClass}>Question library / history</p>
-        {library.length === 0 ? (
-          <p className={adminMetadataClass}>Nothing else in the library yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {library.map((q) => (
-              <QuestionRow key={q.id} question={q} availablePositions={availablePositions} />
-            ))}
-          </div>
-        )}
-      </div>
+      <details className="space-y-3">
+        <summary className={`cursor-pointer ${sectionLabelClass}`}>View Question history ({history.length})</summary>
+        <div className="mt-3 space-y-3">
+          {history.length === 0 ? (
+            <p className={adminMetadataClass}>No historical Questions yet.</p>
+          ) : (
+            history.map((q) => <QuestionRow key={q.id} question={q} />)
+          )}
+        </div>
+      </details>
     </div>
   )
 }

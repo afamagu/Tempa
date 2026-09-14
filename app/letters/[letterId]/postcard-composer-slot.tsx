@@ -1,6 +1,7 @@
 'use client'
 
-import { POSTCARD_CATALOG, type LetterPostcardDraft } from '@/lib/moments'
+import type { LetterPostcardDraft } from '@/lib/moments'
+import type { PostcardCatalogEntry } from '@/lib/postcards'
 import { helperTextClass } from '@/app/profile/ui'
 import PostcardThumbnail from '@/app/letters/postcard-thumbnail'
 
@@ -15,22 +16,22 @@ import PostcardThumbnail from '@/app/letters/postcard-thumbnail'
  * `<EditorContent>` in moments-composer.tsx, entirely outside the
  * document tree.
  *
- * Thumbnail + expanded-experience checkpoint (2026-09-14) — the filled
- * state now reuses the SAME compact, portrait, still-only
- * PostcardThumbnail the delivered/Preview letterhead slot uses (Part 7:
- * "The composer may also use the compact letterhead thumbnail as its
- * resting state"), so the resting Postcard looks and sizes identically
- * everywhere a member sees it. Tapping it opens PostcardEditor, never
- * the read-only expanded experience — editing vs. reading are still two
- * separate surfaces, only the CLOSED thumbnail treatment is shared.
+ * Admin Phase 2A-2 — `catalogEntry` is resolved by the caller from the
+ * live, active DB catalogue (lib/postcards.ts), never a static lookup
+ * here. Null means either nothing is attached yet, or the attached key
+ * is no longer in the active catalogue (e.g. deactivated after being
+ * drafted) — the same honest "no longer available" treatment either
+ * empty-state path already offered.
  */
 export default function PostcardComposerSlot({
   draft,
+  catalogEntry,
   disabled,
   onAdd,
   onEdit,
 }: {
   draft: LetterPostcardDraft | null
+  catalogEntry: PostcardCatalogEntry | null
   /** True while Postcards aren't currently offerable at all (mirrors the
    * ⊕ affordance's own `enabled` gate) — the empty-state button simply
    * doesn't render rather than opening onto a dead end. A Postcard
@@ -54,9 +55,7 @@ export default function PostcardComposerSlot({
     )
   }
 
-  const postcard = POSTCARD_CATALOG[draft.postcardKey]
-
-  if (!postcard) {
+  if (!catalogEntry) {
     return (
       <div className="flex justify-end">
         <button
@@ -73,7 +72,7 @@ export default function PostcardComposerSlot({
 
   return (
     <div className="flex justify-end">
-      <PostcardThumbnail frontImagePath={postcard.frontImagePath} onOpen={onEdit} ariaLabel="Edit this postcard" />
+      <PostcardThumbnail frontImagePath={catalogEntry.frontImagePath} onOpen={onEdit} ariaLabel="Edit this postcard" />
     </div>
   )
 }

@@ -22,12 +22,13 @@ function excerpt(text: string, maxChars = 240) {
 // QUESTION + DATE: system/context styling, outside the writing surface.
 // ANSWER: darker inset human-writing surface. Same grammar as a letter.
 //
-// Question Slots checkpoint — the old "Show in Minds" manual toggle
-// (set_current_answer) is REMOVED from this surface entirely. Primary
-// Minds/Profile representation is no longer a member choice at all —
-// it is always and only the answer to whichever Question currently
-// holds position #1 (answer.isPrimary). Exposing a control that no
-// longer actually determines that would be actively misleading. The
+// The old "Show in Minds" manual toggle (set_current_answer) is
+// REMOVED from this surface entirely. Primary Minds/Profile
+// representation is no longer a member choice at all — it is always
+// and only the answer to whichever Question is currently Flagship
+// (answer.isPrimary), a separate, admin-chosen bit of state never
+// permanently tied to a slot number. Exposing a control that no longer
+// actually determines that would be actively misleading. The
 // set_current_answer RPC and is_current column are left completely
 // unchanged server-side (see lib/questions.ts's own header comment)
 // purely for backward compatibility with historical data — nothing in
@@ -72,12 +73,12 @@ function EligibleQuestionRow({ question }: { question: LibraryQuestion }) {
 /**
  * Minds' "My answers" and "Answer a Question" content.
  *
- * Question Slots checkpoint: "Answer a Question" shows the current,
- * explicitly Admin-positioned #1/#2/#3 Questions (lib/questions.ts's
- * getEligibleQuestions), in that order, minus anything this member has
- * already answered — genuinely new things to try, never something
- * already answered. Revisiting/editing an existing answer is "My
- * answers"' job (each answer's own prompt links to the same write page,
+ * "Answer a Question" shows the current, explicitly Admin-positioned
+ * three Questions (lib/questions.ts's getEligibleQuestions), in slot
+ * order, minus anything this member has already answered — genuinely
+ * new things to try, never something already answered. Revisiting/
+ * editing an existing answer is "My answers"' job (each answer's own
+ * prompt links to the same write page,
  * app/question/[questionId]/page.tsx, pre-filled with the existing
  * body).
  */

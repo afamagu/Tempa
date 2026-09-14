@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { sectionTitleClass, helperTextClass } from '@/app/profile/ui'
+import { sectionTitleClass, sectionLabelClass, helperTextClass } from '@/app/profile/ui'
 import DiscoveryResults, { type DiscoveryEntry } from '@/app/minds/discovery-results'
 
 // No client-side count parameter — the database function fixes this at
@@ -95,8 +95,14 @@ export default async function ClosureRecommendations({
   }))
 
   return (
+    // Release Polish Pass — a small uppercase "Discover" eyebrow now
+    // opens this section, the same restrained kicker token every other
+    // distinct section on this page family uses — an unmistakable
+    // signal that a new editorial section has begun, not a continuation
+    // of the letter above it.
     <div className="mt-10 rounded-md border-t-2 border-foreground/15 bg-background p-5 sm:p-6">
-      <div className="flex items-center gap-2">
+      <p className={sectionLabelClass}>Discover</p>
+      <div className="mt-1.5 flex items-center gap-2">
         <MindsIcon />
         <p className={sectionTitleClass}>Other minds you might like to meet</p>
       </div>
