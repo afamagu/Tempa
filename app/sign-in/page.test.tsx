@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import SignInPage, { getAuthErrorMessage } from './page'
+import SignInPage, { getAuthErrorMessage, getAuthErrorMessageFromFragment } from './page'
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -65,6 +65,39 @@ describe('getAuthErrorMessage — sanitized auth errors', () => {
   })
 })
 
+// Checkpoint 1, Phase B — GoTrue's own token-verification failures
+// (an already-consumed/expired magic-link token) arrive as a URL
+// FRAGMENT, never a query param. getAuthErrorMessageFromFragment is
+// the pure function that turns that fragment into calm, specific,
+// sanitized copy.
+describe('getAuthErrorMessageFromFragment — reads GoTrue\'s fragment-only errors safely', () => {
+  it('otp_expired gets the specific, calm, actionable message', () => {
+    const result = getAuthErrorMessageFromFragment(
+      '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired'
+    )
+    expect(result).toBe('This sign-in link is no longer valid. Request a new link and use the newest email.')
+  })
+
+  it('works whether or not the leading "#" is included', () => {
+    const withHash = getAuthErrorMessageFromFragment('#error_code=otp_expired&error=access_denied')
+    const withoutHash = getAuthErrorMessageFromFragment('error_code=otp_expired&error=access_denied')
+    expect(withHash).toBe(withoutHash)
+    expect(withHash).not.toBe('')
+  })
+
+  it('an unrecognized error_code still falls back to the same generic wording used elsewhere, never the raw error_description', () => {
+    const result = getAuthErrorMessageFromFragment('#error=server_error&error_code=unexpected_failure&error_description=Some+internal+detail')
+    expect(result).toBe('Something went wrong signing you in. Please try again.')
+    expect(result).not.toContain('internal detail')
+    expect(result).not.toContain('unexpected_failure')
+  })
+
+  it('an empty or absent fragment returns an empty string — never fabricates an error', () => {
+    expect(getAuthErrorMessageFromFragment('')).toBe('')
+    expect(getAuthErrorMessageFromFragment('#')).toBe('')
+  })
+})
+
 describe('SignInPage — existing intent=join / sign-in UI behavior remains intact', () => {
   it('renders the default "Sign in" framing and both auth affordances', () => {
     const html = render()
@@ -91,11 +124,14 @@ describe('SignInPage — Turnstile is passed as captchaToken to signInWithOtp', 
   })
 
   it('the widget is only rendered inside the email form, never near the Google button', () => {
-    // Matches the JSX usage `<TurnstileWidget\n  ref=...>`, not the
-    // unrelated `useRef<TurnstileWidgetHandle>` type annotation earlier
-    // in the file (which also contains the substring "<TurnstileWidget").
+    // Matches the JSX usage `<TurnstileWidget` (the substring alone is
+    // enough to locate it — no need to also match the exact whitespace
+    // that follows, which differs between LF and CRLF-terminated
+    // checkouts of this file), not the unrelated
+    // `useRef<TurnstileWidgetHandle>` type annotation earlier in the
+    // file (which also contains the substring "<TurnstileWidget").
     const formStart = source.indexOf('<form onSubmit={handleSubmit}')
-    const widgetIndex = source.indexOf('<TurnstileWidget\n', formStart)
+    const widgetIndex = source.indexOf('<TurnstileWidget', formStart)
     const googleButtonJsxIndex = source.indexOf('onClick={handleGoogleSignIn}')
     expect(formStart).toBeGreaterThan(-1)
     expect(widgetIndex).toBeGreaterThan(formStart)
@@ -162,8 +198,16 @@ describe('SignInPage — CAPTCHA error/retry behavior', () => {
 
 describe('SignInPage — Google OAuth does not depend on Turnstile', () => {
   it('handleGoogleSignIn never references captchaToken, turnstileEnabled, or the Turnstile widget', () => {
+    // Finds the function's own closing brace (2-space indent) via a
+    // line-ending-agnostic regex (`\r?\n`) rather than a literal `\n` —
+    // an LF-only literal never matches this file's actual CRLF line
+    // endings, silently matching nothing (index -1) and comparing an
+    // empty slice instead of failing loudly.
     const start = source.indexOf('async function handleGoogleSignIn')
-    const end = source.indexOf('\n  }\n', start)
+    expect(start).toBeGreaterThan(-1)
+    const closingBraceMatch = /\r?\n {2}\}\r?\n/.exec(source.slice(start))
+    expect(closingBraceMatch).not.toBeNull()
+    const end = start + closingBraceMatch!.index
     const body = source.slice(start, end)
     expect(body).not.toContain('captchaToken')
     expect(body).not.toContain('turnstileEnabled')
@@ -179,5 +223,47 @@ describe('SignInPage — Google OAuth does not depend on Turnstile', () => {
 
   it('the Google button is never disabled by Turnstile state — only by its own googleLoading flag', () => {
     expect(source).toMatch(/onClick=\{handleGoogleSignIn\}\s*\n\s*disabled=\{googleLoading\}/)
+  })
+})
+
+// Checkpoint 1, Phase B — the fragment-reading effect is mount-once,
+// event/DOM driven (reads window.location.hash, calls
+// window.history.replaceState) — this SSR-only harness (no jsdom)
+// cannot simulate it firing, matching this file's own established
+// convention for every other effect-driven behavior here (e.g. the
+// Turnstile ref-reset wiring above). Source-text inspection instead
+// confirms the wiring itself is correct; getAuthErrorMessageFromFragment
+// itself is exercised directly, above.
+describe('SignInPage — auth-error fragment is read once and then scrubbed from the URL', () => {
+  it('only runs when the page already loaded in the known auth_failed state', () => {
+    const effectStart = source.indexOf("if (searchParams.get('error') !== 'auth_failed') return")
+    expect(effectStart).toBeGreaterThan(-1)
+  })
+
+  it('reads the fragment via getAuthErrorMessageFromFragment, never window.location.hash directly elsewhere', () => {
+    expect(source).toContain('getAuthErrorMessageFromFragment(window.location.hash)')
+  })
+
+  it('refines errorMessage with the fragment-derived message when one is found', () => {
+    const effectStart = source.indexOf("if (searchParams.get('error') !== 'auth_failed') return")
+    const effectEnd = source.indexOf('}, [])', effectStart)
+    expect(effectEnd).toBeGreaterThan(effectStart)
+    const body = source.slice(effectStart, effectEnd)
+    expect(body).toContain('setErrorMessage(message)')
+  })
+
+  it('scrubs the fragment via history.replaceState, preserving the path and query but dropping the hash', () => {
+    expect(source).toContain("window.history.replaceState(null, '', window.location.pathname + window.location.search)")
+  })
+
+  it('never touches the URL when no fragment error was found (no message)', () => {
+    const effectStart = source.indexOf("if (searchParams.get('error') !== 'auth_failed') return")
+    const effectEnd = source.indexOf('}, [])', effectStart)
+    const body = source.slice(effectStart, effectEnd)
+    expect(body).toMatch(/if \(!message\) return/)
+    const guardIndex = body.indexOf('if (!message) return')
+    const replaceStateIndex = body.indexOf('window.history.replaceState')
+    expect(guardIndex).toBeGreaterThan(-1)
+    expect(replaceStateIndex).toBeGreaterThan(guardIndex)
   })
 })

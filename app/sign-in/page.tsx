@@ -59,6 +59,41 @@ export function getAuthErrorMessage(error: { message?: string; status?: number }
   return 'Something went wrong. Please try again.'
 }
 
+/**
+ * Checkpoint 1, Phase B — GoTrue's own token-verification failures
+ * (e.g. an already-consumed/expired magic-link token) arrive as a URL
+ * FRAGMENT (`#error=access_denied&error_code=otp_expired&...`), never
+ * a query param — fragments are never sent to the server, so
+ * app/auth/callback/route.ts can never see them; it only ever sees
+ * that fragments existed indirectly, via the browser's own standard
+ * "inherit the previous fragment when a redirect Location carries
+ * none" behavior, which is why that fragment survives all the way onto
+ * `/sign-in?error=auth_failed` unchanged. Read client-side only (see
+ * the effect below — fragments do not exist during SSR).
+ *
+ * Deliberately never forwards `error_description` verbatim to the
+ * client for the same reason getAuthErrorMessage never forwards a raw
+ * SDK message — only a hand-picked, restrained TEMPA-facing string per
+ * KNOWN error_code, with the same generic fallback as everywhere else
+ * for anything unrecognized.
+ */
+export function getAuthErrorMessageFromFragment(hash: string): string {
+  if (!hash) return ''
+
+  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash)
+  const errorCode = params.get('error_code')
+
+  if (errorCode === 'otp_expired') {
+    return 'This sign-in link is no longer valid. Request a new link and use the newest email.'
+  }
+
+  if (params.get('error')) {
+    return 'Something went wrong signing you in. Please try again.'
+  }
+
+  return ''
+}
+
 function SignInForm() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
@@ -81,6 +116,30 @@ function SignInForm() {
   // since a client-supplied query param is never trusted merely
   // because this page generated the original link.
   const nextPath = sanitizeInternalPath(searchParams.get('next'))
+
+  // Checkpoint 1, Phase B — refines the generic `?error=auth_failed`
+  // message (set above, from the query string, visible during SSR)
+  // with GoTrue's own more specific error_code once the fragment is
+  // readable client-side, and then scrubs the fragment from the
+  // visible URL so a stale auth error never lingers after later
+  // interaction (e.g. a refresh, or the URL being copy-pasted
+  // elsewhere). Only runs when already in the known auth_failed state
+  // — never touches the URL on an ordinary page load. window.location.hash
+  // doesn't exist during server rendering, so this one-time read from
+  // that external source has to happen post-mount in an effect, not
+  // during render — the same legitimate exception category
+  // react-hooks/set-state-in-effect exists to let through (see
+  // app/board/dispatch-composer.tsx's draft-restore effect for the
+  // established precedent).
+  useEffect(() => {
+    if (searchParams.get('error') !== 'auth_failed') return
+    const message = getAuthErrorMessageFromFragment(window.location.hash)
+    if (!message) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read from window.location.hash, see comment above
+    setErrorMessage(message)
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Pre-beta email auth bot protection (2026-09-15) — Turnstile is scoped
   // to this email/magic-link form only, never the Google button below

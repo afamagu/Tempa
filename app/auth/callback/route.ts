@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
 import { NextResponse } from 'next/server'
@@ -43,9 +44,33 @@ export async function GET(request: Request) {
       console.error('[auth/callback] code exchange failed', {
         message: error.message,
         code: error.code,
+        name: error.name,
       })
     }
+
+    return NextResponse.redirect(`${origin}/sign-in?error=auth_failed`)
   }
+
+  // Checkpoint 1, Phase A blind spot — until now, landing here with
+  // NEITHER `code` NOR a query-string `error` produced zero server-side
+  // log output at all. This is exactly what happens when GoTrue's own
+  // token verification fails (e.g. `otp_expired`): it redirects here
+  // with the real error only in the URL FRAGMENT (`#error=...`), which
+  // browsers never send to the server — see app/sign-in/page.tsx's own
+  // getAuthErrorMessageFromFragment for where that fragment IS read,
+  // client-side. Deliberately logs only a fixed reason tag, the NAMES
+  // (never values) of whatever query params were present, and a plain
+  // COUNT of PKCE-verifier-shaped cookies (never their values) — enough
+  // to distinguish "GoTrue rejected the token before ever issuing a
+  // code" from other failure shapes, without ever logging an auth code,
+  // a token, a session, or cookie contents.
+  const cookieStore = await cookies()
+  const verifierCookieCount = cookieStore.getAll().filter((c) => c.name.includes('code-verifier')).length
+  console.error('[auth/callback] auth_callback_no_code_no_query_error', {
+    reason: 'auth_callback_no_code_no_query_error',
+    paramNames: Array.from(searchParams.keys()),
+    verifierCookieCount,
+  })
 
   return NextResponse.redirect(`${origin}/sign-in?error=auth_failed`)
 }
