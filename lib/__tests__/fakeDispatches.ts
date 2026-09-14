@@ -33,8 +33,40 @@ export type FakeProfileRow = {
   pinned_dispatch_id?: string | null
 }
 export type FakeTopicRow = { dispatch_id: string; topic: string }
-export type FakeKeptRow = { viewer_user_id: string; kept_user_id: string }
-export type FakeViewRow = { viewer_id: string; dispatch_id: string; last_paragraph_index: number }
+export type FakeKeptRow = {
+  viewer_user_id: string
+  kept_user_id: string
+  /** Board Feed Foundation checkpoint (Phase 2A), session-stability
+   * correction — board_feed_page pins the Keep-ADD direction to session
+   * start via this existing column (kept_minds.created_at < p_session_
+   * started_at), see docs/sql/2026-09-22-board-feed-foundation.sql.
+   * Optional: defaults to a safely-in-the-past sentinel, so existing
+   * fixtures that don't care about Keep timing continue to test as
+   * "kept before session start," matching their pre-correction
+   * behavior. */
+  created_at?: string
+}
+export type FakeViewRow = {
+  viewer_id: string
+  dispatch_id: string
+  last_paragraph_index: number
+  /** The table's own MUTABLE latest-view timestamp — upserted to now()
+   * on every real recordDispatchProgress call. Optional here because
+   * most existing fixtures only care about "a view row exists at all"
+   * (hasSeenDispatch/getSeenDispatchIds); defaults to a fixed,
+   * safely-in-the-past sentinel so those keep passing unchanged. */
+  viewed_at?: string
+  /** Session-stability correction (Board Feed Foundation checkpoint,
+   * Phase 2A) — the IMMUTABLE "earliest known view" fact board_feed_page
+   * actually keys its tiering on (see docs/sql/2026-09-22-board-feed-
+   * foundation.sql). Optional: when omitted, defaults to viewed_at (the
+   * same backfill relationship the real migration establishes for
+   * pre-existing rows — first_viewed_at = viewed_at for any fixture that
+   * doesn't care about the two diverging), and if viewed_at is ALSO
+   * omitted, to the same safely-in-the-past sentinel viewed_at itself
+   * defaults to. */
+  first_viewed_at?: string
+}
 export type FakeShareRow = { id: string; dispatch_id: string; revoked_at: string | null }
 export type FakeMomentRow = { id: string; dispatch_id: string; position: number; image_path: string }
 /** Safety & Trust Checkpoint 1B/1C: mirrors blocked_users' shape —
@@ -49,6 +81,12 @@ export type FakeBlockRow = {
   created_at?: string
 }
 
+/** Board Feed Foundation checkpoint (Phase 2A) — mirrors
+ * account_enforcement_state.status, keyed by user id. A member absent
+ * from this map defaults to 'active', matching current_account_status's
+ * own coalesce. */
+export type FakeAccountStatus = 'active' | 'restricted' | 'suspended' | 'banned'
+
 export function createFakeDispatches(options: {
   viewerId: string | null
   rows: FakeDispatchRow[]
@@ -59,6 +97,7 @@ export function createFakeDispatches(options: {
   shares?: FakeShareRow[]
   moments?: FakeMomentRow[]
   blocked?: FakeBlockRow[]
+  accountStatus?: Record<string, FakeAccountStatus>
 }) {
   const { viewerId } = options
   const rows = options.rows
@@ -70,6 +109,17 @@ export function createFakeDispatches(options: {
   const shares = options.shares ?? []
   const moments = options.moments ?? []
   const blocked = options.blocked ?? []
+  const accountStatus = options.accountStatus ?? {}
+
+  // Mirrors tempa_private.author_content_publicly_visible (docs/sql/
+  // 2026-09-22-board-feed-foundation.sql): only 'suspended'/'banned'
+  // exclude an author's already-published content from OTHER members —
+  // 'restricted' and 'active' (including a status-less author) stay
+  // fully visible, matching the live function's own exact boundary.
+  function authorContentPubliclyVisible(authorId: string) {
+    const status = accountStatus[authorId] ?? 'active'
+    return status !== 'suspended' && status !== 'banned'
+  }
 
   // Mirrors tempa_private.is_blocked_pair(a, b) as redefined by
   // Checkpoint 1C (docs/sql/2026-09-12-scoped-blocking-and-fixes.sql):
@@ -107,7 +157,8 @@ export function createFakeDispatches(options: {
       (r) =>
         (r.status === 'published' &&
           r.moderation_status === 'visible' &&
-          !isBlockedPair(viewerId, r.author_id)) ||
+          !isBlockedPair(viewerId, r.author_id) &&
+          authorContentPubliclyVisible(r.author_id)) ||
         r.author_id === viewerId
     )
   }
@@ -352,6 +403,59 @@ export function createFakeDispatches(options: {
     return builder
   }
 
+  // dispatch_moments — supports both call shapes lib/dispatches.ts
+  // actually issues: a single-dispatch read ordered by position
+  // (getDispatchMoments/getDispatchMomentsForEditing, via .eq) and a
+  // batched multi-dispatch read (getFirstMomentThumbnails, via .in) —
+  // both always ordered oldest-position-first, matching the live
+  // `order by position asc` every one of those functions uses.
+  function momentsFrom() {
+    const filters: { dispatchId?: string; dispatchIds?: string[] } = {}
+    const applyFilters = () =>
+      moments
+        .filter((m) => (filters.dispatchId ? m.dispatch_id === filters.dispatchId : true))
+        .filter((m) => (filters.dispatchIds ? filters.dispatchIds.includes(m.dispatch_id) : true))
+        .sort((a, b) => a.position - b.position)
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        if (column === 'dispatch_id') filters.dispatchId = value as string
+        return builder
+      },
+      in(column: string, values: string[]) {
+        if (column === 'dispatch_id') filters.dispatchIds = values
+        return builder
+      },
+      order() {
+        return builder
+      },
+      then(resolve: (value: { data: FakeMomentRow[]; error: null }) => void) {
+        resolve({ data: applyFilters(), error: null })
+      },
+    }
+    return builder
+  }
+
+  function accountEnforcementFrom() {
+    const filters: { userId?: string } = {}
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        if (column === 'user_id') filters.userId = value as string
+        return builder
+      },
+      async maybeSingle() {
+        const status = filters.userId ? accountStatus[filters.userId] : undefined
+        return { data: status ? { status } : null, error: null }
+      },
+    }
+    return builder
+  }
+
   function from(table: string) {
     if (table === 'dispatches') return dispatchesFrom()
     if (table === 'public_profiles' || table === 'profiles') return profilesFrom()
@@ -360,6 +464,8 @@ export function createFakeDispatches(options: {
     if (table === 'dispatch_views') return viewsFrom()
     if (table === 'dispatch_shares') return sharesFrom()
     if (table === 'blocked_users') return blockedUsersFrom()
+    if (table === 'dispatch_moments') return momentsFrom()
+    if (table === 'account_enforcement_state') return accountEnforcementFrom()
     throw new Error(`fakeDispatches does not simulate table "${table}"`)
   }
 
@@ -437,7 +543,119 @@ export function createFakeDispatches(options: {
             r.body.toLowerCase().includes(q) ||
             topics.some((t) => t.dispatch_id === r.id && t.topic.toLowerCase().includes(q)))
       )
-      return { data: matches.sort((a, b) => b.published_at.localeCompare(a.published_at)), error: null }
+      // Board Feed Foundation checkpoint (Phase 2A): mirrors
+      // search_dispatches' own new hard cap (docs/sql/2026-09-22-board-
+      // feed-foundation.sql) — was previously unbounded.
+      const SEARCH_HARD_CAP = 50
+      return {
+        data: matches.sort((a, b) => b.published_at.localeCompare(a.published_at)).slice(0, SEARCH_HARD_CAP),
+        error: null,
+      }
+    }
+    // Board Feed Foundation checkpoint (Phase 2A) — mirrors
+    // public.board_feed_page (docs/sql/2026-09-22-board-feed-
+    // foundation.sql) closely enough to test its OBSERVABLE properties
+    // (tiering, author diversity via author_seq, session-stability via
+    // the pre-session viewed_at cutoff, keyset cursor correctness) in
+    // pure JS, without a live Postgres to run the real SQL against. The
+    // seed_hash tie-break below does not need to reproduce Postgres's
+    // own hashtext() byte-for-byte — only to be a deterministic,
+    // seed-and-id-dependent function, which is all the real property
+    // (same seed -> same order; a different seed CAN reorder a tie)
+    // actually requires.
+    if (fn === 'board_feed_page') {
+      const sessionStartedAt = params?.p_session_started_at as string
+      const seed = params?.p_seed as string
+      const limit = (params?.p_limit as number) ?? 12
+      const cursor =
+        params?.p_cursor_tier == null
+          ? null
+          : {
+              tier: params.p_cursor_tier as number,
+              authorSeq: params.p_cursor_author_seq as number,
+              seedHash: params.p_cursor_seed_hash as number,
+              id: params.p_cursor_id as string,
+            }
+
+      function seedHash(id: string): number {
+        let h = 2166136261
+        const combined = `${seed}${id}`
+        for (let i = 0; i < combined.length; i++) {
+          h ^= combined.charCodeAt(i)
+          h = Math.imul(h, 16777619)
+        }
+        return h | 0
+      }
+
+      const eligible = visibleRows()
+        .filter((r) => r.status === 'published' && r.moderation_status === 'visible')
+        .filter((r) => r.published_at <= sessionStartedAt)
+        .sort((a, b) => b.published_at.localeCompare(a.published_at))
+        .slice(0, 300)
+
+      // Session-stability correction: tiering keys on first_viewed_at
+      // (immutable) and kept_minds.created_at (pins the Keep-ADD
+      // direction), never the mutable viewed_at or a live/unpinned Keep
+      // check — see docs/sql/2026-09-22-board-feed-foundation.sql for
+      // the full reasoning this mirrors.
+      const SENTINEL_PAST = '2000-01-01T00:00:00Z'
+      const tiered = eligible.map((r) => {
+        const seenPreSession = views.some((v) => {
+          if (v.viewer_id !== viewerId || v.dispatch_id !== r.id) return false
+          const firstViewedAt = v.first_viewed_at ?? v.viewed_at ?? SENTINEL_PAST
+          return firstViewedAt < sessionStartedAt
+        })
+        const isKeptPreSession = kept.some(
+          (k) =>
+            k.viewer_user_id === viewerId &&
+            k.kept_user_id === r.author_id &&
+            (k.created_at ?? SENTINEL_PAST) < sessionStartedAt
+        )
+        const tier = seenPreSession ? 3 : isKeptPreSession ? 1 : 2
+        return { ...r, tier }
+      })
+
+      const authorSeqByTierAuthor = new Map<string, number>()
+      const ranked = [...tiered]
+        .sort((a, b) => b.published_at.localeCompare(a.published_at))
+        .map((r) => {
+          const key = `${r.tier}:${r.author_id}`
+          const next = (authorSeqByTierAuthor.get(key) ?? 0) + 1
+          authorSeqByTierAuthor.set(key, next)
+          return { ...r, author_seq: next, seed_hash: seedHash(r.id) }
+        })
+
+      ranked.sort((a, b) => {
+        if (a.tier !== b.tier) return a.tier - b.tier
+        if (a.author_seq !== b.author_seq) return a.author_seq - b.author_seq
+        if (a.seed_hash !== b.seed_hash) return a.seed_hash - b.seed_hash
+        return a.id.localeCompare(b.id)
+      })
+
+      function tupleGreaterThanCursor(r: (typeof ranked)[number]): boolean {
+        if (!cursor) return true
+        if (r.tier !== cursor.tier) return r.tier > cursor.tier
+        if (r.author_seq !== cursor.authorSeq) return r.author_seq > cursor.authorSeq
+        if (r.seed_hash !== cursor.seedHash) return r.seed_hash > cursor.seedHash
+        return r.id > cursor.id
+      }
+
+      const page = ranked.filter(tupleGreaterThanCursor).slice(0, limit)
+
+      return {
+        data: page.map((r) => ({
+          id: r.id,
+          author_id: r.author_id,
+          title: r.title,
+          body: r.body,
+          published_at: r.published_at,
+          moderation_status: r.moderation_status,
+          tier: r.tier,
+          author_seq: r.author_seq,
+          seed_hash: r.seed_hash,
+        })),
+        error: null,
+      }
     }
     // Mirrors share_dispatch's own validation order and get-or-create
     // behavior (see docs/sql/2026-09-07-dispatches-and-board.sql,

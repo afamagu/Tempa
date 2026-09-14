@@ -259,48 +259,112 @@ export async function getPublishedDispatches(supabase: SupabaseClient): Promise<
   return attachTopicsAndAuthors(supabase, (rows ?? []) as DispatchRow[])
 }
 
-const HOME_POOL_LIMIT = 30
 const HOME_DISPATCH_COUNT = 3
 
 /**
- * Home's small Dispatch set — up to 3, viewer-aware and unseen-first,
- * same tiering as The Board itself (sortBoardDispatches: unseen-kept,
- * then unseen-others, then previously seen), just capped tighter.
- * Board usability checkpoint (2026-09-09): previously Home showed a
- * plain recent-first pool with no relationship to what the viewer had
- * already read; that made it feel static rather than a living
- * "something new for you" surface. Naturally rotates as a member reads
- * — opening a Dispatch marks it seen (dispatch_views, via the reader's
- * existing recordDispatchProgress), so the next time Home is fetched,
- * an unseen Dispatch takes its place if one exists. No separate
- * Home-only "dismissed" table, no popularity signal — this is the same
- * pure sortBoardDispatches function Board uses, over a small pool.
+ * Home's small Dispatch set — exactly up to 3 (never more; Home is
+ * deliberately not a feed). Board Feed Foundation checkpoint (Phase 2A):
+ * now a thin wrapper over getBoardFeedPage — the SAME tiering/author-
+ * diversity core The Board itself uses, one page, no cursor, always a
+ * fresh session (a new session_started_at/seed on every Home render,
+ * since Home has no browsing-session concept to stay stable across —
+ * see getBoardFeedPage's own doc comment). This preserves Home's
+ * pre-2A feel exactly: naturally rotates as a member reads (opening a
+ * Dispatch marks it seen, so the next Home load can surface a different
+ * unseen Dispatch), no separate Home-only "dismissed" table, no
+ * popularity signal.
  */
-export async function getHomeBoardDispatches(
+export async function getHomeBoardDispatches(supabase: SupabaseClient): Promise<DispatchListItem[]> {
+  const { items } = await getBoardFeedPage(supabase, {
+    sessionStartedAt: new Date().toISOString(),
+    seed: generateBoardSeed(),
+    cursor: null,
+    limit: HOME_DISPATCH_COUNT,
+  })
+  return items
+}
+
+// ============================================================
+// BOARD FEED — Board Feed Foundation checkpoint (Phase 2A)
+// ============================================================
+
+/** Opaque-to-callers cursor for board_feed_page's keyset pagination —
+ * the (tier, author_seq, seed_hash, id) tuple of the last row already
+ * returned. Carries no meaning outside another getBoardFeedPage call. */
+export type BoardFeedCursor = {
+  tier: number
+  authorSeq: number
+  seedHash: number
+  id: string
+}
+
+export const BOARD_FEED_PAGE_SIZE = 12
+
+/** A short, non-secret, per-browsing-session random string — the seed
+ * fed into board_feed_page's deterministic hashtext() tie-break. Not a
+ * security token: it only ever decides display order, never anything
+ * access-related, so plain Math.random() (visible in the Board URL,
+ * exactly as the checkpoint spec calls for) is intentional, not an
+ * oversight. */
+export function generateBoardSeed(): string {
+  return Math.random().toString(36).slice(2, 10)
+}
+
+type BoardFeedRow = DispatchRow & {
+  tier: number
+  author_seq: number
+  seed_hash: number
+}
+
+/**
+ * One page of The Board's session-stable, cursor-paginated,
+ * author-diverse feed — see docs/sql/2026-09-22-board-feed-
+ * foundation.sql's own extensive comment on board_feed_page for the
+ * full reasoning (session model, the exact viewed_at-based stability
+ * rule, author_seq's diversity+recency unification, the seeded
+ * hashtext() tie-break, and why this is real keyset pagination, never
+ * OFFSET). This function's own job is thin: call the RPC, attach
+ * authors/topics via the same batched helper every other Dispatch
+ * listing already uses, and turn the last row's own (tier, author_seq,
+ * seed_hash, id) into the next page's cursor.
+ *
+ * `sessionStartedAt`/`seed` must be the SAME two values for every call
+ * within one Board browsing session (including every "Load more") —
+ * carried by the caller (the Board page's own URL), never persisted
+ * here or anywhere else. A `cursor` of `null` always means "first page
+ * of this session," never "first page ever."
+ */
+export async function getBoardFeedPage(
   supabase: SupabaseClient,
-  viewerId: string
-): Promise<DispatchListItem[]> {
-  const { data: rows } = await supabase
-    .from('dispatches')
-    .select(LIST_COLUMNS)
-    .eq('status', 'published')
-    .eq('moderation_status', 'visible')
-    .order('published_at', { ascending: false })
-    .limit(HOME_POOL_LIMIT)
+  params: {
+    sessionStartedAt: string
+    seed: string
+    cursor: BoardFeedCursor | null
+    limit?: number
+  }
+): Promise<{ items: DispatchListItem[]; nextCursor: BoardFeedCursor | null }> {
+  const limit = params.limit ?? BOARD_FEED_PAGE_SIZE
 
-  const pool = await attachTopicsAndAuthors(supabase, (rows ?? []) as DispatchRow[])
-  if (pool.length === 0) return []
+  const { data: rows } = await supabase.rpc('board_feed_page', {
+    p_session_started_at: params.sessionStartedAt,
+    p_seed: params.seed,
+    p_limit: limit,
+    p_cursor_tier: params.cursor?.tier ?? null,
+    p_cursor_author_seq: params.cursor?.authorSeq ?? null,
+    p_cursor_seed_hash: params.cursor?.seedHash ?? null,
+    p_cursor_id: params.cursor?.id ?? null,
+  })
 
-  const [seenIds, keptUserIds] = await Promise.all([
-    getSeenDispatchIds(supabase, viewerId),
-    getKeptUserIds(supabase, viewerId),
-  ])
+  const typedRows = (rows ?? []) as BoardFeedRow[]
+  const items = await attachTopicsAndAuthors(supabase, typedRows)
 
-  const ordered = sortBoardDispatches(
-    pool.map((d) => ({ ...d, seen: seenIds.has(d.id), kept: keptUserIds.has(d.authorId) }))
-  )
+  const last = typedRows[typedRows.length - 1]
+  const nextCursor: BoardFeedCursor | null =
+    typedRows.length === limit && last
+      ? { tier: last.tier, authorSeq: last.author_seq, seedHash: last.seed_hash, id: last.id }
+      : null
 
-  return ordered.slice(0, HOME_DISPATCH_COUNT)
+  return { items, nextCursor }
 }
 
 /**

@@ -91,7 +91,7 @@ export default async function HomePage() {
     getHiddenCorrespondenceIds(supabase, user.id),
     getEligibleQuestions(supabase, user.id),
     getMyAnswers(supabase, user.id),
-    getHomeBoardDispatches(supabase, user.id),
+    getHomeBoardDispatches(supabase),
   ])
 
   const activeAnnouncement = await getActiveAnnouncement(supabase)

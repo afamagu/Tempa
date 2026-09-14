@@ -1,36 +1,51 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
 import {
-  getPublishedDispatches,
   searchDispatches,
-  getSeenDispatchIds,
   getKeptUserIds,
-  sortBoardDispatches,
+  getBoardFeedPage,
   getFirstMomentThumbnails,
+  generateBoardSeed,
+  BOARD_FEED_PAGE_SIZE,
 } from '@/lib/dispatches'
-import { sectionTitleClass, helperTextClass } from '@/app/profile/ui'
+import { sectionTitleClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import DispatchCard from './dispatch-card'
 import DispatchSearch from './dispatch-search'
 import KeepButton from './keep-button'
 import WriteDispatchButton from './write-dispatch-button'
+import BoardFeed from './board-feed'
 
 /**
  * The Board — a normal vertically scrolling discovery/list page, never
- * Reels/Stories/an animated feed. Ordering is viewer-aware and
- * unseen-first (sortBoardDispatches), never a popularity signal — none
- * of likes/views/followers exist anywhere in this schema to rank by.
- * Search results (when ?q is present) are shown newest-first only,
- * without the seen/kept tiering — a deliberate lookup, not passive
- * discovery.
+ * Reels/Stories/an animated feed. Search results (when ?q is present)
+ * are shown newest-first only, without any tiering — a deliberate
+ * lookup, not passive discovery — and never touch the session/cursor
+ * machinery below at all.
+ *
+ * Board Feed Foundation checkpoint (Phase 2A) — the non-search path now
+ * carries an explicit Board browsing session in its own URL:
+ * `?s=<session_started_at>&seed=<seed>`. Neither value is persisted
+ * anywhere (no new database table) — the FIRST request of a session
+ * (no `s`/`seed` present) mints both and redirects once to the
+ * canonical URL carrying them, so a plain browser refresh (which
+ * re-requests that same URL) reuses the SAME session rather than
+ * silently starting a new one. "Load more" (see board-feed.tsx) and a
+ * genuine "back" navigation after opening one Dispatch both naturally
+ * reuse the same URL/session too. An explicit Refresh is simply a link
+ * back to plain `/board` — hitting the page with neither value present
+ * triggers the same mint-and-redirect path, producing a fresh
+ * session_started_at and seed (see getBoardFeedPage/board_feed_page for
+ * exactly what that changes and what it deliberately doesn't).
  */
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>
+  searchParams: Promise<{ q?: string; s?: string; seed?: string }>
 }) {
-  const { q } = await searchParams
+  const { q, s, seed } = await searchParams
   const query = (q ?? '').trim()
 
   const supabase = await createClient()
@@ -42,25 +57,25 @@ export default async function BoardPage({
     redirect('/sign-in')
   }
 
-  const [waitingCount, pool, seenIds, keptUserIds] = await Promise.all([
+  if (!query && (!s || !seed)) {
+    redirect(`/board?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
+  }
+
+  const [waitingCount, feedResult, keptUserIds] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
-    query ? searchDispatches(supabase, query) : getPublishedDispatches(supabase),
-    getSeenDispatchIds(supabase, user.id),
+    query
+      ? searchDispatches(supabase, query).then((items) => ({ items, nextCursor: null }))
+      : getBoardFeedPage(supabase, { sessionStartedAt: s!, seed: seed!, cursor: null }),
     getKeptUserIds(supabase, user.id),
   ])
 
-  const dispatches = query
-    ? pool
-    : sortBoardDispatches(
-        pool.map((d) => ({ ...d, seen: seenIds.has(d.id), kept: keptUserIds.has(d.authorId) }))
-      )
+  const dispatches = feedResult.items
 
   // Board list Moment preview (Board live-test corrections, 2026-09-10):
   // the same batched first-Moment lookup Home's shelf already uses (see
-  // getFirstMomentThumbnails), so a Dispatch with a photo Moment shows
-  // the same small thumbnail here that it shows on Home — previously
-  // this page fetched nothing at all, so DispatchCard never had a
-  // thumbnailUrl to render even when one existed.
+  // getFirstMomentThumbnails) — one call per page, whether this is the
+  // first page or a later "Load more" page (see board-feed.tsx), never
+  // per-card.
   const thumbnailByDispatchId = await getFirstMomentThumbnails(
     supabase,
     dispatches.map((d) => d.id)
@@ -78,7 +93,14 @@ export default async function BoardPage({
             <WriteDispatchButton />
           </div>
 
-          <DispatchSearch initialQuery={query} />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <DispatchSearch initialQuery={query} />
+            {!query && (
+              <Link href="/board" className={quietLinkClass}>
+                Refresh the Board
+              </Link>
+            )}
+          </div>
 
           {dispatches.length === 0 ? (
             <div className="space-y-2">
@@ -91,7 +113,7 @@ export default async function BoardPage({
                 </>
               )}
             </div>
-          ) : (
+          ) : query ? (
             <div className="space-y-4">
               {dispatches.map((dispatch) => (
                 <DispatchCard
@@ -111,6 +133,17 @@ export default async function BoardPage({
                 />
               ))}
             </div>
+          ) : (
+            <BoardFeed
+              viewerId={user.id}
+              sessionStartedAt={s!}
+              seed={seed!}
+              initialDispatches={dispatches}
+              initialThumbnails={Object.fromEntries(thumbnailByDispatchId)}
+              initialCursor={feedResult.nextCursor}
+              initialKeptUserIds={[...keptUserIds]}
+              pageSize={BOARD_FEED_PAGE_SIZE}
+            />
           )}
         </div>
       </main>
