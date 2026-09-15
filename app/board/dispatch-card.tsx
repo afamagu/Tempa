@@ -38,6 +38,7 @@ export default function DispatchCard({
   dispatch,
   keepSlot,
   thumbnailUrl,
+  trailQuery,
 }: {
   dispatch: DispatchListItem
   keepSlot?: React.ReactNode
@@ -45,7 +46,16 @@ export default function DispatchCard({
    * getFirstMomentThumbnails lookup Home's BoardShelfCard already uses,
    * threaded through by the caller (app/board/page.tsx). */
   thumbnailUrl?: string
+  /** Home Phase 1 (Reading Trail) — the reading-trail query string
+   * (readingTrailSearchParams(...).toString(), lib/dispatches.ts) for
+   * THIS card's own position in an already-ranked board_feed_page
+   * result, appended to its link so the Dispatch detail page can offer
+   * Continue Reading. Omitted entirely for search results (which carry
+   * no tiering/cursor of any kind) — no trail is ever manufactured for
+   * those. */
+  trailQuery?: string
 }) {
+  const href = trailQuery ? `/board/${dispatch.id}?${trailQuery}` : `/board/${dispatch.id}`
   return (
     <div className="rounded-md border border-foreground/10 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
@@ -60,7 +70,7 @@ export default function DispatchCard({
         {keepSlot && <div className="shrink-0">{keepSlot}</div>}
       </div>
 
-      <Link href={`/board/${dispatch.id}`} className="mt-2 block transition-colors hover:opacity-80">
+      <Link href={href} className="mt-2 block transition-colors hover:opacity-80">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[16px] font-medium text-foreground">{dispatch.title}</p>

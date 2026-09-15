@@ -125,4 +125,23 @@ describe('DispatchCard', () => {
     expect(keepIndex).toBeLessThan(titleIndex)
     expect(keepIndex).toBeLessThan(linkIndex)
   })
+
+  // Home Phase 1 (Reading Trail) — trailQuery is purely additive: when
+  // present, it's appended as the link's own query string; when absent
+  // (a search result — see app/board/page.tsx), the href stays bare,
+  // exactly matching the "no trail manufactured" requirement.
+  describe('Reading Trail — trailQuery', () => {
+    it('appends the trail query string to the Dispatch link when supplied', () => {
+      const html = renderToStaticMarkup(
+        <DispatchCard dispatch={item()} trailQuery="s=2026-09-01T00%3A00%3A00Z&seed=abc&tier=2&aseq=1&shash=99" />
+      )
+      expect(html).toContain('href="/board/d-1?s=2026-09-01T00%3A00%3A00Z&amp;seed=abc&amp;tier=2&amp;aseq=1&amp;shash=99"')
+    })
+
+    it('omits the query string entirely when trailQuery is not supplied — a bare href, no trail manufactured', () => {
+      const html = renderToStaticMarkup(<DispatchCard dispatch={item()} />)
+      expect(html).toContain('href="/board/d-1"')
+      expect(html).not.toContain('?')
+    })
+  })
 })

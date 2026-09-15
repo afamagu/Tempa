@@ -41,7 +41,18 @@ export default function AnnouncementTeaser({
       <p className={sectionLabelClass}>Announcement</p>
 
       {imageUrl && (
-        <Link href="/announcement" className="block aspect-[3/2] w-full overflow-hidden rounded-md">
+        // Home Phase 1B — a wider, shorter ratio on mobile (roughly
+        // 160-200px effective height on a typical phone at this
+        // column's own width) so the artwork reads as editorial
+        // accompaniment, never a hero takeover of the first viewport;
+        // widens back to the original, more generous 3:2 on desktop,
+        // where the wider column comfortably supports it. object-cover
+        // throughout — this image is already a deliberately-cropped
+        // photographic hero (never a diagram/screenshot where `contain`
+        // would be required to avoid cutting off meaningful content),
+        // so only the crop WINDOW changes with viewport, never the fit
+        // mode itself.
+        <Link href="/announcement" className="block aspect-[2/1] w-full overflow-hidden rounded-md sm:aspect-[3/2]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="h-full w-full object-cover" />
         </Link>

@@ -259,27 +259,232 @@ export async function getPublishedDispatches(supabase: SupabaseClient): Promise<
   return attachTopicsAndAuthors(supabase, (rows ?? []) as DispatchRow[])
 }
 
-const HOME_DISPATCH_COUNT = 3
+/**
+ * Home Phase 1 (Editorial Reading Surface) — internal candidate pool
+ * size, NOT the number of cards Home renders. Comfortably covers every
+ * section's own max (Featured 3 + Shelf 5 + From Minds You Keep 3 +
+ * Serendipity 3 = 14) with a little headroom for sections that can't
+ * fill (e.g. too few Kept-author rows), without ever needing a second
+ * round trip. Still just a `limit` on the same board_feed_page RPC —
+ * no new ranking, no new RPC.
+ */
+export const HOME_CANDIDATE_COUNT = 20
 
 /**
- * Home's small Dispatch set — exactly up to 3 (never more; Home is
- * deliberately not a feed). Board Feed Foundation checkpoint (Phase 2A):
- * now a thin wrapper over getBoardFeedPage — the SAME tiering/author-
- * diversity core The Board itself uses, one page, no cursor, always a
- * fresh session (a new session_started_at/seed on every Home render,
- * since Home has no browsing-session concept to stay stable across —
- * see getBoardFeedPage's own doc comment). This preserves Home's
- * pre-2A feel exactly: naturally rotates as a member reads (opening a
- * Dispatch marks it seen, so the next Home load can surface a different
- * unseen Dispatch), no separate Home-only "dismissed" table, no
- * popularity signal.
+ * Home's candidate pool for its editorial Board reading surface — a
+ * thin wrapper over getBoardFeedPage, the SAME tiering/author-diversity
+ * core The Board itself uses, one page, no cursor. Mints ONE fresh
+ * session_started_at/seed per Home render (Home still has no persisted
+ * browsing-session concept — see getBoardFeedPage's own doc comment)
+ * and returns it alongside the items, so every Dispatch link Home
+ * builds from this SAME candidate set can encode that session via
+ * readingTrailSearchParams, keeping Continue Reading consistent for
+ * the whole render without persisting anything new to the DB.
+ * Partitioning this pool into sections is the caller's job
+ * (partitionHomeSections) — this function only ever fetches.
  */
-export async function getHomeBoardDispatches(supabase: SupabaseClient): Promise<DispatchListItem[]> {
+export async function getHomeBoardCandidates(
+  supabase: SupabaseClient
+): Promise<{ items: BoardFeedItem[]; sessionStartedAt: string; seed: string }> {
+  const sessionStartedAt = new Date().toISOString()
+  const seed = generateBoardSeed()
   const { items } = await getBoardFeedPage(supabase, {
-    sessionStartedAt: new Date().toISOString(),
-    seed: generateBoardSeed(),
+    sessionStartedAt,
+    seed,
     cursor: null,
-    limit: HOME_DISPATCH_COUNT,
+    limit: HOME_CANDIDATE_COUNT,
+  })
+  return { items, sessionStartedAt, seed }
+}
+
+export type HomeSections = {
+  featured: BoardFeedItem[]
+  shelf: BoardFeedItem[]
+  fromMindsYouKeep: BoardFeedItem[]
+  serendipity: BoardFeedItem[]
+  /** Left over after every section above has claimed its rows — not a
+   * section of its own; ON THE BOARD's ambient title strip draws from
+   * this first (falling back to reusing already-placed titles only if
+   * the candidate pool was too small to leave anything over), so the
+   * strip's titles are genuinely distinct from the cards above it
+   * whenever the pool allows. */
+  remainder: BoardFeedItem[]
+}
+
+const HOME_FEATURED_COUNT = 3
+const HOME_SHELF_COUNT = 5
+const HOME_KEEP_SECTION_MAX = 3
+const HOME_SERENDIPITY_MAX = 3
+
+/**
+ * Pure: deterministic section partitioning over an ALREADY-ranked
+ * board_feed_page candidate pool — never re-ranks, never invents a new
+ * ranking algorithm, and never lets the same Dispatch id appear in more
+ * than one section (the one hard product rule this function exists to
+ * guarantee). Order among candidates is preserved throughout — each
+ * section simply claims the next eligible unused rows in that existing
+ * order. Degrades gracefully (a shorter or entirely omitted section)
+ * rather than ever duplicating a card when the pool runs out; the
+ * caller (app/home/page.tsx) is responsible for omitting a rendered
+ * section entirely once it's empty (From Minds You Keep in particular
+ * is expected to often be empty and must vanish cleanly, not render a
+ * heading over nothing).
+ *
+ * Section order matches the product contract exactly: Featured claims
+ * first, then the Shelf, then From Minds You Keep (tier 1 only), then
+ * Serendipity (non-kept, preferring tier 2 — a Phase-1 proxy for
+ * broader discovery only, never a claim about being "outside the
+ * member's interests," which don't exist yet).
+ */
+export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
+  const used = new Set<string>()
+
+  const featured = items.slice(0, HOME_FEATURED_COUNT)
+  for (const item of featured) used.add(item.id)
+
+  const shelf: BoardFeedItem[] = []
+  for (const item of items) {
+    if (shelf.length >= HOME_SHELF_COUNT) break
+    if (used.has(item.id)) continue
+    shelf.push(item)
+    used.add(item.id)
+  }
+
+  const fromMindsYouKeep: BoardFeedItem[] = []
+  for (const item of items) {
+    if (fromMindsYouKeep.length >= HOME_KEEP_SECTION_MAX) break
+    if (used.has(item.id) || item.tier !== 1) continue
+    fromMindsYouKeep.push(item)
+    used.add(item.id)
+  }
+
+  const serendipity: BoardFeedItem[] = []
+  function fillSerendipity(matchesPreference: (item: BoardFeedItem) => boolean) {
+    for (const item of items) {
+      if (serendipity.length >= HOME_SERENDIPITY_MAX) break
+      if (used.has(item.id) || item.tier === 1 || !matchesPreference(item)) continue
+      serendipity.push(item)
+      used.add(item.id)
+    }
+  }
+  // Prefer tier 2 (unseen, non-kept); only fall back to tier 3
+  // (previously seen) once tier 2 is exhausted — never tier 1 (kept),
+  // which stays exclusive to the section above.
+  fillSerendipity((item) => item.tier === 2)
+  fillSerendipity(() => true)
+
+  const remainder = items.filter((item) => !used.has(item.id))
+
+  return { featured, shelf, fromMindsYouKeep, serendipity, remainder }
+}
+
+// ============================================================
+// READING TRAIL — zero-DB-state "Continue Reading" (Home Phase 1)
+// ============================================================
+//
+// A Dispatch link built from an already-ranked board_feed_page result
+// (Home's candidate pool, or The Board's own feed) carries that
+// result's session (sessionStartedAt/seed) plus the LINKED item's own
+// keyset cursor as plain URL query params — nothing persisted anywhere.
+// The Dispatch detail page, when it finds valid trail params, asks
+// board_feed_page (via getNextTrailItems below) for exactly the next
+// rows after that cursor in that exact session/ordering, and renders a
+// small "Continue Reading" shelf — each card's OWN href carries the
+// same session plus ITS OWN cursor, so picking any one of them (not
+// just the first) keeps the trail extending correctly from THAT item
+// onward. A bare `/board/[id]` URL (direct link, shared link, a search
+// result) simply has none of these params, so no trail is ever
+// manufactured for it.
+
+const TRAIL_PARAM_KEYS = {
+  sessionStartedAt: 's',
+  seed: 'seed',
+  tier: 'tier',
+  authorSeq: 'aseq',
+  seedHash: 'shash',
+} as const
+
+/**
+ * Encodes one Dispatch link's reading-trail context — the session this
+ * candidate came from, plus this item's own (tier, author_seq,
+ * seed_hash) cursor. The item's own id is deliberately NOT included
+ * here: it's already the `/board/[dispatchId]` route param the caller
+ * is linking to, so the Dispatch detail page recovers it from its own
+ * route params rather than duplicating it into the query string.
+ */
+export function readingTrailSearchParams(
+  session: { sessionStartedAt: string; seed: string },
+  item: BoardFeedItem
+): URLSearchParams {
+  const params = new URLSearchParams()
+  params.set(TRAIL_PARAM_KEYS.sessionStartedAt, session.sessionStartedAt)
+  params.set(TRAIL_PARAM_KEYS.seed, session.seed)
+  params.set(TRAIL_PARAM_KEYS.tier, String(item.tier))
+  params.set(TRAIL_PARAM_KEYS.authorSeq, String(item.cursor.authorSeq))
+  params.set(TRAIL_PARAM_KEYS.seedHash, String(item.cursor.seedHash))
+  return params
+}
+
+export type ReadingTrailContext = {
+  sessionStartedAt: string
+  seed: string
+  tier: number
+  authorSeq: number
+  seedHash: number
+}
+
+/**
+ * Pure: parses the Dispatch detail page's own searchParams back into a
+ * trail context — returns null (never throws) for anything absent or
+ * malformed, since an absent/broken trail simply means no Continue
+ * Reading block renders, exactly like a bare direct/shared URL.
+ */
+export function parseReadingTrailParams(
+  searchParams: Record<string, string | string[] | undefined>
+): ReadingTrailContext | null {
+  const get = (key: string): string | undefined => {
+    const value = searchParams[key]
+    return typeof value === 'string' ? value : undefined
+  }
+
+  const sessionStartedAt = get(TRAIL_PARAM_KEYS.sessionStartedAt)
+  const seed = get(TRAIL_PARAM_KEYS.seed)
+  const tier = Number(get(TRAIL_PARAM_KEYS.tier))
+  const authorSeq = Number(get(TRAIL_PARAM_KEYS.authorSeq))
+  const seedHash = Number(get(TRAIL_PARAM_KEYS.seedHash))
+
+  if (!sessionStartedAt || !seed) return null
+  if (!Number.isFinite(tier) || !Number.isFinite(authorSeq) || !Number.isFinite(seedHash)) return null
+
+  return { sessionStartedAt, seed, tier, authorSeq, seedHash }
+}
+
+/** Home Phase 1B — the "Continue Reading" shelf shows up to this many
+ * subsequent trail items, never just one. */
+export const CONTINUE_READING_COUNT = 4
+
+/**
+ * Up to `count` rows immediately after `context`'s own cursor, in that
+ * context's exact session/ordering — a plain getBoardFeedPage call
+ * with `limit: count`, no new RPC. `currentDispatchId` completes the
+ * keyset cursor (board_feed_page's own tuple comparison needs it as
+ * the final tie-break) — it comes from the caller's own route param,
+ * never from the URL query string (see readingTrailSearchParams's own
+ * comment). Returns fewer than `count` (down to zero) once the trail
+ * reaches the end of the session's ordering — never an error, the
+ * caller simply renders a smaller shelf, or none at all.
+ */
+export async function getNextTrailItems(
+  supabase: SupabaseClient,
+  context: ReadingTrailContext,
+  currentDispatchId: string,
+  count: number = CONTINUE_READING_COUNT
+): Promise<BoardFeedItem[]> {
+  const { items } = await getBoardFeedPage(supabase, {
+    sessionStartedAt: context.sessionStartedAt,
+    seed: context.seed,
+    cursor: { tier: context.tier, authorSeq: context.authorSeq, seedHash: context.seedHash, id: currentDispatchId },
+    limit: count,
   })
   return items
 }
@@ -296,6 +501,18 @@ export type BoardFeedCursor = {
   authorSeq: number
   seedHash: number
   id: string
+}
+
+/** One board_feed_page row, WITH the per-viewer ranking/cursor
+ * information the RPC already computes and previously discarded after
+ * mapping — Home Phase 1 needs `tier` to partition sections (From
+ * Minds You Keep = tier 1, Serendipity prefers tier 2) and `cursor`
+ * (this row's OWN tier/author_seq/seed_hash) to build a reading-trail
+ * link for it (see readingTrailSearchParams below). `cursor.id` always
+ * equals this item's own `id`. */
+export type BoardFeedItem = DispatchListItem & {
+  tier: number
+  cursor: BoardFeedCursor
 }
 
 export const BOARD_FEED_PAGE_SIZE = 12
@@ -342,7 +559,7 @@ export async function getBoardFeedPage(
     cursor: BoardFeedCursor | null
     limit?: number
   }
-): Promise<{ items: DispatchListItem[]; nextCursor: BoardFeedCursor | null }> {
+): Promise<{ items: BoardFeedItem[]; nextCursor: BoardFeedCursor | null }> {
   const limit = params.limit ?? BOARD_FEED_PAGE_SIZE
 
   const { data: rows } = await supabase.rpc('board_feed_page', {
@@ -356,7 +573,20 @@ export async function getBoardFeedPage(
   })
 
   const typedRows = (rows ?? []) as BoardFeedRow[]
-  const items = await attachTopicsAndAuthors(supabase, typedRows)
+  const listItems = await attachTopicsAndAuthors(supabase, typedRows)
+  const cursorByRowId = new Map(
+    typedRows.map((row) => [
+      row.id,
+      { tier: row.tier, authorSeq: row.author_seq, seedHash: row.seed_hash, id: row.id },
+    ])
+  )
+  // attachTopicsAndAuthors preserves row order/count 1:1, so this zip is
+  // safe — kept as an id-keyed lookup regardless, rather than assuming
+  // index alignment, so it can never silently misattach a cursor.
+  const items: BoardFeedItem[] = listItems.map((item) => {
+    const cursor = cursorByRowId.get(item.id)!
+    return { ...item, tier: cursor.tier, cursor }
+  })
 
   const last = typedRows[typedRows.length - 1]
   const nextCursor: BoardFeedCursor | null =

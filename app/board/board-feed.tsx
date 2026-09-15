@@ -5,8 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import {
   getBoardFeedPage,
   getFirstMomentThumbnails,
+  readingTrailSearchParams,
   type BoardFeedCursor,
-  type DispatchListItem,
+  type BoardFeedItem,
 } from '@/lib/dispatches'
 import { helperTextClass } from '@/app/profile/ui'
 import DispatchCard from './dispatch-card'
@@ -50,7 +51,7 @@ export default function BoardFeed({
   viewerId: string
   sessionStartedAt: string
   seed: string
-  initialDispatches: DispatchListItem[]
+  initialDispatches: BoardFeedItem[]
   initialThumbnails: Record<string, string>
   initialCursor: BoardFeedCursor | null
   initialKeptUserIds: string[]
@@ -101,6 +102,7 @@ export default function BoardFeed({
           key={dispatch.id}
           dispatch={dispatch}
           thumbnailUrl={thumbnails.get(dispatch.id)}
+          trailQuery={readingTrailSearchParams({ sessionStartedAt, seed }, dispatch).toString()}
           keepSlot={
             dispatch.authorId !== viewerId ? (
               <KeepButton

@@ -20,7 +20,7 @@ import {
   revokeDispatchShare,
   getActiveDispatchShare,
   getSharedDispatch,
-  getHomeBoardDispatches,
+  getHomeBoardCandidates,
   updateDispatch,
   deleteDispatch,
   pinDispatch,
@@ -29,7 +29,13 @@ import {
   getBoardFeedPage,
   getFirstMomentThumbnails,
   getDispatchMoments,
+  partitionHomeSections,
+  readingTrailSearchParams,
+  parseReadingTrailParams,
+  getNextTrailItems,
+  CONTINUE_READING_COUNT,
   type BoardFeedCursor,
+  type BoardFeedItem,
 } from './dispatches'
 import { docToPlainBody, RICH_BODY_MARKER } from './letter-editor-doc'
 import { blockUser, unblockUser } from './blocking'
@@ -589,22 +595,18 @@ describe('Dispatch sharing — getSharedDispatch (the external reader\'s sole da
   })
 })
 
-describe('Board usability checkpoint — Home Dispatch set', () => {
-  it('never shows more than 3 Dispatches', async () => {
-    const fake = createFakeDispatches({
-      viewerId: VIEWER,
-      rows: [
-        row({ id: 'd-1', published_at: '2026-09-08T00:00:00Z' }),
-        row({ id: 'd-2', published_at: '2026-09-07T00:00:00Z' }),
-        row({ id: 'd-3', published_at: '2026-09-06T00:00:00Z' }),
-        row({ id: 'd-4', published_at: '2026-09-05T00:00:00Z' }),
-      ],
-    })
-    const home = await getHomeBoardDispatches(client(fake))
-    expect(home).toHaveLength(3)
+describe('Home Phase 1 (Editorial Reading Surface) — Home candidate pool', () => {
+  it('no longer hard-caps itself at 3 — fetches up to HOME_CANDIDATE_COUNT candidates', async () => {
+    const rows = Array.from({ length: 25 }, (_, i) =>
+      row({ id: `d-${i}`, published_at: `2026-09-${String(8 - (i % 8)).padStart(2, '0')}T00:00:00Z` })
+    )
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows })
+    const { items } = await getHomeBoardCandidates(client(fake))
+    expect(items.length).toBeGreaterThan(3)
+    expect(items.length).toBeLessThanOrEqual(20)
   })
 
-  it('is unseen-first, same tiering as the Board itself — a seen Dispatch is replaced by an unseen one', async () => {
+  it('is unseen-first, same tiering as the Board itself — a seen Dispatch is not among the first candidates while unseen ones exist', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [
@@ -615,9 +617,26 @@ describe('Board usability checkpoint — Home Dispatch set', () => {
       ],
       views: [{ viewer_id: VIEWER, dispatch_id: 'seen-1', last_paragraph_index: 0 }],
     })
-    const home = await getHomeBoardDispatches(client(fake))
-    expect(home.map((d) => d.id)).not.toContain('seen-1')
-    expect(home).toHaveLength(3)
+    const { items } = await getHomeBoardCandidates(client(fake))
+    const ids = items.map((d) => d.id)
+    expect(ids.indexOf('seen-1')).toBe(ids.length - 1)
+  })
+
+  it('returns the session (sessionStartedAt/seed) it minted, so callers can encode it into reading-trail links', async () => {
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows: [row({ id: 'd-1' })] })
+    const { sessionStartedAt, seed } = await getHomeBoardCandidates(client(fake))
+    expect(typeof sessionStartedAt).toBe('string')
+    expect(sessionStartedAt.length).toBeGreaterThan(0)
+    expect(typeof seed).toBe('string')
+    expect(seed.length).toBeGreaterThan(0)
+  })
+
+  it('each candidate carries its own tier and cursor (never discarded, unlike the old getHomeBoardDispatches)', async () => {
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows: [row({ id: 'd-1' })] })
+    const { items } = await getHomeBoardCandidates(client(fake))
+    expect(items[0]).toHaveProperty('tier')
+    expect(items[0]).toHaveProperty('cursor')
+    expect(items[0].cursor).toMatchObject({ id: 'd-1' })
   })
 })
 
@@ -1195,7 +1214,7 @@ describe('Admin Phase 2A-1 — hidden Dispatch is invisible everywhere except th
     expect(result.map((r) => r.id)).toEqual(['visible-1'])
   })
 
-  it('Home (getHomeBoardDispatches) excludes a hidden Dispatch from its pool', async () => {
+  it('Home (getHomeBoardCandidates) excludes a hidden Dispatch from its pool', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [
@@ -1204,8 +1223,8 @@ describe('Admin Phase 2A-1 — hidden Dispatch is invisible everywhere except th
       ],
       profiles: [{ id: AUTHOR_A, pseudonym: 'A' }, { id: AUTHOR_B, pseudonym: 'B' }],
     })
-    const home = await getHomeBoardDispatches(client(fake))
-    expect(home.map((r) => r.id)).toEqual(['visible-1'])
+    const { items } = await getHomeBoardCandidates(client(fake))
+    expect(items.map((r) => r.id)).toEqual(['visible-1'])
   })
 
   it('a profile\'s Dispatch list (getPublishedDispatchesByAuthor) excludes a hidden Dispatch, even for the profile owner themself', async () => {
@@ -1698,19 +1717,175 @@ describe('getBoardFeedPage — Trust & Safety read-visibility (account enforceme
   })
 })
 
-describe('getHomeBoardDispatches — shares the Board feed core, never a cursor/pagination concept', () => {
-  it('the returned value is a plain array with no cursor field of any kind', async () => {
+describe('getHomeBoardCandidates — shares the Board feed core, no separate pagination concept of its own', () => {
+  it('the returned items are NOT plain DispatchListItem — each carries its own tier/cursor, never top-level nextCursor', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
     })
-    const home = await getHomeBoardDispatches(client(fake))
-    expect(Array.isArray(home)).toBe(true)
-    expect(home[0]).not.toHaveProperty('nextCursor')
-    expect(home[0]).not.toHaveProperty('cursor')
+    const { items } = await getHomeBoardCandidates(client(fake))
+    expect(Array.isArray(items)).toBe(true)
+    expect(items[0]).not.toHaveProperty('nextCursor')
+    expect(items[0]).toHaveProperty('cursor')
   })
 
-  it('never exceeds 3 even with many eligible Dispatches across every tier', async () => {
+  it('caps at HOME_CANDIDATE_COUNT even with many eligible Dispatches across every tier', async () => {
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      boardRow({ id: `d-${i}`, author_id: `user-${i}`, published_at: `2026-09-${String((i % 28) + 1).padStart(2, '0')}T00:00:00Z` })
+    )
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows })
+    const { items } = await getHomeBoardCandidates(client(fake))
+    expect(items.length).toBeLessThanOrEqual(20)
+    expect(items.length).toBeGreaterThan(3)
+  })
+})
+
+describe('Home Phase 1 — partitionHomeSections', () => {
+  function feedItem(overrides: Partial<BoardFeedItem>): BoardFeedItem {
+    const id = overrides.id ?? 'd-1'
+    return {
+      id,
+      authorId: 'author-1',
+      title: 'A title',
+      body: 'Body',
+      publishedAt: '2026-09-01T00:00:00Z',
+      moderationStatus: 'visible',
+      authorPseudonym: 'Someone',
+      authorCountry: null,
+      topics: [],
+      tier: 2,
+      cursor: { tier: 2, authorSeq: 1, seedHash: 0, id },
+      ...overrides,
+    }
+  }
+
+  it('never lets the same Dispatch id appear in more than one section', () => {
+    const items = Array.from({ length: 20 }, (_, i) =>
+      feedItem({ id: `d-${i}`, tier: i % 3 === 0 ? 1 : i % 3 === 1 ? 2 : 3 })
+    )
+    const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
+    const allIds = [
+      ...featured.map((i) => i.id),
+      ...shelf.map((i) => i.id),
+      ...fromMindsYouKeep.map((i) => i.id),
+      ...serendipity.map((i) => i.id),
+      ...remainder.map((i) => i.id),
+    ]
+    expect(new Set(allIds).size).toBe(allIds.length)
+    // Every candidate must land in exactly one bucket (including remainder).
+    expect(allIds.length).toBe(items.length)
+  })
+
+  it('Featured takes the first 3 rows in existing order; the Shelf takes the next 5 unused rows', () => {
+    const items = Array.from({ length: 10 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const { featured, shelf } = partitionHomeSections(items)
+    expect(featured.map((i) => i.id)).toEqual(['d-0', 'd-1', 'd-2'])
+    expect(shelf.map((i) => i.id)).toEqual(['d-3', 'd-4', 'd-5', 'd-6', 'd-7'])
+  })
+
+  it('From Minds You Keep omits cleanly (empty array) when no unused tier-1 rows remain', () => {
+    const items = Array.from({ length: 8 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const { fromMindsYouKeep } = partitionHomeSections(items)
+    expect(fromMindsYouKeep).toEqual([])
+  })
+
+  it('From Minds You Keep takes up to 3 additional unused tier-1 rows', () => {
+    const items = [
+      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}`, tier: 2 })),
+      feedItem({ id: 'kept-1', tier: 1 }),
+      feedItem({ id: 'kept-2', tier: 1 }),
+      feedItem({ id: 'kept-3', tier: 1 }),
+      feedItem({ id: 'kept-4', tier: 1 }),
+    ]
+    const { fromMindsYouKeep } = partitionHomeSections(items)
+    expect(fromMindsYouKeep.map((i) => i.id)).toEqual(['kept-1', 'kept-2', 'kept-3'])
+  })
+
+  it('Serendipity prefers tier 2 and never includes a tier-1 (kept) row', () => {
+    const items = [
+      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}`, tier: 2 })),
+      feedItem({ id: 'kept-1', tier: 1 }),
+      feedItem({ id: 'serendipity-tier2', tier: 2 }),
+      feedItem({ id: 'serendipity-tier3', tier: 3 }),
+    ]
+    const { serendipity } = partitionHomeSections(items)
+    expect(serendipity.map((i) => i.id)).not.toContain('kept-1')
+    expect(serendipity.map((i) => i.id)).toContain('serendipity-tier2')
+  })
+
+  it('degrades gracefully — never duplicates a card when the pool is smaller than every section combined', () => {
+    const items = Array.from({ length: 4 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const { featured, shelf, fromMindsYouKeep, serendipity } = partitionHomeSections(items)
+    const allIds = [...featured, ...shelf, ...fromMindsYouKeep, ...serendipity].map((i) => i.id)
+    expect(new Set(allIds).size).toBe(allIds.length)
+    expect(allIds.length).toBeLessThanOrEqual(items.length)
+  })
+
+  it('remainder holds whatever is left over after every section has claimed its rows', () => {
+    const items = Array.from({ length: 20 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
+    expect(remainder.length).toBe(
+      items.length - featured.length - shelf.length - fromMindsYouKeep.length - serendipity.length
+    )
+    expect(remainder.some((i) => featured.some((f) => f.id === i.id))).toBe(false)
+  })
+})
+
+describe('Home Phase 1 — reading trail helpers', () => {
+  function feedItem(overrides: Partial<BoardFeedItem>): BoardFeedItem {
+    const id = overrides.id ?? 'd-1'
+    return {
+      id,
+      authorId: 'author-1',
+      title: 'A title',
+      body: 'Body',
+      publishedAt: '2026-09-01T00:00:00Z',
+      moderationStatus: 'visible',
+      authorPseudonym: 'Someone',
+      authorCountry: null,
+      topics: [],
+      tier: 2,
+      cursor: { tier: 2, authorSeq: 3, seedHash: 12345, id },
+      ...overrides,
+    }
+  }
+
+  it('readingTrailSearchParams encodes the session plus the item\'s own cursor (never the item id itself)', () => {
+    const params = readingTrailSearchParams(
+      { sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123' },
+      feedItem({ id: 'd-1', tier: 2, cursor: { tier: 2, authorSeq: 3, seedHash: 12345, id: 'd-1' } })
+    )
+    expect(params.get('s')).toBe('2026-09-01T00:00:00Z')
+    expect(params.get('seed')).toBe('abc123')
+    expect(params.get('tier')).toBe('2')
+    expect(params.get('aseq')).toBe('3')
+    expect(params.get('shash')).toBe('12345')
+  })
+
+  it('parseReadingTrailParams round-trips what readingTrailSearchParams encoded', () => {
+    const params = readingTrailSearchParams(
+      { sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123' },
+      feedItem({ id: 'd-1', tier: 1, cursor: { tier: 1, authorSeq: 7, seedHash: -99, id: 'd-1' } })
+    )
+    const parsed = parseReadingTrailParams(Object.fromEntries(params.entries()))
+    expect(parsed).toEqual({ sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123', tier: 1, authorSeq: 7, seedHash: -99 })
+  })
+
+  it('parseReadingTrailParams returns null for a bare direct/shared URL with no trail params at all', () => {
+    expect(parseReadingTrailParams({})).toBeNull()
+  })
+
+  it('parseReadingTrailParams returns null when only some params are present (malformed/truncated)', () => {
+    expect(parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc' })).toBeNull()
+  })
+
+  it('parseReadingTrailParams returns null for non-numeric cursor fields', () => {
+    expect(
+      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', tier: 'x', aseq: '1', shash: '1' })
+    ).toBeNull()
+  })
+
+  it('getNextTrailItems returns the rows immediately after the given cursor, in that exact session, in order', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [
@@ -1718,11 +1893,87 @@ describe('getHomeBoardDispatches — shares the Board feed core, never a cursor/
         boardRow({ id: 'b', author_id: AUTHOR_B, published_at: '2026-09-04T00:00:00Z' }),
         boardRow({ id: 'c', author_id: 'user-c', published_at: '2026-09-03T00:00:00Z' }),
         boardRow({ id: 'd', author_id: 'user-d', published_at: '2026-09-02T00:00:00Z' }),
-        boardRow({ id: 'e', author_id: 'user-e', published_at: '2026-09-01T00:00:00Z' }),
       ],
     })
-    const home = await getHomeBoardDispatches(client(fake))
-    expect(home).toHaveLength(3)
+    const { items } = await getBoardFeedPage(client(fake), {
+      sessionStartedAt: SESSION_STARTED_AT,
+      seed: SEED_A,
+      cursor: null,
+    })
+    const [first, second, third] = items
+    const next = await getNextTrailItems(
+      client(fake),
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: first.tier, authorSeq: first.cursor.authorSeq, seedHash: first.cursor.seedHash },
+      first.id,
+      2
+    )
+    expect(next.map((i) => i.id)).toEqual([second.id, third.id])
+  })
+
+  it('getNextTrailItems defaults to CONTINUE_READING_COUNT items when count is omitted', async () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      boardRow({ id: `d-${i}`, author_id: `user-${i}`, published_at: `2026-09-${String(10 - i).padStart(2, '0')}T00:00:00Z` })
+    )
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    const [first] = items
+    const next = await getNextTrailItems(
+      client(fake),
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: first.tier, authorSeq: first.cursor.authorSeq, seedHash: first.cursor.seedHash },
+      first.id
+    )
+    expect(next).toHaveLength(CONTINUE_READING_COUNT)
+  })
+
+  it('getNextTrailItems returns an empty array (never null/throws) once the trail reaches the end', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'only-one', author_id: AUTHOR_A })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), {
+      sessionStartedAt: SESSION_STARTED_AT,
+      seed: SEED_A,
+      cursor: null,
+    })
+    const [only] = items
+    const next = await getNextTrailItems(
+      client(fake),
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: only.tier, authorSeq: only.cursor.authorSeq, seedHash: only.cursor.seedHash },
+      only.id
+    )
+    expect(next).toEqual([])
+  })
+
+  it('picking a NON-first recommendation preserves the correct onward trail — its own cursor continues from where IT sits, not from the original item', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [
+        boardRow({ id: 'a', author_id: AUTHOR_A, published_at: '2026-09-05T00:00:00Z' }),
+        boardRow({ id: 'b', author_id: AUTHOR_B, published_at: '2026-09-04T00:00:00Z' }),
+        boardRow({ id: 'c', author_id: 'user-c', published_at: '2026-09-03T00:00:00Z' }),
+        boardRow({ id: 'd', author_id: 'user-d', published_at: '2026-09-02T00:00:00Z' }),
+      ],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    const [first, second, third, fourth] = items
+    // Reader opens `first`, sees a shelf of [second, third, fourth], and
+    // taps the THIRD suggestion (not the first) — its own cursor must
+    // pick up correctly from there, not silently resume after `first`.
+    const shelf = await getNextTrailItems(
+      client(fake),
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: first.tier, authorSeq: first.cursor.authorSeq, seedHash: first.cursor.seedHash },
+      first.id,
+      3
+    )
+    expect(shelf.map((i) => i.id)).toEqual([second.id, third.id, fourth.id])
+    const chosen = shelf[1] // third
+    const afterChosen = await getNextTrailItems(
+      client(fake),
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: chosen.tier, authorSeq: chosen.cursor.authorSeq, seedHash: chosen.cursor.seedHash },
+      chosen.id,
+      3
+    )
+    expect(afterChosen.map((i) => i.id)).toEqual([fourth.id])
   })
 })
 

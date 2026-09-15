@@ -134,20 +134,48 @@ export default function AppShell({
             <Link
               key={item.key}
               href={item.href}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] transition-colors ${
-                isActive ? 'text-foreground' : 'text-foreground/50'
-              }`}
+              aria-current={isActive ? 'page' : undefined}
+              className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px]"
             >
-              <span className="relative">
-                <NavIcon item={item.key} className="h-5 w-5" />
-                {item.key === 'letters' && waitingLetterCount > 0 && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent"
+              {/* Home Phase 1B — a soft rounded lozenge behind the
+                  active icon, the TEMPA primary olive family (--accent),
+                  never Worth Reading's verdigris (that stays reserved).
+                  Shape AND color both carry the active state (never
+                  color alone) — the lozenge background, the icon's own
+                  stronger olive, and the label's modest weight/opacity
+                  bump are three independent cues, so the active tab
+                  reads clearly even for a viewer who can't distinguish
+                  the two colors. Purely a background/color swap (150ms),
+                  no bounce/pulse/scale — and sized to sit comfortably
+                  inside the existing touch target, never crowding the
+                  bar or growing it. */}
+              <span
+                className={`flex h-8 w-12 items-center justify-center rounded-full transition-colors duration-150 ${
+                  isActive ? 'bg-accent/10' : ''
+                }`}
+              >
+                <span className="relative">
+                  <NavIcon
+                    item={item.key}
+                    className={`h-5 w-5 transition-colors duration-150 ${
+                      isActive ? 'text-accent' : 'text-foreground/50'
+                    }`}
                   />
-                )}
+                  {item.key === 'letters' && waitingLetterCount > 0 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent"
+                    />
+                  )}
+                </span>
               </span>
-              <span>{item.label}</span>
+              <span
+                className={`transition-colors duration-150 ${
+                  isActive ? 'font-medium text-foreground' : 'text-foreground/50'
+                }`}
+              >
+                {item.label}
+              </span>
             </Link>
           )
         })}

@@ -17,7 +17,12 @@ import {
   isRichBody,
 } from '@/lib/letters'
 import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
-import { getHomeBoardDispatches, getFirstMomentThumbnails } from '@/lib/dispatches'
+import {
+  getHomeBoardCandidates,
+  getFirstMomentThumbnails,
+  partitionHomeSections,
+  readingTrailSearchParams,
+} from '@/lib/dispatches'
 import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
 import { sectionLabelClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
@@ -29,7 +34,10 @@ import QuestionIncompleteNotice from '@/app/minds/question-incomplete-notice'
 import RecommendedMindCard, { type RecommendedMind } from './recommended-mind-card'
 import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
+import BoardTitleStrip from './board-title-strip'
 import AnnouncementTeaser from './announcement-teaser'
+
+const STRIP_ITEM_COUNT = 6
 
 const RECOMMENDED_COUNT = 6
 
@@ -81,7 +89,7 @@ export default async function HomePage() {
     hiddenCorrespondenceIds,
     eligibleQuestions,
     myAnswers,
-    boardShelf,
+    boardCandidates,
   ] = await Promise.all([
     getMyLetters(supabase, user.id),
     getWaitingLetterCount(supabase, user.id),
@@ -91,7 +99,7 @@ export default async function HomePage() {
     getHiddenCorrespondenceIds(supabase, user.id),
     getEligibleQuestions(supabase, user.id),
     getMyAnswers(supabase, user.id),
-    getHomeBoardDispatches(supabase),
+    getHomeBoardCandidates(supabase),
   ])
 
   const activeAnnouncement = await getActiveAnnouncement(supabase)
@@ -99,10 +107,42 @@ export default async function HomePage() {
     ? (await resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath)).url
     : null
 
+  // Home Phase 1 (Editorial Reading Surface) — one candidate pool
+  // (~HOME_CANDIDATE_COUNT rows from the SAME board_feed_page ranking
+  // The Board itself uses), partitioned deterministically in
+  // application code into Featured/Shelf/From Minds You
+  // Keep/Serendipity — never a second ranking pass, never a Dispatch
+  // repeated across sections (see partitionHomeSections's own comment).
+  const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
+  const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(boardItems)
+
   const boardThumbnails = await getFirstMomentThumbnails(
     supabase,
-    boardShelf.map((d) => d.id)
+    boardItems.map((d) => d.id)
   )
+
+  // Reading Trail — every Home Dispatch link (cards AND the ON THE
+  // BOARD strip) carries this SAME session plus its own item's cursor,
+  // so the Dispatch detail page can offer Continue Reading with zero
+  // new DB state (see lib/dispatches.ts's own "READING TRAIL" section).
+  function trailQueryFor(item: (typeof boardItems)[number]): string {
+    return readingTrailSearchParams({ sessionStartedAt: boardSessionStartedAt, seed: boardSeed }, item).toString()
+  }
+
+  const [featuredLead, ...featuredSupporting] = featured
+
+  // Home Phase 1C — ON THE BOARD may only ever show a candidate that
+  // ISN'T already rendered in another Home Dispatch section above it.
+  // No fallback to boardItems: on a small/sparse dataset where
+  // partitionHomeSections has used up every candidate, remainder is
+  // empty and the strip simply omits itself (stripItems.length === 0
+  // below) rather than repeating a Dispatch a reader already saw in
+  // Featured/Shelf/etc.
+  const stripItems = remainder.slice(0, STRIP_ITEM_COUNT).map((item) => ({
+    id: item.id,
+    title: item.title,
+    href: `/board/${item.id}?${trailQueryFor(item)}`,
+  }))
 
   // "Remove from my Letterbox" means a correspondence no longer
   // surfaces in this viewer's ordinary personal mail surfaces at all —
@@ -185,124 +225,260 @@ export default async function HomePage() {
   return (
     <AppShell active="home" waitingLetterCount={waitingCount}>
       <main className="min-h-screen p-6">
-        <div className="mx-auto w-full max-w-md py-10">
-          {/* Premium Announcement Publishing checkpoint — a restrained
-              editorial TEMPA object, not a system notice: 3:2 hero,
-              title, subtitle. No carousel, no ad-banner styling, no
-              giant CTA. Exactly one at a time (getActiveAnnouncement's
-              own deterministic ranking).
-              Release Polish Pass correction — Home shows a compact
-              TEASER only (eyebrow, hero, title, subtitle, a short
-              clamped excerpt, "Read announcement →"), never the full
-              body inline; the full editorial rendering (unchanged)
-              lives on its own /announcement page now. */}
-          {activeAnnouncement && (
-            <AnnouncementTeaser announcement={activeAnnouncement} imageUrl={announcementImageUrl} />
-          )}
+        <div className="py-10">
+          {/* Home Phase 1B — hierarchy reorder: "What happened in my
+              world?" (personal/attention content) comes first, then
+              good writing (the editorial Board surface) immediately
+              after — an ordinary Announcement is deliberately no longer
+              among the first things a member sees; it moves to the very
+              end of the page, after every reading section, so it can
+              never dominate the first mobile viewport. Personal content
+              stays in a comfortable narrow reading column, regardless of
+              how wide the editorial Board surface below gets to be. */}
+          <div className="mx-auto w-full max-w-md">
+            <div className="space-y-6">
+              <p className={sectionLabelClass}>Arrivals</p>
 
-          <div className="space-y-6">
-            <p className={sectionLabelClass}>Arrivals</p>
-
-            {awaitingReply.length > 0 ? (
-              <div className="space-y-2">
-                {/* The identity here is its own link to their profile,
-                    deliberately separate from the card below (which
-                    opens the letter itself) — clicking the person is
-                    not the same intent as clicking "read this letter." */}
-                {singleAwaiting && singleAwaitingSender && (
-                  <ArrivalSenderLink
-                    senderId={singleAwaiting.senderId}
-                    pseudonym={singleAwaitingSender.pseudonym}
-                  />
-                )}
-                <Link
-                  href={singleAwaiting ? `/letters/${singleAwaiting.id}` : '/letters'}
-                  className="block rounded-md border border-accent/40 px-5 py-5 transition-colors hover:border-accent/70"
-                >
-                  <p className={sectionTitleClass}>
-                    {awaitingReply.length === 1
-                      ? '1 letter waiting'
-                      : `${awaitingReply.length} letters waiting`}
-                  </p>
-                  <p className={`${helperTextClass} mt-1`}>Someone has written to you.</p>
-                  {singleAwaiting && (
-                    <div className="mt-2 rounded-md bg-surface-shell p-3">
-                      <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[14px] leading-snug text-foreground/70">
-                        <FormattedText
-                          text={letterPreviewText(singleAwaiting.body)}
-                          isRich={isRichBody(singleAwaiting.body)}
-                        />
-                      </p>
-                    </div>
+              {awaitingReply.length > 0 ? (
+                <div className="space-y-2">
+                  {/* The identity here is its own link to their profile,
+                      deliberately separate from the card below (which
+                      opens the letter itself) — clicking the person is
+                      not the same intent as clicking "read this letter." */}
+                  {singleAwaiting && singleAwaitingSender && (
+                    <ArrivalSenderLink
+                      senderId={singleAwaiting.senderId}
+                      pseudonym={singleAwaitingSender.pseudonym}
+                    />
                   )}
-                </Link>
-              </div>
-            ) : hasActiveCorrespondence ? (
-              <div className="rounded-md border border-foreground/10 px-5 py-5">
-                <p className={sectionTitleClass}>Your correspondence continues.</p>
-                <Link href="/letters" className={`${quietLinkClass} mt-2`}>
-                  Open Letterbox
-                </Link>
-              </div>
-            ) : (
-              <p className={helperTextClass}>Nothing waiting right now.</p>
-            )}
+                  <Link
+                    href={singleAwaiting ? `/letters/${singleAwaiting.id}` : '/letters'}
+                    className="block rounded-md border border-accent/40 px-5 py-5 transition-colors hover:border-accent/70"
+                  >
+                    <p className={sectionTitleClass}>
+                      {awaitingReply.length === 1
+                        ? '1 letter waiting'
+                        : `${awaitingReply.length} letters waiting`}
+                    </p>
+                    <p className={`${helperTextClass} mt-1`}>Someone has written to you.</p>
+                    {singleAwaiting && (
+                      <div className="mt-2 rounded-md bg-surface-shell p-3">
+                        <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[14px] leading-snug text-foreground/70">
+                          <FormattedText
+                            text={letterPreviewText(singleAwaiting.body)}
+                            isRich={isRichBody(singleAwaiting.body)}
+                          />
+                        </p>
+                      </div>
+                    )}
+                  </Link>
+                </div>
+              ) : hasActiveCorrespondence ? (
+                <div className="rounded-md border border-foreground/10 px-5 py-5">
+                  <p className={sectionTitleClass}>Your correspondence continues.</p>
+                  <Link href="/letters" className={`${quietLinkClass} mt-2`}>
+                    Open Letterbox
+                  </Link>
+                </div>
+              ) : (
+                <p className={helperTextClass}>Nothing waiting right now.</p>
+              )}
 
-            {mailOnTheWay && (
-              <SystemMessage
-                variant="quiet"
-                icon={<MailInTransitIcon className="h-3.5 w-3.5 text-foreground/50" />}
-                title="Mail on the way"
-              >
-                A letter is travelling to you.
-              </SystemMessage>
+              {mailOnTheWay && (
+                <SystemMessage
+                  variant="quiet"
+                  icon={<MailInTransitIcon className="h-3.5 w-3.5 text-foreground/50" />}
+                  title="Mail on the way"
+                >
+                  A letter is travelling to you.
+                </SystemMessage>
+              )}
+            </div>
+
+            {/* Home Phase 1 — QuestionIncompleteNotice moved up into the
+                personal/attention group (same needsAnswer condition,
+                unchanged behavior) rather than being stranded below the
+                Board reading surface. */}
+            {needsAnswer && (
+              <div className="mt-10">
+                <QuestionIncompleteNotice />
+              </div>
             )}
           </div>
 
-          {/* The Board section — up to 3 WIDE Dispatch cards, stacked
-              top-to-bottom (space-y-3), NEVER a carousel: no swipe, no
-              drag, no auto-advance, no arrows. getHomeBoardDispatches
-              is unseen-first (same tiering as The Board itself), so
-              opening one and returning to Home naturally surfaces a
-              different unseen Dispatch next time, with no separate
-              Home-only "dismissed" state. The Board destination itself
-              is where a member goes for more — this is a
-              discoverability nudge only. */}
-          {boardShelf.length > 0 && (
-            <div className="mt-14">
+          {/* Home Phase 1 (Editorial Reading Surface) — the wide
+              editorial Board reading surface: roughly 10-14 UNIQUE
+              reading opportunities drawn from ONE board_feed_page
+              candidate pool (the SAME ranking The Board itself uses,
+              never a new algorithm, never semantic/interest matching —
+              that is a later checkpoint), partitioned deterministically
+              into sections that never repeat a Dispatch. This is NOT an
+              infinite feed: no auto-loading, no "load more" here, a
+              fixed set per render. Allowed to expand substantially
+              beyond the narrow personal column above on desktop — see
+              max-w-4xl below — while staying a single natural column on
+              mobile.
+              Home Phase 1B — Recommended Minds now lives INSIDE this
+              same wide column too (between From Minds You Keep and A
+              Little Serendipity, per the reordered hierarchy), so the
+              whole "good writing" stretch of the page reads as one
+              continuous width rather than narrow-wide-narrow-wide. The
+              wrapper itself is guarded on EITHER pool being non-empty —
+              Recommended Minds' own data is independent of Dispatches,
+              so it must still render even in the rare case the Board
+              candidate pool comes back empty. */}
+          {(boardItems.length > 0 || recommended.length > 0) && (
+            <div className="mx-auto mt-14 w-full max-w-4xl">
+              {boardItems.length > 0 && (
+                <>
               <div className="flex items-center justify-between gap-3">
                 <p className={sectionLabelClass}>From the Board</p>
                 <Link href="/board" className={quietLinkClass}>
                   See all
                 </Link>
               </div>
-              <div className="mt-3 space-y-3">
-                {boardShelf.map((dispatch) => (
-                  <BoardShelfCard key={dispatch.id} dispatch={dispatch} thumbnailUrl={boardThumbnails.get(dispatch.id)} />
+              {/* Featured — one visually stronger lead card plus two
+                  supporting cards on desktop (a calm editorial
+                  composition, never a news-site grid); all three simply
+                  stack on mobile. Same TEMPA card language throughout
+                  (BoardShelfCard's own `size` variants), never a
+                  different component. */}
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                {featuredLead && (
+                  <div className="sm:col-span-2">
+                    <BoardShelfCard
+                      dispatch={featuredLead}
+                      thumbnailUrl={boardThumbnails.get(featuredLead.id)}
+                      trailQuery={trailQueryFor(featuredLead)}
+                      size="lead"
+                    />
+                  </div>
+                )}
+                {featuredSupporting.map((dispatch) => (
+                  <BoardShelfCard
+                    key={dispatch.id}
+                    dispatch={dispatch}
+                    thumbnailUrl={boardThumbnails.get(dispatch.id)}
+                    trailQuery={trailQueryFor(dispatch)}
+                  />
                 ))}
               </div>
+
+              {/* ON THE BOARD — a restrained ambient strip, NOT primary
+                  navigation; see board-title-strip.tsx for the full
+                  cross-fade/pause/reduced-motion/accessibility contract. */}
+              {stripItems.length > 0 && (
+                <div className="mt-8">
+                  <p className={sectionLabelClass}>On the Board</p>
+                  <div className="mt-2">
+                    <BoardTitleStrip items={stripItems} />
+                  </div>
+                </div>
+              )}
+
+              {/* Your Reading Shelf — mobile: native horizontal overflow
+                  + CSS scroll-snap, no carousel library, no dots/arrows,
+                  scrollbar hidden via the existing .no-scrollbar
+                  convention, each card sized so the next one peeks in.
+                  Desktop: a calm 2-column editorial grid instead of the
+                  mobile carousel shape. */}
+              {shelf.length > 0 && (
+                <div className="mt-14">
+                  <p className={sectionLabelClass}>Your Reading Shelf</p>
+                  <div className="no-scrollbar mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:pb-0">
+                    {shelf.map((dispatch) => (
+                      <div key={dispatch.id} className="w-[85%] shrink-0 snap-start sm:w-auto sm:shrink">
+                        <BoardShelfCard
+                          dispatch={dispatch}
+                          thumbnailUrl={boardThumbnails.get(dispatch.id)}
+                          trailQuery={trailQueryFor(dispatch)}
+                          size="shelf"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* From Minds You Keep — omitted entirely (never an empty
+                  heading) when the candidate pool has no unused Kept-
+                  author rows left. */}
+              {fromMindsYouKeep.length > 0 && (
+                <div className="mt-14">
+                  <p className={sectionLabelClass}>From Minds You Keep</p>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                    {fromMindsYouKeep.map((dispatch) => (
+                      <BoardShelfCard
+                        key={dispatch.id}
+                        dispatch={dispatch}
+                        thumbnailUrl={boardThumbnails.get(dispatch.id)}
+                        trailQuery={trailQueryFor(dispatch)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+                </>
+              )}
+
+              {/* Home Phase 1B — Recommended Minds, moved here per the
+                  reordered hierarchy: after meaningful reading content
+                  (Featured/Shelf/Kept writing), before A Little
+                  Serendipity. Data/eligibility logic is completely
+                  unchanged from Phase 1 — only its position and its
+                  outer wrapper (now sharing the wide column instead of
+                  its own narrow one) moved. */}
+              {recommended.length > 0 && (
+                <div className={boardItems.length > 0 ? 'mt-14' : ''}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className={sectionLabelClass}>Recommended minds</p>
+                    <Link href="/minds" className={quietLinkClass}>
+                      See all
+                    </Link>
+                  </div>
+                  <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+                    {recommended.map((r) => (
+                      <RecommendedMindCard key={r.userId} mind={r} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* A Little Serendipity — a Phase-1 broad-discovery proxy
+                  only (non-kept, preferring unseen); deliberately never
+                  described as "outside your interests," since Interests
+                  don't exist yet. */}
+              {serendipity.length > 0 && (
+                <div className="mt-14">
+                  <p className={sectionLabelClass}>A Little Serendipity</p>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                    {serendipity.map((dispatch) => (
+                      <BoardShelfCard
+                        key={dispatch.id}
+                        dispatch={dispatch}
+                        thumbnailUrl={boardThumbnails.get(dispatch.id)}
+                        trailQuery={trailQueryFor(dispatch)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {recommended.length > 0 && (
-            <div className="mt-14 border-t border-foreground/10 pt-8">
-              <div className="flex items-center justify-between gap-3">
-                <p className={sectionLabelClass}>Recommended minds</p>
-                <Link href="/minds" className={quietLinkClass}>
-                  See all
-                </Link>
-              </div>
-              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-                {recommended.map((r) => (
-                  <RecommendedMindCard key={r.userId} mind={r} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {needsAnswer && (
-            <div className="mt-10">
-              <QuestionIncompleteNotice />
+          {/* Home Phase 1B — the ordinary Announcement teaser moves to
+              the very end of the page, after every reading section —
+              deliberately no longer among the first things a member
+              sees, so it can never dominate the first mobile viewport.
+              Behavior/content/component are completely unchanged (see
+              announcement-teaser.tsx for this pass's own narrow
+              proportion-only polish to its image). AnnouncementTeaser
+              has no concept of urgency today, and this pass doesn't
+              invent one — every current Announcement follows this same
+              ordinary end-of-page placement. */}
+          {activeAnnouncement && (
+            <div className="mx-auto mt-14 w-full max-w-md">
+              <AnnouncementTeaser announcement={activeAnnouncement} imageUrl={announcementImageUrl} />
             </div>
           )}
         </div>

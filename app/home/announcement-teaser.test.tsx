@@ -85,4 +85,14 @@ describe('AnnouncementTeaser — a teaser, never the full article', () => {
     const html = renderToStaticMarkup(<AnnouncementTeaser announcement={announcement({ subtitle: null })} imageUrl={null} />)
     expect(html).not.toContain('italic')
   })
+
+  // Home Phase 1B — the hero image must read as editorial accompaniment
+  // on mobile (a shorter, wider ratio), never a hero takeover of the
+  // first viewport; the more generous 3:2 ratio is preserved on desktop
+  // via the sm: breakpoint, and object-cover is unchanged throughout.
+  it('uses a shorter, wider ratio on mobile and the original 3:2 ratio from sm: up, both with object-cover', () => {
+    const html = renderToStaticMarkup(<AnnouncementTeaser announcement={announcement()} imageUrl="https://example.com/hero.jpg" />)
+    expect(html).toMatch(/class="[^"]*aspect-\[2\/1\][^"]*sm:aspect-\[3\/2\][^"]*"/)
+    expect(html).toContain('object-cover')
+  })
 })

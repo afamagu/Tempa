@@ -91,4 +91,83 @@ describe('BoardShelfCard', () => {
     expect(profileLinkEnd).toBeGreaterThan(-1)
     expect(profileLinkEnd).toBeLessThan(readerLinkStart)
   })
+
+  // Home Phase 1 (Reading Trail) — identical contract to
+  // dispatch-card.test.tsx's own trailQuery coverage.
+  describe('Reading Trail — trailQuery', () => {
+    it('appends the trail query string to the Dispatch link when supplied', () => {
+      const html = renderToStaticMarkup(
+        <BoardShelfCard dispatch={item()} trailQuery="s=2026-09-01T00%3A00%3A00Z&seed=abc&tier=1&aseq=2&shash=5" />
+      )
+      expect(html).toContain('href="/board/d-1?s=2026-09-01T00%3A00%3A00Z&amp;seed=abc&amp;tier=1&amp;aseq=2&amp;shash=5"')
+    })
+
+    it('omits the query string entirely when trailQuery is not supplied', () => {
+      const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
+      expect(html).toContain('href="/board/d-1"')
+      expect(html).not.toContain('?')
+    })
+  })
+
+  // Home Phase 1 (Editorial Reading Surface) — the SAME card language
+  // and layout grammar at every size, only type scale/clamp/thumbnail
+  // size change; never a different component or structure.
+  describe('size variants', () => {
+    it('defaults to the "default" size when size is omitted', () => {
+      const withDefault = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
+      const explicitDefault = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="default" />)
+      expect(withDefault).toBe(explicitDefault)
+    })
+
+    it('"lead" renders a visibly larger title than "default" or "shelf"', () => {
+      const lead = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="lead" />)
+      const defaultSize = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="default" />)
+      const shelf = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="shelf" />)
+      expect(lead).toContain('text-[19px]')
+      expect(defaultSize).not.toContain('text-[19px]')
+      expect(shelf).not.toContain('text-[19px]')
+    })
+
+    it('every size still renders exactly the same two sibling links (identity + reader), never a different structure', () => {
+      for (const size of ['lead', 'default', 'shelf', 'continue'] as const) {
+        const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size={size} />)
+        expect((html.match(/<a /g) ?? []).length).toBe(2)
+      }
+    })
+
+    // Home Phase 1C — Continue Reading's desktop card quality pass: more
+    // room than 'shelf' (2-per-row, not 3), a 2-line title instead of a
+    // hard single-line truncate, a larger thumbnail, and — unlike every
+    // other size — no bg-surface-shell inset around the excerpt, so it
+    // reads as editorial preview copy rather than a small form control.
+    describe('"continue" size (Continue Reading shelf)', () => {
+      it('still shows identity, title, and excerpt', () => {
+        const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="continue" />)
+        expect(html).toContain('Evening Quill')
+        expect(html).toContain('A quiet morning ritual')
+        expect(html).toContain('A short Dispatch preview line')
+      })
+
+      it('allows the title up to two lines (line-clamp-2), never a hard single-line truncate', () => {
+        const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="continue" />)
+        expect(html).toMatch(/class="[^"]*line-clamp-2[^"]*"[^>]*>A quiet morning ritual/)
+      })
+
+      it('does NOT wrap the excerpt in the bg-surface-shell inset that every other size uses', () => {
+        const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="continue" />)
+        expect(html).not.toContain('bg-surface-shell')
+      })
+
+      it('renders a visibly larger thumbnail than the "shelf" size', () => {
+        const continueSize = renderToStaticMarkup(
+          <BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" size="continue" />
+        )
+        const shelf = renderToStaticMarkup(
+          <BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" size="shelf" />
+        )
+        expect(continueSize).toMatch(/<img[^>]*class="[^"]*h-16 w-16[^"]*"/)
+        expect(shelf).toMatch(/<img[^>]*class="[^"]*h-12 w-12[^"]*"/)
+      })
+    })
+  })
 })

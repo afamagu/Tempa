@@ -10,12 +10,16 @@ import {
   clampReadingPosition,
   isKeepingMind,
   getActiveDispatchShare,
+  parseReadingTrailParams,
+  getNextTrailItems,
+  readingTrailSearchParams,
+  getFirstMomentThumbnails,
 } from '@/lib/dispatches'
 import { getDispatchReplies } from '@/lib/replies'
 import { isDispatchWorthReading } from '@/lib/worth-reading'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
-import { sectionTitleClass, metadataTextClass, helperTextClass } from '@/app/profile/ui'
+import { sectionTitleClass, metadataTextClass, sectionLabelClass, helperTextClass } from '@/app/profile/ui'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { iconButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
@@ -30,6 +34,7 @@ import DispatchReader from './dispatch-reader'
 import AuthorActionsMenu from './author-actions-menu'
 import RepliesSection from './replies-section'
 import WorthReadingButton from './worth-reading-button'
+import BoardShelfCard from '@/app/home/board-shelf-card'
 
 function FlagIcon() {
   return (
@@ -78,10 +83,13 @@ function BackArrowIcon() {
  */
 export default async function DispatchPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ dispatchId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { dispatchId } = await params
+  const resolvedSearchParams = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -126,7 +134,15 @@ export default async function DispatchPage({
     )
   }
 
-  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow, replies, worthReading] =
+  // Reading Trail (Home Phase 1) — only ever present when THIS exact
+  // link was generated from an already-ranked board_feed_page result
+  // (a Home section card, the ambient strip, or a normal /board feed
+  // card); a bare direct/shared URL or a search-result card carries
+  // none of these params, so trailContext is null and no trail is
+  // manufactured — see lib/dispatches.ts's own "READING TRAIL" section.
+  const trailContext = parseReadingTrailParams(resolvedSearchParams)
+
+  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow, replies, worthReading, nextTrailItems] =
     await Promise.all([
       getWaitingLetterCount(supabase, user.id),
       getDispatchMoments(supabase, dispatch.id),
@@ -147,7 +163,33 @@ export default async function DispatchPage({
       // (like Keep in Mind) a member cannot mark their own Dispatch, so
       // the author's own view never needs this lookup at all.
       isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
+      // Home Phase 1B — up to CONTINUE_READING_COUNT subsequent rows in
+      // the SAME session/ordering, never just one.
+      trailContext ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
     ])
+
+  // Same batched first-Moment lookup every other Dispatch listing
+  // surface already uses — safe to call with an empty array (Home
+  // Phase 1's own getFirstMomentThumbnails already short-circuits then).
+  const nextTrailThumbnails = await getFirstMomentThumbnails(
+    supabase,
+    nextTrailItems.map((item) => item.id)
+  )
+
+  // Each card's OWN trailQuery carries the SAME session plus ITS OWN
+  // cursor (BoardShelfCard builds the actual href from dispatch.id +
+  // this query string), so a reader who picks the 2nd/3rd/4th
+  // suggestion — not just the first — still starts the trail correctly
+  // from THAT item onward.
+  const continueReadingCards = trailContext
+    ? nextTrailItems.map((item) => ({
+        item,
+        trailQuery: readingTrailSearchParams(
+          { sessionStartedAt: trailContext.sessionStartedAt, seed: trailContext.seed },
+          item
+        ).toString(),
+      }))
+    : []
 
   const isPinned = isAuthor && pinnedRow.data?.pinned_dispatch_id === dispatch.id
 
@@ -237,6 +279,48 @@ export default async function DispatchPage({
             {!isAuthor && <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />}
 
             <RepliesSection dispatchId={dispatch.id} viewerId={user.id} initialReplies={replies} />
+
+            {/* Reading Trail (Home Phase 1B, desktop card quality
+                revisited in Phase 1C) — a compact "next reads" shelf,
+                restrained editorial navigation rather than a single
+                title-only link: up to CONTINUE_READING_COUNT subsequent
+                rows from the SAME deterministic session/ordering, using
+                the SAME BoardShelfCard language/thumbnail machinery
+                Home already uses (identity, country, title, excerpt,
+                first-Moment thumbnail — no counts, no Worth Reading
+                metric, no popularity label). Renders ONLY when this
+                exact page load carried valid trail params AND
+                board_feed_page actually has at least one next row for
+                that cursor — a direct/shared URL, a search result, or
+                simply reaching the end of the ordering all render
+                nothing here. Mobile: native horizontal overflow +
+                scroll-snap, one card substantially visible, no library,
+                no dots, no auto-advance — unchanged from Phase 1B.
+                Desktop: Phase 1C widens this from a cramped 3-per-row
+                rail to 2 comfortably-sized cards (BoardShelfCard's own
+                'continue' size — see board-shelf-card.tsx), so a full
+                pseudonym, a 2-line title, and real editorial excerpt
+                copy all have room to breathe instead of truncating
+                hard. A single remaining item renders gracefully with no
+                fake carousel affordance — the row simply doesn't
+                overflow. */}
+            {continueReadingCards.length > 0 && (
+              <div className="border-t border-foreground/10 pt-4">
+                <p className={sectionLabelClass}>Continue reading</p>
+                <div className="no-scrollbar mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:pb-0">
+                  {continueReadingCards.map(({ item, trailQuery }) => (
+                    <div key={item.id} className="w-[85%] shrink-0 snap-start sm:w-auto sm:shrink">
+                      <BoardShelfCard
+                        dispatch={item}
+                        thumbnailUrl={nextTrailThumbnails.get(item.id)}
+                        trailQuery={trailQuery}
+                        size="continue"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Bottom-of-letter return nav (pre-beta UX polish batch 1) —
                 the same destination as the top back link, so a reader who

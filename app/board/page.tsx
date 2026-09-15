@@ -9,6 +9,7 @@ import {
   getFirstMomentThumbnails,
   generateBoardSeed,
   BOARD_FEED_PAGE_SIZE,
+  type DispatchListItem,
 } from '@/lib/dispatches'
 import { sectionTitleClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
@@ -61,15 +62,20 @@ export default async function BoardPage({
     redirect(`/board?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
   }
 
-  const [waitingCount, feedResult, keptUserIds] = await Promise.all([
+  // Kept as two distinctly-typed results, never unified into one
+  // polymorphic variable — search results (plain DispatchListItem[],
+  // no tiering of any kind) must never be given reading-trail cursor
+  // fields they don't actually have; only a genuine board_feed_page
+  // result (BoardFeedItem[]) carries those. Both branches still run
+  // fully in parallel with the other two calls below.
+  const [waitingCount, keptUserIds, searchResults, boardFeedResult] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
-    query
-      ? searchDispatches(supabase, query).then((items) => ({ items, nextCursor: null }))
-      : getBoardFeedPage(supabase, { sessionStartedAt: s!, seed: seed!, cursor: null }),
     getKeptUserIds(supabase, user.id),
+    query ? searchDispatches(supabase, query) : Promise.resolve(null),
+    query ? Promise.resolve(null) : getBoardFeedPage(supabase, { sessionStartedAt: s!, seed: seed!, cursor: null }),
   ])
 
-  const dispatches = feedResult.items
+  const dispatches: DispatchListItem[] = query ? searchResults! : boardFeedResult!.items
 
   // Board list Moment preview (Board live-test corrections, 2026-09-10):
   // the same batched first-Moment lookup Home's shelf already uses (see
@@ -138,9 +144,9 @@ export default async function BoardPage({
               viewerId={user.id}
               sessionStartedAt={s!}
               seed={seed!}
-              initialDispatches={dispatches}
+              initialDispatches={boardFeedResult!.items}
               initialThumbnails={Object.fromEntries(thumbnailByDispatchId)}
-              initialCursor={feedResult.nextCursor}
+              initialCursor={boardFeedResult!.nextCursor}
               initialKeptUserIds={[...keptUserIds]}
               pageSize={BOARD_FEED_PAGE_SIZE}
             />
