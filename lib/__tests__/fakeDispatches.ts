@@ -103,6 +103,11 @@ export type FakeReplyRow = {
   created_at: string
 }
 
+/** Board Experience Phase 2C — mirrors dispatch_worth_reading (docs/sql/
+ * 2026-09-24-dispatch-worth-reading.sql). created_at defaults to a
+ * fixed sentinel for a fixture that doesn't care about its value. */
+export type FakeWorthReadingRow = { dispatch_id: string; user_id: string; created_at?: string }
+
 export function createFakeDispatches(options: {
   viewerId: string | null
   rows: FakeDispatchRow[]
@@ -115,6 +120,7 @@ export function createFakeDispatches(options: {
   blocked?: FakeBlockRow[]
   accountStatus?: Record<string, FakeAccountStatus>
   replies?: FakeReplyRow[]
+  worthReading?: FakeWorthReadingRow[]
 }) {
   const { viewerId } = options
   const rows = options.rows
@@ -128,6 +134,7 @@ export function createFakeDispatches(options: {
   const blocked = options.blocked ?? []
   const accountStatus = options.accountStatus ?? {}
   const replies = options.replies ?? []
+  const worthReading = options.worthReading ?? []
   for (const r of replies) {
     if (r.moderation_status === undefined) r.moderation_status = 'visible'
     if (r.parent_reply_id === undefined) r.parent_reply_id = null
@@ -522,6 +529,38 @@ export function createFakeDispatches(options: {
     return builder
   }
 
+  // Board Experience Phase 2C — mirrors dispatch_worth_reading_own's RLS
+  // predicate (auth.uid() = user_id): scoped to viewerId only, matching
+  // the live policy's own restriction — a row belonging to a different
+  // user is simply never in this viewer's visible set, regardless of
+  // which dispatch_id/user_id filters the query itself adds. This is
+  // the fake's only read path for this table; isDispatchWorthReading is
+  // the sole caller.
+  function worthReadingFrom() {
+    const filters: { dispatchId?: string; userId?: string } = {}
+    const ownRows = () => worthReading.filter((w) => w.user_id === viewerId)
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        if (column === 'dispatch_id') filters.dispatchId = value as string
+        if (column === 'user_id') filters.userId = value as string
+        return builder
+      },
+      async maybeSingle() {
+        const match =
+          ownRows().find(
+            (w) =>
+              (!filters.dispatchId || w.dispatch_id === filters.dispatchId) &&
+              (!filters.userId || w.user_id === filters.userId)
+          ) ?? null
+        return { data: match, error: null }
+      },
+    }
+    return builder
+  }
+
   function accountEnforcementFrom() {
     const filters: { userId?: string } = {}
     const builder = {
@@ -551,6 +590,7 @@ export function createFakeDispatches(options: {
     if (table === 'dispatch_moments') return momentsFrom()
     if (table === 'account_enforcement_state') return accountEnforcementFrom()
     if (table === 'dispatch_replies') return repliesFrom()
+    if (table === 'dispatch_worth_reading') return worthReadingFrom()
     throw new Error(`fakeDispatches does not simulate table "${table}"`)
   }
 
@@ -994,6 +1034,23 @@ export function createFakeDispatches(options: {
             (k.viewer_user_id === blockedId && k.kept_user_id === viewerId)
           if (matchesEitherDirection) kept.splice(i, 1)
         }
+        // Board Phase 2C, FINAL SECURITY/HARDENING PATCH — mirrors
+        // block_user's own new dispatch_worth_reading cleanup exactly
+        // (docs/sql/2026-09-24-dispatch-worth-reading.sql piece 3): a
+        // FULL block clears any Worth Reading mark between the pair in
+        // BOTH directions — the caller's own mark on blockedId's
+        // Dispatch, and blockedId's own mark on the caller's Dispatch —
+        // same shape as the Keep cascade immediately above. A 'letters'
+        // scope never enters this branch, so it never touches Worth
+        // Reading either.
+        const dispatchAuthor = (dispatchId: string) => rows.find((r) => r.id === dispatchId)?.author_id
+        for (let i = worthReading.length - 1; i >= 0; i--) {
+          const w = worthReading[i]
+          const matchesEitherDirection =
+            (w.user_id === viewerId && dispatchAuthor(w.dispatch_id) === blockedId) ||
+            (w.user_id === blockedId && dispatchAuthor(w.dispatch_id) === viewerId)
+          if (matchesEitherDirection) worthReading.splice(i, 1)
+        }
       }
       return { data: null, error: null }
     }
@@ -1127,6 +1184,70 @@ export function createFakeDispatches(options: {
       return { data: null, error: null }
     }
 
+    // Board Experience Phase 2C — mirrors set_dispatch_worth_reading
+    // (docs/sql/2026-09-24-dispatch-worth-reading.sql) validation order
+    // exactly: auth first; the false (undo) direction is de-escalating
+    // and handled BEFORE the account-status/blocking/Dispatch-state
+    // checks below, so it stays available regardless of any of them
+    // (same reasoning as unkeep_mind/delete_reply above). The true
+    // direction then reproduces create_reply's own eligibility shape —
+    // account status, Dispatch existence/published+visible, own-
+    // Dispatch rejection, full-block check, author public-visibility —
+    // before an idempotent (ON CONFLICT DO NOTHING) insert.
+    if (fn === 'set_dispatch_worth_reading') {
+      if (!viewerId) {
+        return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      }
+      const dispatchId = params?.p_dispatch_id as string
+      const worthReadingValue = params?.p_worth_reading as boolean | null | undefined
+
+      // FINAL SECURITY/HARDENING PATCH, correction A: NULL is rejected
+      // explicitly, BEFORE the false-branch check below — mirrors the
+      // migration's own reasoning exactly: a bare `worthReadingValue ===
+      // false` check would let NULL/undefined silently fall through to
+      // the true-branch logic below instead of being refused outright.
+      if (worthReadingValue === null || worthReadingValue === undefined) {
+        return { data: null, error: { message: 'Worth Reading state is required.', code: 'P0001' } }
+      }
+
+      if (worthReadingValue === false) {
+        for (let i = worthReading.length - 1; i >= 0; i--) {
+          if (worthReading[i].dispatch_id === dispatchId && worthReading[i].user_id === viewerId) {
+            worthReading.splice(i, 1)
+          }
+        }
+        return { data: null, error: null }
+      }
+
+      const status = accountStatus[viewerId] ?? 'active'
+      if (status === 'restricted' || status === 'suspended' || status === 'banned') {
+        return { data: null, error: { message: 'This action is not available right now.', code: 'P0001' } }
+      }
+      const dispatch = rows.find((r) => r.id === dispatchId)
+      if (!dispatch) {
+        return { data: null, error: { message: 'Dispatch not found.', code: 'P0001' } }
+      }
+      if (dispatch.status !== 'published' || dispatch.moderation_status !== 'visible') {
+        return { data: null, error: { message: 'This Dispatch is not available right now.', code: 'P0001' } }
+      }
+      if (dispatch.author_id === viewerId) {
+        return {
+          data: null,
+          error: { message: 'You cannot mark your own Dispatch worth reading.', code: 'P0001' },
+        }
+      }
+      if (isBlockedPair(viewerId, dispatch.author_id)) {
+        return { data: null, error: { message: 'This action is not available right now.', code: 'P0001' } }
+      }
+      if (!authorContentPubliclyVisible(dispatch.author_id)) {
+        return { data: null, error: { message: 'This action is not available right now.', code: 'P0001' } }
+      }
+      if (!worthReading.some((w) => w.dispatch_id === dispatchId && w.user_id === viewerId)) {
+        worthReading.push({ dispatch_id: dispatchId, user_id: viewerId, created_at: new Date().toISOString() })
+      }
+      return { data: null, error: null }
+    }
+
     throw new Error(`fakeDispatches: no rpc handler for "${fn}"`)
   }
 
@@ -1147,5 +1268,9 @@ export function createFakeDispatches(options: {
      * flip moderation_status directly, standing in for admin_hide_reply/
      * admin_restore_reply (modeled instead in simulateReportRpcs.ts). */
     _replies: replies,
+    /** Test-only escape hatch onto the underlying Worth Reading rows —
+     * e.g. to assert a mark's presence/absence directly rather than
+     * only through isDispatchWorthReading's own RLS-scoped read. */
+    _worthReading: worthReading,
   }
 }

@@ -12,6 +12,7 @@ import {
   getActiveDispatchShare,
 } from '@/lib/dispatches'
 import { getDispatchReplies } from '@/lib/replies'
+import { isDispatchWorthReading } from '@/lib/worth-reading'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import { sectionTitleClass, metadataTextClass, helperTextClass } from '@/app/profile/ui'
@@ -28,6 +29,7 @@ import ShareDispatchButton from '../share-dispatch-button'
 import DispatchReader from './dispatch-reader'
 import AuthorActionsMenu from './author-actions-menu'
 import RepliesSection from './replies-section'
+import WorthReadingButton from './worth-reading-button'
 
 function FlagIcon() {
   return (
@@ -124,23 +126,28 @@ export default async function DispatchPage({
     )
   }
 
-  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow, replies] = await Promise.all([
-    getWaitingLetterCount(supabase, user.id),
-    getDispatchMoments(supabase, dispatch.id),
-    getDispatchViewState(supabase, user.id, dispatch.id),
-    isAuthor ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
-    // Only the author can SELECT dispatch_shares at all (RLS); a
-    // non-author's Share button simply starts from "not yet known" and
-    // still works correctly via share_dispatch's own get-or-create.
-    isAuthor ? getActiveDispatchShare(supabase, dispatch.id) : Promise.resolve(null),
-    // Needed only so Delete can clean up this Dispatch's own storage
-    // objects afterward — see author-actions-menu.tsx.
-    isAuthor ? getDispatchMomentsForEditing(supabase, dispatch.id) : Promise.resolve([]),
-    isAuthor
-      ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    getDispatchReplies(supabase, dispatch.id),
-  ])
+  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow, replies, worthReading] =
+    await Promise.all([
+      getWaitingLetterCount(supabase, user.id),
+      getDispatchMoments(supabase, dispatch.id),
+      getDispatchViewState(supabase, user.id, dispatch.id),
+      isAuthor ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
+      // Only the author can SELECT dispatch_shares at all (RLS); a
+      // non-author's Share button simply starts from "not yet known" and
+      // still works correctly via share_dispatch's own get-or-create.
+      isAuthor ? getActiveDispatchShare(supabase, dispatch.id) : Promise.resolve(null),
+      // Needed only so Delete can clean up this Dispatch's own storage
+      // objects afterward — see author-actions-menu.tsx.
+      isAuthor ? getDispatchMomentsForEditing(supabase, dispatch.id) : Promise.resolve([]),
+      isAuthor
+        ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      getDispatchReplies(supabase, dispatch.id),
+      // Board Phase 2C — Worth Reading is a private per-viewer mark, and
+      // (like Keep in Mind) a member cannot mark their own Dispatch, so
+      // the author's own view never needs this lookup at all.
+      isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
+    ])
 
   const isPinned = isAuthor && pinnedRow.data?.pinned_dispatch_id === dispatch.id
 
@@ -226,6 +233,8 @@ export default async function DispatchPage({
                 initialPosition={initialPosition}
               />
             </div>
+
+            {!isAuthor && <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />}
 
             <RepliesSection dispatchId={dispatch.id} viewerId={user.id} initialReplies={replies} />
 
