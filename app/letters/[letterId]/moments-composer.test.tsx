@@ -53,11 +53,21 @@ describe('MomentsComposer — initial render (editor not yet mounted)', () => {
   it('shows the Moments-unavailable notice when momentsQualified is false, and does not crash', () => {
     const html = renderComposer({ momentsQualified: false })
     expect(html).toContain('available in this correspondence yet.')
+    // Visual Language Pass 1B — this passive, no-action notice now
+    // renders through the shared TempaNote primitive.
+    expect(html).toContain('Tempa Note')
   })
 
-  it('shows the photo-decision-outstanding notice when applicable', () => {
+  it('shows the photo-unavailable notice via TempaNote when qualified but not currently sendable', () => {
+    const html = renderComposer({ canSendPhoto: false, photoDecisionOutstandingForMe: false })
+    expect(html).toContain('available in this correspondence right now.')
+    expect(html).toContain('Tempa Note')
+  })
+
+  it('shows the photo-decision-outstanding notice when applicable, NOT through TempaNote (it carries a Review photo action)', () => {
     const html = renderComposer({ canSendPhoto: false, photoDecisionOutstandingForMe: true })
     expect(html).toContain('A photo is waiting for your decision')
+    expect(html).not.toContain('Tempa Note')
   })
 
   // Regression coverage (2026-09-05 live-test report): an established-

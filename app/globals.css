@@ -26,6 +26,13 @@
      so an expanded letter's warm --background paper visibly sits "on
      top of" a calmer surrounding layer instead of blending into it. */
   --surface-shell: color-mix(in srgb, var(--background) 90%, var(--foreground) 6%);
+  /* Dispatch Culture Polish Pass — a second narrow-purpose accent,
+     alongside --clay: a restrained, aged blue-green (verdigris).
+     Reserved EXCLUSIVELY for the Worth Reading reader-quality signal
+     (app/board/[dispatchId]/worth-reading-button.tsx) — never a
+     general-purpose third brand color, and never reused for any other
+     feature's own identity the way --accent/--clay already are not. */
+  --verdigris: #3F6F6B;
   color-scheme: light;
 }
 
@@ -36,6 +43,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-clay: var(--clay);
+  --color-verdigris: var(--verdigris);
   --color-surface-shell: var(--surface-shell);
   --font-sans: var(--font-geist-sans);
   --font-serif: var(--font-newsreader);

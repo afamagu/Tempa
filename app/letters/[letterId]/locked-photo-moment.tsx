@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import { isPhotoDecisionOutstandingForUser, canReconsiderPhotoFree, type PhotoConsentStatus } from '@/lib/letters'
 import PhotoConsentChoices from './photo-consent-choices'
+import TempaNote from '@/app/tempa-note'
 
 function LockIcon() {
   return (
@@ -52,6 +53,14 @@ function LockIcon() {
  * same isPhotoDecisionOutstandingForUser predicate PhotoConsent already
  * uses fixes this: the reconsidering requester now correctly sees only
  * "still waiting," never live buttons.
+ *
+ * Visual Language Pass 1B: the two purely passive/no-action branches
+ * below (the non-reconsiderable photo_free report, and the final
+ * pending/deferred "still waiting" fallback) render through the shared
+ * TempaNote primitive (app/tempa-note.tsx). Every branch with a live
+ * control (the reconsider button, PhotoConsentChoices, "Not now") is
+ * deliberately left as plain helperTextClass — TempaNote does not
+ * support an adjacent action.
  */
 export default function LockedPhotoMoment({
   id,
@@ -118,7 +127,7 @@ export default function LockedPhotoMoment({
               </button>
             </>
           ) : status === 'photo_free' ? (
-            <p className={helperTextClass}>They&apos;d prefer to keep this correspondence photo-free.</p>
+            <TempaNote>They&apos;d prefer to keep this correspondence photo-free.</TempaNote>
           ) : outstanding ? (
             <>
               <p className="text-[14px] font-semibold text-foreground">A photo is waiting</p>
@@ -148,11 +157,11 @@ export default function LockedPhotoMoment({
             // pending (they're the requester, still waiting on the other
             // person) or deferred (same — deferred's resolver is always
             // the outstanding branch above, never the requester).
-            <p className={helperTextClass}>
+            <TempaNote>
               {status === 'deferred'
                 ? "They'd prefer to wait before exchanging photos."
                 : 'Photo sharing is still waiting for their decision.'}
-            </p>
+            </TempaNote>
           )}
         </div>
       )}

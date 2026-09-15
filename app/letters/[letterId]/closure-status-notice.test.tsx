@@ -3,9 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ClosureStatusNotice from './closure-status-notice'
 
 // Release Polish Pass — the closure status now reads as quiet
-// correspondence metadata (a narrow accent rule + envelope glyph),
-// never a bright/alarming warning treatment and never another
-// content card indistinguishable from the letter itself.
+// correspondence metadata (a narrow clay accent rule), never a
+// bright/alarming warning treatment and never another content card
+// indistinguishable from the letter itself.
+//
+// Dispatch Culture Polish Pass — this was the prototype the shared
+// TempaNote primitive (app/tempa-note.tsx) generalizes from, and is now
+// rendered through it: the "Tempa Note" label replaces the old static
+// envelope glyph as the one unified identity marker.
 describe('ClosureStatusNotice', () => {
   it('shows the given title and detail', () => {
     const html = renderToStaticMarkup(
@@ -22,9 +27,10 @@ describe('ClosureStatusNotice', () => {
     expect(html).not.toMatch(/text-red|bg-red|border-red|amber|yellow/)
   })
 
-  it('renders a small static envelope glyph, not the in-transit (motion) icon', () => {
+  it('renders through TempaNote — the "Tempa Note" label, no envelope icon anymore', () => {
     const html = renderToStaticMarkup(<ClosureStatusNotice title="Title" detail="Detail" />)
-    expect(html).toContain('<svg')
+    expect(html).toContain('Tempa Note')
+    expect(html).not.toContain('<svg')
   })
 
   it('is a narrow accent-rule treatment, not a filled/bordered card', () => {

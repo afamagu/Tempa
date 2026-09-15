@@ -40,6 +40,9 @@ describe('PhotoConsent — reconsideration scenario (Melons / Saint Nicole)', ()
     // The dead end this fixes: no link pointing at a locked photo that
     // doesn't exist for this viewer.
     expect(html).not.toContain('Review photo')
+    // Visual Language Pass 1B: the outstanding-decision branch (this
+    // one — it carries live controls) is NOT rendered through TempaNote.
+    expect(html).not.toContain('Tempa Note')
   })
 
   it('requester (Saint Nicole, mid-reconsideration) only sees the waiting message, never decision controls', () => {
@@ -59,6 +62,10 @@ describe('PhotoConsent — reconsideration scenario (Melons / Saint Nicole)', ()
     expect(html).not.toContain('View this photo and allow photo sharing')
     expect(html).not.toContain('Keep this correspondence photo-free')
     expect(html).not.toContain('Maybe later')
+    // Visual Language Pass 1B: this is the passive "still waiting"
+    // report — it now renders through the shared TempaNote primitive.
+    expect(html).toContain('Tempa Note')
+    expect(html).toMatch(/border-clay/)
   })
 
   it('non-requester WITH a genuinely locked photo gets the link, never duplicate inline controls at the same time', () => {
@@ -98,5 +105,59 @@ describe('PhotoConsent — reconsideration scenario (Melons / Saint Nicole)', ()
     expect(html).toContain('Keep this correspondence photo-free')
     // respond_photo_sharing rejects 'defer' once already deferred.
     expect(html).not.toContain('Maybe later')
+    expect(html).not.toContain('Tempa Note')
+  })
+})
+
+// Visual Language Pass 1B — the remaining passive/no-action branches
+// (not covered by the reconsideration scenario above), each rendered
+// through the shared TempaNote primitive.
+describe('PhotoConsent — passive branches render through TempaNote', () => {
+  it('photo_free, non-resolver: reports the settled state via TempaNote', () => {
+    const html = renderToStaticMarkup(
+      <PhotoConsent
+        correspondenceId="corr-1"
+        status="photo_free"
+        requestedBy={MELONS}
+        resolvedBy={SAINT_NICOLE}
+        userId={MELONS}
+        otherPseudonym="Saint Nicole"
+        reviewPhotoHref={undefined}
+      />
+    )
+    expect(html).toContain('prefer to keep this correspondence photo-free.')
+    expect(html).toContain('Tempa Note')
+    expect(html).toMatch(/border-clay/)
+  })
+
+  it('photo_free, the resolver themselves: renders nothing at all', () => {
+    const html = renderToStaticMarkup(
+      <PhotoConsent
+        correspondenceId="corr-1"
+        status="photo_free"
+        requestedBy={MELONS}
+        resolvedBy={SAINT_NICOLE}
+        userId={SAINT_NICOLE}
+        otherPseudonym="Melons"
+        reviewPhotoHref={undefined}
+      />
+    )
+    expect(html).toBe('')
+  })
+
+  it('enabled status (photos enabled): reports the settled state via TempaNote', () => {
+    const html = renderToStaticMarkup(
+      <PhotoConsent
+        correspondenceId="corr-1"
+        status="enabled"
+        requestedBy={MELONS}
+        resolvedBy={MELONS}
+        userId={SAINT_NICOLE}
+        otherPseudonym="Melons"
+        reviewPhotoHref={undefined}
+      />
+    )
+    expect(html).toContain('Photos are enabled in this correspondence.')
+    expect(html).toContain('Tempa Note')
   })
 })

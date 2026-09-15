@@ -11,11 +11,21 @@ import MomentHint from './moment-hint'
 // authenticated reader (app/board/[dispatchId]/page.tsx) — see each
 // consumer's own test/usage for the "only when a Moment resolves"
 // gating, which lives at the call site, not in this component.
+//
+// Dispatch Culture Polish Pass: now rendered through the shared
+// TempaNote primitive (app/tempa-note.tsx) — see tempa-note.test.tsx
+// for the primitive's own contract (clay rule, "Tempa Note" label).
 describe('MomentHint — restrained, dismissible, one-time explanation, shared internal/external', () => {
   it('shows the restrained explanation copy by default', () => {
     const html = renderToStaticMarkup(<MomentHint dispatchId="d-1" />)
     expect(html).toContain('A glimpse from the writer')
-    expect(html).toContain('tap a small image as you read to open it.')
+    expect(html).toContain('Tap a small image as you read to open it.')
+  })
+
+  it('is rendered through TempaNote — the clay left rule and "Tempa Note" label', () => {
+    const html = renderToStaticMarkup(<MomentHint dispatchId="d-1" />)
+    expect(html).toMatch(/border-clay/)
+    expect(html).toContain('Tempa Note')
   })
 
   it('is a plain inline element, never a modal/dialog', () => {

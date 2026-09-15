@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { helperTextClass } from '@/app/profile/ui'
+import TempaNote from '@/app/tempa-note'
 
 const SEEN_KEY_PREFIX = 'tempa:moment-hint-seen:'
 
@@ -36,6 +36,11 @@ function alreadySeenThisSession(dispatchId: string): boolean {
  * card (dispatch-card.tsx, board-shelf-card.tsx never import this) —
  * only inside an actually-opened Dispatch, external or authenticated.
  *
+ * Dispatch Culture Polish Pass: rendered through the shared TempaNote
+ * primitive (app/tempa-note.tsx) rather than its own bespoke neutral
+ * box — this is exactly the "Tempa explains something in one sentence"
+ * shape TempaNote exists for.
+ *
  * Session-scoped only via sessionStorage, keyed per Dispatch — closing
  * the tab or opening a different Dispatch shows it again; there is
  * deliberately no database persistence for this in either context. The
@@ -61,18 +66,8 @@ export default function MomentHint({ dispatchId }: { dispatchId: string }) {
   if (dismissed) return null
 
   return (
-    <div className="flex items-start justify-between gap-3 rounded-md border border-foreground/10 px-3 py-2">
-      <p className={helperTextClass}>
-        A glimpse from the writer&rsquo;s world — tap a small image as you read to open it.
-      </p>
-      <button
-        type="button"
-        onClick={dismiss}
-        aria-label="Dismiss this hint"
-        className="shrink-0 text-foreground/40 transition-colors hover:text-foreground/70"
-      >
-        ×
-      </button>
-    </div>
+    <TempaNote onDismiss={dismiss} dismissLabel="Dismiss this hint">
+      <p>A glimpse from the writer&rsquo;s world. Tap a small image as you read to open it.</p>
+    </TempaNote>
   )
 }

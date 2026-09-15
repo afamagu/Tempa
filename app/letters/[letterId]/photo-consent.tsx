@@ -1,7 +1,8 @@
 import Link from 'next/link'
-import { helperTextClass, systemBodyClass, compactSecondaryButtonClass } from '@/app/profile/ui'
+import { systemBodyClass, compactSecondaryButtonClass } from '@/app/profile/ui'
 import { isPhotoDecisionOutstandingForUser, type PhotoConsentStatus } from '@/lib/letters'
 import PhotoConsentChoices from './photo-consent-choices'
+import TempaNote from '@/app/tempa-note'
 
 /**
  * A quiet, purely informational summary of this correspondence's photo-
@@ -27,6 +28,13 @@ import PhotoConsentChoices from './photo-consent-choices'
  * exists for this viewer — so the choices render directly here instead.
  * The two are mutually exclusive (never both at once): a link when one
  * exists, the live controls only when it doesn't.
+ *
+ * Visual Language Pass 1B: every purely passive/no-action branch below
+ * (pending-waiting, deferred-waiting, photo_free-not-resolver, and the
+ * plain "enabled" state) now renders through the shared TempaNote
+ * primitive (app/tempa-note.tsx). The outstanding-decision branch above
+ * is deliberately NOT converted — it carries a real action (a link or
+ * live decision controls), which TempaNote does not support.
  */
 export default function PhotoConsent({
   correspondenceId,
@@ -78,16 +86,14 @@ export default function PhotoConsent({
     // The outstanding branch above already covers the non-requester;
     // this is only ever reached by the requester, still waiting.
     return isRequester ? (
-      <p className={helperTextClass}>Photo sharing is still waiting for their decision.</p>
+      <TempaNote>Photo sharing is still waiting for their decision.</TempaNote>
     ) : null
   }
 
   if (status === 'deferred') {
     // The outstanding branch above already covers the resolver (the
     // person who deferred); this is only ever reached by the requester.
-    return isRequester ? (
-      <p className={helperTextClass}>They&apos;d prefer to wait before exchanging photos.</p>
-    ) : null
+    return isRequester ? <TempaNote>They&apos;d prefer to wait before exchanging photos.</TempaNote> : null
   }
 
   if (status === 'photo_free') {
@@ -100,9 +106,9 @@ export default function PhotoConsent({
     // identified the resolver.
     const isResolver = resolvedBy === userId
     return isResolver ? null : (
-      <p className={helperTextClass}>They&apos;d prefer to keep this correspondence photo-free.</p>
+      <TempaNote>They&apos;d prefer to keep this correspondence photo-free.</TempaNote>
     )
   }
 
-  return <p className={helperTextClass}>Photos are enabled in this correspondence.</p>
+  return <TempaNote>Photos are enabled in this correspondence.</TempaNote>
 }

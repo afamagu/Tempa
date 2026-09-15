@@ -23,6 +23,7 @@ import {
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
 import { resolveLetterPhotoUrl } from '@/lib/draft-photo-url'
+import TempaNote from '@/app/tempa-note'
 import {
   readLetterEditorDraft,
   writeLetterEditorDraft,
@@ -774,7 +775,7 @@ export default function MomentsComposer({
       )}
 
       {!momentsQualified && (
-        <p className={helperTextClass}>Moments aren&apos;t available in this correspondence yet.</p>
+        <TempaNote>Moments aren&apos;t available in this correspondence yet.</TempaNote>
       )}
       {momentsQualified && !canSendPhoto && photoDecisionOutstandingForMe && (
         <div className="space-y-1.5">
@@ -789,7 +790,7 @@ export default function MomentsComposer({
         </div>
       )}
       {momentsQualified && !canSendPhoto && !photoDecisionOutstandingForMe && (
-        <p className={helperTextClass}>Photo sharing isn&apos;t available in this correspondence right now.</p>
+        <TempaNote>Photo sharing isn&apos;t available in this correspondence right now.</TempaNote>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
