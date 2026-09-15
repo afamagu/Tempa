@@ -1,12 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { resolveLetterPhotoUrl, DRAFT_PHOTO_SIGNED_URL_TTL_SECONDS } from './draft-photo-url'
+import {
+  resolveLetterPhotoUrl,
+  resolveDispatchPhotoUrl,
+  DRAFT_PHOTO_SIGNED_URL_TTL_SECONDS,
+} from './draft-photo-url'
 
-function fakeSupabase(createSignedUrl: (path: string, ttl: number) => Promise<unknown>) {
+function fakeSupabase(createSignedUrl: (path: string, ttl: number) => Promise<unknown>, expectedBucket = 'letter-photos') {
   return {
     storage: {
       from: vi.fn((bucket: string) => {
-        expect(bucket).toBe('letter-photos')
+        expect(bucket).toBe(expectedBucket)
         return { createSignedUrl }
       }),
     },
@@ -58,6 +62,52 @@ describe('resolveLetterPhotoUrl', () => {
       throw new Error('network unreachable')
     })
     const result = await resolveLetterPhotoUrl(supabase, 'corr-1/thrown.jpg')
+    expect(result).toEqual({ url: null, error: 'network unreachable' })
+  })
+})
+
+// Dispatch Preview checkpoint — the exact same signing shape, scoped to
+// the separate, non-consent-gated dispatch-photos bucket. Used as
+// resolveDraftPreviewMoments' fallback resolver when opening a Dispatch
+// Preview.
+describe('resolveDispatchPhotoUrl', () => {
+  it('a restored imagePath resolves into a usable display URL', async () => {
+    const supabase = fakeSupabase(
+      async () => ({ data: { signedUrl: 'https://signed.test/author-1/a.jpg' }, error: null }),
+      'dispatch-photos'
+    )
+    const result = await resolveDispatchPhotoUrl(supabase, 'author-1/a.jpg')
+    expect(result).toEqual({ url: 'https://signed.test/author-1/a.jpg', error: null })
+  })
+
+  it('always signs against the dispatch-photos bucket — never letter-photos — and the exact imagePath/TTL given', async () => {
+    let capturedPath: string | undefined
+    let capturedTtl: number | undefined
+    const supabase = fakeSupabase(async (path, ttl) => {
+      capturedPath = path
+      capturedTtl = ttl
+      return { data: { signedUrl: 'https://signed.test/x' }, error: null }
+    }, 'dispatch-photos')
+    await resolveDispatchPhotoUrl(supabase, 'author-9/z.jpg')
+    expect(capturedPath).toBe('author-9/z.jpg')
+    expect(capturedTtl).toBe(DRAFT_PHOTO_SIGNED_URL_TTL_SECONDS)
+  })
+
+  it('a genuine failure comes back as a reportable error, never silently swallowed', async () => {
+    const supabase = fakeSupabase(
+      async () => ({ data: null, error: { message: 'new row violates row-level security policy' } }),
+      'dispatch-photos'
+    )
+    const result = await resolveDispatchPhotoUrl(supabase, 'author-1/denied.jpg')
+    expect(result.url).toBeNull()
+    expect(result.error).toBe('new row violates row-level security policy')
+  })
+
+  it('never throws — a rejected/thrown call is caught and reported as an error result instead', async () => {
+    const supabase = fakeSupabase(async () => {
+      throw new Error('network unreachable')
+    }, 'dispatch-photos')
+    const result = await resolveDispatchPhotoUrl(supabase, 'author-1/thrown.jpg')
     expect(result).toEqual({ url: null, error: 'network unreachable' })
   })
 })

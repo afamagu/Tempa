@@ -19,12 +19,16 @@ import WritingToolbar from '@/app/letters/writing-toolbar'
 import {
   docToPlainBody,
   docToMomentDrafts,
+  docToDraftMomentDescriptors,
+  resolveDraftPreviewMoments,
   dispatchBodyToDoc,
   canSendLetter,
+  letterDocHasContent,
   stripRichBodyMarker,
   EMPTY_LETTER_DOC,
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
+import { resolveDispatchPhotoUrl } from '@/lib/draft-photo-url'
 import {
   readDispatchDraft,
   writeDispatchDraft,
@@ -39,6 +43,7 @@ import {
   publishDispatch,
   updateDispatch,
   dispatchPostcardToBaseContent,
+  type DispatchMoment,
   type DispatchMomentDraft,
   type DispatchPostcard,
   type PublishDispatchError,
@@ -56,6 +61,7 @@ import PostcardComposerSlot from '@/app/letters/[letterId]/postcard-composer-slo
 import PostcardEditor from '@/app/letters/[letterId]/postcard-editor'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
+import DispatchPreview from './dispatch-preview'
 
 const TITLE_MAX_CHARS = 70
 
@@ -111,6 +117,28 @@ export type ExistingDispatchForEditing = {
  * actually locks it in. No length UI anywhere for the body: Dispatches
  * carry no product-facing character cap (see dispatchTitleError for the
  * one genuine, visible limit — the title).
+ *
+ * WRITE → PREVIEW → PUBLISH (create mode only) — same philosophy as
+ * moments-composer.tsx's own WRITE → PREVIEW → SEND, adapted rather than
+ * copied: the primary action is "Preview Dispatch," never a direct
+ * publish. `canPreview` decides whether Preview is reachable at all
+ * (title/body/no-photo-mid-upload — the same signal used for previous
+ * Publish-button eligibility) and DELIBERATELY excludes the Postcard
+ * back-message completeness check, mirroring moments-composer.tsx's own
+ * `canSend` exactly: that gate applies at the actual Publish action
+ * instead (inside DispatchPreview, as `publishBlockedReason`, with a
+ * visible, restrained explanation and a direct link back into the
+ * Postcard editor) — never silently. This is the fix for a real live
+ * defect: the previous single-button flow folded the Postcard-message
+ * gate directly into the Publish button's own `disabled` state with NO
+ * visible explanation anywhere in the UI, so an author who opened the
+ * new Postcard picker, selected one, and closed the editor without
+ * writing a back message was left staring at a permanently disabled
+ * "Publish Dispatch" button with no way to understand why. Edit mode is
+ * unaffected — it never renders a Postcard picker at all (see
+ * existingDispatch.postcard's own read-only display below), so its own
+ * `canSubmit` needs no such gate and its "Save changes" button still
+ * submits directly, exactly as before.
  *
  * Board usability checkpoint (2026-09-09): also serves editing, via
  * `mode="edit"` + `existingDispatch` — the SAME composer, not a second
@@ -184,6 +212,13 @@ export default function DispatchComposer({
   }, [])
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
+
+  // WRITE → PREVIEW → PUBLISH (create mode only) — same null-means-
+  // closed/resolving, array-means-ready convention moments-composer.tsx
+  // already uses for its own `previewMoments`. Never touched in edit
+  // mode (edit mode has no Preview step at all).
+  const [previewMoments, setPreviewMoments] = useState<DispatchMoment[] | null>(null)
+  const [preparingPreview, setPreparingPreview] = useState(false)
 
   // Dispatch Postcards Checkpoint 2 — CREATE MODE ONLY. Mirrors moments-
   // composer.tsx's own Postcard state exactly: held entirely separate
@@ -334,12 +369,47 @@ export default function DispatchComposer({
   // limit (see the Build Guide's Dispatches section) — the server-side
   // 10,000-visible-character ceiling is a defensive backstop only, never
   // surfaced here.
+
+  // Edit mode's own submit eligibility — "Save changes" still submits
+  // directly, unchanged from before Preview existed. Postcard state is
+  // permanently inert in edit mode (the effects above never populate it
+  // there), so no Postcard gate is needed here at all.
   const canSubmit =
     Boolean(editor) &&
     titleError === null &&
     canSendLetter(docJSON, { aboveMax: false, submitting: publishing }) &&
-    !uploadingIndex &&
-    !postcardNeedsMessage
+    !uploadingIndex
+
+  // Create mode's Preview eligibility — deliberately the SAME shape as
+  // moments-composer.tsx's own `canSend`: title/body/no-photo-mid-upload
+  // only. The Postcard back-message completeness gate is intentionally
+  // NOT here — see this file's own top-level doc comment for why folding
+  // it in here (the previous, single-button behavior) was the live bug.
+  const canPreview =
+    Boolean(editor) &&
+    titleError === null &&
+    canSendLetter(docJSON, { aboveMax: false, submitting: publishing || preparingPreview }) &&
+    !uploadingIndex
+
+  // Shown next to the Preview button ONLY when there is something
+  // concrete and fixable to say — never a generic "can't submit" dead
+  // end. Photo-upload-in-progress already has its own visible "Adding
+  // photo…" line below, so it isn't duplicated here.
+  const previewBlockedReason: string | null =
+    isEdit || publishing || preparingPreview
+      ? null
+      : titleError
+        ? titleError
+        : !letterDocHasContent(docJSON)
+          ? 'Write something before you can preview.'
+          : null
+
+  // The actual Publish precondition (evaluated inside DispatchPreview in
+  // create mode, or directly by "Save changes" in edit mode) — the ONE
+  // place the Postcard back-message gate now lives, always paired with a
+  // visible reason (DispatchPreview's own publishBlockedReason prop).
+  const publishBlockedReason: string | null =
+    !isEdit && postcardNeedsMessage ? 'Write something on the back of your postcard before publishing.' : null
 
   function insertPhotoMomentAtParagraphEnd(paragraphIndex: number, attrs: { imagePath: string; previewUrl: string }) {
     if (!editor) return
@@ -398,8 +468,16 @@ export default function DispatchComposer({
     }
   }
 
+  // Dispatch Preview checkpoint — the SAME "prevent double-submission"
+  // guard the button's own `disabled` already provides, reasserted here
+  // defensively: in edit mode, `canSubmit` (already false while
+  // `publishing`); in create mode, `canPreview` plus the Postcard
+  // completeness gate — since Preview's own Publish button is disabled
+  // while `publishing` or `publishBlockedReason`, this can only ever be
+  // reached once per click either way.
   async function handleSubmit() {
-    if (!editor || !canSubmit) return
+    const canPublish = isEdit ? canSubmit : canPreview && !publishBlockedReason
+    if (!editor || !canPublish) return
     setPublishing(true)
     setError(null)
 
@@ -475,6 +553,33 @@ export default function DispatchComposer({
       setError(`${genericErrorMessage}${devDetail}`)
     } finally {
       setPublishing(false)
+    }
+  }
+
+  // WRITE → PREVIEW → PUBLISH (create mode only) — resolves the CURRENT
+  // editor document's Moments into real, displayable Moment[] BEFORE
+  // opening Preview, the same "resolve fresh at the moment Preview is
+  // requested" approach moments-composer.tsx's own handleOpenPreview
+  // uses (docToDraftMomentDescriptors + resolveDraftPreviewMoments,
+  // reused as-is — the only Dispatch-specific addition is
+  // resolveDispatchPhotoUrl, signing against the separate dispatch-
+  // photos bucket instead of letter-photos). previewMoments stays null
+  // (Preview closed/not yet resolving) until this completes, exactly
+  // mirroring that same null-vs-array convention.
+  async function handleOpenPreview() {
+    if (!editor || preparingPreview) return
+    setPreparingPreview(true)
+    try {
+      const descriptors = docToDraftMomentDescriptors(editor.getJSON() as LetterDocJSON)
+      const supabase = createClient()
+      const resolved = await resolveDraftPreviewMoments(descriptors, (imagePath) => resolveDispatchPhotoUrl(supabase, imagePath))
+      setPreviewMoments(
+        resolved
+          .filter((m) => m.type === 'photo')
+          .map((m) => ({ id: m.id, position: m.position, imageUrl: m.imageUrl }))
+      )
+    } finally {
+      setPreparingPreview(false)
     }
   }
 
@@ -571,17 +676,59 @@ export default function DispatchComposer({
           <TopicInput topics={topics} onChange={handleTopicsChange} />
         </div>
 
+        {/* Dispatch Preview checkpoint — restrained, single-line
+            explanation for WHY Preview isn't available yet, shown only
+            when there's something concrete and fixable to say. Never
+            rendered in edit mode (edit mode has its own direct "Save
+            changes" with no Preview step). */}
+        {!isEdit && previewBlockedReason && <p className={helperTextClass}>{previewBlockedReason}</p>}
+
         {error && <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p>}
 
         <div className="flex flex-wrap gap-3">
           <Link href={backHref} className={secondaryButtonClass}>
             Back
           </Link>
-          <button type="button" onClick={handleSubmit} disabled={!canSubmit} className={primaryButtonClass}>
-            {publishing ? (isEdit ? 'Saving…' : 'Publishing…') : isEdit ? 'Save changes' : 'Publish Dispatch'}
-          </button>
+          {isEdit ? (
+            <button type="button" onClick={handleSubmit} disabled={!canSubmit} className={primaryButtonClass}>
+              {publishing ? 'Saving…' : 'Save changes'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleOpenPreview}
+              disabled={!canPreview || preparingPreview}
+              className={primaryButtonClass}
+            >
+              {preparingPreview ? 'Preparing…' : 'Preview Dispatch'}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* WRITE → PREVIEW → PUBLISH (create mode only) — only
+          publishDispatch/publish_dispatch call site remaining for create
+          mode; handleSubmit is passed straight through, never
+          duplicated. Editor/title/topics/Postcard draft all stay exactly
+          as they were underneath — this is purely an overlay. */}
+      {!isEdit && previewMoments && (
+        <DispatchPreview
+          authorId={authorId}
+          authorPseudonym={authorPseudonym}
+          title={title}
+          body={docToPlainBody(docJSON)}
+          topics={topics}
+          moments={previewMoments}
+          postcardDraft={postcardDraft}
+          postcardCatalogEntry={postcardCatalogEntry}
+          onBack={() => setPreviewMoments(null)}
+          onPublish={handleSubmit}
+          publishing={publishing}
+          publishBlockedReason={publishBlockedReason}
+          onEditPostcard={() => setPostcardEditorOpen(true)}
+          error={error}
+        />
+      )}
     </main>
   )
 }

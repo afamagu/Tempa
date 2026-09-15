@@ -46,3 +46,34 @@ export async function resolveLetterPhotoUrl(
     return { url: null, error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+/**
+ * Dispatch Preview checkpoint — the exact same signing shape as
+ * resolveLetterPhotoUrl above, against the separate, non-consent-gated
+ * `dispatch-photos` bucket a Dispatch's own photoMoment nodes always
+ * upload to (see app/board/dispatch-photo-moment-node.tsx's own doc
+ * comment for why that bucket is kept structurally distinct from the
+ * private `letter-photos` one). Used only as resolveDraftPreviewMoments'
+ * fallback resolver, for the rare case a restored draft's photoMoment
+ * node has no `previewUrl` attr of its own yet (the common case already
+ * carries one — a fresh upload's blob: URL, or an already-resolved
+ * signed URL from DispatchPhotoMomentView's own mount-time fetch).
+ */
+export async function resolveDispatchPhotoUrl(
+  supabase: SupabaseClient,
+  imagePath: string
+): Promise<ResolvedPhotoUrl> {
+  try {
+    const { data, error } = await supabase.storage
+      .from('dispatch-photos')
+      .createSignedUrl(imagePath, DRAFT_PHOTO_SIGNED_URL_TTL_SECONDS)
+
+    if (error || !data?.signedUrl) {
+      return { url: null, error: error?.message ?? 'No signed URL was returned.' }
+    }
+
+    return { url: data.signedUrl, error: null }
+  } catch (err) {
+    return { url: null, error: err instanceof Error ? err.message : String(err) }
+  }
+}

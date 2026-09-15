@@ -11,10 +11,21 @@ vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
 // instance doesn't exist on this first render, so this only proves the
 // safe pre-mount state — live typing needs a real browser.
 describe('DispatchComposer — initial render (editor not yet mounted)', () => {
-  it('renders without crashing, starts with Publish disabled, and uses the required button label', () => {
+  // Dispatch Preview checkpoint (WRITE → PREVIEW → PUBLISH) — the
+  // primary action in create mode is now "Preview Dispatch," never a
+  // direct "Publish Dispatch". A blank title/body starts it disabled,
+  // same as before, but now with a visible, understandable reason next
+  // to it — the fix for the live "disabled with no explanation" defect.
+  it('renders without crashing, starts with Preview disabled, and uses the required button label — never a direct Publish button', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(html).toContain('Publish Dispatch')
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>Publish Dispatch<\/button>/)
+    expect(html).toContain('Preview Dispatch')
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Preview Dispatch<\/button>/)
+    expect(html).not.toContain('Publish Dispatch')
+  })
+
+  it('shows a visible, understandable reason next to the disabled Preview button — never an unexplained disabled control', () => {
+    const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
+    expect(html).toContain('A Dispatch needs a title.')
   })
 
   it('never uses any other composer\'s button vocabulary', () => {
@@ -85,12 +96,14 @@ describe('DispatchComposer — edit mode (item 11)', () => {
     postcard: null,
   }
 
-  it('uses "Save changes", never "Publish Dispatch", and starts disabled until a real edit is made', () => {
+  it('uses "Save changes", never "Publish Dispatch" or "Preview Dispatch" — edit mode has no Preview step at all', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" mode="edit" existingDispatch={existingDispatch} />
     )
     expect(html).toContain('Save changes')
     expect(html).not.toContain('Publish Dispatch')
+    expect(html).not.toContain('Preview Dispatch')
+    expect(html).not.toContain('Preview')
   })
 
   it('pre-fills the title input with the existing Dispatch\'s title', () => {
