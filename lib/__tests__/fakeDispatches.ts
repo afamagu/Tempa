@@ -87,6 +87,22 @@ export type FakeBlockRow = {
  * own coalesce. */
 export type FakeAccountStatus = 'active' | 'restricted' | 'suspended' | 'banned'
 
+/** Board Experience Phase 2B — mirrors dispatch_replies (docs/sql/2026-
+ * 09-23-dispatch-replies.sql). moderation_status/deleted_at default to
+ * 'visible'/null for a fixture that doesn't care about either. */
+export type FakeReplyRow = {
+  id: string
+  dispatch_id: string
+  author_id: string
+  body: string
+  parent_reply_id?: string | null
+  root_reply_id?: string | null
+  reply_to_user_id?: string | null
+  moderation_status?: 'visible' | 'hidden'
+  deleted_at?: string | null
+  created_at: string
+}
+
 export function createFakeDispatches(options: {
   viewerId: string | null
   rows: FakeDispatchRow[]
@@ -98,6 +114,7 @@ export function createFakeDispatches(options: {
   moments?: FakeMomentRow[]
   blocked?: FakeBlockRow[]
   accountStatus?: Record<string, FakeAccountStatus>
+  replies?: FakeReplyRow[]
 }) {
   const { viewerId } = options
   const rows = options.rows
@@ -110,6 +127,14 @@ export function createFakeDispatches(options: {
   const moments = options.moments ?? []
   const blocked = options.blocked ?? []
   const accountStatus = options.accountStatus ?? {}
+  const replies = options.replies ?? []
+  for (const r of replies) {
+    if (r.moderation_status === undefined) r.moderation_status = 'visible'
+    if (r.parent_reply_id === undefined) r.parent_reply_id = null
+    if (r.root_reply_id === undefined) r.root_reply_id = null
+    if (r.reply_to_user_id === undefined) r.reply_to_user_id = null
+    if (r.deleted_at === undefined) r.deleted_at = null
+  }
 
   // Mirrors tempa_private.author_content_publicly_visible (docs/sql/
   // 2026-09-22-board-feed-foundation.sql): only 'suspended'/'banned'
@@ -438,6 +463,65 @@ export function createFakeDispatches(options: {
     return builder
   }
 
+  // Board Experience Phase 2B — mirrors dispatch_replies_select_
+  // published (docs/sql/2026-09-23-dispatch-replies.sql). Final security
+  // review correction: the parent Dispatch must be CURRENTLY, genuinely
+  // public — published, moderator-visible, not full-blocked between the
+  // viewer and the Dispatch's author, and that author's content publicly
+  // visible — with NO own-author bypass on this parent gate (unlike
+  // dispatches' own RLS, which does let an author see their own draft/
+  // hidden Dispatch; that exception does NOT extend to Replies attached
+  // to it). On top of that, the Reply's own moderation_status/blocking/
+  // account-visibility, OR the Reply's own author viewing their own
+  // Reply regardless of any of that. Deliberately no deleted_at filter —
+  // a member-deleted Reply stays selectable (its row survives), matching
+  // the real policy exactly.
+  function replyParentReachable(dispatchId: string) {
+    const d = rows.find((r) => r.id === dispatchId)
+    if (!d) return false
+    return (
+      d.status === 'published' &&
+      d.moderation_status === 'visible' &&
+      !isBlockedPair(viewerId, d.author_id) &&
+      authorContentPubliclyVisible(d.author_id)
+    )
+  }
+
+  function visibleReplies() {
+    return replies.filter(
+      (r) =>
+        replyParentReachable(r.dispatch_id) &&
+        ((r.moderation_status === 'visible' &&
+          !isBlockedPair(viewerId, r.author_id) &&
+          authorContentPubliclyVisible(r.author_id)) ||
+          r.author_id === viewerId)
+    )
+  }
+
+  function repliesFrom() {
+    const filters: { dispatchId?: string } = {}
+    const applyFilters = () =>
+      visibleReplies()
+        .filter((r) => (filters.dispatchId ? r.dispatch_id === filters.dispatchId : true))
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        if (column === 'dispatch_id') filters.dispatchId = value as string
+        return builder
+      },
+      order() {
+        return builder
+      },
+      then(resolve: (value: { data: FakeReplyRow[]; error: null }) => void) {
+        resolve({ data: applyFilters(), error: null })
+      },
+    }
+    return builder
+  }
+
   function accountEnforcementFrom() {
     const filters: { userId?: string } = {}
     const builder = {
@@ -466,6 +550,7 @@ export function createFakeDispatches(options: {
     if (table === 'blocked_users') return blockedUsersFrom()
     if (table === 'dispatch_moments') return momentsFrom()
     if (table === 'account_enforcement_state') return accountEnforcementFrom()
+    if (table === 'dispatch_replies') return repliesFrom()
     throw new Error(`fakeDispatches does not simulate table "${table}"`)
   }
 
@@ -786,7 +871,11 @@ export function createFakeDispatches(options: {
     // profile that had this Dispatch pinned). Independent review item
     // 4: a HIDDEN Dispatch is not deletable by its own still-active
     // author either — folded into the same existence check, reusing the
-    // existing message.
+    // existing message. Board Experience Phase 2B pre-SQL correction
+    // pass: a Dispatch with any dispatch_replies row — its own author's
+    // or another member's — can no longer be hard-deleted, mirroring
+    // delete_dispatch's own new guard exactly (docs/sql/2026-09-23-
+    // dispatch-replies.sql piece 2).
     if (fn === 'delete_dispatch') {
       if (!viewerId) {
         return { data: null, error: { message: 'Authentication required.', code: '42501' } }
@@ -795,6 +884,12 @@ export function createFakeDispatches(options: {
       const dispatch = rows.find((r) => r.id === dispatchId)
       if (!dispatch || dispatch.author_id !== viewerId || dispatch.moderation_status !== 'visible') {
         return { data: null, error: { message: 'Only the author of a Dispatch may delete it.', code: 'P0001' } }
+      }
+      if (replies.some((r) => r.dispatch_id === dispatchId)) {
+        return {
+          data: null,
+          error: { message: 'This Dispatch cannot be deleted while it still has Replies.', code: 'P0001' },
+        }
       }
       rows.splice(rows.indexOf(dispatch), 1)
       for (let i = topics.length - 1; i >= 0; i--) {
@@ -936,6 +1031,102 @@ export function createFakeDispatches(options: {
       }
       return { data: null, error: null }
     }
+    // Board Experience Phase 2B — mirrors create_reply (docs/sql/2026-
+    // 09-23-dispatch-replies.sql) validation order exactly: auth,
+    // account status, body validity, Dispatch existence/eligibility,
+    // Dispatch-author blocking, then (only when replying to a Reply)
+    // parent existence/same-dispatch/eligibility/blocking, deriving
+    // reply_to_user_id and root_reply_id server-side — never from
+    // params.
+    if (fn === 'create_reply') {
+      if (!viewerId) {
+        return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      }
+      const status = accountStatus[viewerId] ?? 'active'
+      if (status === 'restricted' || status === 'suspended' || status === 'banned') {
+        return { data: null, error: { message: 'This action is not available right now.', code: 'P0001' } }
+      }
+      const body = ((params?.p_body as string) ?? '').trim()
+      if (body.length === 0) {
+        return { data: null, error: { message: 'A Reply needs some writing.', code: 'P0001' } }
+      }
+      if (body.length > 500) {
+        return { data: null, error: { message: 'Reply is too long.', code: 'P0001' } }
+      }
+      const dispatchId = params?.p_dispatch_id as string
+      const dispatch = rows.find((r) => r.id === dispatchId)
+      if (!dispatch) {
+        return { data: null, error: { message: 'Dispatch not found.', code: 'P0001' } }
+      }
+      if (dispatch.status !== 'published' || dispatch.moderation_status !== 'visible') {
+        return { data: null, error: { message: 'This Dispatch is not open to Replies right now.', code: 'P0001' } }
+      }
+      // Final security review correction: SECURITY DEFINER bypasses RLS
+      // entirely, so this reproduces the Dispatch author's own public-
+      // visibility check too (suspended/banned rejected), not just
+      // blocking — same as the real RPC now does.
+      if (isBlockedPair(viewerId, dispatch.author_id) || !authorContentPubliclyVisible(dispatch.author_id)) {
+        return { data: null, error: { message: 'This action is not available right now.', code: 'P0001' } }
+      }
+
+      const parentReplyId = (params?.p_parent_reply_id as string | null | undefined) ?? null
+      let rootReplyId: string | null = null
+      let replyToUserId: string | null = null
+
+      if (parentReplyId !== null) {
+        const parent = replies.find((r) => r.id === parentReplyId)
+        if (!parent) {
+          return { data: null, error: { message: 'The Reply you are answering no longer exists.', code: 'P0001' } }
+        }
+        if (parent.dispatch_id !== dispatchId) {
+          return { data: null, error: { message: 'That Reply does not belong to this Dispatch.', code: 'P0001' } }
+        }
+        if (parent.moderation_status !== 'visible' || parent.deleted_at !== null) {
+          return { data: null, error: { message: 'That Reply is no longer available to answer.', code: 'P0001' } }
+        }
+        // Same correction, applied to the parent Reply's own author.
+        if (isBlockedPair(viewerId, parent.author_id) || !authorContentPubliclyVisible(parent.author_id)) {
+          return { data: null, error: { message: 'This action is not available right now.', code: 'P0001' } }
+        }
+        replyToUserId = parent.author_id
+        rootReplyId = parent.root_reply_id ?? parent.id
+      }
+
+      const newReply: FakeReplyRow = {
+        id: `reply-${replies.length + 1}`,
+        dispatch_id: dispatchId,
+        author_id: viewerId,
+        body,
+        parent_reply_id: parentReplyId,
+        root_reply_id: rootReplyId,
+        reply_to_user_id: replyToUserId,
+        moderation_status: 'visible',
+        deleted_at: null,
+        created_at: new Date().toISOString(),
+      }
+      replies.push(newReply)
+      return { data: newReply, error: null }
+    }
+
+    // Mirrors delete_reply: author-only tombstone, never gated on
+    // account status or blocking (a de-escalating action, same
+    // reasoning as unkeep_mind above) — clears body and sets deleted_at
+    // together, leaves every other field (including parent_reply_id/
+    // root_reply_id/reply_to_user_id) untouched.
+    if (fn === 'delete_reply') {
+      if (!viewerId) {
+        return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      }
+      const replyId = params?.p_reply_id as string
+      const reply = replies.find((r) => r.id === replyId && r.author_id === viewerId && r.deleted_at === null)
+      if (!reply) {
+        return { data: null, error: { message: 'Reply not found.', code: 'P0001' } }
+      }
+      reply.deleted_at = new Date().toISOString()
+      reply.body = ''
+      return { data: null, error: null }
+    }
+
     throw new Error(`fakeDispatches: no rpc handler for "${fn}"`)
   }
 
@@ -952,5 +1143,9 @@ export function createFakeDispatches(options: {
      * (which this fake doesn't model; see admin-moderation.test.ts's
      * simulate-RPC suite for that layer). */
     _rows: rows,
+    /** Test-only escape hatch onto the underlying Reply rows — e.g. to
+     * flip moderation_status directly, standing in for admin_hide_reply/
+     * admin_restore_reply (modeled instead in simulateReportRpcs.ts). */
+    _replies: replies,
   }
 }

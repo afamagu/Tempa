@@ -5,6 +5,8 @@ import {
   restoreDispatch,
   hideQuestionAnswer,
   restoreQuestionAnswer,
+  hideReply,
+  restoreReply,
   listPublicContent,
   listContentAudit,
 } from './admin-moderation'
@@ -129,6 +131,124 @@ describe('admin_hide_dispatch / admin_restore_dispatch — moderator floor, reas
     const { error } = await restoreDispatch(client(fake), 'd1', 'Nothing to restore.')
     expect(error?.message).toBe('This content is already visible.')
     expect(fake._auditLog).toHaveLength(0)
+  })
+})
+
+describe('admin_hide_reply / admin_restore_reply — same shape as Dispatches (Board Experience Phase 2B)', () => {
+  it('a non-staff member cannot hide a Reply', async () => {
+    const fake = createFakeReports({
+      viewerId: MEMBER,
+      profiles: [{ id: MEMBER, pseudonym: 'Member' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+    })
+    const { error } = await hideReply(client(fake), 'r1', 'Testing')
+    expect(error?.message).toBe('Not authorized.')
+    expect(fake._replies[0].moderation_status).toBe('visible')
+  })
+
+  it('a moderator CANNOT hide an unreported Reply — report-driven access only', async () => {
+    const fake = createFakeReports({
+      viewerId: MODERATOR,
+      profiles: [{ id: MODERATOR, pseudonym: 'Mod' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+      staff: { [MODERATOR]: 'moderator' },
+    })
+    const { error } = await hideReply(client(fake), 'r1', 'Just felt like it.')
+    expect(error?.message).toBe('Not authorized.')
+    expect(fake._replies[0].moderation_status).toBe('visible')
+  })
+
+  it('a moderator CAN hide, then restore, a REPORTED Reply — reversible', async () => {
+    const fake = createFakeReports({
+      viewerId: MEMBER,
+      profiles: [{ id: MEMBER, pseudonym: 'Member' }, { id: MODERATOR, pseudonym: 'Mod' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+      staff: { [MODERATOR]: 'moderator' },
+    })
+    await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    fake._setViewer(MODERATOR)
+
+    const hidden = await hideReply(client(fake), 'r1', 'Violates guidelines.')
+    expect(hidden.error).toBeNull()
+    expect(fake._replies[0].moderation_status).toBe('hidden')
+
+    const restored = await restoreReply(client(fake), 'r1', 'Reviewed, was a false positive.')
+    expect(restored.error).toBeNull()
+    expect(fake._replies[0].moderation_status).toBe('visible')
+  })
+
+  it('an admin CAN proactively hide an eligible Reply with no report at all', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { error } = await hideReply(client(fake), 'r1', 'Proactive review finding.')
+    expect(error).toBeNull()
+    expect(fake._replies[0].moderation_status).toBe('hidden')
+  })
+
+  it('hide is rejected without a reason, even for a legitimately reported Reply', async () => {
+    const fake = createFakeReports({
+      viewerId: MEMBER,
+      profiles: [{ id: MEMBER, pseudonym: 'Member' }, { id: MODERATOR, pseudonym: 'Mod' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+      staff: { [MODERATOR]: 'moderator' },
+    })
+    await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    fake._setViewer(MODERATOR)
+    const { error } = await hideReply(client(fake), 'r1', '   ')
+    expect(error?.message).toBe('A reason is required.')
+    expect(fake._replies[0].moderation_status).toBe('visible')
+  })
+
+  it('hiding writes a content_hidden audit row targeting "reply"; restoring writes content_restored', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    await hideReply(client(fake), 'r1', 'Reason one.')
+    await restoreReply(client(fake), 'r1', 'Reason two.')
+    expect(fake._auditLog.map((a) => a.action)).toEqual(['content_hidden', 'content_restored'])
+    expect(fake._auditLog[0].target_type).toBe('reply')
+    expect(fake._auditLog[0].reason).toBe('Reason one.')
+  })
+
+  it('idempotency: hiding an already-hidden Reply is a clear error, not a fabricated audit transition', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    await hideReply(client(fake), 'r1', 'First hide.')
+    const { error } = await hideReply(client(fake), 'r1', 'Second hide attempt.')
+    expect(error?.message).toBe('This content is already hidden.')
+    expect(fake._auditLog).toHaveLength(1)
+  })
+
+  it('member-deletion (tombstone) and moderator hiding are independent — hiding an already member-deleted Reply still works, and does not touch its (already cleared) body', async () => {
+    const fake = createFakeReports({
+      viewerId: ADMIN,
+      profiles: [{ id: ADMIN, pseudonym: 'Admin' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'T', body: 'B', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: '' }],
+      staff: { [ADMIN]: 'admin' },
+    })
+    const { error } = await hideReply(client(fake), 'r1', 'Hiding a member-removed Reply anyway.')
+    expect(error).toBeNull()
+    expect(fake._replies[0].moderation_status).toBe('hidden')
+    expect(fake._replies[0].body).toBe('')
   })
 })
 

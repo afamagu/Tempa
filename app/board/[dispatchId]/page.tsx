@@ -11,6 +11,7 @@ import {
   isKeepingMind,
   getActiveDispatchShare,
 } from '@/lib/dispatches'
+import { getDispatchReplies } from '@/lib/replies'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import { sectionTitleClass, metadataTextClass, helperTextClass } from '@/app/profile/ui'
@@ -26,6 +27,7 @@ import KeepButton from '../keep-button'
 import ShareDispatchButton from '../share-dispatch-button'
 import DispatchReader from './dispatch-reader'
 import AuthorActionsMenu from './author-actions-menu'
+import RepliesSection from './replies-section'
 
 function FlagIcon() {
   return (
@@ -122,7 +124,7 @@ export default async function DispatchPage({
     )
   }
 
-  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow] = await Promise.all([
+  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow, replies] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getDispatchMoments(supabase, dispatch.id),
     getDispatchViewState(supabase, user.id, dispatch.id),
@@ -137,6 +139,7 @@ export default async function DispatchPage({
     isAuthor
       ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
       : Promise.resolve({ data: null }),
+    getDispatchReplies(supabase, dispatch.id),
   ])
 
   const isPinned = isAuthor && pinnedRow.data?.pinned_dispatch_id === dispatch.id
@@ -223,6 +226,8 @@ export default async function DispatchPage({
                 initialPosition={initialPosition}
               />
             </div>
+
+            <RepliesSection dispatchId={dispatch.id} viewerId={user.id} initialReplies={replies} />
 
             {/* Bottom-of-letter return nav (pre-beta UX polish batch 1) —
                 the same destination as the top back link, so a reader who

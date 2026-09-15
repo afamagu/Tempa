@@ -617,6 +617,12 @@ export type DeleteDispatchError = { message: string; code?: string } | null
  * app/board/[dispatchId]/author-actions-menu.tsx) using the image paths
  * they already hold from BEFORE calling this, since the Moment rows
  * naming those paths are gone the instant this succeeds.
+ *
+ * Board Experience Phase 2B pre-SQL correction: delete_dispatch now
+ * refuses to delete a Dispatch that still has any Reply row (its own
+ * author's or another member's), returning the exact message "This
+ * Dispatch cannot be deleted while it still has Replies." — Replies are
+ * never cascade-deleted alongside their Dispatch.
  */
 export async function deleteDispatch(
   supabase: SupabaseClient,

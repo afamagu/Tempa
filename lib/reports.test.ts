@@ -352,3 +352,197 @@ describe('reportContent — question_answer target (Admin Phase 2A-1, Decision 1
     expect(error?.message).toBe('Answer not found.')
   })
 })
+
+describe('reportContent — reply target (Board Experience Phase 2B)', () => {
+  const AUTHOR = 'user-reply-author'
+
+  it('accepts a visible Reply as a report target', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: AUTHOR, title: 'A title', body: 'A body', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A thoughtful reply.' }],
+    })
+    const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    expect(error).toBeNull()
+    expect(fake._reports[0].reported_user_id).toBe(AUTHOR)
+  })
+
+  it('the frozen evidence snapshot contains the Reply body, author pseudonym, Dispatch context, and parent relationship', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Quiet Ember' }],
+      dispatches: [{ id: 'd1', author_id: 'user-dispatch-author', title: 'Evening thoughts', body: 'A body', status: 'published' }],
+      replies: [
+        { id: 'parent-1', dispatch_id: 'd1', author_id: 'user-other', body: 'The original reply.' },
+        { id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'Something upsetting.', parent_reply_id: 'parent-1' },
+      ],
+    })
+    await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    expect(fake._reports[0].evidence_snapshot).toEqual({
+      body: 'Something upsetting.',
+      author_pseudonym: 'Quiet Ember',
+      dispatch_id: 'd1',
+      dispatch_title: 'Evening thoughts',
+      parent_reply_id: 'parent-1',
+    })
+  })
+
+  it('rejects self-reporting your own Reply', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }],
+      dispatches: [{ id: 'd1', author_id: 'user-dispatch-author', title: 'A title', body: 'A body', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: REPORTER, body: 'My own reply.' }],
+    })
+    const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    expect(error?.message).toBe('You cannot report your own content.')
+  })
+
+  it('rejects a second report of the same Reply by the same reporter (duplicate protection preserved)', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: 'user-dispatch-author', title: 'A title', body: 'A body', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+    })
+    await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    const { error } = await reportContent(client(fake), 'reply', 'r1', 'spam', '')
+    expect(error?.message).toBe('You have already reported this.')
+    expect(fake._reports).toHaveLength(1)
+  })
+
+  it('rejects a nonexistent Reply id', async () => {
+    const fake = createFakeReports({ viewerId: REPORTER, profiles: [{ id: REPORTER, pseudonym: 'Reporter' }] })
+    const { error } = await reportContent(client(fake), 'reply', 'does-not-exist', 'harassment', '')
+    expect(error?.message).toBe('Reply not found.')
+  })
+
+  it('rejects a Reply that is already moderator-hidden', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: 'user-dispatch-author', title: 'A title', body: 'A body', status: 'published' }],
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.', moderation_status: 'hidden' }],
+    })
+    const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    expect(error?.message).toBe('Reply not found.')
+  })
+
+  it('a member-deleted Reply REMAINS reportable — deleting a Reply must never be usable to evade an in-flight report', async () => {
+    const fake = createFakeReports({
+      viewerId: REPORTER,
+      profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }],
+      dispatches: [{ id: 'd1', author_id: 'user-dispatch-author', title: 'A title', body: 'A body', status: 'published' }],
+      // moderation_status stays 'visible' — the fake, like the real
+      // schema, only ever gates reportability on moderation_status; a
+      // member-deleted-but-not-moderator-hidden Reply is still visible
+      // by that definition, with whatever context remains.
+      replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: '' }],
+    })
+    const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+    expect(error).toBeNull()
+    expect(fake._reports[0].reported_user_id).toBe(AUTHOR)
+  })
+
+  // ============================================================
+  // Final pre-SQL security/verifier correction, Defect 3 — report_
+  // content's reply branch must match the SAME full visibility boundary
+  // dispatch_replies_select_published enforces: both the Reply's own
+  // state AND its parent Dispatch's own full public-visibility gate.
+  // ============================================================
+  describe('the reply branch matches Reply readability exactly', () => {
+    const DISPATCH_AUTHOR = 'user-dispatch-author'
+
+    function setup(overrides: {
+      dispatchOverrides?: Partial<{ status: 'published' | 'unpublished'; moderation_status: 'visible' | 'hidden' }>
+      blocked?: { blocker_id: string; blocked_id: string; scope?: 'letters' | 'full' }[]
+      authorAccountStatus?: Record<string, 'active' | 'restricted' | 'suspended' | 'banned'>
+    } = {}) {
+      return createFakeReports({
+        viewerId: REPORTER,
+        profiles: [
+          { id: REPORTER, pseudonym: 'Reporter' },
+          { id: AUTHOR, pseudonym: 'Author' },
+          { id: DISPATCH_AUTHOR, pseudonym: 'Dispatch Author' },
+        ],
+        dispatches: [
+          {
+            id: 'd1',
+            author_id: DISPATCH_AUTHOR,
+            title: 'A title',
+            body: 'A body',
+            status: 'published',
+            ...overrides.dispatchOverrides,
+          },
+        ],
+        replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: 'A reply.' }],
+        blocked: overrides.blocked,
+        authorAccountStatus: overrides.authorAccountStatus,
+      })
+    }
+
+    it('rejects reporting a Reply on an unpublished parent Dispatch', async () => {
+      const fake = setup({ dispatchOverrides: { status: 'unpublished' } })
+      const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+      expect(error?.message).toBe('Reply not found.')
+    })
+
+    it('rejects reporting a Reply on a moderator-hidden parent Dispatch', async () => {
+      const fake = setup({ dispatchOverrides: { moderation_status: 'hidden' } })
+      const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+      expect(error?.message).toBe('Reply not found.')
+    })
+
+    it('rejects reporting a Reply when the parent Dispatch author is full-blocked; a letters-only block does not affect it', async () => {
+      const fakeFull = setup({ blocked: [{ blocker_id: REPORTER, blocked_id: DISPATCH_AUTHOR, scope: 'full' }] })
+      const rejected = await reportContent(client(fakeFull), 'reply', 'r1', 'harassment', '')
+      expect(rejected.error?.message).toBe('Reply not found.')
+
+      const fakeLettersOnly = setup({ blocked: [{ blocker_id: REPORTER, blocked_id: DISPATCH_AUTHOR, scope: 'letters' }] })
+      const allowed = await reportContent(client(fakeLettersOnly), 'reply', 'r1', 'harassment', '')
+      expect(allowed.error).toBeNull()
+    })
+
+    it('rejects reporting a Reply when the parent Dispatch author is suspended/banned; active/restricted is unaffected', async () => {
+      const fakeSuspended = setup({ authorAccountStatus: { [DISPATCH_AUTHOR]: 'suspended' } })
+      const rejected = await reportContent(client(fakeSuspended), 'reply', 'r1', 'harassment', '')
+      expect(rejected.error?.message).toBe('Reply not found.')
+
+      const fakeRestricted = setup({ authorAccountStatus: { [DISPATCH_AUTHOR]: 'restricted' } })
+      const allowed = await reportContent(client(fakeRestricted), 'reply', 'r1', 'harassment', '')
+      expect(allowed.error).toBeNull()
+    })
+
+    it('rejects reporting a Reply when the REPLY\'s own author is full-blocked; a letters-only block does not affect it', async () => {
+      const fakeFull = setup({ blocked: [{ blocker_id: REPORTER, blocked_id: AUTHOR, scope: 'full' }] })
+      const rejected = await reportContent(client(fakeFull), 'reply', 'r1', 'harassment', '')
+      expect(rejected.error?.message).toBe('Reply not found.')
+
+      const fakeLettersOnly = setup({ blocked: [{ blocker_id: REPORTER, blocked_id: AUTHOR, scope: 'letters' }] })
+      const allowed = await reportContent(client(fakeLettersOnly), 'reply', 'r1', 'harassment', '')
+      expect(allowed.error).toBeNull()
+    })
+
+    it('rejects reporting a Reply when the REPLY\'s own author is suspended/banned; active/restricted is unaffected', async () => {
+      const fakeSuspended = setup({ authorAccountStatus: { [AUTHOR]: 'banned' } })
+      const rejected = await reportContent(client(fakeSuspended), 'reply', 'r1', 'harassment', '')
+      expect(rejected.error?.message).toBe('Reply not found.')
+
+      const fakeRestricted = setup({ authorAccountStatus: { [AUTHOR]: 'restricted' } })
+      const allowed = await reportContent(client(fakeRestricted), 'reply', 'r1', 'harassment', '')
+      expect(allowed.error).toBeNull()
+    })
+
+    it('a member-deleted Reply on an otherwise fully-visible Dispatch/author stays reportable even under the widened checks', async () => {
+      const fake = createFakeReports({
+        viewerId: REPORTER,
+        profiles: [{ id: REPORTER, pseudonym: 'Reporter' }, { id: AUTHOR, pseudonym: 'Author' }, { id: DISPATCH_AUTHOR, pseudonym: 'Dispatch Author' }],
+        dispatches: [{ id: 'd1', author_id: DISPATCH_AUTHOR, title: 'A title', body: 'A body', status: 'published' }],
+        replies: [{ id: 'r1', dispatch_id: 'd1', author_id: AUTHOR, body: '' }],
+      })
+      const { error } = await reportContent(client(fake), 'reply', 'r1', 'harassment', '')
+      expect(error).toBeNull()
+    })
+  })
+})

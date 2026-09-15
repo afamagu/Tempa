@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import AuthorActionsMenu from './author-actions-menu'
+
+const SOURCE_PATH = path.join(__dirname, 'author-actions-menu.tsx')
+const source = readFileSync(SOURCE_PATH, 'utf8')
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {}, refresh: () => {} }) }))
 
@@ -29,5 +34,31 @@ describe('AuthorActionsMenu — restrained trigger (item 10)', () => {
       <AuthorActionsMenu dispatchId="d-1" initialShareToken={null} initialIsPinned={false} momentImagePaths={[]} />
     )
     expect(html).not.toContain('window.confirm')
+  })
+})
+
+// Board Experience Phase 2B, pre-SQL correction pass — a Dispatch that
+// still has Replies cannot be deleted (delete_dispatch's own new
+// guard). "Please try again" would be misleading for that specific,
+// permanent condition, so handleDelete gives it its own coherent
+// message instead — same source-inspection convention as ReportButton's
+// own duplicate-report-message test (app/report-button.test.tsx), since
+// the click-driven flow itself is unreachable via renderToStaticMarkup.
+describe('AuthorActionsMenu — coherent error when a Dispatch has Replies (source)', () => {
+  function handleDeleteBody(): string {
+    const start = source.indexOf('async function handleDelete')
+    const end = source.indexOf('async function', start + 1)
+    return source.slice(start, end === -1 ? source.length : end)
+  }
+
+  it('shows the exact guard message verbatim, not the generic retry copy, when deleteDispatch returns it', () => {
+    const body = handleDeleteBody()
+    expect(body).toContain("deleteError.message === 'This Dispatch cannot be deleted while it still has Replies.'")
+    expect(body).toContain('? deleteError.message')
+  })
+
+  it('still falls back to the generic retry message for any other delete error', () => {
+    const body = handleDeleteBody()
+    expect(body).toContain(': \'Could not delete this Dispatch. Please try again.\'')
   })
 })

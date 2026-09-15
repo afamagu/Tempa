@@ -152,7 +152,16 @@ export default function AuthorActionsMenu({
       const supabase = createClient()
       const { error: deleteError } = await deleteDispatch(supabase, dispatchId)
       if (deleteError) {
-        setError('Could not delete this Dispatch. Please try again.')
+        // Board Experience Phase 2B pre-SQL correction: a Dispatch with
+        // Replies cannot be deleted at all right now (see delete_
+        // dispatch's own guard) — "Please try again" would be
+        // misleading for that specific, permanent condition, so it gets
+        // its own coherent message instead of the generic retry copy.
+        setError(
+          deleteError.message === 'This Dispatch cannot be deleted while it still has Replies.'
+            ? deleteError.message
+            : 'Could not delete this Dispatch. Please try again.'
+        )
         return
       }
       if (momentImagePaths.length > 0) {

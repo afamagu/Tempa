@@ -54,6 +54,34 @@ export async function restoreQuestionAnswer(
   return { error: null }
 }
 
+/**
+ * Board Experience Phase 2B (docs/sql/2026-09-23-dispatch-replies.sql) —
+ * same shape as hideDispatch/restoreDispatch, not folded into
+ * ContentType/listPublicContent: Replies are deliberately not part of
+ * the proactive Public Content Review surface in this checkpoint, only
+ * reachable via a Reply's own report (the same moderator-floor,
+ * report-driven access hideDispatch already has).
+ */
+export async function hideReply(
+  supabase: SupabaseClient,
+  replyId: string,
+  reason: string
+): Promise<{ error: AdminError }> {
+  const { error } = await supabase.rpc('admin_hide_reply', { p_reply_id: replyId, p_reason: reason.trim() })
+  if (error) return { error: { message: error.message, code: error.code } }
+  return { error: null }
+}
+
+export async function restoreReply(
+  supabase: SupabaseClient,
+  replyId: string,
+  reason: string
+): Promise<{ error: AdminError }> {
+  const { error } = await supabase.rpc('admin_restore_reply', { p_reply_id: replyId, p_reason: reason.trim() })
+  if (error) return { error: { message: error.message, code: error.code } }
+  return { error: null }
+}
+
 export type PublicContentRow = {
   contentType: ContentType
   id: string

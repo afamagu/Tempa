@@ -33,7 +33,7 @@ import {
 } from './dispatches'
 import { docToPlainBody, RICH_BODY_MARKER } from './letter-editor-doc'
 import { blockUser, unblockUser } from './blocking'
-import { createFakeDispatches, type FakeDispatchRow } from './__tests__/fakeDispatches'
+import { createFakeDispatches, type FakeDispatchRow, type FakeReplyRow } from './__tests__/fakeDispatches'
 
 const AUTHOR_A = 'user-a'
 const AUTHOR_B = 'user-b'
@@ -822,6 +822,80 @@ describe('Board usability checkpoint — deleteDispatch', () => {
     })
     fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
     const { error } = await deleteDispatch(client(fake), 'd-1')
+    expect(error).toBeNull()
+  })
+
+  // ============================================================
+  // Board Experience Phase 2B, pre-SQL correction pass — a Dispatch
+  // must never cascade-delete another member's Reply just because its
+  // own author deletes the Dispatch. delete_dispatch (docs/sql/2026-09-
+  // 23-dispatch-replies.sql piece 2) now refuses the delete outright
+  // while ANY Reply row still references the Dispatch.
+  // ============================================================
+  function replyRow(overrides: Partial<FakeReplyRow> = {}): FakeReplyRow {
+    return {
+      id: 'r-1',
+      dispatch_id: 'd-1',
+      author_id: AUTHOR_B,
+      body: 'A thoughtful response.',
+      created_at: '2026-09-23T00:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('a Dispatch with zero Replies keeps its prior delete behavior (unchanged)', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      replies: [],
+    })
+    const { error } = await deleteDispatch(client(fake), 'd-1')
+    expect(error).toBeNull()
+    expect(fake._rows.find((r) => r.id === 'd-1')).toBeUndefined()
+  })
+
+  it('a Dispatch with at least one Reply cannot be hard-deleted', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      replies: [replyRow({ id: 'r-1', author_id: AUTHOR_B })],
+    })
+    const { error } = await deleteDispatch(client(fake), 'd-1')
+    expect(error?.message).toBe('This Dispatch cannot be deleted while it still has Replies.')
+    expect(fake._rows.find((r) => r.id === 'd-1')).toBeDefined()
+  })
+
+  it('the delete attempt never destroys another member\'s Reply — it survives, untouched', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      replies: [replyRow({ id: 'r-1', author_id: AUTHOR_B, body: 'Please keep writing.' })],
+    })
+    await deleteDispatch(client(fake), 'd-1')
+    const surviving = fake._replies.find((r) => r.id === 'r-1')
+    expect(surviving).toBeDefined()
+    expect(surviving?.author_id).toBe(AUTHOR_B)
+    expect(surviving?.body).toBe('Please keep writing.')
+    expect(surviving?.deleted_at).toBeNull()
+  })
+
+  it('the guard blocks deletion even when every Reply is the Dispatch author\'s own (no authorship carve-out)', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      replies: [replyRow({ id: 'r-1', author_id: AUTHOR_A })],
+    })
+    const { error } = await deleteDispatch(client(fake), 'd-1')
+    expect(error?.message).toBe('This Dispatch cannot be deleted while it still has Replies.')
+  })
+
+  it('deleting a DIFFERENT Dispatch with no Replies of its own still succeeds even while another Dispatch has Replies', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A }), row({ id: 'd-2', author_id: AUTHOR_A })],
+      replies: [replyRow({ id: 'r-1', dispatch_id: 'd-1', author_id: AUTHOR_B })],
+    })
+    const { error } = await deleteDispatch(client(fake), 'd-2')
     expect(error).toBeNull()
   })
 })

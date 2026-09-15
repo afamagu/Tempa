@@ -21,7 +21,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // caller could legitimately see it (active Question, moderation_status
 // = 'visible', not a blocked pair — the same predicate as its own read
 // policy), enforced entirely server-side by report_content.
-export type ReportTargetType = 'profile' | 'letter' | 'dispatch' | 'photo_moment' | 'question_answer'
+// 'reply' added Board Experience Phase 2B (docs/sql/2026-09-23-
+// dispatch-replies.sql) — same shape: reportable only when visible
+// (moderation_status = 'visible', not a blocked pair), evidence derived
+// server-side, a member-deleted Reply remains reportable (whatever
+// context still exists — author, Dispatch/parent — is still captured;
+// not filtered by deleted_at, so deleting a Reply can't be used to dodge
+// an in-flight report).
+export type ReportTargetType = 'profile' | 'letter' | 'dispatch' | 'photo_moment' | 'question_answer' | 'reply'
 
 export type ReportReason =
   | 'scam_fraud'

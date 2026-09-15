@@ -55,7 +55,7 @@ export type FakeReport = {
   id: string
   reporter_user_id: string
   reported_user_id: string
-  target_type: 'profile' | 'letter' | 'dispatch' | 'photo_moment' | 'question_answer'
+  target_type: 'profile' | 'letter' | 'dispatch' | 'photo_moment' | 'question_answer' | 'reply'
   target_id: string
   reason: string
   context: string | null
@@ -63,6 +63,27 @@ export type FakeReport = {
   status: 'open' | 'reviewed'
   created_at: string
 }
+
+// Board Experience Phase 2B — the Reply shape report_content's new
+// 'reply' branch reads from (docs/sql/2026-09-23-dispatch-replies.sql).
+export type FakeReply = {
+  id: string
+  dispatch_id: string
+  author_id: string
+  body: string
+  parent_reply_id?: string | null
+  moderation_status?: 'visible' | 'hidden'
+  moderated_at?: string | null
+}
+
+// Final security review correction — the 'reply' branch now must
+// reproduce the same full-block + public-account-visibility boundary
+// dispatch_replies_select_published enforces. Scoped narrowly to the
+// 'reply' branch only: the other branches in this fake (dispatch,
+// photo_moment) were already simplified relative to the real SQL's own
+// blocking checks before this pass, and widening them is out of scope
+// for this correction.
+export type FakeBlock = { blocker_id: string; blocked_id: string; scope?: 'letters' | 'full' }
 
 export type FakeAuditRow = {
   id: string
@@ -89,6 +110,14 @@ export function createFakeReports(options: {
   questions?: FakeQuestion[]
   questionAnswers?: FakeQuestionAnswer[]
   staff?: Record<string, 'moderator' | 'admin'>
+  replies?: FakeReply[]
+  /** Reply-branch-only, per the final security review correction — see
+   * FakeBlock's own comment. */
+  blocked?: FakeBlock[]
+  /** Reply-branch-only initial per-user account status (active if
+   * absent) — separate from the runtime `accountStatus` Map below,
+   * which tracks admin_set_account_status calls made DURING a test. */
+  authorAccountStatus?: Record<string, 'active' | 'restricted' | 'suspended' | 'banned'>
 }) {
   let viewerId = options.viewerId
   const profiles = options.profiles ?? []
@@ -99,11 +128,34 @@ export function createFakeReports(options: {
   const questions = options.questions ?? []
   const questionAnswers = options.questionAnswers ?? []
   const staff = options.staff ?? {}
+  const replies = options.replies ?? []
+  const blocked = options.blocked ?? []
+  const authorAccountStatus = options.authorAccountStatus ?? {}
+
+  // Mirrors tempa_private.is_blocked_pair(a, b) — full-scope block only,
+  // either direction. Reply-branch-only (see FakeBlock's own comment).
+  function isBlockedPairForReply(a: string | null, b: string) {
+    if (!a) return false
+    return blocked.some(
+      (row) =>
+        (row.scope ?? 'full') === 'full' &&
+        ((row.blocker_id === a && row.blocked_id === b) || (row.blocker_id === b && row.blocked_id === a))
+    )
+  }
+
+  // Mirrors tempa_private.author_content_publicly_visible(author_id) —
+  // only suspended/banned exclude an author's content. Reply-branch-only.
+  function authorContentPubliclyVisibleForReply(authorId: string) {
+    const status = authorAccountStatus[authorId] ?? 'active'
+    return status !== 'suspended' && status !== 'banned'
+  }
 
   // Default every dispatch/answer to 'visible' unless the fixture says
   // otherwise — mirrors the migration's `not null default 'visible'`.
   for (const d of dispatches) if (d.moderation_status === undefined) d.moderation_status = 'visible'
   for (const qa of questionAnswers) if (qa.moderation_status === undefined) qa.moderation_status = 'visible'
+  for (const r of replies) if (r.moderation_status === undefined) r.moderation_status = 'visible'
+  for (const r of replies) if (r.parent_reply_id === undefined) r.parent_reply_id = null
   for (const qa of questionAnswers) if (qa.is_current === undefined) qa.is_current = false
   for (const q of questions) if (q.family === undefined) q.family = null
   for (const q of questions) if (q.created_at === undefined) q.created_at = new Date().toISOString()
@@ -135,7 +187,7 @@ export function createFakeReports(options: {
       const reason = params?.p_reason as string
       const context = (params?.p_context as string | null) ?? null
 
-      if (!['profile', 'letter', 'dispatch', 'photo_moment', 'question_answer'].includes(targetType)) {
+      if (!['profile', 'letter', 'dispatch', 'photo_moment', 'question_answer', 'reply'].includes(targetType)) {
         return { data: null, error: { message: 'Unknown report target.', code: 'P0001' } }
       }
       if (!VALID_REASONS.includes(reason)) {
@@ -179,6 +231,44 @@ export function createFakeReports(options: {
           reportedUserId = qa.user_id
           evidence = { prompt: q.prompt, body: qa.body, author_pseudonym: pseudonymOf(qa.user_id) }
         }
+      } else if (targetType === 'reply') {
+        // Board Experience Phase 2B, final security review correction —
+        // mirrors report_content's 'reply' branch in FULL: the Reply's
+        // own moderation_status/blocking/public-visibility AND its
+        // parent Dispatch's own full public-visibility gate (published,
+        // moderator-visible, not full-blocked, author publicly visible)
+        // — not merely the Reply's own state. Deliberately NO deleted_at
+        // filter — a member-deleted Reply remains reportable (whatever
+        // context survives — author, Dispatch, parent — is still
+        // captured), so deleting a Reply can never be used to dodge an
+        // in-flight report.
+        const r = replies.find(
+          (r) =>
+            r.id === targetId &&
+            r.moderation_status === 'visible' &&
+            !isBlockedPairForReply(viewerId, r.author_id) &&
+            authorContentPubliclyVisibleForReply(r.author_id)
+        )
+        const d = r
+          ? dispatches.find(
+              (d) =>
+                d.id === r.dispatch_id &&
+                d.status === 'published' &&
+                d.moderation_status === 'visible' &&
+                !isBlockedPairForReply(viewerId, d.author_id) &&
+                authorContentPubliclyVisibleForReply(d.author_id)
+            )
+          : undefined
+        if (r && d) {
+          reportedUserId = r.author_id
+          evidence = {
+            body: r.body,
+            author_pseudonym: pseudonymOf(r.author_id),
+            dispatch_id: r.dispatch_id,
+            dispatch_title: d.title,
+            parent_reply_id: r.parent_reply_id ?? null,
+          }
+        }
       } else if (targetType === 'photo_moment') {
         const m = moments.find((m) => m.id === targetId && m.type === 'photo')
         if (m) {
@@ -215,7 +305,9 @@ export function createFakeReports(options: {
                 ? 'Dispatch not found.'
                 : targetType === 'question_answer'
                   ? 'Answer not found.'
-                  : 'Photo not found.'
+                  : targetType === 'reply'
+                    ? 'Reply not found.'
+                    : 'Photo not found.'
         return { data: null, error: { message: notFoundMessage, code: 'P0001' } }
       }
 
@@ -316,7 +408,7 @@ export function createFakeReports(options: {
       }
       if (
         targetType !== null &&
-        !['profile', 'letter', 'dispatch', 'photo_moment', 'question_answer'].includes(targetType)
+        !['profile', 'letter', 'dispatch', 'photo_moment', 'question_answer', 'reply'].includes(targetType)
       ) {
         return { data: null, error: { message: 'Invalid target type filter.', code: 'P0001' } }
       }
@@ -509,6 +601,54 @@ export function createFakeReports(options: {
           fn === 'admin_hide_question_answer'
             ? { previous_status: oldStatus, new_status: newStatus, was_current: wasCurrent }
             : { previous_status: oldStatus, new_status: newStatus },
+        created_at: new Date().toISOString(),
+      })
+      return { data: null, error: null }
+    }
+
+    // Board Experience Phase 2B — mirrors admin_hide_reply/admin_
+    // restore_reply exactly (docs/sql/2026-09-23-dispatch-replies.sql):
+    // a direct copy of admin_hide_dispatch/admin_restore_dispatch's own
+    // authorization/idempotency/audit-log shape, substituted onto
+    // Replies. target_identifier_snapshot is a short body excerpt
+    // (Replies have no title) — may legitimately be empty if the Reply
+    // was already member-deleted before a moderator ever hid it.
+    if (fn === 'admin_hide_reply' || fn === 'admin_restore_reply') {
+      if (!viewerId) return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      if (!isStaff(viewerId, 'moderator')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+      const replyId = params?.p_reply_id as string
+      if (!isStaff(viewerId, 'admin')) {
+        if (!reports.some((r) => r.target_type === 'reply' && r.target_id === replyId)) {
+          return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
+        }
+      }
+      const reason = ((params?.p_reason as string) ?? '').trim()
+      if (reason.length === 0) return { data: null, error: { message: 'A reason is required.', code: 'P0001' } }
+      const r = replies.find((r) => r.id === replyId)
+      if (!r) return { data: null, error: { message: 'Reply not found.', code: 'P0001' } }
+      const oldStatus = r.moderation_status
+      const newStatus = fn === 'admin_hide_reply' ? 'hidden' : 'visible'
+      if (oldStatus === newStatus) {
+        return {
+          data: null,
+          error: {
+            message: newStatus === 'hidden' ? 'This content is already hidden.' : 'This content is already visible.',
+            code: 'P0001',
+          },
+        }
+      }
+      r.moderation_status = newStatus
+      r.moderated_at = new Date().toISOString()
+      auditLog.push({
+        id: `audit-${auditLog.length + 1}`,
+        actor_id: viewerId,
+        actor_identifier_snapshot: pseudonymOf(viewerId) ?? viewerId,
+        action: fn === 'admin_hide_reply' ? 'content_hidden' : 'content_restored',
+        target_type: 'reply',
+        target_id: r.id,
+        target_identifier_snapshot: r.body.slice(0, 60),
+        reason,
+        metadata: { previous_status: oldStatus, new_status: newStatus },
         created_at: new Date().toISOString(),
       })
       return { data: null, error: null }
@@ -1132,6 +1272,7 @@ export function createFakeReports(options: {
     _dispatches: dispatches,
     _questions: questions,
     _questionAnswers: questionAnswers,
+    _replies: replies,
     _setViewer(id: string | null) {
       viewerId = id
     },
