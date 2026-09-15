@@ -108,6 +108,38 @@ export type FakeReplyRow = {
  * fixed sentinel for a fixture that doesn't care about its value. */
 export type FakeWorthReadingRow = { dispatch_id: string; user_id: string; created_at?: string }
 
+/** Dispatch Postcards Checkpoint 2 — mirrors the LIVE Postcard catalogue
+ * tables (public.postcard_catalog/public.postcard_versions, unchanged by
+ * this checkpoint) closely enough to exercise publish_dispatch's own
+ * Postcard validation/resolution in pure JS. */
+export type FakePostcardCatalogRow = { key: string; is_active: boolean }
+export type FakePostcardVersionRow = {
+  id: string
+  postcard_key: string
+  is_current: boolean
+  title: string
+  location: string
+  collection: string
+  postmark_text: string
+  footer_text: string
+  front_image_path: string
+  motion_src?: string | null
+  duration_seconds?: number | null
+  reveal_line_alignment?: string | null
+}
+/** Mirrors public.dispatch_postcards (docs/sql/2026-09-25-dispatch-
+ * postcards.sql) — at most one row per dispatch_id, written only by the
+ * publish_dispatch mock below, read by the dispatch_postcards table
+ * handler (getDispatchPostcard's own query shape) and by get_shared_
+ * dispatch's own mock. */
+export type FakeDispatchPostcardRow = {
+  dispatch_id: string
+  postcard_version_id: string
+  reveal_line: string | null
+  back_message: string
+  sender_pseudonym_snapshot: string
+}
+
 export function createFakeDispatches(options: {
   viewerId: string | null
   rows: FakeDispatchRow[]
@@ -121,6 +153,9 @@ export function createFakeDispatches(options: {
   accountStatus?: Record<string, FakeAccountStatus>
   replies?: FakeReplyRow[]
   worthReading?: FakeWorthReadingRow[]
+  postcardCatalog?: FakePostcardCatalogRow[]
+  postcardVersions?: FakePostcardVersionRow[]
+  dispatchPostcards?: FakeDispatchPostcardRow[]
 }) {
   const { viewerId } = options
   const rows = options.rows
@@ -135,6 +170,9 @@ export function createFakeDispatches(options: {
   const accountStatus = options.accountStatus ?? {}
   const replies = options.replies ?? []
   const worthReading = options.worthReading ?? []
+  const postcardCatalog = options.postcardCatalog ?? []
+  const postcardVersions = options.postcardVersions ?? []
+  const dispatchPostcards = options.dispatchPostcards ?? []
   for (const r of replies) {
     if (r.moderation_status === undefined) r.moderation_status = 'visible'
     if (r.parent_reply_id === undefined) r.parent_reply_id = null
@@ -561,6 +599,55 @@ export function createFakeDispatches(options: {
     return builder
   }
 
+  // dispatch_postcards — mirrors getDispatchPostcard's own query shape:
+  // a single row (via .maybeSingle()) joined to its embedded, frozen
+  // postcard_versions relation, scoped to one dispatch_id. RLS itself
+  // (dispatch_postcards_select_visible) is mirrored by simply reusing
+  // visibleRows() — the same "is this Dispatch visible to this viewer"
+  // predicate every other Dispatch-scoped table in this fake already
+  // delegates through.
+  function dispatchPostcardsFrom() {
+    const filters: { dispatchId?: string } = {}
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        if (column === 'dispatch_id') filters.dispatchId = value as string
+        return builder
+      },
+      async maybeSingle() {
+        const dispatchVisible = visibleRows().some((r) => r.id === filters.dispatchId)
+        if (!dispatchVisible) return { data: null, error: null }
+        const row = dispatchPostcards.find((p) => p.dispatch_id === filters.dispatchId)
+        if (!row) return { data: null, error: null }
+        const version = postcardVersions.find((v) => v.id === row.postcard_version_id) ?? null
+        return {
+          data: {
+            reveal_line: row.reveal_line,
+            back_message: row.back_message,
+            sender_pseudonym_snapshot: row.sender_pseudonym_snapshot,
+            postcard_versions: version
+              ? {
+                  title: version.title,
+                  location: version.location,
+                  collection: version.collection,
+                  postmark_text: version.postmark_text,
+                  footer_text: version.footer_text,
+                  front_image_path: version.front_image_path,
+                  motion_src: version.motion_src ?? null,
+                  duration_seconds: version.duration_seconds ?? null,
+                  reveal_line_alignment: version.reveal_line_alignment ?? null,
+                }
+              : null,
+          },
+          error: null,
+        }
+      },
+    }
+    return builder
+  }
+
   function accountEnforcementFrom() {
     const filters: { userId?: string } = {}
     const builder = {
@@ -591,6 +678,7 @@ export function createFakeDispatches(options: {
     if (table === 'account_enforcement_state') return accountEnforcementFrom()
     if (table === 'dispatch_replies') return repliesFrom()
     if (table === 'dispatch_worth_reading') return worthReadingFrom()
+    if (table === 'dispatch_postcards') return dispatchPostcardsFrom()
     throw new Error(`fakeDispatches does not simulate table "${table}"`)
   }
 
@@ -632,6 +720,60 @@ export function createFakeDispatches(options: {
       if (topics.length > 3) {
         return { data: null, error: { message: 'A Dispatch may carry at most 3 topics.', code: 'P0001' } }
       }
+
+      // Dispatch Postcards Checkpoint 2 — validated BEFORE any row is
+      // pushed, mirroring publish_dispatch's own "validate first, so a
+      // failure never leaves a half-published Dispatch behind" ordering.
+      const postcardInput = params?.p_postcard as
+        | { postcard_key: string | null; reveal_line: string | null; back_message: string | null }
+        | null
+        | undefined
+      let resolvedPostcard: {
+        postcard_version_id: string
+        reveal_line: string | null
+        back_message: string
+        sender_pseudonym_snapshot: string
+      } | null = null
+
+      if (postcardInput) {
+        const key = postcardInput.postcard_key
+        if (!key || key.trim().length === 0) {
+          return { data: null, error: { message: 'A Postcard requires a postcard key.', code: 'P0001' } }
+        }
+        const catalogEntry = postcardCatalog.find((c) => c.key === key && c.is_active)
+        if (!catalogEntry) {
+          return { data: null, error: { message: 'Unknown postcard.', code: 'P0001' } }
+        }
+        const currentVersion = postcardVersions.find((v) => v.postcard_key === key && v.is_current)
+        if (!currentVersion) {
+          return { data: null, error: { message: 'This postcard has no current version available.', code: 'P0001' } }
+        }
+        const revealLine = postcardInput.reveal_line
+        if (revealLine !== null && revealLine.length > 32) {
+          return { data: null, error: { message: "A Postcard's Reveal Line is too long.", code: 'P0001' } }
+        }
+        const backMessage = (postcardInput.back_message ?? '').trim()
+        if (backMessage.length === 0) {
+          return {
+            data: null,
+            error: { message: 'A Postcard needs its own written message before it can be published.', code: 'P0001' },
+          }
+        }
+        if (backMessage.length > 200) {
+          return { data: null, error: { message: "A Postcard's back message is too long.", code: 'P0001' } }
+        }
+        const authorProfile = profiles.find((p) => p.id === viewerId)
+        if (!authorProfile) {
+          return { data: null, error: { message: 'Could not resolve your pseudonym for this Postcard.', code: 'P0001' } }
+        }
+        resolvedPostcard = {
+          postcard_version_id: currentVersion.id,
+          reveal_line: revealLine,
+          back_message: backMessage,
+          sender_pseudonym_snapshot: authorProfile.pseudonym,
+        }
+      }
+
       const row: FakeDispatchRow = {
         id: `dispatch-${rows.length + 1}`,
         author_id: viewerId,
@@ -655,6 +797,12 @@ export function createFakeDispatches(options: {
       const draftMoments = (params?.p_moments as { position: number; image_path: string }[] | undefined) ?? []
       for (const m of draftMoments) {
         moments.push({ id: `moment-${moments.length + 1}`, dispatch_id: row.id, position: m.position, image_path: m.image_path })
+      }
+      // Inserted atomically with the Dispatch itself, same as the real
+      // publish_dispatch — max one row per dispatch_id by construction
+      // (a brand-new dispatch_id every call).
+      if (resolvedPostcard) {
+        dispatchPostcards.push({ dispatch_id: row.id, ...resolvedPostcard })
       }
       return { data: row, error: null }
     }
@@ -849,6 +997,33 @@ export function createFakeDispatches(options: {
         .sort((a, b) => a.position - b.position)
         .map((m) => ({ id: m.id, position: m.position, image_path: m.image_path }))
 
+      // Dispatch Postcards Checkpoint 2 — resolved the same way the real
+      // SECURITY DEFINER function does: joined through dispatch_postcards
+      // -> postcard_versions, bundled into one jsonb-shaped object;
+      // undefined (never queried at all) when the Dispatch has none,
+      // matching the real RPC's own null-via-empty-subselect behavior.
+      const dispatchPostcard = dispatchPostcards.find((p) => p.dispatch_id === dispatch.id)
+      const postcardVersion = dispatchPostcard
+        ? postcardVersions.find((v) => v.id === dispatchPostcard.postcard_version_id)
+        : undefined
+      const postcard =
+        dispatchPostcard && postcardVersion
+          ? {
+              title: postcardVersion.title,
+              location: postcardVersion.location,
+              collection: postcardVersion.collection,
+              postmark_text: postcardVersion.postmark_text,
+              footer_text: postcardVersion.footer_text,
+              front_image_path: postcardVersion.front_image_path,
+              motion_src: postcardVersion.motion_src ?? null,
+              duration_seconds: postcardVersion.duration_seconds ?? null,
+              reveal_line_alignment: postcardVersion.reveal_line_alignment ?? null,
+              reveal_line: dispatchPostcard.reveal_line,
+              back_message: dispatchPostcard.back_message,
+              sender_pseudonym_snapshot: dispatchPostcard.sender_pseudonym_snapshot,
+            }
+          : undefined
+
       return {
         data: [
           {
@@ -859,6 +1034,7 @@ export function createFakeDispatches(options: {
             author_pseudonym: pseudonym,
             topics: dispatchTopics,
             moments: dispatchMoments,
+            postcard,
           },
         ],
         error: null,
@@ -1272,5 +1448,10 @@ export function createFakeDispatches(options: {
      * e.g. to assert a mark's presence/absence directly rather than
      * only through isDispatchWorthReading's own RLS-scoped read. */
     _worthReading: worthReading,
+    /** Dispatch Postcards Checkpoint 2 — test-only escape hatch onto the
+     * rows publish_dispatch's own fake mutation actually wrote, e.g. to
+     * assert the max-one-per-dispatch/exact-current-version-captured
+     * properties directly rather than only through a subsequent read. */
+    _dispatchPostcards: dispatchPostcards,
   }
 }

@@ -14,6 +14,8 @@ import {
   getNextTrailItems,
   readingTrailSearchParams,
   getFirstMomentThumbnails,
+  getDispatchPostcard,
+  dispatchPostcardToBaseContent,
 } from '@/lib/dispatches'
 import { getDispatchReplies } from '@/lib/replies'
 import { isDispatchWorthReading } from '@/lib/worth-reading'
@@ -35,6 +37,7 @@ import AuthorActionsMenu from './author-actions-menu'
 import RepliesSection from './replies-section'
 import WorthReadingButton from './worth-reading-button'
 import BoardShelfCard from '@/app/home/board-shelf-card'
+import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 
 function FlagIcon() {
   return (
@@ -142,31 +145,46 @@ export default async function DispatchPage({
   // manufactured — see lib/dispatches.ts's own "READING TRAIL" section.
   const trailContext = parseReadingTrailParams(resolvedSearchParams)
 
-  const [waitingCount, moments, viewState, kept, activeShare, editableMoments, pinnedRow, replies, worthReading, nextTrailItems] =
-    await Promise.all([
-      getWaitingLetterCount(supabase, user.id),
-      getDispatchMoments(supabase, dispatch.id),
-      getDispatchViewState(supabase, user.id, dispatch.id),
-      isAuthor ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
-      // Only the author can SELECT dispatch_shares at all (RLS); a
-      // non-author's Share button simply starts from "not yet known" and
-      // still works correctly via share_dispatch's own get-or-create.
-      isAuthor ? getActiveDispatchShare(supabase, dispatch.id) : Promise.resolve(null),
-      // Needed only so Delete can clean up this Dispatch's own storage
-      // objects afterward — see author-actions-menu.tsx.
-      isAuthor ? getDispatchMomentsForEditing(supabase, dispatch.id) : Promise.resolve([]),
-      isAuthor
-        ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
-        : Promise.resolve({ data: null }),
-      getDispatchReplies(supabase, dispatch.id),
-      // Board Phase 2C — Worth Reading is a private per-viewer mark, and
-      // (like Keep in Mind) a member cannot mark their own Dispatch, so
-      // the author's own view never needs this lookup at all.
-      isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
-      // Home Phase 1B — up to CONTINUE_READING_COUNT subsequent rows in
-      // the SAME session/ordering, never just one.
-      trailContext ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
-    ])
+  const [
+    waitingCount,
+    moments,
+    viewState,
+    kept,
+    activeShare,
+    editableMoments,
+    pinnedRow,
+    replies,
+    worthReading,
+    nextTrailItems,
+    postcard,
+  ] = await Promise.all([
+    getWaitingLetterCount(supabase, user.id),
+    getDispatchMoments(supabase, dispatch.id),
+    getDispatchViewState(supabase, user.id, dispatch.id),
+    isAuthor ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
+    // Only the author can SELECT dispatch_shares at all (RLS); a
+    // non-author's Share button simply starts from "not yet known" and
+    // still works correctly via share_dispatch's own get-or-create.
+    isAuthor ? getActiveDispatchShare(supabase, dispatch.id) : Promise.resolve(null),
+    // Needed only so Delete can clean up this Dispatch's own storage
+    // objects afterward — see author-actions-menu.tsx.
+    isAuthor ? getDispatchMomentsForEditing(supabase, dispatch.id) : Promise.resolve([]),
+    isAuthor
+      ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    getDispatchReplies(supabase, dispatch.id),
+    // Board Phase 2C — Worth Reading is a private per-viewer mark, and
+    // (like Keep in Mind) a member cannot mark their own Dispatch, so
+    // the author's own view never needs this lookup at all.
+    isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
+    // Home Phase 1B — up to CONTINUE_READING_COUNT subsequent rows in
+    // the SAME session/ordering, never just one.
+    trailContext ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
+    // Dispatch Postcards Checkpoint 2 — at most one, resolved once here;
+    // null renders nothing (see LetterheadPostcard's own conditional
+    // rendering below).
+    getDispatchPostcard(supabase, dispatch.id),
+  ])
 
   // Same batched first-Moment lookup every other Dispatch listing
   // surface already uses — safe to call with an empty array (Home
@@ -266,6 +284,22 @@ export default async function DispatchPage({
 
             {moments.some((m) => m.imageUrl) && <MomentHint dispatchId={dispatch.id} />}
 
+            {/* Dispatch Postcards Checkpoint 2 — reuses LetterheadPostcard
+                verbatim (closed thumbnail, tap to open the real front/
+                back/Living-Reveal PostcardObject overlay), positioned
+                with the Dispatch's own header/body content, above the
+                reader. No attached Postcard renders nothing here. */}
+            {postcard && (
+              <div className="flex justify-end">
+                <LetterheadPostcard
+                  base={dispatchPostcardToBaseContent(postcard.version)}
+                  revealLine={postcard.revealLine}
+                  backMessage={postcard.backMessage}
+                  senderPseudonym={postcard.senderPseudonymSnapshot}
+                />
+              </div>
+            )}
+
             <div className="rounded-md bg-surface-shell p-4 sm:p-6">
               <DispatchReader
                 viewerId={user.id}
@@ -306,7 +340,7 @@ export default async function DispatchPage({
                 overflow. */}
             {continueReadingCards.length > 0 && (
               <div className="border-t border-foreground/10 pt-4">
-                <p className={sectionLabelClass}>Continue reading</p>
+                <p className={sectionLabelClass}>Read next</p>
                 <div className="no-scrollbar mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:pb-0">
                   {continueReadingCards.map(({ item, trailQuery }) => (
                     <div key={item.id} className="w-[85%] shrink-0 snap-start sm:w-auto sm:shrink">

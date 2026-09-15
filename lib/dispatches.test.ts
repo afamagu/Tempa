@@ -34,12 +34,19 @@ import {
   parseReadingTrailParams,
   getNextTrailItems,
   CONTINUE_READING_COUNT,
+  getDispatchPostcard,
   type BoardFeedCursor,
   type BoardFeedItem,
 } from './dispatches'
 import { docToPlainBody, RICH_BODY_MARKER } from './letter-editor-doc'
 import { blockUser, unblockUser } from './blocking'
-import { createFakeDispatches, type FakeDispatchRow, type FakeReplyRow } from './__tests__/fakeDispatches'
+import {
+  createFakeDispatches,
+  type FakeDispatchRow,
+  type FakeReplyRow,
+  type FakePostcardCatalogRow,
+  type FakePostcardVersionRow,
+} from './__tests__/fakeDispatches'
 
 const AUTHOR_A = 'user-a'
 const AUTHOR_B = 'user-b'
@@ -236,6 +243,224 @@ describe('publishDispatch', () => {
     expect(data?.publishedAt).toBeTruthy()
     const stored = await getDispatchById(client(fake), data!.id)
     expect(stored?.topics.sort()).toEqual(['memory', 'ritual'])
+  })
+})
+
+// Dispatch Postcards Checkpoint 2.
+const ACTIVE_CATALOG: FakePostcardCatalogRow[] = [{ key: 'essaouira', is_active: true }]
+const CURRENT_VERSION: FakePostcardVersionRow = {
+  id: 'version-essaouira-1',
+  postcard_key: 'essaouira',
+  is_current: true,
+  title: 'Essaouira',
+  location: 'Atlantic Morocco',
+  collection: 'Atlantic Morocco Collection',
+  postmark_text: 'ESSAOUIRA',
+  footer_text: 'Tempa Postcard',
+  front_image_path: '/postcards/essaouira.jpg',
+}
+
+describe('publishDispatch — Postcard (Checkpoint 2)', () => {
+  it('no Postcard remains valid behavior — omitting it publishes exactly as before', async () => {
+    const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [], profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }] })
+    const { data, error } = await publishDispatch(client(fake), { title: 'No postcard here', body: 'x', topics: [] })
+    expect(error).toBeNull()
+    expect(fake._dispatchPostcards).toHaveLength(0)
+    expect(data?.id).toBeTruthy()
+  })
+
+  it('a valid Postcard is captured, resolving the CURRENT immutable version — never the bare key', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'A Dispatch with a Postcard',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: 'A little something.', backMessage: 'Written for this one.' },
+    })
+    expect(error).toBeNull()
+    expect(fake._dispatchPostcards).toHaveLength(1)
+    const stored = fake._dispatchPostcards[0]
+    expect(stored.dispatch_id).toBe(data!.id)
+    expect(stored.postcard_version_id).toBe('version-essaouira-1')
+    expect(stored.sender_pseudonym_snapshot).toBe('Evening Quill')
+    expect(stored.back_message).toBe('Written for this one.')
+  })
+
+  it('an inactive/unknown catalog key is rejected, and publication does not proceed at all (atomic rollback)', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: [{ key: 'retired', is_active: false }],
+      postcardVersions: [{ ...CURRENT_VERSION, id: 'v-retired', postcard_key: 'retired' }],
+    })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'Should never publish',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'retired', revealLine: '', backMessage: 'Hello.' },
+    })
+    expect(data).toBeNull()
+    expect(error?.message).toBe('Unknown postcard.')
+    // Nothing was created — same "half-published Dispatch never exists"
+    // guarantee write_letter's own Postcard validation already has.
+    const board = await getPublishedDispatches(client(fake))
+    expect(board.map((d) => d.title)).not.toContain('Should never publish')
+    expect(fake._dispatchPostcards).toHaveLength(0)
+  })
+
+  it('invalid Postcard content (blank back message) is rejected before publication', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'Blank back message',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: '   ' },
+    })
+    expect(data).toBeNull()
+    expect(error?.message).toContain('written message')
+    expect(fake._dispatchPostcards).toHaveLength(0)
+  })
+
+  it('a Reveal Line over 32 characters is rejected', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'Too long a reveal line',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: 'x'.repeat(33), backMessage: 'Hello.' },
+    })
+    expect(data).toBeNull()
+    expect(error?.message).toContain('Reveal Line')
+  })
+
+  it('a back message over 200 characters is rejected', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'Too long a back message',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'x'.repeat(201) },
+    })
+    expect(data).toBeNull()
+    expect(error?.message).toContain('too long')
+  })
+
+  it('one Postcard maximum — two separate publishes each get their own single row, never more than one per Dispatch', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const first = await publishDispatch(client(fake), {
+      title: 'First',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'One.' },
+    })
+    const second = await publishDispatch(client(fake), {
+      title: 'Second',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'Two.' },
+    })
+    expect(fake._dispatchPostcards).toHaveLength(2)
+    expect(fake._dispatchPostcards.filter((p) => p.dispatch_id === first.data!.id)).toHaveLength(1)
+    expect(fake._dispatchPostcards.filter((p) => p.dispatch_id === second.data!.id)).toHaveLength(1)
+  })
+
+  it('updateDispatch cannot change or remove an already-published Dispatch\'s Postcard — it has no such parameter at all', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const { data } = await publishDispatch(client(fake), {
+      title: 'Has a Postcard',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'Frozen forever.' },
+    })
+    // updateDispatch's own TypeScript input type has no postcard field —
+    // this call is exactly what the composer's edit-mode submit sends.
+    await updateDispatch(client(fake), data!.id, { title: 'Edited title', body: 'edited body', topics: [] })
+    expect(fake._dispatchPostcards).toHaveLength(1)
+    expect(fake._dispatchPostcards[0].back_message).toBe('Frozen forever.')
+  })
+})
+
+describe('getDispatchPostcard', () => {
+  it('returns null when the Dispatch has no attached Postcard', async () => {
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows: [row({ id: 'no-postcard' })] })
+    expect(await getDispatchPostcard(client(fake), 'no-postcard')).toBeNull()
+  })
+
+  it('resolves the attached Postcard\'s frozen version content', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [row({ id: 'with-postcard' })],
+      postcardVersions: [CURRENT_VERSION],
+      dispatchPostcards: [
+        {
+          dispatch_id: 'with-postcard',
+          postcard_version_id: 'version-essaouira-1',
+          reveal_line: 'Hello there.',
+          back_message: 'Written just for this Dispatch.',
+          sender_pseudonym_snapshot: 'Evening Quill',
+        },
+      ],
+    })
+    const postcard = await getDispatchPostcard(client(fake), 'with-postcard')
+    expect(postcard?.revealLine).toBe('Hello there.')
+    expect(postcard?.backMessage).toBe('Written just for this Dispatch.')
+    expect(postcard?.senderPseudonymSnapshot).toBe('Evening Quill')
+    expect(postcard?.version.frontImagePath).toBe('/postcards/essaouira.jpg')
+  })
+
+  it('never resolves a Postcard for a Dispatch this viewer cannot otherwise see (mirrors dispatch_postcards_select_visible\'s RLS delegation)', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [row({ id: 'unpublished', status: 'unpublished', author_id: AUTHOR_A })],
+      postcardVersions: [CURRENT_VERSION],
+      dispatchPostcards: [
+        {
+          dispatch_id: 'unpublished',
+          postcard_version_id: 'version-essaouira-1',
+          reveal_line: null,
+          back_message: 'Hidden along with the Dispatch itself.',
+          sender_pseudonym_snapshot: 'Evening Quill',
+        },
+      ],
+    })
+    expect(await getDispatchPostcard(client(fake), 'unpublished')).toBeNull()
   })
 })
 
@@ -592,6 +817,46 @@ describe('Dispatch sharing — getSharedDispatch (the external reader\'s sole da
     expect(second.data?.id).not.toBe(first.data?.id)
     expect(await getSharedDispatch(client(fake), first.data!.id)).toBeNull()
     expect(await getSharedDispatch(client(fake), second.data!.id)).not.toBeNull()
+  })
+
+  // Dispatch Postcards Checkpoint 2 — the signed-out reader gets the same
+  // resolved Postcard content, straight from get_shared_dispatch itself,
+  // never a second direct query against dispatch_postcards/postcard_
+  // catalog/postcard_versions.
+  it('a shared Dispatch with an attached Postcard resolves it for the signed-out reader', async () => {
+    const fake = createFakeDispatches({
+      viewerId: null,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, status: 'published' })],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      shares: [{ id: 'token-1', dispatch_id: 'd-1', revoked_at: null }],
+      postcardVersions: [CURRENT_VERSION],
+      dispatchPostcards: [
+        {
+          dispatch_id: 'd-1',
+          postcard_version_id: 'version-essaouira-1',
+          reveal_line: 'Keep a little sea with you.',
+          back_message: 'Made it here at last.',
+          sender_pseudonym_snapshot: 'Evening Quill',
+        },
+      ],
+    })
+    const shared = await getSharedDispatch(client(fake), 'token-1')
+    expect(shared?.postcard?.backMessage).toBe('Made it here at last.')
+    expect(shared?.postcard?.revealLine).toBe('Keep a little sea with you.')
+    expect(shared?.postcard?.senderPseudonymSnapshot).toBe('Evening Quill')
+    expect(shared?.postcard?.version.frontImagePath).toBe('/postcards/essaouira.jpg')
+  })
+
+  it('a shared Dispatch with no Postcard resolves postcard: null, and everything else works normally', async () => {
+    const fake = createFakeDispatches({
+      viewerId: null,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, status: 'published', title: 'No postcard here' })],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      shares: [{ id: 'token-1', dispatch_id: 'd-1', revoked_at: null }],
+    })
+    const shared = await getSharedDispatch(client(fake), 'token-1')
+    expect(shared?.postcard).toBeNull()
+    expect(shared?.title).toBe('No postcard here')
   })
 })
 

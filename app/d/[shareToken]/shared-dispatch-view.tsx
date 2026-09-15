@@ -4,6 +4,7 @@ import CountryFlag from '@/app/country-flag'
 import TopicChips from '@/app/board/topic-chips'
 import DispatchBody from '@/app/board/dispatch-body'
 import MomentHint from '@/app/board/moment-hint'
+import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import { formatDatePlain } from '@/lib/format-date'
 import {
   metadataTextClass,
@@ -11,7 +12,7 @@ import {
   systemBodyClass,
   primaryButtonClass,
 } from '@/app/profile/ui'
-import type { SharedDispatch } from '@/lib/dispatches'
+import { dispatchPostcardToBaseContent, type SharedDispatch } from '@/lib/dispatches'
 
 /**
  * The external reader's actual content — factored out from the async
@@ -89,6 +90,27 @@ export default function SharedDispatchView({
           {dispatch.topics.length > 0 && <TopicChips topics={dispatch.topics} />}
 
           {hasMoments && <MomentHint dispatchId={dispatch.id} />}
+
+          {/* Dispatch Postcards Checkpoint 2 — the same LetterheadPostcard
+              component the authenticated reader uses, fed exactly the
+              resolved fields get_shared_dispatch already returned (no
+              second fetch, no direct query against dispatch_postcards/
+              postcard_catalog/postcard_versions from this anon-facing
+              page). A signed-out visitor gets the full front/back/
+              Living-Reveal experience — never an additional member-only
+              capability, since LetterheadPostcard/PostcardObject make no
+              Supabase calls of their own. No attached Postcard renders
+              nothing here, same as the authenticated reader. */}
+          {dispatch.postcard && (
+            <div className="flex justify-end">
+              <LetterheadPostcard
+                base={dispatchPostcardToBaseContent(dispatch.postcard.version)}
+                revealLine={dispatch.postcard.revealLine}
+                backMessage={dispatch.postcard.backMessage}
+                senderPseudonym={dispatch.postcard.senderPseudonymSnapshot}
+              />
+            </div>
+          )}
 
           <div className="rounded-md bg-surface-shell p-4 sm:p-6">
             <DispatchBody body={dispatch.body} moments={dispatch.moments} />

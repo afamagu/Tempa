@@ -17,7 +17,12 @@ import type { DispatchMoment } from '@/lib/dispatches'
  * to a private correspondence (no photo-consent lock state — a
  * Dispatch's Moments are either visible because it's published, or not
  * fetched at all; there is no "locked, awaiting a decision" state
- * here). No Postcards — see the Build Guide's Dispatches section.
+ * here). Still no Postcards here — a Dispatch's optional Postcard
+ * (Checkpoint 2) is a letterhead-position enclosure rendered by the
+ * caller (app/board/[dispatchId]/page.tsx, shared-dispatch-view.tsx) via
+ * LetterheadPostcard, never inline prose inside this component, exactly
+ * mirroring how a Photo Moment is inline here but a letter-level
+ * Postcard never is in LetterBody either.
  */
 export default function DispatchBody({
   body,

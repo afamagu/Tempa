@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getDispatchById, getDispatchMomentsForEditing } from '@/lib/dispatches'
+import { getDispatchById, getDispatchMomentsForEditing, getDispatchPostcard } from '@/lib/dispatches'
 import DispatchComposer from '../../dispatch-composer'
 
 /**
@@ -38,11 +38,19 @@ export default async function EditDispatchPage({
     redirect(`/board/${dispatch.id}`)
   }
 
-  const moments = await getDispatchMomentsForEditing(supabase, dispatch.id)
+  const [moments, postcard, profile] = await Promise.all([
+    getDispatchMomentsForEditing(supabase, dispatch.id),
+    // Dispatch Postcards Checkpoint 2 — the already-published, immutable
+    // Postcard this Dispatch carries, if any; shown read-only, never
+    // editable through this composer.
+    getDispatchPostcard(supabase, dispatch.id),
+    supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
+  ])
 
   return (
     <DispatchComposer
       authorId={user.id}
+      authorPseudonym={profile.data?.pseudonym ?? ''}
       mode="edit"
       existingDispatch={{
         id: dispatch.id,
@@ -50,6 +58,7 @@ export default async function EditDispatchPage({
         body: dispatch.body,
         topics: dispatch.topics,
         moments,
+        postcard,
       }}
     />
   )

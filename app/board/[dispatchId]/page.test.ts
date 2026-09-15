@@ -80,4 +80,39 @@ describe('Dispatch detail page — Continue Reading shelf (Home Phase 1B)', () =
     const block = executable.slice(shelfBlockStart, shelfBlockEnd)
     expect(block).not.toMatch(/worth\s*reading/i)
   })
+
+  // Dispatch Postcards Checkpoint 2 — the section label is now "Read
+  // next," copy-only, no behavior/layout/trail change (all the shelf
+  // assertions above still pass unmodified).
+  it('labels the shelf "Read next" — the old "Continue reading" label is gone', () => {
+    expect(source).toContain('sectionLabelClass}>Read next')
+    expect(source).not.toMatch(/>continue reading</i)
+  })
+})
+
+describe('Dispatch detail page — attached Postcard (Checkpoint 2)', () => {
+  it('fetches the Postcard once, alongside every other per-view data fetch', () => {
+    expect(source).toContain('getDispatchPostcard(supabase, dispatch.id)')
+  })
+
+  it('renders nothing when there is no attached Postcard', () => {
+    expect(source).toContain('{postcard && (')
+  })
+
+  it('reuses LetterheadPostcard directly — no bespoke Postcard rendering', () => {
+    const start = source.indexOf('{postcard && (')
+    const end = source.indexOf('<div className="rounded-md bg-surface-shell p-4 sm:p-6">', start)
+    const block = source.slice(start, end)
+    expect(block).toContain('<LetterheadPostcard')
+    expect(block).toContain('dispatchPostcardToBaseContent(postcard.version)')
+  })
+
+  it('sits with the Dispatch header/body content, above the reader', () => {
+    const title = source.indexOf('<h1 className={sectionTitleClass}>')
+    const postcardBlock = source.indexOf('{postcard && (')
+    const reader = source.indexOf('<DispatchReader')
+    expect(title).toBeGreaterThan(-1)
+    expect(postcardBlock).toBeGreaterThan(title)
+    expect(postcardBlock).toBeLessThan(reader)
+  })
 })

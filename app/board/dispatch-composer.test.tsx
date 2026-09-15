@@ -53,9 +53,13 @@ describe('DispatchComposer — initial render (editor not yet mounted)', () => {
     expect(html.toLowerCase()).not.toContain('comment')
   })
 
-  it('never offers a Postcard entry point — Postcards remain private-correspondence-only', () => {
+  // Dispatch Postcards Checkpoint 2 — CREATE mode now offers the same
+  // "+ Add a postcard" affordance the Letter composer already has,
+  // reusing PostcardComposerSlot as-is; nothing is attached yet on this
+  // first, pre-mount render, so the empty-slot button is what renders.
+  it('offers the "+ Add a postcard" affordance in create mode', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(html.toLowerCase()).not.toContain('postcard')
+    expect(html).toContain('Add a postcard')
   })
 
   it('offers a topics input, capped at 3', () => {
@@ -78,6 +82,7 @@ describe('DispatchComposer — edit mode (item 11)', () => {
     body: 'Some existing body.',
     topics: ['fashion', 'tailor'],
     moments: [],
+    postcard: null,
   }
 
   it('uses "Save changes", never "Publish Dispatch", and starts disabled until a real edit is made', () => {
@@ -115,5 +120,62 @@ describe('DispatchComposer — edit mode (item 11)', () => {
       <DispatchComposer authorId="author-1" mode="edit" existingDispatch={existingDispatch} />
     )
     expect(html).toContain('Edit Dispatch')
+  })
+})
+
+// Dispatch Postcards Checkpoint 2.
+describe('DispatchComposer — Postcard (Checkpoint 2)', () => {
+  it('edit mode never offers the "Add a postcard" picker affordance — an existing Postcard is immutable, and there is none to add after publication', () => {
+    const html = renderToStaticMarkup(
+      <DispatchComposer
+        authorId="author-1"
+        mode="edit"
+        existingDispatch={{
+          id: 'dispatch-1',
+          title: 'An existing title',
+          body: 'Some existing body.',
+          topics: [],
+          moments: [],
+          postcard: null,
+        }}
+      />
+    )
+    expect(html).not.toContain('Add a postcard')
+  })
+
+  it('edit mode shows an already-attached Postcard read-only, with no change/remove control', () => {
+    const html = renderToStaticMarkup(
+      <DispatchComposer
+        authorId="author-1"
+        mode="edit"
+        existingDispatch={{
+          id: 'dispatch-1',
+          title: 'An existing title',
+          body: 'Some existing body.',
+          topics: [],
+          moments: [],
+          postcard: {
+            revealLine: 'A little something.',
+            backMessage: 'Written for this Dispatch.',
+            senderPseudonymSnapshot: 'Evening Quill',
+            version: {
+              title: 'Essaouira',
+              location: 'Atlantic Morocco',
+              collection: 'Atlantic Morocco Collection',
+              postmarkText: 'ESSAOUIRA',
+              footerText: 'Tempa Postcard',
+              frontImagePath: '/postcards/essaouira.jpg',
+              motionSrc: null,
+              durationSeconds: null,
+              revealLineAlignment: null,
+            },
+          },
+        }}
+      />
+    )
+    expect(html).toContain('/postcards/essaouira.jpg')
+    expect(html).not.toContain('Change postcard')
+    expect(html).not.toContain('>Remove<')
+    expect(html).not.toContain('Add a postcard')
   })
 })

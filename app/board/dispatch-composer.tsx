@@ -25,21 +25,36 @@ import {
   EMPTY_LETTER_DOC,
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
-import { readDispatchDraft, writeDispatchDraft, clearDispatchDraft } from '@/lib/letter-editor-draft'
+import {
+  readDispatchDraft,
+  writeDispatchDraft,
+  clearDispatchDraft,
+  readDispatchPostcardDraft,
+  writeDispatchPostcardDraft,
+  clearDispatchPostcardDraft,
+} from '@/lib/letter-editor-draft'
 import {
   dispatchTitleError,
   normalizeTopics,
   publishDispatch,
   updateDispatch,
+  dispatchPostcardToBaseContent,
   type DispatchMomentDraft,
+  type DispatchPostcard,
   type PublishDispatchError,
 } from '@/lib/dispatches'
 import { processImageForUpload } from '@/lib/image-processing'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
+import { getActivePostcards, type PostcardCatalogEntry } from '@/lib/postcards'
+import type { LetterPostcardDraft } from '@/lib/moments'
 import { DispatchPhotoMoment } from './dispatch-photo-moment-node'
 import { MomentAffordance } from '@/app/letters/[letterId]/moment-affordance-extension'
 import PhotoSourceInputs, { selectPhotoSourceRef } from '@/app/letters/[letterId]/photo-source-inputs'
 import MomentSourceMenu from '@/app/letters/[letterId]/moment-source-menu'
+import PostcardPicker from '@/app/letters/[letterId]/postcard-picker'
+import PostcardComposerSlot from '@/app/letters/[letterId]/postcard-composer-slot'
+import PostcardEditor from '@/app/letters/[letterId]/postcard-editor'
+import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
 
 const TITLE_MAX_CHARS = 70
@@ -75,15 +90,27 @@ export type ExistingDispatchForEditing = {
   body: string
   topics: string[]
   moments: { position: number; imagePath: string; previewUrl: string | null }[]
+  /** Dispatch Postcards Checkpoint 2 — the already-published, IMMUTABLE
+   * Postcard this Dispatch carries, if any. Shown quietly (read-only,
+   * via LetterheadPostcard) in edit mode — never a picker/change/remove
+   * control; update_dispatch itself has no Postcard parameter at all, so
+   * there is no ordinary path to mutate this even if a control existed. */
+  postcard: DispatchPostcard | null
 }
 
 /**
  * The Dispatch composer — title, body (Bold/Italic/Emoji via the same
- * shared Tiptap schema every letter composer uses), up to 3 topics, and
- * optional still-image Moments. No length UI anywhere: Dispatches carry
- * no product-facing character cap (see dispatchTitleError for the one
- * genuine, visible limit — the title). No Postcard entry point here —
- * Postcards remain private-correspondence-only.
+ * shared Tiptap schema every letter composer uses), up to 3 topics,
+ * optional still-image Moments, and (Dispatch Postcards Checkpoint 2,
+ * CREATE MODE ONLY) an optional single Postcard. The Postcard reuses the
+ * exact same PostcardComposerSlot/PostcardPicker/PostcardEditor
+ * components the Letter composer already uses — no parallel picker/
+ * editor. Selected once, before publish: publish_dispatch resolves the
+ * catalogue key to its CURRENT immutable version server-side (never the
+ * client), so the choice made here is only ever a draft until Publish
+ * actually locks it in. No length UI anywhere for the body: Dispatches
+ * carry no product-facing character cap (see dispatchTitleError for the
+ * one genuine, visible limit — the title).
  *
  * Board usability checkpoint (2026-09-09): also serves editing, via
  * `mode="edit"` + `existingDispatch` — the SAME composer, not a second
@@ -114,10 +141,18 @@ export type ExistingDispatchForEditing = {
  */
 export default function DispatchComposer({
   authorId,
+  authorPseudonym = '',
   mode = 'create',
   existingDispatch,
 }: {
   authorId: string
+  /** Dispatch Postcards Checkpoint 2 — the author's CURRENT pseudonym,
+   * resolved server-side by the caller (app/board/write/page.tsx,
+   * app/board/[dispatchId]/edit/page.tsx), same "never a snapshot at
+   * draft time" reasoning as PostcardEditor's own senderPseudonym prop
+   * (lib/moments.ts's resolveLetterPostcardDisplay doc comment). Unused
+   * outside the Postcard editor's own live draft preview. */
+  authorPseudonym?: string
   mode?: 'create' | 'edit'
   existingDispatch?: ExistingDispatchForEditing
 }) {
@@ -149,6 +184,74 @@ export default function DispatchComposer({
   }, [])
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
+
+  // Dispatch Postcards Checkpoint 2 — CREATE MODE ONLY. Mirrors moments-
+  // composer.tsx's own Postcard state exactly: held entirely separate
+  // from the editor document, null means nothing attached,
+  // postcardPickerOpen serves both the empty slot's "+ Add a postcard"
+  // and the editor's own "Change postcard." Left permanently unused (and
+  // never rendered) in edit mode — an already-published Dispatch's
+  // Postcard is immutable, shown read-only via existingDispatch.postcard
+  // instead (see the JSX below).
+  const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
+  const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
+  const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
+  const [activePostcards, setActivePostcards] = useState<PostcardCatalogEntry[]>([])
+
+  useEffect(() => {
+    if (isEdit) return
+    let cancelled = false
+    getActivePostcards(createClient()).then((postcards) => {
+      if (!cancelled) setActivePostcards(postcards)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit])
+
+  // Restored once on mount, from its own separate key — completely
+  // independent of the editor's own draft restoration above, same
+  // reasoning as moments-composer.tsx's matching effect.
+  useEffect(() => {
+    if (isEdit) return
+    const restored = readDispatchPostcardDraft(authorId)
+    queueMicrotask(() => setPostcardDraft(restored))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, authorId])
+
+  // The ONE place a Postcard edit is both applied to state AND
+  // persisted — see moments-composer.tsx's matching function for why
+  // this is deliberately not a useEffect keyed on postcardDraft changing.
+  function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
+    setPostcardDraft(next)
+    writeDispatchPostcardDraft(authorId, next)
+  }
+
+  function choosePostcard(postcardKey: string) {
+    setPostcardDraftAndPersist({
+      postcardKey,
+      revealLine: postcardDraft?.revealLine ?? '',
+      backMessage: postcardDraft?.backMessage ?? '',
+    })
+    setPostcardPickerOpen(false)
+    setPostcardEditorOpen(true)
+  }
+
+  function removePostcard() {
+    setPostcardDraftAndPersist(null)
+    setPostcardEditorOpen(false)
+  }
+
+  const postcardCatalogEntry = postcardDraft
+    ? (activePostcards.find((p) => p.key === postcardDraft.postcardKey) ?? null)
+    : null
+
+  // "The front is the atmosphere. The back is written for this
+  // particular sending" — same rule write_letter enforces for a sent
+  // Letter Postcard, applied here to Publish. Draft state may have a
+  // blank back while composing; Publish itself requires a real,
+  // author-written message (mirrored server-side in publish_dispatch).
+  const postcardNeedsMessage = Boolean(postcardDraft && postcardDraft.backMessage.trim().length === 0)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -235,7 +338,8 @@ export default function DispatchComposer({
     Boolean(editor) &&
     titleError === null &&
     canSendLetter(docJSON, { aboveMax: false, submitting: publishing }) &&
-    !uploadingIndex
+    !uploadingIndex &&
+    !postcardNeedsMessage
 
   function insertPhotoMomentAtParagraphEnd(paragraphIndex: number, attrs: { imagePath: string; previewUrl: string }) {
     if (!editor) return
@@ -332,10 +436,15 @@ export default function DispatchComposer({
       : 'Could not publish your Dispatch. Please try again.'
 
     try {
+      // Dispatch Postcards Checkpoint 2 — the draft is passed ONLY on
+      // the create-mode publish call; updateDispatch never accepts a
+      // postcard parameter at all (update_dispatch has no such RPC
+      // argument), so an edit-mode submission cannot touch it even by
+      // accident.
       const { data, error: submitError } =
         isEdit && existingDispatch
           ? await updateDispatch(createClient(), existingDispatch.id, { title, body, topics, moments })
-          : await publishDispatch(createClient(), { title, body, topics, moments })
+          : await publishDispatch(createClient(), { title, body, topics, moments, postcard: postcardDraft })
 
       if (submitError || !data) {
         console.error(isEdit ? '[board] edit failed' : '[board] publish failed', {
@@ -354,7 +463,10 @@ export default function DispatchComposer({
         return
       }
 
-      if (!isEdit) clearDispatchDraft(authorId)
+      if (!isEdit) {
+        clearDispatchDraft(authorId)
+        clearDispatchPostcardDraft(authorId)
+      }
       router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -390,6 +502,33 @@ export default function DispatchComposer({
           className={inputClass}
         />
 
+        {/* Dispatch Postcards Checkpoint 2 — CREATE MODE ONLY: the same
+            letterhead-position slot the Letter composer uses, sitting
+            between the title and the writing surface, entirely outside
+            the ProseMirror document. EDIT MODE shows the already-
+            published, immutable Postcard instead (if any) — read-only,
+            no picker/change/remove control — via LetterheadPostcard
+            directly, never this slot. */}
+        {!isEdit && (
+          <PostcardComposerSlot
+            draft={postcardDraft}
+            catalogEntry={postcardCatalogEntry}
+            onAdd={() => setPostcardPickerOpen(true)}
+            onEdit={() => setPostcardEditorOpen(true)}
+          />
+        )}
+
+        {isEdit && existingDispatch?.postcard && (
+          <div className="flex justify-end">
+            <LetterheadPostcard
+              base={dispatchPostcardToBaseContent(existingDispatch.postcard.version)}
+              revealLine={existingDispatch.postcard.revealLine}
+              backMessage={existingDispatch.postcard.backMessage}
+              senderPseudonym={existingDispatch.postcard.senderPseudonymSnapshot}
+            />
+          </div>
+        )}
+
         <div className="space-y-2">
           <WritingToolbar editor={editor} />
           <EditorContent editor={editor} />
@@ -403,6 +542,27 @@ export default function DispatchComposer({
             onChooseLibrary={() => chooseSource(false)}
             onChooseCamera={() => chooseSource(true)}
             onCancel={() => setOpenPicker(null)}
+          />
+        )}
+
+        {postcardPickerOpen && (
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-background p-4 shadow-lg">
+            <PostcardPicker postcards={activePostcards} onSelect={choosePostcard} onCancel={() => setPostcardPickerOpen(false)} />
+          </div>
+        )}
+
+        {postcardEditorOpen && postcardDraft && (
+          <PostcardEditor
+            draft={postcardDraft}
+            catalogEntry={postcardCatalogEntry}
+            senderPseudonym={authorPseudonym}
+            onChange={setPostcardDraftAndPersist}
+            onChangePostcard={() => {
+              setPostcardEditorOpen(false)
+              setPostcardPickerOpen(true)
+            }}
+            onRemove={removePostcard}
+            onDone={() => setPostcardEditorOpen(false)}
           />
         )}
 

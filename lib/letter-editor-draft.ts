@@ -225,3 +225,51 @@ export function writeDispatchDraft(authorId: string, draft: DispatchDraft): void
 export function clearDispatchDraft(authorId: string): void {
   clearDraft(dispatchDraftKey(authorId))
 }
+
+// ============================================================
+// DISPATCH POSTCARD DRAFT (Dispatch Postcards Checkpoint 2) —
+// deliberately a SEPARATE localStorage key from dispatchDraftKey above,
+// mirroring correspondencePostcardDraftKey's own reasoning exactly: a
+// Postcard is a Dispatch-level enclosure, not part of the ProseMirror
+// document, so it has no natural home inside DispatchDraft's own `doc`
+// field. Scoped by authorId, same as dispatchDraftKey, since a Dispatch
+// draft has no correspondence/letter id to key on before it's published.
+// CREATE MODE ONLY — an edit-mode Dispatch's already-published Postcard
+// is immutable and never goes through this draft mechanism at all.
+// ============================================================
+
+function dispatchPostcardDraftKey(authorId: string): string {
+  return `tempa-dispatch-postcard-draft:${authorId}`
+}
+
+/** Reads the current unpublished Dispatch's Postcard draft, or null when
+ * there is none — same fail-safe-to-null convention as every other read
+ * function in this file. */
+export function readDispatchPostcardDraft(authorId: string): LetterPostcardDraft | null {
+  try {
+    const raw = window.localStorage.getItem(dispatchPostcardDraftKey(authorId))
+    if (!raw) return null
+    return JSON.parse(raw) as LetterPostcardDraft
+  } catch {
+    return null
+  }
+}
+
+/** Pass null to clear — mirrors writeLetterPostcardDraft's own "nothing
+ * to persist" convention above. */
+export function writeDispatchPostcardDraft(authorId: string, draft: LetterPostcardDraft | null): void {
+  try {
+    const key = dispatchPostcardDraftKey(authorId)
+    if (draft === null) {
+      window.localStorage.removeItem(key)
+    } else {
+      window.localStorage.setItem(key, JSON.stringify(draft))
+    }
+  } catch {
+    // ignore storage failures (e.g. private browsing quota)
+  }
+}
+
+export function clearDispatchPostcardDraft(authorId: string): void {
+  clearDraft(dispatchPostcardDraftKey(authorId))
+}

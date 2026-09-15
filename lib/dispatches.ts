@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { letterPreviewText, isRichBody } from './letters'
+import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 
 const PHOTO_SIGNED_URL_TTL_SECONDS = 60 * 10
 
@@ -775,26 +776,178 @@ export async function getDispatchMomentsForEditing(
   }))
 }
 
+// ============================================================
+// DISPATCH POSTCARDS (Checkpoint 2) — a published Dispatch may carry at
+// most one TEMPA Postcard, reusing the exact same architecture Letters
+// already established (public.postcard_catalog/postcard_versions,
+// PostcardBaseContent, resolveLetterPostcardDisplay, LetterheadPostcard/
+// PostcardObject/PostcardThumbnail — see docs/sql/2026-09-25-dispatch-
+// postcards.sql for the sibling `dispatch_postcards` table this reads/
+// writes). Selected once, at initial publication, inside publish_dispatch
+// itself (which resolves the CURRENT immutable postcard_versions row at
+// that moment, exactly like write_letter/reply_to_letter) — never
+// mutable afterward: update_dispatch deliberately gains no Postcard
+// parameter at all, so there is no ordinary code path that can change or
+// remove an already-published Dispatch's Postcard.
+// ============================================================
+
+/** The frozen production identity a Dispatch's Postcard actually shipped
+ * with — mirrors lib/letters.ts's own LetterPostcardVersion shape
+ * exactly (this is deliberately a parallel type, not a shared import:
+ * Dispatches and Letters are kept structurally independent features that
+ * happen to reuse the same underlying Postcard tables/components, never
+ * each other's Letter/Dispatch-specific glue). */
+export type DispatchPostcardVersion = {
+  title: string
+  location: string
+  collection: string
+  postmarkText: string
+  footerText: string
+  frontImagePath: string
+  motionSrc: string | null
+  durationSeconds: number | null
+  revealLineAlignment: string | null
+}
+
+export type DispatchPostcard = {
+  revealLine: string
+  backMessage: string
+  /** The publishing author's pseudonym exactly as it read at Publish —
+   * frozen forever, same reasoning as letter_postcards.sender_pseudonym_
+   * snapshot (see docs/sql/2026-09-14-letter-level-postcards.sql's own
+   * doc comment for why this is snapshotted while the ordinary Dispatch
+   * byline intentionally is not). */
+  senderPseudonymSnapshot: string
+  version: DispatchPostcardVersion
+}
+
+/** Converts a Dispatch's own frozen version into the generic base
+ * content shape lib/moments.ts's resolveLetterPostcardDisplay merges
+ * sender overrides onto — the exact same conversion lib/letters.ts's
+ * letterPostcardToBaseContent performs for a delivered letter's
+ * Postcard, reproduced here (not imported) to keep Dispatches and
+ * Letters structurally independent. */
+export function dispatchPostcardToBaseContent(version: DispatchPostcardVersion): PostcardBaseContent {
+  return {
+    title: version.title,
+    location: version.location,
+    collection: version.collection,
+    frontImagePath: version.frontImagePath,
+    postmarkText: version.postmarkText,
+    footerText: version.footerText,
+    living: version.motionSrc
+      ? {
+          motionSrc: version.motionSrc,
+          durationSeconds: version.durationSeconds ?? undefined,
+          revealLineAlignment: (version.revealLineAlignment as PostcardRevealLineAlignment | null) ?? undefined,
+        }
+      : undefined,
+  }
+}
+
+type DispatchPostcardRow = {
+  reveal_line: string | null
+  back_message: string
+  sender_pseudonym_snapshot: string
+  postcard_versions: {
+    title: string
+    location: string
+    collection: string
+    postmark_text: string
+    footer_text: string
+    front_image_path: string
+    motion_src: string | null
+    duration_seconds: number | null
+    reveal_line_alignment: string | null
+  } | null
+}
+
+/**
+ * The one Postcard attached to this Dispatch, if any — a plain SELECT
+ * against dispatch_postcards (RLS-scoped to "the underlying Dispatch is
+ * visible to this authenticated reader," see the migration's own
+ * dispatch_postcards_select_visible policy), joined to its frozen
+ * postcard_versions row through the embedded relation. Used by the
+ * authenticated reader (app/board/[dispatchId]/page.tsx) and by the
+ * edit-mode composer's own read-only display; the signed-out external
+ * reader instead gets its Postcard bundled straight into
+ * get_shared_dispatch's own response (see getSharedDispatch below) —
+ * never this function, which depends on an authenticated Supabase
+ * client.
+ */
+export async function getDispatchPostcard(
+  supabase: SupabaseClient,
+  dispatchId: string
+): Promise<DispatchPostcard | null> {
+  const { data } = await supabase
+    .from('dispatch_postcards')
+    .select(
+      'reveal_line, back_message, sender_pseudonym_snapshot, postcard_versions(title, location, collection, postmark_text, footer_text, front_image_path, motion_src, duration_seconds, reveal_line_alignment)'
+    )
+    .eq('dispatch_id', dispatchId)
+    .maybeSingle()
+
+  const row = data as unknown as DispatchPostcardRow | null
+  if (!row || !row.postcard_versions) return null
+
+  return {
+    revealLine: row.reveal_line ?? '',
+    backMessage: row.back_message,
+    senderPseudonymSnapshot: row.sender_pseudonym_snapshot,
+    version: {
+      title: row.postcard_versions.title,
+      location: row.postcard_versions.location,
+      collection: row.postcard_versions.collection,
+      postmarkText: row.postcard_versions.postmark_text,
+      footerText: row.postcard_versions.footer_text,
+      frontImagePath: row.postcard_versions.front_image_path,
+      motionSrc: row.postcard_versions.motion_src,
+      durationSeconds: row.postcard_versions.duration_seconds,
+      revealLineAlignment: row.postcard_versions.reveal_line_alignment,
+    },
+  }
+}
+
 export type PublishDispatchError = { message: string; code?: string; details?: string; hint?: string } | null
 
 export type DispatchMomentDraft = { position: number; imagePath: string }
 
 /**
  * Publishes a Dispatch (title, body, up to 3 topics, still-image
- * Moments) via the publish_dispatch RPC — one atomic transaction, same
- * reasoning as publish_question_answer: a Dispatch must never be left
- * with only some of its topics/Moments inserted if validation fails
- * partway through.
+ * Moments, an optional Postcard) via the publish_dispatch RPC — one
+ * atomic transaction, same reasoning as publish_question_answer: a
+ * Dispatch must never be left with only some of its topics/Moments/
+ * Postcard inserted if validation fails partway through. `postcard` is
+ * the SAME draft shape the Letter composer already uses
+ * (LetterPostcardDraft — reused as-is, not a parallel type) — the
+ * server-side RPC resolves it to a frozen postcard_version_id at
+ * publish time, exactly like write_letter does for a sent letter;
+ * omitted/null means no Postcard, valid behavior either way.
  */
 export async function publishDispatch(
   supabase: SupabaseClient,
-  input: { title: string; body: string; topics: string[]; moments?: DispatchMomentDraft[] }
+  input: {
+    title: string
+    body: string
+    topics: string[]
+    moments?: DispatchMomentDraft[]
+    postcard?: LetterPostcardDraft | null
+  }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
   const { data, error } = await supabase.rpc('publish_dispatch', {
     p_title: input.title,
     p_body: input.body,
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
+    // Same explicit-null-over-empty-string convention toMomentRpcPayload
+    // already established at this RPC boundary (lib/moments.ts).
+    p_postcard: input.postcard
+      ? {
+          postcard_key: input.postcard.postcardKey,
+          reveal_line: input.postcard.revealLine.trim().length > 0 ? input.postcard.revealLine : null,
+          back_message: input.postcard.backMessage.trim().length > 0 ? input.postcard.backMessage : null,
+        }
+      : null,
   })
 
   if (error) {
@@ -1104,7 +1257,27 @@ export type SharedDispatch = {
   authorCountry: string | null
   topics: string[]
   moments: DispatchMoment[]
+  /** Checkpoint 2 — resolved straight out of get_shared_dispatch's own
+   * widened response (never a second query, never letter_postcards/
+   * postcard_catalog/postcard_versions touched directly by an anon
+   * client) — null when this Dispatch carries no Postcard. */
+  postcard: DispatchPostcard | null
 }
+
+type SharedDispatchPostcardJson = {
+  title: string
+  location: string
+  collection: string
+  postmark_text: string
+  footer_text: string
+  front_image_path: string
+  motion_src: string | null
+  duration_seconds: number | null
+  reveal_line_alignment: string | null
+  reveal_line: string | null
+  back_message: string
+  sender_pseudonym_snapshot: string
+} | null
 
 type SharedDispatchRpcRow = {
   dispatch_id: string
@@ -1117,6 +1290,12 @@ type SharedDispatchRpcRow = {
   author_country?: string | null
   topics: string[]
   moments: { id: string; position: number; image_path: string }[]
+  /** Checkpoint 2 — the resolved Postcard fields required for
+   * presentation ONLY, built server-side inside the SECURITY DEFINER
+   * function itself; null when this Dispatch has no attached Postcard.
+   * Optional here for the same reason author_country is: an older RPC
+   * row (before this migration) simply won't carry the key. */
+  postcard?: SharedDispatchPostcardJson
 }
 
 /**
@@ -1226,6 +1405,26 @@ export async function getSharedDispatch(
     mappedMoments.map((m) => ({ id: m.id, position: m.position, hasImageUrl: Boolean(m.imageUrl) }))
   )
 
+  const postcardJson = row.postcard ?? null
+  const postcard: DispatchPostcard | null = postcardJson
+    ? {
+        revealLine: postcardJson.reveal_line ?? '',
+        backMessage: postcardJson.back_message,
+        senderPseudonymSnapshot: postcardJson.sender_pseudonym_snapshot,
+        version: {
+          title: postcardJson.title,
+          location: postcardJson.location,
+          collection: postcardJson.collection,
+          postmarkText: postcardJson.postmark_text,
+          footerText: postcardJson.footer_text,
+          frontImagePath: postcardJson.front_image_path,
+          motionSrc: postcardJson.motion_src,
+          durationSeconds: postcardJson.duration_seconds,
+          revealLineAlignment: postcardJson.reveal_line_alignment,
+        },
+      }
+    : null
+
   return {
     id: row.dispatch_id,
     title: row.title,
@@ -1235,6 +1434,7 @@ export async function getSharedDispatch(
     authorCountry: row.author_country ?? null,
     topics: row.topics,
     moments: mappedMoments,
+    postcard,
   }
 }
 

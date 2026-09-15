@@ -12,5 +12,11 @@ export default async function WriteDispatchPage() {
     redirect('/sign-in')
   }
 
-  return <DispatchComposer authorId={user.id} />
+  // Dispatch Postcards Checkpoint 2 — resolved here so DispatchComposer
+  // can pass the author's CURRENT pseudonym into PostcardEditor's own
+  // live draft preview (never a snapshot at draft time; publish_dispatch
+  // itself snapshots the real value again, independently, at Publish).
+  const { data: profile } = await supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle()
+
+  return <DispatchComposer authorId={user.id} authorPseudonym={profile?.pseudonym ?? ''} />
 }

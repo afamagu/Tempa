@@ -14,6 +14,7 @@ function dispatch(overrides: Partial<SharedDispatch> = {}): SharedDispatch {
     authorCountry: null,
     topics: ['mornings'],
     moments: [],
+    postcard: null,
     ...overrides,
   }
 }
@@ -142,6 +143,46 @@ describe('SharedDispatchView — reads the entire Dispatch before joining', () =
     // Exactly one bg-surface-shell wrapper exists — the paper card
     // around the body — not one around the whole page or the CTA.
     expect((html.match(/bg-surface-shell/g) ?? []).length).toBe(1)
+  })
+})
+
+// Dispatch Postcards Checkpoint 2 — the signed-out reader must experience
+// the same attached Postcard the authenticated one does, entirely from
+// the already-fetched SharedDispatch prop (no data-fetching of its own —
+// see this file's own doc comment for that established contract).
+describe('SharedDispatchView — attached Postcard (Checkpoint 2)', () => {
+  const postcard = {
+    revealLine: 'A little something.',
+    backMessage: 'Written for this Dispatch, shared with anyone who opens it.',
+    senderPseudonymSnapshot: 'Evening Quill',
+    version: {
+      title: 'Essaouira',
+      location: 'Atlantic Morocco',
+      collection: 'Atlantic Morocco Collection',
+      postmarkText: 'ESSAOUIRA',
+      footerText: 'Tempa Postcard',
+      frontImagePath: '/postcards/essaouira.jpg',
+      motionSrc: null,
+      durationSeconds: null,
+      revealLineAlignment: null,
+    },
+  }
+
+  it('renders the Postcard thumbnail when the Dispatch carries one', () => {
+    const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch({ postcard })} isAuthenticated={false} />)
+    expect(html).toContain('/postcards/essaouira.jpg')
+  })
+
+  it('renders nothing Postcard-related when the Dispatch has none — everything else still renders normally', () => {
+    const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch({ postcard: null })} isAuthenticated={false} />)
+    expect(html).not.toContain('/postcards/')
+    expect(html).toContain('A quiet morning ritual')
+  })
+
+  it('never exposes a private/member-only field through the Postcard — no author id, no email, no internal version id text', () => {
+    const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch({ postcard })} isAuthenticated={false} />)
+    expect(html).not.toContain('postcard_version_id')
+    expect(html).not.toContain('postcardVersionId')
   })
 })
 
