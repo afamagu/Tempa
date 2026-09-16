@@ -1,8 +1,9 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getProfileInterestKeys } from '@/lib/profile-interests'
-import { sectionLabelClass, proseSubheadingClass, helperTextClass } from '@/app/profile/ui'
+import { proseSubheadingClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import InterestsEditor from './interests-editor'
 
@@ -34,8 +35,15 @@ export default async function ReadingInterestsPage() {
     <AppShell active="you" waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
-          <div className="space-y-1">
-            <p className={sectionLabelClass}>You / Settings</p>
+          <div className="space-y-2">
+            {/* Same back-navigation treatment as app/you/guide/page.tsx's
+                own "You" link — reused as-is, not a new pattern, since
+                this is otherwise a dead end once a member has followed
+                the sidebar in (see app/you/page.tsx's own "Reading
+                interests" entry). */}
+            <Link href="/you" className={secondaryButtonClass}>
+              You
+            </Link>
             <h1 className={proseSubheadingClass}>Reading interests</h1>
             <p className={helperTextClass}>
               What you love reading about — this shapes what The Board surfaces for you. It&rsquo;s

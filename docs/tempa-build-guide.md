@@ -2606,6 +2606,37 @@ pass so code changes are evaluated against a concrete target rather than prose a
 
 ------------------------------------------------------------------------
 
+# 35. HOME DESKTOP COMPOSITION — DEFERRED DESIGN PASS (recorded 2026-09-27, not built)
+
+Not a redesign — a scoped observation from the Board Personalization
+checkpoint (§20; Board ranking now relationship- and interest-aware) to
+revisit once a Home visual pass is actually scheduled. Do not act on this
+piecemeal alongside ranking/backend work.
+
+-   desktop Home content currently reads as centered/floating within the
+    post-sidebar canvas, rather than composed against it;
+-   investigate left-anchoring the main Home content after a deliberate
+    sidebar gutter, instead of large mirrored empty margins on both
+    sides — this is a composition problem, not a "too much whitespace"
+    problem; Tempa's generous whitespace (§2, §34) should be preserved,
+    not reduced;
+-   review the Home hierarchy as one system rather than patching
+    individual sections in isolation: Arrivals, From the Board,
+    announcements, section headings (and whether a page-level heading is
+    warranted), and the remaining Home sections;
+-   review Board-card presentation specifically as used on Home: media
+    geometry, avatar treatment, country-mark rendering, and typography/
+    hierarchy should be made consistent across cards;
+-   Arrivals should NOT become loud or dashboard-like in the course of
+    this — Tempa's calm editorial character (§2) is a constraint on the
+    solution, not something this pass trades away;
+-   Tempa Kids is out of scope here and remains listed under §23
+    (Deliberately Deferred) — if it is ever pursued as a real product
+    surface, it needs its own product/safety/legal architecture review
+    before any implementation, separate from this composition pass.
+
+------------------------------------------------------------------------
+
 # CURRENT NEXT ACTION — UPDATED 2026-09-09
 
 **Review and, if approved, execute `docs/sql/2026-09-09-board-usability.sql` (then
