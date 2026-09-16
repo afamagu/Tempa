@@ -17,6 +17,13 @@ import { systemBodyClass } from '@/app/profile/ui'
  * patterns. In particular this does not replace app/system-message.tsx,
  * whose `notice`/`warning` variants carry an optional action row this
  * component deliberately does not support.
+ *
+ * Reader Polish Checkpoint — the explanatory copy is italic, on top of
+ * systemBodyClass's already-smaller-than-letter-prose sans-serif
+ * treatment, so it reads as quiet editorial guidance even when it sits
+ * directly above real (serif, non-italic) correspondence — never the
+ * "Tempa Note" label itself, which stays upright, uppercase, and
+ * clearly legible as the one identifying marker.
  */
 export default function TempaNote({
   children,
@@ -33,7 +40,7 @@ export default function TempaNote({
     <div className={`flex items-start justify-between gap-3 border-l-2 border-clay/50 pl-3 ${className}`}>
       <div className="space-y-1">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">Tempa Note</p>
-        <div className={systemBodyClass}>{children}</div>
+        <div className={`italic ${systemBodyClass}`}>{children}</div>
       </div>
       {onDismiss && (
         <button

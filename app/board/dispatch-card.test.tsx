@@ -93,7 +93,7 @@ describe('DispatchCard', () => {
   // — it must never appear on a listing card.
   it('never renders the Moment discovery hint on a listing card', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" />)
-    expect(html).not.toContain('A glimpse from the writer')
+    expect(html).not.toContain('Little glimpses from the writer')
   })
 
   // Live-test regression (Checkpoint 1C, §7): the Board card's author

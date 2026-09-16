@@ -15,6 +15,23 @@ describe('TempaNote — the shared "Tempa is speaking" primitive', () => {
     expect(html).not.toMatch(/rounded-md border(?!-l)/)
   })
 
+  // Reader Polish Checkpoint — the explanatory copy is italic (on top of
+  // the already-smaller-than-letter-prose systemBodyClass), so a reader
+  // can tell at a glance this sentence was written by Tempa, not by
+  // their correspondent — but the "Tempa Note" label itself stays
+  // upright, never italic, so it remains the one clearly legible marker.
+  it('the explanatory copy is italic, quietly distinguishing it from real (non-italic) letter prose', () => {
+    const html = renderToStaticMarkup(<TempaNote>A short explanation.</TempaNote>)
+    expect(html).toMatch(/class="italic [^"]*"[^>]*>A short explanation\./)
+  })
+
+  it('the "Tempa Note" label itself is never italicized', () => {
+    const html = renderToStaticMarkup(<TempaNote>A short explanation.</TempaNote>)
+    const labelMatch = html.match(/<p class="([^"]*)">Tempa Note<\/p>/)
+    expect(labelMatch).not.toBeNull()
+    expect(labelMatch![1]).not.toContain('italic')
+  })
+
   it('renders the given explanatory copy', () => {
     const html = renderToStaticMarkup(<TempaNote>A short explanation of a Tempa feature.</TempaNote>)
     expect(html).toContain('A short explanation of a Tempa feature.')

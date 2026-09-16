@@ -48,7 +48,7 @@ describe('BoardShelfCard', () => {
   // — it must never appear on a listing card.
   it('never renders the Moment discovery hint on a listing card', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" />)
-    expect(html).not.toContain('A glimpse from the writer')
+    expect(html).not.toContain('Little glimpses from the writer')
   })
 
   it('is a plain wide card with no swipe/carousel/drag affordance of its own', () => {

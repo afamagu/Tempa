@@ -41,6 +41,22 @@ function alreadySeenThisSession(dispatchId: string): boolean {
  * box — this is exactly the "Tempa explains something in one sentence"
  * shape TempaNote exists for.
  *
+ * Reader Polish Checkpoint (final copy pass): copy rewritten to say more
+ * than a mechanical image instruction — Moments are small glimpses into
+ * the writer's world encountered while reading, not just a tap target.
+ * Uses "a Moment," the real product term (see e.g. MomentsAvailableNotice's
+ * own "You can now add Moments"), never "a small image." Deliberately
+ * still says nothing about a Postcard: this component's own visibility
+ * gate (both call sites — app/board/[dispatchId]/page.tsx and app/d/
+ * [shareToken]/shared-dispatch-view.tsx — pass `moments.some(m =>
+ * m.imageUrl)`/`hasMoments`) is about photo Moments only, never about
+ * whether a Dispatch has an attached Postcard (a separate, independent
+ * condition rendered just below this, via LetterheadPostcard). Claiming
+ * to explain a Postcard here would be true only sometimes — this note
+ * only ever shows because of a photo Moment, so its copy stays truthful
+ * to that; that visibility semantics is deliberately UNCHANGED by this
+ * pass.
+ *
  * Session-scoped only via sessionStorage, keyed per Dispatch — closing
  * the tab or opening a different Dispatch shows it again; there is
  * deliberately no database persistence for this in either context. The
@@ -67,7 +83,7 @@ export default function MomentHint({ dispatchId }: { dispatchId: string }) {
 
   return (
     <TempaNote onDismiss={dismiss} dismissLabel="Dismiss this hint">
-      <p>A glimpse from the writer&rsquo;s world. Tap a small image as you read to open it.</p>
+      <p>Little glimpses from the writer&rsquo;s world may appear along the way. Tap a Moment to open it.</p>
     </TempaNote>
   )
 }

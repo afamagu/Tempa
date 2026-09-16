@@ -82,12 +82,12 @@ describe('SharedDispatchView — reads the entire Dispatch before joining', () =
         isAuthenticated={false}
       />
     )
-    expect(html).toContain('A glimpse from the writer')
+    expect(html).toContain('Little glimpses from the writer')
   })
 
   it('shows no Moment hint when the Dispatch has no Moments', () => {
     const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch({ moments: [] })} isAuthenticated={false} />)
-    expect(html).not.toContain('A glimpse from the writer')
+    expect(html).not.toContain('Little glimpses from the writer')
   })
 
   it('8. renders Moments only from the data it was given', () => {
