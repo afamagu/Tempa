@@ -264,12 +264,14 @@ export async function getPublishedDispatches(supabase: SupabaseClient): Promise<
  * Home Phase 1 (Editorial Reading Surface) — internal candidate pool
  * size, NOT the number of cards Home renders. Comfortably covers every
  * section's own max (Featured 3 + Shelf 5 + From Minds You Keep 3 +
- * Serendipity 3 = 14) with a little headroom for sections that can't
- * fill (e.g. too few Kept-author rows), without ever needing a second
- * round trip. Still just a `limit` on the same board_feed_page RPC —
- * no new ranking, no new RPC.
+ * Serendipity 3 = 14) with headroom for sections that can't fill (e.g.
+ * too few Kept-author rows) and for the relationship-aware ranking's own
+ * unseen-first/familiar-interleave shape, without ever needing a second
+ * round trip. Raised from 20 to 30 (Board Personalization checkpoint) —
+ * still just a `limit` on the same board_feed_page RPC, no new ranking,
+ * no new RPC.
  */
-export const HOME_CANDIDATE_COUNT = 20
+export const HOME_CANDIDATE_COUNT = 30
 
 /**
  * Home's candidate pool for its editorial Board reading surface — a
@@ -332,10 +334,12 @@ const HOME_SERENDIPITY_MAX = 3
  * heading over nothing).
  *
  * Section order matches the product contract exactly: Featured claims
- * first, then the Shelf, then From Minds You Keep (tier 1 only), then
- * Serendipity (non-kept, preferring tier 2 — a Phase-1 proxy for
- * broader discovery only, never a claim about being "outside the
- * member's interests," which don't exist yet).
+ * first, then the Shelf, then From Minds You Keep (isKept only — a
+ * correspondent-only author never qualifies), then Serendipity
+ * (isFamiliar === false only — never backfilled with a familiar author
+ * just to reach the target count; a proxy for broader discovery only,
+ * never a claim about being "outside the member's interests," which
+ * don't exist yet).
  */
 export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
   const used = new Set<string>()
@@ -351,28 +355,30 @@ export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
     used.add(item.id)
   }
 
+  // Keep-only, per the approved architecture — an author who is merely
+  // an established correspondent (isFamiliar true, isKept false) never
+  // qualifies for this section, even though they're otherwise treated as
+  // familiar for ranking purposes.
   const fromMindsYouKeep: BoardFeedItem[] = []
   for (const item of items) {
     if (fromMindsYouKeep.length >= HOME_KEEP_SECTION_MAX) break
-    if (used.has(item.id) || item.tier !== 1) continue
+    if (used.has(item.id) || !item.isKept) continue
     fromMindsYouKeep.push(item)
     used.add(item.id)
   }
 
+  // isFamiliar === false only — never backfilled with a familiar
+  // (Kept or correspondent) author just to reach the target count, per
+  // the approved architecture. The feed itself is already unseen-first,
+  // so this naturally prefers unseen material without any extra logic
+  // here.
   const serendipity: BoardFeedItem[] = []
-  function fillSerendipity(matchesPreference: (item: BoardFeedItem) => boolean) {
-    for (const item of items) {
-      if (serendipity.length >= HOME_SERENDIPITY_MAX) break
-      if (used.has(item.id) || item.tier === 1 || !matchesPreference(item)) continue
-      serendipity.push(item)
-      used.add(item.id)
-    }
+  for (const item of items) {
+    if (serendipity.length >= HOME_SERENDIPITY_MAX) break
+    if (used.has(item.id) || item.isFamiliar) continue
+    serendipity.push(item)
+    used.add(item.id)
   }
-  // Prefer tier 2 (unseen, non-kept); only fall back to tier 3
-  // (previously seen) once tier 2 is exhausted — never tier 1 (kept),
-  // which stays exclusive to the section above.
-  fillSerendipity((item) => item.tier === 2)
-  fillSerendipity(() => true)
 
   const remainder = items.filter((item) => !used.has(item.id))
 
@@ -397,21 +403,37 @@ export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
 // result) simply has none of these params, so no trail is ever
 // manufactured for it.
 
+/** Reading Trail v2 (Board Personalization checkpoint) — retires the
+ * old tier/author_seq-based cursor fields (`tier`, `aseq`, `shash`)
+ * entirely in favor of the new (seen_bucket, rank_key, seed_hash)
+ * cursor board_feed_page now returns. `v` is an explicit version marker
+ * so an old, unversioned trail URL (from before this checkpoint) always
+ * parses to null rather than being silently misinterpreted against the
+ * new field meanings. */
+const READING_TRAIL_VERSION = 2
+
 const TRAIL_PARAM_KEYS = {
   sessionStartedAt: 's',
   seed: 'seed',
-  tier: 'tier',
-  authorSeq: 'aseq',
-  seedHash: 'shash',
+  version: 'v',
+  seenBucket: 'sb',
+  rankKey: 'rk',
+  seedHash: 'sh',
 } as const
 
 /**
  * Encodes one Dispatch link's reading-trail context — the session this
- * candidate came from, plus this item's own (tier, author_seq,
- * seed_hash) cursor. The item's own id is deliberately NOT included
- * here: it's already the `/board/[dispatchId]` route param the caller
- * is linking to, so the Dispatch detail page recovers it from its own
- * route params rather than duplicating it into the query string.
+ * candidate came from, plus this item's own (seen_bucket, rank_key,
+ * seed_hash) cursor. `rank_key` is carried as an opaque STRING
+ * throughout — never parsed into a JS number anywhere in this file or
+ * any caller — since it is a PostgreSQL `numeric` value that may not
+ * round-trip losslessly through JS's own number type. The item's own id
+ * is deliberately NOT included here: it's already the
+ * `/board/[dispatchId]` route param the caller is linking to, so the
+ * Dispatch detail page recovers it from its own route params rather than
+ * duplicating it into the query string. Never carries `isKept`/
+ * `isFamiliar` or any other relationship signal — those stay purely
+ * server-side/internal to ranking, per the minimal-exposure requirement.
  */
 export function readingTrailSearchParams(
   session: { sessionStartedAt: string; seed: string },
@@ -420,8 +442,9 @@ export function readingTrailSearchParams(
   const params = new URLSearchParams()
   params.set(TRAIL_PARAM_KEYS.sessionStartedAt, session.sessionStartedAt)
   params.set(TRAIL_PARAM_KEYS.seed, session.seed)
-  params.set(TRAIL_PARAM_KEYS.tier, String(item.tier))
-  params.set(TRAIL_PARAM_KEYS.authorSeq, String(item.cursor.authorSeq))
+  params.set(TRAIL_PARAM_KEYS.version, String(READING_TRAIL_VERSION))
+  params.set(TRAIL_PARAM_KEYS.seenBucket, String(item.cursor.seenBucket))
+  params.set(TRAIL_PARAM_KEYS.rankKey, item.cursor.rankKey)
   params.set(TRAIL_PARAM_KEYS.seedHash, String(item.cursor.seedHash))
   return params
 }
@@ -429,16 +452,19 @@ export function readingTrailSearchParams(
 export type ReadingTrailContext = {
   sessionStartedAt: string
   seed: string
-  tier: number
-  authorSeq: number
+  seenBucket: number
+  /** Opaque PostgreSQL `numeric` string — never parsed to a JS number. */
+  rankKey: string
   seedHash: number
 }
 
 /**
  * Pure: parses the Dispatch detail page's own searchParams back into a
- * trail context — returns null (never throws) for anything absent or
- * malformed, since an absent/broken trail simply means no Continue
- * Reading block renders, exactly like a bare direct/shared URL.
+ * trail context — returns null (never throws) for anything absent,
+ * malformed, from an old/unversioned URL, or from an unsupported
+ * version, since a missing/broken/stale trail simply means no Continue
+ * Reading block renders (the Dispatch itself still renders normally),
+ * exactly like a bare direct/shared URL.
  */
 export function parseReadingTrailParams(
   searchParams: Record<string, string | string[] | undefined>
@@ -450,14 +476,17 @@ export function parseReadingTrailParams(
 
   const sessionStartedAt = get(TRAIL_PARAM_KEYS.sessionStartedAt)
   const seed = get(TRAIL_PARAM_KEYS.seed)
-  const tier = Number(get(TRAIL_PARAM_KEYS.tier))
-  const authorSeq = Number(get(TRAIL_PARAM_KEYS.authorSeq))
+  const version = get(TRAIL_PARAM_KEYS.version)
+  const seenBucket = Number(get(TRAIL_PARAM_KEYS.seenBucket))
+  const rankKey = get(TRAIL_PARAM_KEYS.rankKey)
   const seedHash = Number(get(TRAIL_PARAM_KEYS.seedHash))
 
   if (!sessionStartedAt || !seed) return null
-  if (!Number.isFinite(tier) || !Number.isFinite(authorSeq) || !Number.isFinite(seedHash)) return null
+  if (version !== String(READING_TRAIL_VERSION)) return null
+  if (!Number.isFinite(seenBucket) || !Number.isFinite(seedHash)) return null
+  if (!rankKey || rankKey.trim().length === 0) return null
 
-  return { sessionStartedAt, seed, tier, authorSeq, seedHash }
+  return { sessionStartedAt, seed, seenBucket, rankKey, seedHash }
 }
 
 /** Home Phase 1B — the "Continue Reading" shelf shows up to this many
@@ -484,35 +513,48 @@ export async function getNextTrailItems(
   const { items } = await getBoardFeedPage(supabase, {
     sessionStartedAt: context.sessionStartedAt,
     seed: context.seed,
-    cursor: { tier: context.tier, authorSeq: context.authorSeq, seedHash: context.seedHash, id: currentDispatchId },
+    cursor: {
+      seenBucket: context.seenBucket,
+      rankKey: context.rankKey,
+      seedHash: context.seedHash,
+      id: currentDispatchId,
+    },
     limit: count,
   })
   return items
 }
 
 // ============================================================
-// BOARD FEED — Board Feed Foundation checkpoint (Phase 2A)
+// BOARD FEED — Board Feed Foundation / Board Personalization checkpoints
 // ============================================================
 
 /** Opaque-to-callers cursor for board_feed_page's keyset pagination —
- * the (tier, author_seq, seed_hash, id) tuple of the last row already
- * returned. Carries no meaning outside another getBoardFeedPage call. */
+ * the (seen_bucket, rank_key, seed_hash, id) tuple of the last row
+ * already returned. `rankKey` is carried as an opaque STRING (a
+ * PostgreSQL `numeric` value) — never parsed into a JS number anywhere,
+ * since NUMERIC can exceed what JS's own number type represents exactly.
+ * Carries no meaning outside another getBoardFeedPage call. */
 export type BoardFeedCursor = {
-  tier: number
-  authorSeq: number
+  seenBucket: number
+  rankKey: string
   seedHash: number
   id: string
 }
 
 /** One board_feed_page row, WITH the per-viewer ranking/cursor
  * information the RPC already computes and previously discarded after
- * mapping — Home Phase 1 needs `tier` to partition sections (From
- * Minds You Keep = tier 1, Serendipity prefers tier 2) and `cursor`
- * (this row's OWN tier/author_seq/seed_hash) to build a reading-trail
- * link for it (see readingTrailSearchParams below). `cursor.id` always
- * equals this item's own `id`. */
+ * mapping — Home Phase 1 needs `isKept`/`isFamiliar` to partition
+ * sections (From Minds You Keep = isKept only, Serendipity =
+ * isFamiliar === false only) and `cursor` (this row's OWN seen_bucket/
+ * rank_key/seed_hash) to build a reading-trail link for it (see
+ * readingTrailSearchParams below). `cursor.id` always equals this item's
+ * own `id`. Board Personalization checkpoint — minimal relationship
+ * exposure: `isKept`/`isFamiliar` exist ONLY for this Home-partitioning
+ * purpose; nothing broader (a labeled "correspondent" concept, a
+ * `familiarity` string, etc.) is ever exposed here. */
 export type BoardFeedItem = DispatchListItem & {
-  tier: number
+  isKept: boolean
+  isFamiliar: boolean
   cursor: BoardFeedCursor
 }
 
@@ -529,22 +571,27 @@ export function generateBoardSeed(): string {
 }
 
 type BoardFeedRow = DispatchRow & {
-  tier: number
-  author_seq: number
+  is_kept: boolean
+  is_familiar: boolean
+  seen_bucket: number
+  /** PostgreSQL `numeric`, deserialized by supabase-js as a string —
+   * never coerced to a JS number (see BoardFeedCursor's own comment). */
+  rank_key: string
   seed_hash: number
 }
 
 /**
  * One page of The Board's session-stable, cursor-paginated,
- * author-diverse feed — see docs/sql/2026-09-22-board-feed-
- * foundation.sql's own extensive comment on board_feed_page for the
- * full reasoning (session model, the exact viewed_at-based stability
- * rule, author_seq's diversity+recency unification, the seeded
- * hashtext() tie-break, and why this is real keyset pagination, never
- * OFFSET). This function's own job is thin: call the RPC, attach
- * authors/topics via the same batched helper every other Dispatch
- * listing already uses, and turn the last row's own (tier, author_seq,
- * seed_hash, id) into the next page's cursor.
+ * relationship-aware, author-diverse feed — see docs/sql/2026-09-26-
+ * board-personalization-ranking.sql's own extensive comment on
+ * board_feed_page for the full ranking reasoning (session-stable unseen/
+ * seen partition, the nested Keep:Correspondent then Familiar:Discovery
+ * weighted interleave, the bounded familiar-author augmentation, and why
+ * this is real keyset pagination, never OFFSET). This function's own job
+ * is thin: call the RPC, attach authors/topics via the same batched
+ * helper every other Dispatch listing already uses, and turn the last
+ * row's own (seen_bucket, rank_key, seed_hash, id) into the next page's
+ * cursor.
  *
  * `sessionStartedAt`/`seed` must be the SAME two values for every call
  * within one Board browsing session (including every "Load more") —
@@ -567,32 +614,32 @@ export async function getBoardFeedPage(
     p_session_started_at: params.sessionStartedAt,
     p_seed: params.seed,
     p_limit: limit,
-    p_cursor_tier: params.cursor?.tier ?? null,
-    p_cursor_author_seq: params.cursor?.authorSeq ?? null,
+    p_cursor_seen_bucket: params.cursor?.seenBucket ?? null,
+    p_cursor_rank_key: params.cursor?.rankKey ?? null,
     p_cursor_seed_hash: params.cursor?.seedHash ?? null,
     p_cursor_id: params.cursor?.id ?? null,
   })
 
   const typedRows = (rows ?? []) as BoardFeedRow[]
   const listItems = await attachTopicsAndAuthors(supabase, typedRows)
-  const cursorByRowId = new Map(
-    typedRows.map((row) => [
-      row.id,
-      { tier: row.tier, authorSeq: row.author_seq, seedHash: row.seed_hash, id: row.id },
-    ])
-  )
+  const rowById = new Map(typedRows.map((row) => [row.id, row]))
   // attachTopicsAndAuthors preserves row order/count 1:1, so this zip is
   // safe — kept as an id-keyed lookup regardless, rather than assuming
   // index alignment, so it can never silently misattach a cursor.
   const items: BoardFeedItem[] = listItems.map((item) => {
-    const cursor = cursorByRowId.get(item.id)!
-    return { ...item, tier: cursor.tier, cursor }
+    const row = rowById.get(item.id)!
+    return {
+      ...item,
+      isKept: row.is_kept,
+      isFamiliar: row.is_familiar,
+      cursor: { seenBucket: row.seen_bucket, rankKey: row.rank_key, seedHash: row.seed_hash, id: row.id },
+    }
   })
 
   const last = typedRows[typedRows.length - 1]
   const nextCursor: BoardFeedCursor | null =
     typedRows.length === limit && last
-      ? { tier: last.tier, authorSeq: last.author_seq, seedHash: last.seed_hash, id: last.id }
+      ? { seenBucket: last.seen_bucket, rankKey: last.rank_key, seedHash: last.seed_hash, id: last.id }
       : null
 
   return { items, nextCursor }

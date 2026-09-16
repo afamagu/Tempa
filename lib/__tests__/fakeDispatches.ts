@@ -67,6 +67,23 @@ export type FakeViewRow = {
    * defaults to. */
   first_viewed_at?: string
 }
+/** Board Personalization checkpoint — mirrors public.correspondences
+ * (docs/sql/2026-08-31-correspondences.sql, established_at added by
+ * docs/sql/2026-09-03-correspondence-established-at.sql) closely enough
+ * to exercise board_feed_page's second familiarity signal: `status`
+ * must be 'active' AND `established_at` must be non-null AND session-
+ * stable (< session start) to count — a first-contact correspondence
+ * that never received a reply (established_at still null) never
+ * qualifies. `participant_low`/`participant_high` mirror the real
+ * table's canonical ordered-pair storage; which one is "low" vs "high"
+ * never matters to this fake's own lookups (both are always checked). */
+export type FakeCorrespondenceRow = {
+  participant_low: string
+  participant_high: string
+  status: 'active' | 'closed'
+  established_at?: string | null
+}
+
 export type FakeShareRow = { id: string; dispatch_id: string; revoked_at: string | null }
 export type FakeMomentRow = { id: string; dispatch_id: string; position: number; image_path: string }
 /** Safety & Trust Checkpoint 1B/1C: mirrors blocked_users' shape —
@@ -147,6 +164,7 @@ export function createFakeDispatches(options: {
   topics?: FakeTopicRow[]
   kept?: FakeKeptRow[]
   views?: FakeViewRow[]
+  correspondences?: FakeCorrespondenceRow[]
   shares?: FakeShareRow[]
   moments?: FakeMomentRow[]
   blocked?: FakeBlockRow[]
@@ -164,6 +182,7 @@ export function createFakeDispatches(options: {
   const topics = options.topics ?? []
   const kept = options.kept ?? []
   const views = options.views ?? []
+  const correspondences = options.correspondences ?? []
   const shares = options.shares ?? []
   const moments = options.moments ?? []
   const blocked = options.blocked ?? []
@@ -825,27 +844,30 @@ export function createFakeDispatches(options: {
         error: null,
       }
     }
-    // Board Feed Foundation checkpoint (Phase 2A) — mirrors
-    // public.board_feed_page (docs/sql/2026-09-22-board-feed-
-    // foundation.sql) closely enough to test its OBSERVABLE properties
-    // (tiering, author diversity via author_seq, session-stability via
-    // the pre-session viewed_at cutoff, keyset cursor correctness) in
-    // pure JS, without a live Postgres to run the real SQL against. The
-    // seed_hash tie-break below does not need to reproduce Postgres's
-    // own hashtext() byte-for-byte — only to be a deterministic,
+    // Board Personalization checkpoint — mirrors public.board_feed_page
+    // (docs/sql/2026-09-26-board-personalization-ranking.sql) closely
+    // enough to test its OBSERVABLE properties (session-stable unseen/
+    // seen partition, the nested Keep:Correspondent then Familiar:
+    // Discovery weighted interleave, author diversity, bounded familiar-
+    // author augmentation, keyset cursor correctness) in pure JS, without
+    // a live Postgres to run the real SQL against. The seed_hash
+    // tie-break below does not need to reproduce Postgres's own
+    // hashtext() byte-for-byte — only to be a deterministic,
     // seed-and-id-dependent function, which is all the real property
     // (same seed -> same order; a different seed CAN reorder a tie)
-    // actually requires.
+    // actually requires. rank_key is returned as a STRING, mirroring how
+    // supabase-js deserializes a PostgreSQL `numeric` column — never a
+    // JS number, matching the real RPC's own contract.
     if (fn === 'board_feed_page') {
       const sessionStartedAt = params?.p_session_started_at as string
       const seed = params?.p_seed as string
       const limit = (params?.p_limit as number) ?? 12
       const cursor =
-        params?.p_cursor_tier == null
+        params?.p_cursor_seen_bucket == null
           ? null
           : {
-              tier: params.p_cursor_tier as number,
-              authorSeq: params.p_cursor_author_seq as number,
+              seenBucket: params.p_cursor_seen_bucket as number,
+              rankKey: Number(params.p_cursor_rank_key as string | number),
               seedHash: params.p_cursor_seed_hash as number,
               id: params.p_cursor_id as string,
             }
@@ -860,55 +882,140 @@ export function createFakeDispatches(options: {
         return h | 0
       }
 
-      const eligible = visibleRows()
+      const SENTINEL_PAST = '2000-01-01T00:00:00Z'
+
+      function seenPreSession(dispatchId: string): boolean {
+        return views.some((v) => {
+          if (v.viewer_id !== viewerId || v.dispatch_id !== dispatchId) return false
+          const firstViewedAt = v.first_viewed_at ?? v.viewed_at ?? SENTINEL_PAST
+          return firstViewedAt < sessionStartedAt
+        })
+      }
+
+      const eligibleGlobal = visibleRows()
         .filter((r) => r.status === 'published' && r.moderation_status === 'visible')
         .filter((r) => r.published_at <= sessionStartedAt)
         .sort((a, b) => b.published_at.localeCompare(a.published_at))
         .slice(0, 300)
 
-      // Session-stability correction: tiering keys on first_viewed_at
-      // (immutable) and kept_minds.created_at (pins the Keep-ADD
-      // direction), never the mutable viewed_at or a live/unpinned Keep
-      // check — see docs/sql/2026-09-22-board-feed-foundation.sql for
-      // the full reasoning this mirrors.
-      const SENTINEL_PAST = '2000-01-01T00:00:00Z'
-      const tiered = eligible.map((r) => {
-        const seenPreSession = views.some((v) => {
-          if (v.viewer_id !== viewerId || v.dispatch_id !== r.id) return false
-          const firstViewedAt = v.first_viewed_at ?? v.viewed_at ?? SENTINEL_PAST
-          return firstViewedAt < sessionStartedAt
-        })
-        const isKeptPreSession = kept.some(
-          (k) =>
-            k.viewer_user_id === viewerId &&
-            k.kept_user_id === r.author_id &&
-            (k.created_at ?? SENTINEL_PAST) < sessionStartedAt
-        )
-        const tier = seenPreSession ? 3 : isKeptPreSession ? 1 : 2
-        return { ...r, tier }
+      // Familiar authors — Keep beats an established correspondent when
+      // both are true for the same author (never stacked). Full block
+      // (defense-in-depth, mirroring the migration's own explicit
+      // is_blocked_pair check) excludes a candidate author entirely;
+      // Stop Letters (a 'letters'-scope block) is NEVER checked here —
+      // isBlockedPair only ever trips on 'full', matching the real
+      // helper board_feed_page itself calls.
+      const isKeptByAuthor = new Map<string, boolean>()
+      for (const k of kept) {
+        if (k.viewer_user_id !== viewerId) continue
+        if ((k.created_at ?? SENTINEL_PAST) >= sessionStartedAt) continue
+        if (isBlockedPair(viewerId, k.kept_user_id)) continue
+        isKeptByAuthor.set(k.kept_user_id, true)
+      }
+      for (const c of correspondences) {
+        if (c.status !== 'active' || !c.established_at) continue
+        if (c.established_at >= sessionStartedAt) continue
+        if (c.participant_low !== viewerId && c.participant_high !== viewerId) continue
+        const otherAuthor = c.participant_low === viewerId ? c.participant_high : c.participant_low
+        if (isBlockedPair(viewerId, otherAuthor)) continue
+        if (!isKeptByAuthor.has(otherAuthor)) isKeptByAuthor.set(otherAuthor, false)
+      }
+      const familiarAuthorIds = [...isKeptByAuthor.keys()]
+
+      // Bounded per-familiar-author augmentation: up to 2 most recent
+      // UNSEEN eligible Dispatches per familiar author, mirroring the
+      // real migration's LATERAL ... ORDER BY published_at DESC LIMIT 2.
+      const augmentRows: FakeDispatchRow[] = []
+      for (const authorId of familiarAuthorIds) {
+        const authorUnseenEligible = visibleRows()
+          .filter((r) => r.author_id === authorId)
+          .filter((r) => r.status === 'published' && r.moderation_status === 'visible')
+          .filter((r) => r.published_at <= sessionStartedAt)
+          .filter((r) => !seenPreSession(r.id))
+          .sort((a, b) => b.published_at.localeCompare(a.published_at))
+          .slice(0, 2)
+        augmentRows.push(...authorUnseenEligible)
+      }
+
+      const combinedById = new Map<string, FakeDispatchRow>()
+      for (const r of eligibleGlobal) combinedById.set(r.id, r)
+      for (const r of augmentRows) combinedById.set(r.id, r)
+
+      const classified = [...combinedById.values()].map((r) => {
+        const isKept = isKeptByAuthor.get(r.author_id) ?? false
+        const isFamiliar = isKeptByAuthor.has(r.author_id)
+        const seenBucket = seenPreSession(r.id) ? 1 : 0
+        return { ...r, is_kept: isKept, is_familiar: isFamiliar, seen_bucket: seenBucket, seed_hash: seedHash(r.id) }
       })
 
-      const authorSeqByTierAuthor = new Map<string, number>()
-      const ranked = [...tiered]
+      // Author diversity — computed once per (seen_bucket, author_id),
+      // since is_kept/is_familiar are per-author facts: a given author's
+      // rows always fall entirely within exactly one of the three
+      // streams below, never split across them (mirrors the real
+      // migration's own author_diverse CTE and its comment on why a
+      // single computation suffices).
+      const authorSeqByBucketAuthor = new Map<string, number>()
+      const authorDiverse = [...classified]
         .sort((a, b) => b.published_at.localeCompare(a.published_at))
         .map((r) => {
-          const key = `${r.tier}:${r.author_id}`
-          const next = (authorSeqByTierAuthor.get(key) ?? 0) + 1
-          authorSeqByTierAuthor.set(key, next)
-          return { ...r, author_seq: next, seed_hash: seedHash(r.id) }
+          const key = `${r.seen_bucket}:${r.author_id}`
+          const next = (authorSeqByBucketAuthor.get(key) ?? 0) + 1
+          authorSeqByBucketAuthor.set(key, next)
+          return { ...r, author_seq: next }
         })
 
+      type Streamed = (typeof authorDiverse)[number]
+      function streamRank(bucket: number, rows: Streamed[]): Map<string, number> {
+        const inBucket = rows
+          .filter((r) => r.seen_bucket === bucket)
+          .sort((a, b) => (a.author_seq !== b.author_seq ? a.author_seq - b.author_seq : a.seed_hash - b.seed_hash))
+        const result = new Map<string, number>()
+        inBucket.forEach((r, i) => result.set(r.id, i + 1))
+        return result
+      }
+
+      const rankKeyById = new Map<string, number>()
+      for (const bucket of [0, 1]) {
+        const keepRows = authorDiverse.filter((r) => r.is_kept)
+        const secondSignalRows = authorDiverse.filter((r) => r.is_familiar && !r.is_kept)
+        const discoveryRows = authorDiverse.filter((r) => !r.is_familiar)
+
+        const keepStreamI = streamRank(bucket, keepRows)
+        const secondStreamI = streamRank(bucket, secondSignalRows)
+        const discoveryStreamI = streamRank(bucket, discoveryRows)
+
+        // Level 1: Keep:second-signal = 3:1 — Sainte-Laguë divisor key
+        // (2i-1)/w, w=3 for Keep, w=1 for the second signal.
+        const familiarMerged: { id: string; kcKey: number }[] = []
+        for (const [id, i] of keepStreamI) familiarMerged.push({ id, kcKey: (2 * i - 1) / 3 })
+        for (const [id, i] of secondStreamI) familiarMerged.push({ id, kcKey: (2 * i - 1) / 1 })
+        const seedHashById = new Map(authorDiverse.map((r) => [r.id, r.seed_hash]))
+        familiarMerged.sort((a, b) => {
+          if (a.kcKey !== b.kcKey) return a.kcKey - b.kcKey
+          return seedHashById.get(a.id)! - seedHashById.get(b.id)!
+        })
+        const familiarI = new Map<string, number>()
+        familiarMerged.forEach((r, i) => familiarI.set(r.id, i + 1))
+
+        // Level 2: Familiar:Discovery = 1:1, unbiased — same (2i-1)/1
+        // formula on both sides, ties resolved purely by seed_hash.
+        for (const [id, i] of familiarI) rankKeyById.set(id, 2 * i - 1)
+        for (const [id, i] of discoveryStreamI) rankKeyById.set(id, 2 * i - 1)
+      }
+
+      const ranked = authorDiverse.map((r) => ({ ...r, rank_key: rankKeyById.get(r.id)! }))
+
       ranked.sort((a, b) => {
-        if (a.tier !== b.tier) return a.tier - b.tier
-        if (a.author_seq !== b.author_seq) return a.author_seq - b.author_seq
+        if (a.seen_bucket !== b.seen_bucket) return a.seen_bucket - b.seen_bucket
+        if (a.rank_key !== b.rank_key) return a.rank_key - b.rank_key
         if (a.seed_hash !== b.seed_hash) return a.seed_hash - b.seed_hash
         return a.id.localeCompare(b.id)
       })
 
       function tupleGreaterThanCursor(r: (typeof ranked)[number]): boolean {
         if (!cursor) return true
-        if (r.tier !== cursor.tier) return r.tier > cursor.tier
-        if (r.author_seq !== cursor.authorSeq) return r.author_seq > cursor.authorSeq
+        if (r.seen_bucket !== cursor.seenBucket) return r.seen_bucket > cursor.seenBucket
+        if (r.rank_key !== cursor.rankKey) return r.rank_key > cursor.rankKey
         if (r.seed_hash !== cursor.seedHash) return r.seed_hash > cursor.seedHash
         return r.id > cursor.id
       }
@@ -923,8 +1030,10 @@ export function createFakeDispatches(options: {
           body: r.body,
           published_at: r.published_at,
           moderation_status: r.moderation_status,
-          tier: r.tier,
-          author_seq: r.author_seq,
+          is_kept: r.is_kept,
+          is_familiar: r.is_familiar,
+          seen_bucket: r.seen_bucket,
+          rank_key: String(r.rank_key),
           seed_hash: r.seed_hash,
         })),
         error: null,

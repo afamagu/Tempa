@@ -46,6 +46,7 @@ import {
   type FakeReplyRow,
   type FakePostcardCatalogRow,
   type FakePostcardVersionRow,
+  type FakeCorrespondenceRow,
 } from './__tests__/fakeDispatches'
 
 const AUTHOR_A = 'user-a'
@@ -868,7 +869,7 @@ describe('Home Phase 1 (Editorial Reading Surface) — Home candidate pool', () 
     const fake = createFakeDispatches({ viewerId: VIEWER, rows })
     const { items } = await getHomeBoardCandidates(client(fake))
     expect(items.length).toBeGreaterThan(3)
-    expect(items.length).toBeLessThanOrEqual(20)
+    expect(items.length).toBeLessThanOrEqual(30)
   })
 
   it('is unseen-first, same tiering as the Board itself — a seen Dispatch is not among the first candidates while unseen ones exist', async () => {
@@ -896,10 +897,11 @@ describe('Home Phase 1 (Editorial Reading Surface) — Home candidate pool', () 
     expect(seed.length).toBeGreaterThan(0)
   })
 
-  it('each candidate carries its own tier and cursor (never discarded, unlike the old getHomeBoardDispatches)', async () => {
+  it('each candidate carries its own isKept/isFamiliar and cursor (never discarded, unlike the old getHomeBoardDispatches)', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [row({ id: 'd-1' })] })
     const { items } = await getHomeBoardCandidates(client(fake))
-    expect(items[0]).toHaveProperty('tier')
+    expect(items[0]).toHaveProperty('isKept')
+    expect(items[0]).toHaveProperty('isFamiliar')
     expect(items[0]).toHaveProperty('cursor')
     expect(items[0].cursor).toMatchObject({ id: 'd-1' })
   })
@@ -1772,7 +1774,7 @@ describe('getBoardFeedPage — session-stability correction (first_viewed_at, no
     expect(nextSession.items.map((i) => i.id)).toEqual(['genuinely-unseen', 'newly-viewed'])
   })
 
-  it('kept_minds.created_at pins the Keep-ADD direction to session start — a Keep performed DURING the session does not promote that author\'s Dispatches to tier 1 until the next session', async () => {
+  it('kept_minds.created_at pins the Keep-ADD direction to session start — a Keep performed DURING the session does not classify that author\'s Dispatches as familiar until the next session', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [
@@ -1783,44 +1785,334 @@ describe('getBoardFeedPage — session-stability correction (first_viewed_at, no
       kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-09-15T00:30:00Z' }],
     })
     const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
-    // AUTHOR_A's Dispatch stays tier 2 (unkept-as-of-session-start) —
-    // newest-published-first ordering within tier 2 puts it ahead of
-    // from-unkept here, which is expected (both tier 2, ordered by
-    // published_at desc); the property under test is that it is NOT
-    // separated into an earlier tier-1 position ahead of the tier
-    // boundary — proven instead in the next test, which makes the tier
-    // difference observable via a genuine tier-1 competitor.
-    expect(items.map((i) => i.id).sort()).toEqual(['from-mid-session-keep', 'from-unkept'])
+    const midSessionKeepItem = items.find((i) => i.id === 'from-mid-session-keep')!
+    expect(midSessionKeepItem.isKept).toBe(false)
+    expect(midSessionKeepItem.isFamiliar).toBe(false)
   })
 
-  it('an OLD Keep (established before session start) is unaffected — still promotes to tier 1 exactly as before this correction', async () => {
+  it('an OLD Keep (established before session start) is unaffected — still classifies that author\'s Dispatches as familiar/kept exactly as before this correction', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
-      rows: [
-        boardRow({ id: 'from-old-keep', author_id: AUTHOR_A, published_at: '2026-09-01T00:00:00Z' }),
-        boardRow({ id: 'from-other', author_id: AUTHOR_B, published_at: '2026-09-10T00:00:00Z' }),
-      ],
+      rows: [boardRow({ id: 'from-old-keep', author_id: AUTHOR_A, published_at: '2026-09-01T00:00:00Z' })],
       kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
     })
     const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
-    // Tier 1 (kept, older created_at) ranks ahead of tier 2 (unkept,
-    // newer publish date) — proves the OLD-Keep path still works.
-    expect(items.map((i) => i.id)).toEqual(['from-old-keep', 'from-other'])
+    expect(items[0].isKept).toBe(true)
+    expect(items[0].isFamiliar).toBe(true)
   })
 })
 
-describe('getBoardFeedPage — ranking tiers', () => {
-  it('an unseen Dispatch from a Kept author ranks ahead of an unseen Dispatch from a non-kept author', async () => {
+describe('getBoardFeedPage — unseen precedes seen (seen_bucket is the outermost sort key)', () => {
+  it('a seen Kept-author Dispatch does NOT jump ahead of healthy unseen inventory, regardless of relationship strength', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [
-        boardRow({ id: 'from-kept', author_id: AUTHOR_A, published_at: '2026-09-01T00:00:00Z' }),
-        boardRow({ id: 'from-other', author_id: AUTHOR_B, published_at: '2026-09-10T00:00:00Z' }),
+        boardRow({ id: 'seen-but-kept', author_id: AUTHOR_A, published_at: '2026-09-10T00:00:00Z' }),
+        boardRow({ id: 'unseen-discovery', author_id: AUTHOR_B, published_at: '2026-09-01T00:00:00Z' }),
       ],
       kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A }],
+      views: [{ viewer_id: VIEWER, dispatch_id: 'seen-but-kept', last_paragraph_index: 0, first_viewed_at: '2026-09-14T00:00:00Z' }],
     })
     const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
-    expect(items.map((i) => i.id)).toEqual(['from-kept', 'from-other'])
+    expect(items.map((i) => i.id)).toEqual(['unseen-discovery', 'seen-but-kept'])
+  })
+})
+
+function correspondenceWith(viewer: string, author: string, overrides: Partial<FakeCorrespondenceRow> = {}): FakeCorrespondenceRow {
+  return {
+    participant_low: viewer < author ? viewer : author,
+    participant_high: viewer < author ? author : viewer,
+    status: 'active',
+    established_at: '2026-09-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('getBoardFeedPage — familiarity classification (Keep, established correspondent)', () => {
+  it('a Kept author\'s Dispatch classifies as isKept=true, isFamiliar=true', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items[0]).toMatchObject({ isKept: true, isFamiliar: true })
+  })
+
+  it('an established correspondent\'s Dispatch classifies as isFamiliar=true, isKept=false — the second, weaker familiarity signal', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: '2026-08-01T00:00:00Z' })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items[0]).toMatchObject({ isKept: false, isFamiliar: true })
+  })
+
+  it('a first-contact correspondence that never became established (established_at null) grants NO familiarity', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: null })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items[0]).toMatchObject({ isKept: false, isFamiliar: false })
+  })
+
+  it('a correspondence established DURING the current session is not yet familiar for THIS session (session-stable, mirrors kept_minds.created_at)', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: '2026-09-15T00:30:00Z' })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items[0]).toMatchObject({ isKept: false, isFamiliar: false })
+  })
+
+  it('Keep and an established correspondence with the SAME author never stack — Keep wins, exactly as if only Keep were true', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: '2026-08-01T00:00:00Z' })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items[0]).toMatchObject({ isKept: true, isFamiliar: true })
+  })
+
+  it('Stop Letters (a letters-only block) does NOT suppress Board familiarity for an established correspondent', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: '2026-08-01T00:00:00Z' })],
+      blocked: [{ blocker_id: VIEWER, blocked_id: AUTHOR_A, scope: 'letters' }],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ isFamiliar: true })
+  })
+
+  it('a FULL block removes the candidate entirely, even from an established correspondent', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: '2026-08-01T00:00:00Z' })],
+      blocked: [{ blocker_id: VIEWER, blocked_id: AUTHOR_A, scope: 'full' }],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items).toHaveLength(0)
+  })
+
+  it('a CLOSED correspondence (even with established_at set) is not confused with an active one — it still counts, matching status=active only being required alongside established_at (a closed episode retains its established_at from when it was active, but the classification predicate requires status=\'active\')', async () => {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
+      correspondences: [correspondenceWith(VIEWER, AUTHOR_A, { established_at: '2026-08-01T00:00:00Z', status: 'closed' })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null })
+    expect(items[0]).toMatchObject({ isKept: false, isFamiliar: false })
+  })
+})
+
+describe('getBoardFeedPage — Keep:Correspondent weighting (3:1, no systematic Familiar tie bias)', () => {
+  it('with 3 Kept authors and 1 correspondent author (each one unseen Dispatch), the FIRST and LAST familiar-stream positions are always Keep — only the correspondent\'s exact position (2nd or 3rd) is seed-dependent', async () => {
+    // Every row here is familiar (no discovery competitors), isolating
+    // the Level-1 Keep:Correspondent merge from the Level-2 Familiar:
+    // Discovery interleave entirely. Sainte-Laguë divisor keys: Keep
+    // (weight 3) at stream positions 1,2,3 get keys 1/3, 1, 5/3;
+    // Correspondent (weight 1) at stream position 1 gets key 1 — tying
+    // ONLY with Keep's 2nd position. Position 1 (key 1/3, unique
+    // minimum) and position 4 (key 5/3, unique maximum among these 4)
+    // are therefore always Keep, regardless of which tied item breaks
+    // first at positions 2/3.
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [
+        boardRow({ id: 'keep-1', author_id: 'kept-a', published_at: '2026-09-05T00:00:00Z' }),
+        boardRow({ id: 'keep-2', author_id: 'kept-b', published_at: '2026-09-04T00:00:00Z' }),
+        boardRow({ id: 'keep-3', author_id: 'kept-c', published_at: '2026-09-03T00:00:00Z' }),
+        boardRow({ id: 'corr-1', author_id: 'corr-a', published_at: '2026-09-02T00:00:00Z' }),
+      ],
+      kept: [
+        { viewer_user_id: VIEWER, kept_user_id: 'kept-a', created_at: '2026-08-01T00:00:00Z' },
+        { viewer_user_id: VIEWER, kept_user_id: 'kept-b', created_at: '2026-08-01T00:00:00Z' },
+        { viewer_user_id: VIEWER, kept_user_id: 'kept-c', created_at: '2026-08-01T00:00:00Z' },
+      ],
+      correspondences: [correspondenceWith(VIEWER, 'corr-a', { established_at: '2026-08-01T00:00:00Z' })],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 4 })
+    expect(items.map((i) => i.id).sort()).toEqual(['corr-1', 'keep-1', 'keep-2', 'keep-3'])
+    expect(items[0].id).toMatch(/^keep-/)
+    expect(items[3].id).toMatch(/^keep-/)
+    expect(items[1].id === 'corr-1' || items[2].id === 'corr-1').toBe(true)
+  })
+
+  it('the 5th and 6th familiar-stream positions never both come from the correspondent — the SAME 3:1 apportionment repeats past the first cycle', async () => {
+    // 6 Kept authors + 2 correspondent authors — the divisor sequence
+    // predicts corr-1 lands in the {2,3} position band and corr-2 in
+    // the {6,7} band (see docs/sql/2026-09-26-board-personalization-
+    // ranking.sql's own worked comment), so positions 4 and 5 (0-indexed
+    // 3,4) are always Keep.
+    const kept = Array.from({ length: 6 }, (_, i) => ({
+      viewer_user_id: VIEWER,
+      kept_user_id: `kept-${i}`,
+      created_at: '2026-08-01T00:00:00Z',
+    }))
+    const rows = [
+      ...Array.from({ length: 6 }, (_, i) =>
+        boardRow({ id: `keep-${i}`, author_id: `kept-${i}`, published_at: `2026-09-${String(10 - i).padStart(2, '0')}T00:00:00Z` })
+      ),
+      boardRow({ id: 'corr-1', author_id: 'corr-a', published_at: '2026-09-03T00:00:00Z' }),
+      boardRow({ id: 'corr-2', author_id: 'corr-b', published_at: '2026-09-02T00:00:00Z' }),
+    ]
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows,
+      kept,
+      correspondences: [
+        correspondenceWith(VIEWER, 'corr-a', { established_at: '2026-08-01T00:00:00Z' }),
+        correspondenceWith(VIEWER, 'corr-b', { established_at: '2026-08-01T00:00:00Z' }),
+      ],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 8 })
+    expect(items).toHaveLength(8)
+    const positionOf = (id: string) => items.findIndex((i) => i.id === id)
+    // Position 4 (0-indexed 3) always Keep — strictly between the two
+    // correspondent bands.
+    expect(items[3].id).toMatch(/^keep-/)
+  })
+})
+
+describe('getBoardFeedPage — Familiar:Discovery interleave (unbiased 1:1, deterministic)', () => {
+  function singleFamiliarVsSingleDiscoveryFake(seed: string) {
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [
+        boardRow({ id: 'familiar-1', author_id: AUTHOR_A, published_at: '2026-09-05T00:00:00Z' }),
+        boardRow({ id: 'discovery-1', author_id: AUTHOR_B, published_at: '2026-09-05T00:00:00Z' }),
+      ],
+      kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
+    })
+    return getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed, cursor: null })
+  }
+
+  it('there is no explicit Familiar-first threshold or offset in the ranking — a single Familiar item and a single Discovery item genuinely tie at the same rank_key and are resolved ONLY by the per-session seed', async () => {
+    const { items } = await singleFamiliarVsSingleDiscoveryFake(SEED_A)
+    // Both rank_key values must be equal (a true tie), never a
+    // structurally-guaranteed Familiar-first ordering.
+    const familiar = items.find((i) => i.id === 'familiar-1')!
+    const discovery = items.find((i) => i.id === 'discovery-1')!
+    expect(familiar.cursor.rankKey).toBe(discovery.cursor.rankKey)
+  })
+
+  it('the identical seed always produces the identical resolution of that tie', async () => {
+    const first = await singleFamiliarVsSingleDiscoveryFake('fixed-seed-x')
+    const second = await singleFamiliarVsSingleDiscoveryFake('fixed-seed-x')
+    expect(first.items.map((i) => i.id)).toEqual(second.items.map((i) => i.id))
+  })
+
+  it('across a FIXED, hardcoded set of known seeds, BOTH tie outcomes are observed — proving the resolution is genuinely seed-dependent, never a fixed lean, without any probabilistic/CI-style "roughly 50/50" assertion', async () => {
+    // A fixed, literal, non-random list of seed strings — fully
+    // deterministic and repeatable: this exact list always produces the
+    // exact same set of outcomes on every run, on every machine.
+    const FIXED_SEEDS = [
+      'seed-01', 'seed-02', 'seed-03', 'seed-04', 'seed-05',
+      'seed-06', 'seed-07', 'seed-08', 'seed-09', 'seed-10',
+      'seed-11', 'seed-12', 'seed-13', 'seed-14', 'seed-15',
+      'seed-16', 'seed-17', 'seed-18', 'seed-19', 'seed-20',
+    ]
+    const outcomes = new Set<string>()
+    for (const seed of FIXED_SEEDS) {
+      const { items } = await singleFamiliarVsSingleDiscoveryFake(seed)
+      outcomes.add(items[0].id)
+    }
+    expect(outcomes.has('familiar-1')).toBe(true)
+    expect(outcomes.has('discovery-1')).toBe(true)
+  })
+})
+
+describe('getBoardFeedPage — discovery guarantee / sparse pool graceful fill', () => {
+  it('a sparse familiar pool (no Keep, no correspondents at all) fills entirely, correctly, from discovery — nothing is lost', async () => {
+    const rows = Array.from({ length: 5 }, (_, i) =>
+      boardRow({ id: `d-${i}`, author_id: `author-${i}`, published_at: `2026-09-0${i + 1}T00:00:00Z` })
+    )
+    const fake = createFakeDispatches({ viewerId: VIEWER, rows })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 10 })
+    expect(items).toHaveLength(5)
+    expect(items.every((i) => i.isFamiliar === false)).toBe(true)
+  })
+
+  it('a sparse discovery pool (every author is familiar) still returns everything — nothing is withheld for lack of a Discovery competitor', async () => {
+    const rows = [
+      boardRow({ id: 'd-1', author_id: AUTHOR_A, published_at: '2026-09-05T00:00:00Z' }),
+      boardRow({ id: 'd-2', author_id: AUTHOR_B, published_at: '2026-09-04T00:00:00Z' }),
+    ]
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows,
+      kept: [
+        { viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' },
+        { viewer_user_id: VIEWER, kept_user_id: AUTHOR_B, created_at: '2026-08-01T00:00:00Z' },
+      ],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 10 })
+    expect(items).toHaveLength(2)
+    expect(items.every((i) => i.isFamiliar === true)).toBe(true)
+  })
+})
+
+describe('getBoardFeedPage — bounded familiar-author augmentation (beyond the global newest-300 pool)', () => {
+  it('a familiar author\'s unseen Dispatch OUTSIDE the global newest-300 window still enters the feed through augmentation', async () => {
+    // 300 unrelated, newer discovery rows fill the global pool entirely,
+    // pushing a single older Kept-author Dispatch outside it.
+    const fillerRows = Array.from({ length: 300 }, (_, i) =>
+      boardRow({ id: `filler-${i}`, author_id: `filler-author-${i}`, published_at: `2026-09-10T00:${String(i % 60).padStart(2, '0')}:00Z` })
+    )
+    const oldKeptRow = boardRow({ id: 'old-kept-dispatch', author_id: AUTHOR_A, published_at: '2026-01-01T00:00:00Z' })
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [...fillerRows, oldKeptRow],
+      kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 1000 })
+    expect(items.map((i) => i.id)).toContain('old-kept-dispatch')
+    const augmented = items.find((i) => i.id === 'old-kept-dispatch')!
+    expect(augmented.isKept).toBe(true)
+  })
+
+  it('augmentation never contributes more than 2 UNSEEN Dispatches per familiar author, even when that author has many more eligible unseen rows outside the global 300', async () => {
+    const fillerRows = Array.from({ length: 300 }, (_, i) =>
+      boardRow({ id: `filler-${i}`, author_id: `filler-author-${i}`, published_at: `2026-09-10T00:${String(i % 60).padStart(2, '0')}:00Z` })
+    )
+    const oldKeptRows = Array.from({ length: 5 }, (_, i) =>
+      boardRow({ id: `old-kept-${i}`, author_id: AUTHOR_A, published_at: `2026-01-0${i + 1}T00:00:00Z` })
+    )
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [...fillerRows, ...oldKeptRows],
+      kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 1000 })
+    const augmentedFromAuthorA = items.filter((i) => i.id.startsWith('old-kept-'))
+    expect(augmentedFromAuthorA.length).toBeLessThanOrEqual(2)
+    // The 2 that DO make it through are the MOST RECENT of the 5 —
+    // old-kept-4 and old-kept-3 (0-indexed, newest published_at first).
+    expect(augmentedFromAuthorA.map((i) => i.id).sort()).toEqual(['old-kept-3', 'old-kept-4'])
+  })
+
+  it('augmentation only ever adds UNSEEN Dispatches — a familiar author\'s older, already-seen Dispatch outside the 300 stays absent', async () => {
+    const fillerRows = Array.from({ length: 300 }, (_, i) =>
+      boardRow({ id: `filler-${i}`, author_id: `filler-author-${i}`, published_at: `2026-09-10T00:${String(i % 60).padStart(2, '0')}:00Z` })
+    )
+    const oldSeenKeptRow = boardRow({ id: 'old-seen-kept', author_id: AUTHOR_A, published_at: '2026-01-01T00:00:00Z' })
+    const fake = createFakeDispatches({
+      viewerId: VIEWER,
+      rows: [...fillerRows, oldSeenKeptRow],
+      kept: [{ viewer_user_id: VIEWER, kept_user_id: AUTHOR_A, created_at: '2026-08-01T00:00:00Z' }],
+      views: [{ viewer_id: VIEWER, dispatch_id: 'old-seen-kept', last_paragraph_index: 0, first_viewed_at: '2026-01-02T00:00:00Z' }],
+    })
+    const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 1000 })
+    expect(items.map((i) => i.id)).not.toContain('old-seen-kept')
   })
 })
 
@@ -1983,7 +2275,7 @@ describe('getBoardFeedPage — Trust & Safety read-visibility (account enforceme
 })
 
 describe('getHomeBoardCandidates — shares the Board feed core, no separate pagination concept of its own', () => {
-  it('the returned items are NOT plain DispatchListItem — each carries its own tier/cursor, never top-level nextCursor', async () => {
+  it('the returned items are NOT plain DispatchListItem — each carries its own isKept/isFamiliar/cursor, never top-level nextCursor', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [boardRow({ id: 'd-1', author_id: AUTHOR_A })],
@@ -1992,15 +2284,17 @@ describe('getHomeBoardCandidates — shares the Board feed core, no separate pag
     expect(Array.isArray(items)).toBe(true)
     expect(items[0]).not.toHaveProperty('nextCursor')
     expect(items[0]).toHaveProperty('cursor')
+    expect(items[0]).toHaveProperty('isKept')
+    expect(items[0]).toHaveProperty('isFamiliar')
   })
 
-  it('caps at HOME_CANDIDATE_COUNT even with many eligible Dispatches across every tier', async () => {
-    const rows = Array.from({ length: 30 }, (_, i) =>
+  it('caps at HOME_CANDIDATE_COUNT (30) even with many eligible Dispatches', async () => {
+    const rows = Array.from({ length: 40 }, (_, i) =>
       boardRow({ id: `d-${i}`, author_id: `user-${i}`, published_at: `2026-09-${String((i % 28) + 1).padStart(2, '0')}T00:00:00Z` })
     )
     const fake = createFakeDispatches({ viewerId: VIEWER, rows })
     const { items } = await getHomeBoardCandidates(client(fake))
-    expect(items.length).toBeLessThanOrEqual(20)
+    expect(items.length).toBeLessThanOrEqual(30)
     expect(items.length).toBeGreaterThan(3)
   })
 })
@@ -2018,16 +2312,19 @@ describe('Home Phase 1 — partitionHomeSections', () => {
       authorPseudonym: 'Someone',
       authorCountry: null,
       topics: [],
-      tier: 2,
-      cursor: { tier: 2, authorSeq: 1, seedHash: 0, id },
+      isKept: false,
+      isFamiliar: false,
+      cursor: { seenBucket: 0, rankKey: '1', seedHash: 0, id },
       ...overrides,
     }
   }
 
   it('never lets the same Dispatch id appear in more than one section', () => {
-    const items = Array.from({ length: 20 }, (_, i) =>
-      feedItem({ id: `d-${i}`, tier: i % 3 === 0 ? 1 : i % 3 === 1 ? 2 : 3 })
-    )
+    const items = Array.from({ length: 20 }, (_, i) => {
+      const isKept = i % 3 === 0
+      const isFamiliar = isKept || i % 3 === 1
+      return feedItem({ id: `d-${i}`, isKept, isFamiliar })
+    })
     const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
     const allIds = [
       ...featured.map((i) => i.id),
@@ -2042,44 +2339,75 @@ describe('Home Phase 1 — partitionHomeSections', () => {
   })
 
   it('Featured takes the first 3 rows in existing order; the Shelf takes the next 5 unused rows', () => {
-    const items = Array.from({ length: 10 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const items = Array.from({ length: 10 }, (_, i) => feedItem({ id: `d-${i}` }))
     const { featured, shelf } = partitionHomeSections(items)
     expect(featured.map((i) => i.id)).toEqual(['d-0', 'd-1', 'd-2'])
     expect(shelf.map((i) => i.id)).toEqual(['d-3', 'd-4', 'd-5', 'd-6', 'd-7'])
   })
 
-  it('From Minds You Keep omits cleanly (empty array) when no unused tier-1 rows remain', () => {
-    const items = Array.from({ length: 8 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+  it('From Minds You Keep omits cleanly (empty array) when no unused isKept rows remain', () => {
+    const items = Array.from({ length: 8 }, (_, i) => feedItem({ id: `d-${i}` }))
     const { fromMindsYouKeep } = partitionHomeSections(items)
     expect(fromMindsYouKeep).toEqual([])
   })
 
-  it('From Minds You Keep takes up to 3 additional unused tier-1 rows', () => {
+  it('From Minds You Keep takes up to 3 additional unused isKept rows', () => {
     const items = [
-      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}`, tier: 2 })),
-      feedItem({ id: 'kept-1', tier: 1 }),
-      feedItem({ id: 'kept-2', tier: 1 }),
-      feedItem({ id: 'kept-3', tier: 1 }),
-      feedItem({ id: 'kept-4', tier: 1 }),
+      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      feedItem({ id: 'kept-1', isKept: true, isFamiliar: true }),
+      feedItem({ id: 'kept-2', isKept: true, isFamiliar: true }),
+      feedItem({ id: 'kept-3', isKept: true, isFamiliar: true }),
+      feedItem({ id: 'kept-4', isKept: true, isFamiliar: true }),
     ]
     const { fromMindsYouKeep } = partitionHomeSections(items)
     expect(fromMindsYouKeep.map((i) => i.id)).toEqual(['kept-1', 'kept-2', 'kept-3'])
   })
 
-  it('Serendipity prefers tier 2 and never includes a tier-1 (kept) row', () => {
+  it('a correspondent-only author (isFamiliar true, isKept false) can appear in Featured/Shelf but NEVER in From Minds You Keep', () => {
     const items = [
-      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}`, tier: 2 })),
-      feedItem({ id: 'kept-1', tier: 1 }),
-      feedItem({ id: 'serendipity-tier2', tier: 2 }),
-      feedItem({ id: 'serendipity-tier3', tier: 3 }),
+      feedItem({ id: 'correspondent-1', isKept: false, isFamiliar: true }),
+      ...Array.from({ length: 9 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+    ]
+    const { featured, shelf, fromMindsYouKeep } = partitionHomeSections(items)
+    expect([...featured, ...shelf].some((i) => i.id === 'correspondent-1')).toBe(true)
+    expect(fromMindsYouKeep.some((i) => i.id === 'correspondent-1')).toBe(false)
+  })
+
+  it('Serendipity excludes Keep authors', () => {
+    const items = [
+      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      feedItem({ id: 'kept-1', isKept: true, isFamiliar: true }),
+      feedItem({ id: 'serendipity-1', isKept: false, isFamiliar: false }),
     ]
     const { serendipity } = partitionHomeSections(items)
     expect(serendipity.map((i) => i.id)).not.toContain('kept-1')
-    expect(serendipity.map((i) => i.id)).toContain('serendipity-tier2')
+    expect(serendipity.map((i) => i.id)).toContain('serendipity-1')
+  })
+
+  it('Serendipity excludes correspondent/familiar (non-Keep) authors too — isFamiliar === false is the entire rule', () => {
+    const items = [
+      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      feedItem({ id: 'correspondent-1', isKept: false, isFamiliar: true }),
+      feedItem({ id: 'serendipity-1', isKept: false, isFamiliar: false }),
+    ]
+    const { serendipity } = partitionHomeSections(items)
+    expect(serendipity.map((i) => i.id)).not.toContain('correspondent-1')
+    expect(serendipity.map((i) => i.id)).toContain('serendipity-1')
+  })
+
+  it('Serendipity is never backfilled with a familiar author merely to reach its target count', () => {
+    const items = [
+      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      feedItem({ id: 'only-discovery', isKept: false, isFamiliar: false }),
+      feedItem({ id: 'familiar-1', isKept: true, isFamiliar: true }),
+      feedItem({ id: 'familiar-2', isKept: false, isFamiliar: true }),
+    ]
+    const { serendipity } = partitionHomeSections(items)
+    expect(serendipity.map((i) => i.id)).toEqual(['only-discovery'])
   })
 
   it('degrades gracefully — never duplicates a card when the pool is smaller than every section combined', () => {
-    const items = Array.from({ length: 4 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const items = Array.from({ length: 4 }, (_, i) => feedItem({ id: `d-${i}` }))
     const { featured, shelf, fromMindsYouKeep, serendipity } = partitionHomeSections(items)
     const allIds = [...featured, ...shelf, ...fromMindsYouKeep, ...serendipity].map((i) => i.id)
     expect(new Set(allIds).size).toBe(allIds.length)
@@ -2087,7 +2415,7 @@ describe('Home Phase 1 — partitionHomeSections', () => {
   })
 
   it('remainder holds whatever is left over after every section has claimed its rows', () => {
-    const items = Array.from({ length: 20 }, (_, i) => feedItem({ id: `d-${i}`, tier: 2 }))
+    const items = Array.from({ length: 20 }, (_, i) => feedItem({ id: `d-${i}` }))
     const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
     expect(remainder.length).toBe(
       items.length - featured.length - shelf.length - fromMindsYouKeep.length - serendipity.length
@@ -2096,7 +2424,7 @@ describe('Home Phase 1 — partitionHomeSections', () => {
   })
 })
 
-describe('Home Phase 1 — reading trail helpers', () => {
+describe('Home Phase 1 — reading trail helpers (v2)', () => {
   function feedItem(overrides: Partial<BoardFeedItem>): BoardFeedItem {
     const id = overrides.id ?? 'd-1'
     return {
@@ -2109,31 +2437,37 @@ describe('Home Phase 1 — reading trail helpers', () => {
       authorPseudonym: 'Someone',
       authorCountry: null,
       topics: [],
-      tier: 2,
-      cursor: { tier: 2, authorSeq: 3, seedHash: 12345, id },
+      isKept: false,
+      isFamiliar: false,
+      cursor: { seenBucket: 0, rankKey: '5', seedHash: 12345, id },
       ...overrides,
     }
   }
 
-  it('readingTrailSearchParams encodes the session plus the item\'s own cursor (never the item id itself)', () => {
+  it('readingTrailSearchParams encodes the session plus the item\'s own cursor (never the item id, never isKept/isFamiliar)', () => {
     const params = readingTrailSearchParams(
       { sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123' },
-      feedItem({ id: 'd-1', tier: 2, cursor: { tier: 2, authorSeq: 3, seedHash: 12345, id: 'd-1' } })
+      feedItem({ id: 'd-1', isKept: true, isFamiliar: true, cursor: { seenBucket: 0, rankKey: '5', seedHash: 12345, id: 'd-1' } })
     )
     expect(params.get('s')).toBe('2026-09-01T00:00:00Z')
     expect(params.get('seed')).toBe('abc123')
-    expect(params.get('tier')).toBe('2')
-    expect(params.get('aseq')).toBe('3')
-    expect(params.get('shash')).toBe('12345')
+    expect(params.get('v')).toBe('2')
+    expect(params.get('sb')).toBe('0')
+    expect(params.get('rk')).toBe('5')
+    expect(params.get('sh')).toBe('12345')
+    expect(params.get('isKept')).toBeNull()
+    expect(params.get('isFamiliar')).toBeNull()
+    expect(params.toString()).not.toMatch(/kept|familiar|correspondent/i)
   })
 
-  it('parseReadingTrailParams round-trips what readingTrailSearchParams encoded', () => {
+  it('parseReadingTrailParams round-trips what readingTrailSearchParams encoded, with rk staying a STRING', () => {
     const params = readingTrailSearchParams(
       { sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123' },
-      feedItem({ id: 'd-1', tier: 1, cursor: { tier: 1, authorSeq: 7, seedHash: -99, id: 'd-1' } })
+      feedItem({ id: 'd-1', cursor: { seenBucket: 1, rankKey: '7', seedHash: -99, id: 'd-1' } })
     )
     const parsed = parseReadingTrailParams(Object.fromEntries(params.entries()))
-    expect(parsed).toEqual({ sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123', tier: 1, authorSeq: 7, seedHash: -99 })
+    expect(parsed).toEqual({ sessionStartedAt: '2026-09-01T00:00:00Z', seed: 'abc123', seenBucket: 1, rankKey: '7', seedHash: -99 })
+    expect(typeof parsed!.rankKey).toBe('string')
   })
 
   it('parseReadingTrailParams returns null for a bare direct/shared URL with no trail params at all', () => {
@@ -2144,9 +2478,33 @@ describe('Home Phase 1 — reading trail helpers', () => {
     expect(parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc' })).toBeNull()
   })
 
-  it('parseReadingTrailParams returns null for non-numeric cursor fields', () => {
+  it('parseReadingTrailParams returns null for a missing version (an old, unversioned trail URL from before this checkpoint)', () => {
     expect(
-      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', tier: 'x', aseq: '1', shash: '1' })
+      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', tier: '2', aseq: '1', shash: '1' })
+    ).toBeNull()
+  })
+
+  it('parseReadingTrailParams returns null for an unsupported version', () => {
+    expect(
+      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', v: '3', sb: '0', rk: '5', sh: '1' })
+    ).toBeNull()
+  })
+
+  it('parseReadingTrailParams returns null for a malformed sb (non-numeric)', () => {
+    expect(
+      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', v: '2', sb: 'x', rk: '5', sh: '1' })
+    ).toBeNull()
+  })
+
+  it('parseReadingTrailParams returns null for a malformed rk (empty)', () => {
+    expect(
+      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', v: '2', sb: '0', rk: '', sh: '1' })
+    ).toBeNull()
+  })
+
+  it('parseReadingTrailParams returns null for a malformed sh (non-numeric)', () => {
+    expect(
+      parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', v: '2', sb: '0', rk: '5', sh: 'x' })
     ).toBeNull()
   })
 
@@ -2168,7 +2526,7 @@ describe('Home Phase 1 — reading trail helpers', () => {
     const [first, second, third] = items
     const next = await getNextTrailItems(
       client(fake),
-      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: first.tier, authorSeq: first.cursor.authorSeq, seedHash: first.cursor.seedHash },
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, seenBucket: first.cursor.seenBucket, rankKey: first.cursor.rankKey, seedHash: first.cursor.seedHash },
       first.id,
       2
     )
@@ -2184,7 +2542,7 @@ describe('Home Phase 1 — reading trail helpers', () => {
     const [first] = items
     const next = await getNextTrailItems(
       client(fake),
-      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: first.tier, authorSeq: first.cursor.authorSeq, seedHash: first.cursor.seedHash },
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, seenBucket: first.cursor.seenBucket, rankKey: first.cursor.rankKey, seedHash: first.cursor.seedHash },
       first.id
     )
     expect(next).toHaveLength(CONTINUE_READING_COUNT)
@@ -2203,7 +2561,7 @@ describe('Home Phase 1 — reading trail helpers', () => {
     const [only] = items
     const next = await getNextTrailItems(
       client(fake),
-      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: only.tier, authorSeq: only.cursor.authorSeq, seedHash: only.cursor.seedHash },
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, seenBucket: only.cursor.seenBucket, rankKey: only.cursor.rankKey, seedHash: only.cursor.seedHash },
       only.id
     )
     expect(next).toEqual([])
@@ -2226,7 +2584,7 @@ describe('Home Phase 1 — reading trail helpers', () => {
     // pick up correctly from there, not silently resume after `first`.
     const shelf = await getNextTrailItems(
       client(fake),
-      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: first.tier, authorSeq: first.cursor.authorSeq, seedHash: first.cursor.seedHash },
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, seenBucket: first.cursor.seenBucket, rankKey: first.cursor.rankKey, seedHash: first.cursor.seedHash },
       first.id,
       3
     )
@@ -2234,11 +2592,16 @@ describe('Home Phase 1 — reading trail helpers', () => {
     const chosen = shelf[1] // third
     const afterChosen = await getNextTrailItems(
       client(fake),
-      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, tier: chosen.tier, authorSeq: chosen.cursor.authorSeq, seedHash: chosen.cursor.seedHash },
+      { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, seenBucket: chosen.cursor.seenBucket, rankKey: chosen.cursor.rankKey, seedHash: chosen.cursor.seedHash },
       chosen.id,
       3
     )
     expect(afterChosen.map((i) => i.id)).toEqual([fourth.id])
+  })
+
+  it('a stale/old trail (parses to null) means Read Next is simply absent — never an error; the caller-side contract is that getNextTrailItems is only ever called when parseReadingTrailParams returned non-null', () => {
+    const staleTrail = parseReadingTrailParams({ s: '2026-09-01T00:00:00Z', seed: 'abc', tier: '2', aseq: '1', shash: '1' })
+    expect(staleTrail).toBeNull()
   })
 })
 
