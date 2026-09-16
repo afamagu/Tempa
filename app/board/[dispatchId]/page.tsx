@@ -1,7 +1,13 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getWaitingLetterCount } from '@/lib/letters'
+import {
+  getWaitingLetterCount,
+  getActiveCorrespondencePartnerIds,
+  getContactedAnswerIds,
+} from '@/lib/letters'
+import { getMyAnswers } from '@/lib/questions'
+import { canWriteToMind } from '@/app/minds/[userId]/page'
 import {
   getDispatchById,
   getDispatchMoments,
@@ -21,7 +27,7 @@ import { getDispatchReplies } from '@/lib/replies'
 import { isDispatchWorthReading } from '@/lib/worth-reading'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
-import { sectionTitleClass, metadataTextClass, sectionLabelClass, helperTextClass } from '@/app/profile/ui'
+import { sectionTitleClass, metadataTextClass, sectionLabelClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { iconButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
@@ -157,6 +163,9 @@ export default async function DispatchPage({
     worthReading,
     nextTrailItems,
     postcard,
+    authorAnswers,
+    activePartnerIds,
+    contactedAnswerIds,
   ] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getDispatchMoments(supabase, dispatch.id),
@@ -184,6 +193,17 @@ export default async function DispatchPage({
     // null renders nothing (see LetterheadPostcard's own conditional
     // rendering below).
     getDispatchPostcard(supabase, dispatch.id),
+    // Dispatch → Correspondence Entry Point checkpoint — the EXACT same
+    // three data sources app/minds/[userId]/page.tsx already reads to
+    // decide "Write to this mind" vs "Open your correspondence" vs
+    // nothing, applied to the Dispatch's own author instead of an
+    // arbitrary profile id. No new eligibility logic, no new RPC/table —
+    // this is a pure reuse of the existing correspondence contract (see
+    // canWriteToMind below). The author's own view never needs any of
+    // this — "write to yourself" is nonsensical and always suppressed.
+    isAuthor ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
+    isAuthor ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
+    isAuthor ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id),
   ])
 
   // Same batched first-Moment lookup every other Dispatch listing
@@ -210,6 +230,27 @@ export default async function DispatchPage({
     : []
 
   const isPinned = isAuthor && pinnedRow.data?.pinned_dispatch_id === dispatch.id
+
+  // Dispatch → Correspondence Entry Point checkpoint — identical
+  // derivation to app/minds/[userId]/page.tsx's own primaryAnswer/
+  // alreadyCorresponding/showWriteToMind (the SAME exported pure
+  // predicate, the SAME two ids-based checks), just keyed on the
+  // Dispatch's author instead of whichever profile page a viewer opened.
+  // When isAuthor, authorAnswers/activePartnerIds/contactedAnswerIds are
+  // all empty by construction (see the Promise.all above), so this
+  // always resolves to showWriteToMind=false, alreadyCorresponding=false
+  // — never a self-correspondence affordance.
+  const authorPrimaryAnswer = authorAnswers.find((a) => a.isPrimary) ?? null
+  const alreadyCorrespondingWithAuthor = activePartnerIds.has(dispatch.authorId)
+  const authorPrimaryAnswerAlreadyContacted = authorPrimaryAnswer
+    ? contactedAnswerIds.has(authorPrimaryAnswer.id)
+    : false
+  const showWriteToAuthor = canWriteToMind({
+    isSelf: isAuthor,
+    alreadyCorresponding: alreadyCorrespondingWithAuthor,
+    hasCurrentAnswer: authorPrimaryAnswer !== null,
+    currentAnswerAlreadyContacted: authorPrimaryAnswerAlreadyContacted,
+  })
 
   const { body: cleanBody } = stripRichBodyMarker(dispatch.body)
   const paragraphCount = splitParagraphs(cleanBody).length
@@ -311,6 +352,31 @@ export default async function DispatchPage({
             </div>
 
             {!isAuthor && <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />}
+
+            {/* Dispatch → Correspondence Entry Point checkpoint — a
+                quiet, editorial invitation into the EXISTING private
+                correspondence flow, never a social engagement bar. Same
+                three-state contract as app/minds/[userId]/page.tsx
+                (write / already-corresponding / nothing), reusing its
+                exact destinations — no new writing flow, no relationship
+                label ("Correspondent" etc.) ever shown. quietLinkClass
+                (a restrained underlined text link, not a button) keeps
+                this visually subordinate to the Dispatch itself, and
+                deliberately NOT sticky/floating — an ordinary in-flow
+                element, safe on mobile alongside AppShell's bottom nav. */}
+            {!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (
+              <div className="border-t border-foreground/10 pt-4">
+                {showWriteToAuthor && authorPrimaryAnswer ? (
+                  <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
+                    Write to this mind
+                  </Link>
+                ) : (
+                  <Link href="/letters" className={quietLinkClass}>
+                    Open your correspondence
+                  </Link>
+                )}
+              </div>
+            )}
 
             <RepliesSection dispatchId={dispatch.id} viewerId={user.id} initialReplies={replies} />
 

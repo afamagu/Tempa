@@ -90,6 +90,114 @@ describe('Dispatch detail page — Continue Reading shelf (Home Phase 1B)', () =
   })
 })
 
+describe('Dispatch detail page — Correspondence Entry Point checkpoint', () => {
+  it('reuses the EXISTING correspondence contract — canWriteToMind imported from the profile page, never redefined here', () => {
+    expect(source).toContain("import { canWriteToMind } from '@/app/minds/[userId]/page'")
+    // No second/local definition — exactly one function declaration
+    // named canWriteToMind anywhere in this file (the import itself).
+    expect(source).not.toMatch(/function\s+canWriteToMind/)
+  })
+
+  it('reuses the EXISTING data sources (getMyAnswers, getActiveCorrespondencePartnerIds, getContactedAnswerIds) — no new query/RPC invented for this', () => {
+    expect(source).toContain("import { getMyAnswers } from '@/lib/questions'")
+    expect(source).toContain('getActiveCorrespondencePartnerIds')
+    expect(source).toContain('getContactedAnswerIds')
+    expect(source).toContain('getMyAnswers(supabase, dispatch.authorId)')
+  })
+
+  it('the author\'s own view never fetches any of this — isAuthor short-circuits to empty answers/empty Sets', () => {
+    expect(source).toContain('isAuthor ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId)')
+    expect(source).toContain(
+      "isAuthor ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id)"
+    )
+    expect(source).toContain(
+      "isAuthor ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id)"
+    )
+  })
+
+  it('3. never offered to write to yourself: isSelf is bound to isAuthor, and the whole block is gated on !isAuthor', () => {
+    expect(source).toContain('isSelf: isAuthor,')
+    expect(source).toContain('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+  })
+
+  it('1/2. routes into the EXISTING private-write destination, the exact same href shape the profile page uses — never a new writing flow', () => {
+    expect(source).toContain('href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`}')
+  })
+
+  it('already-corresponding preserves the existing product behavior — routes to /letters, exactly like the profile page\'s own "Open your correspondence"', () => {
+    expect(source).toContain('<Link href="/letters" className={quietLinkClass}>')
+    expect(source).toContain('Open your correspondence')
+  })
+
+  it('the exact approved copy "Write to this mind" is used', () => {
+    expect(source).toContain('Write to this mind')
+  })
+
+  it('uses the restrained quietLinkClass text-link treatment, never primaryButtonClass/secondaryButtonClass — visually subordinate, never a conversion button', () => {
+    const blockStart = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const blockEnd = source.indexOf('<RepliesSection', blockStart)
+    const block = source.slice(blockStart, blockEnd)
+    expect(block).toContain('quietLinkClass')
+    expect(block).not.toContain('primaryButtonClass')
+    expect(block).not.toContain('secondaryButtonClass')
+  })
+
+  it('4. existing writer identity/profile navigation is untouched — still links to /minds/[authorId]', () => {
+    expect(source).toContain('href={`/minds/${dispatch.authorId}`}')
+  })
+
+  it('sits after WorthReadingButton and before RepliesSection — a quiet, end-of-reading placement, never inside the identity/action row at the top', () => {
+    const worthReading = source.indexOf('<WorthReadingButton')
+    const entryPoint = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const replies = source.indexOf('<RepliesSection')
+    expect(worthReading).toBeGreaterThan(-1)
+    expect(entryPoint).toBeGreaterThan(worthReading)
+    expect(replies).toBeGreaterThan(entryPoint)
+  })
+
+  it('5. no engagement toolbar was introduced by this checkpoint — no Like/Comment/Follow/reaction/count word anywhere in the new block itself', () => {
+    // Scoped to exactly the new block, not the whole file — the file
+    // already legitimately contains unrelated prose using some of these
+    // words elsewhere (e.g. an existing comment reading "like Keep in
+    // Mind"), which a whole-file check would wrongly flag.
+    const blockStart = executable.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const blockEnd = executable.indexOf('<RepliesSection', blockStart)
+    const block = executable.slice(blockStart, blockEnd).toLowerCase()
+    expect(block).not.toMatch(/\blike\b/)
+    expect(block).not.toMatch(/\bfollow(ing|er)?\b/)
+    expect(block).not.toContain('reaction')
+    expect(block).not.toContain('comment')
+    expect(block).not.toMatch(/\bcount\b/)
+  })
+
+  it('7. no fixed/sticky/floating CTA — an ordinary in-flow block, safe alongside AppShell\'s mobile bottom nav', () => {
+    const blockStart = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const blockEnd = source.indexOf('<RepliesSection', blockStart)
+    const block = source.slice(blockStart, blockEnd)
+    expect(block).not.toContain('fixed')
+    expect(block).not.toContain('sticky')
+    expect(block).not.toMatch(/floating/i)
+  })
+
+  it('8. no relationship classification label ("Correspondent", "Blocked", etc.) leaks into the Dispatch UI', () => {
+    const blockStart = executable.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const blockEnd = executable.indexOf('<RepliesSection', blockStart)
+    const block = executable.slice(blockStart, blockEnd)
+    expect(block).not.toMatch(/correspondent/i)
+    expect(block).not.toMatch(/blocked/i)
+    expect(block).not.toMatch(/stop letters/i)
+  })
+
+  it('does not duplicate blocking/Stop Letters checks locally — delegates entirely to the existing profile/write flow, matching that flow\'s own established defense-in-depth pattern', () => {
+    const blockStart = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const blockEnd = source.indexOf('<RepliesSection', blockStart)
+    const block = source.slice(blockStart, blockEnd)
+    expect(block).not.toContain('is_blocked_pair')
+    expect(block).not.toContain('is_correspondence_blocked_pair')
+    expect(block).not.toContain('getBlockScope')
+  })
+})
+
 describe('Dispatch detail page — attached Postcard (Checkpoint 2)', () => {
   it('fetches the Postcard once, alongside every other per-view data fetch', () => {
     expect(source).toContain('getDispatchPostcard(supabase, dispatch.id)')

@@ -19,6 +19,37 @@ function dispatch(overrides: Partial<SharedDispatch> = {}): SharedDispatch {
   }
 }
 
+// Dispatch → Correspondence Entry Point checkpoint — audited and
+// deliberately left UNCHANGED (Section G of that checkpoint). The public
+// share reader's own SharedDispatch type (lib/dispatches.ts) never
+// carries the author's real user id at all — get_shared_dispatch
+// deliberately never returns it to an anonymous caller (see this file's
+// own doc comment) — so a private-write link is structurally impossible
+// here without a new, out-of-scope RPC change. No existing appropriate
+// authenticated handoff pattern exists either: the authenticated branch's
+// only CTA is "Go to The Board," unchanged. These tests pin that this
+// checkpoint changed nothing about this surface.
+describe('SharedDispatchView — Correspondence Entry Point checkpoint: unchanged, by design', () => {
+  it('never renders a "Write to this mind" affordance or any /write/ link, authenticated or not', () => {
+    for (const isAuthenticated of [true, false]) {
+      const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch()} isAuthenticated={isAuthenticated} />)
+      expect(html).not.toContain('Write to this mind')
+      expect(html).not.toContain('/write/')
+    }
+  })
+
+  it('the authenticated visitor CTA is still exactly "Go to The Board" — unchanged by this checkpoint', () => {
+    const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch()} isAuthenticated />)
+    expect(html).toContain('Go to The Board')
+    expect(html).toContain('href="/board"')
+  })
+
+  it('the anonymous visitor CTA is still exactly "Join Tempa" — unchanged by this checkpoint', () => {
+    const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch()} isAuthenticated={false} />)
+    expect(html).toContain('Join Tempa')
+  })
+})
+
 describe('SharedDispatchView — reads the entire Dispatch before joining', () => {
   it('renders the full title, body, pseudonym, and topics', () => {
     const html = renderToStaticMarkup(<SharedDispatchView dispatch={dispatch()} isAuthenticated={false} />)
