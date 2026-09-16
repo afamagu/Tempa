@@ -37,6 +37,26 @@ const RETURN_TO_TOP_SCROLL_THRESHOLD = 800
  * before that click are lost, same as navigating away and back would
  * lose them. Not fixed in this checkpoint — flagged as a known,
  * narrow interaction, not a silent gap.
+ *
+ * Board Load More resilience checkpoint — before this pass, a failed
+ * "Load more" request (getBoardFeedPage or getFirstMomentThumbnails
+ * throwing) simply reset the button back to idle with no explanation at
+ * all; a cohort tester had no way to tell the Board hadn't just silently
+ * finished. `loadMoreFailed` is the one new piece of state: set only
+ * inside loadMore's own catch, cleared at the very start of every new
+ * attempt (so retrying never leaves the stale message showing during the
+ * new request), and never set alongside a successful setCursor call — so
+ * it can never appear at a genuine end-of-feed. Retry is NOT a second
+ * code path: the same button, at the same click handler (loadMore),
+ * simply relabels to "Try again" — since cursor is only ever advanced on
+ * success, a retry click necessarily requests the exact same next page
+ * that just failed, never a different one. This intentionally does NOT
+ * change what counts as a failure: neither getBoardFeedPage nor
+ * getFirstMomentThumbnails currently inspects the Supabase `error` field
+ * on their own calls (a pre-existing, codebase-wide lib/dispatches.ts
+ * convention, unrelated to and out of scope for this checkpoint) — only
+ * a genuine thrown exception (e.g. the underlying fetch failing outright)
+ * reaches this catch today.
  */
 export default function BoardFeed({
   viewerId,
@@ -61,6 +81,7 @@ export default function BoardFeed({
   const [thumbnails, setThumbnails] = useState(new Map(Object.entries(initialThumbnails)))
   const [cursor, setCursor] = useState(initialCursor)
   const [loading, setLoading] = useState(false)
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false)
   const [showReturnToTop, setShowReturnToTop] = useState(false)
   const keptUserIds = new Set(initialKeptUserIds)
 
@@ -75,11 +96,19 @@ export default function BoardFeed({
   async function loadMore() {
     if (loading || !cursor) return
     setLoading(true)
+    // A deliberate new attempt (first try or a "Try again" retry) clears
+    // any stale failure from a previous attempt immediately — never left
+    // displayed as though the retry has already failed while the new
+    // request is still in flight.
+    setLoadMoreFailed(false)
     try {
       const supabase = createClient()
       const { items, nextCursor } = await getBoardFeedPage(supabase, {
         sessionStartedAt,
         seed,
+        // Unchanged on every attempt, success or failure — this IS what
+        // makes a retry request the same next page rather than a
+        // different one: cursor only ever advances below, on success.
         cursor,
         limit: pageSize,
       })
@@ -90,6 +119,16 @@ export default function BoardFeed({
       setDispatches((prev) => [...prev, ...items])
       setThumbnails((prev) => new Map([...prev, ...newThumbnails]))
       setCursor(nextCursor)
+    } catch {
+      // Board Load More resilience checkpoint — a failed page fetch must
+      // never clear or replace what's already on screen, and must never
+      // advance/corrupt the cursor: simply not calling any of the three
+      // setters above already guarantees both, so the ONLY new state
+      // this catch introduces is the calm, retryable failure flag below.
+      // Deliberately no error detail is captured or logged here (see
+      // this component's own doc comment) — the user-facing copy stays
+      // fixed and generic regardless of what actually failed.
+      setLoadMoreFailed(true)
     } finally {
       setLoading(false)
     }
@@ -117,14 +156,28 @@ export default function BoardFeed({
       ))}
 
       {cursor && (
-        <div className="pt-2 text-center">
+        <div className="space-y-2 pt-2 text-center">
+          {/* Board Load More resilience checkpoint — a quiet, restrained
+              inline status right next to the control, never a large
+              alert panel and never alarming red (this is a retryable
+              pagination hiccup, not a fatal error). role="status" gives
+              assistive tech a polite, non-interrupting announcement
+              without stealing focus. Genuine end-of-feed (cursor becomes
+              null on a successful empty final page) can never show this
+              — loadMoreFailed is only ever set inside loadMore's own
+              catch, never alongside a successful setCursor call. */}
+          {loadMoreFailed && (
+            <p role="status" className={helperTextClass}>
+              Tempa couldn&rsquo;t bring in more Dispatches just now.
+            </p>
+          )}
           <button
             type="button"
             onClick={loadMore}
             disabled={loading}
             className={`${helperTextClass} rounded-md border border-foreground/15 px-4 py-2 transition-colors hover:border-foreground/30 hover:bg-foreground/[.03] disabled:opacity-60`}
           >
-            {loading ? 'Loading…' : 'More from the Board'}
+            {loading ? 'Loading…' : loadMoreFailed ? 'Try again' : 'More from the Board'}
           </button>
         </div>
       )}
