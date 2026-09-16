@@ -749,20 +749,25 @@ describe('set_current_answer simulation — kept for backward compatibility, no 
 })
 
 describe('questionSaveConfirmationCopy — no longer reads is_current, driven entirely by Flagship status', () => {
-  it('a member\'s first-ever save of the Flagship Question gets the "primary Minds answer" copy', () => {
-    expect(questionSaveConfirmationCopy(true, false)).toBe('Saved. This is now your primary Minds answer.')
+  // Onboarding & First-Use checkpoint — terminology pass (Section H):
+  // "primary Minds answer" → "primary response" (Minds is no longer the
+  // primary user-visible noun; see the People rename), "Answer saved."
+  // → "Response saved." Neither the function name nor its parameters
+  // changed.
+  it('a member\'s first-ever save of the Flagship Question gets the "primary response" copy', () => {
+    expect(questionSaveConfirmationCopy(true, false)).toBe('Saved. This is now your primary response.')
   })
 
   it('an edit of an already-answered Flagship Question gets the plain copy, never re-claiming primary status', () => {
-    expect(questionSaveConfirmationCopy(true, true)).toBe('Answer saved.')
+    expect(questionSaveConfirmationCopy(true, true)).toBe('Response saved.')
   })
 
   it('a first-ever save of a non-Flagship current Question gets the plain copy — only Flagship is ever announced as primary', () => {
-    expect(questionSaveConfirmationCopy(false, false)).toBe('Answer saved.')
+    expect(questionSaveConfirmationCopy(false, false)).toBe('Response saved.')
   })
 
   it('an edit of a non-Flagship Question gets the plain copy', () => {
-    expect(questionSaveConfirmationCopy(false, true)).toBe('Answer saved.')
+    expect(questionSaveConfirmationCopy(false, true)).toBe('Response saved.')
   })
 })
 

@@ -204,7 +204,12 @@ export default async function PublicProfilePage({
             </div>
           )}
 
-          <OtherAnswersDisclosure answers={otherAnswers} showReport={!isSelf} />
+          <OtherAnswersDisclosure
+            answers={otherAnswers}
+            showReport={!isSelf}
+            ownerPseudonym={profile.pseudonym}
+            isSelf={isSelf}
+          />
 
           {/* Pinned Dispatch — shown only when this person has pinned
               one, always ahead of their other recent writing. Never a

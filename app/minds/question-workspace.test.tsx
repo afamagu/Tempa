@@ -61,14 +61,16 @@ describe('QuestionWorkspace — "My answers" own-history view (Admin Phase 2A-1,
     expect(html).toContain('A visible answer body.')
   })
 
-  it('shows "Your primary Minds answer" only for the answer whose Question currently holds position #1 — never a manual "Show in Minds" toggle', () => {
+  // Onboarding & First-Use checkpoint (Section H) — "Your primary Minds
+  // answer" → "Your primary response," copy-only.
+  it('shows "Your primary response" only for the answer whose Question is currently Flagship — never a manual "Show in Minds" toggle', () => {
     const html = renderToStaticMarkup(<QuestionWorkspace tab="answers" answers={ANSWERED} />)
-    expect(html).toContain('Your primary Minds answer')
+    expect(html).toContain('Your primary response')
     expect(html).not.toContain('Show in Minds')
 
     const notPrimary: MyQuestionAnswer[] = [{ ...ANSWERED[0], isPrimary: false }]
     const htmlNotPrimary = renderToStaticMarkup(<QuestionWorkspace tab="answers" answers={notPrimary} />)
-    expect(htmlNotPrimary).not.toContain('Your primary Minds answer')
+    expect(htmlNotPrimary).not.toContain('Your primary response')
     expect(htmlNotPrimary).not.toContain('Show in Minds')
   })
 

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
+import { hasCompletedGuide } from '@/lib/guide'
 import {
   searchDispatches,
   getKeptUserIds,
@@ -13,6 +14,7 @@ import {
 } from '@/lib/dispatches'
 import { sectionTitleClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
+import FeatureIntroduction from '@/app/feature-introduction'
 import DispatchCard from './dispatch-card'
 import DispatchSearch from './dispatch-search'
 import KeepButton from './keep-button'
@@ -68,11 +70,12 @@ export default async function BoardPage({
   // fields they don't actually have; only a genuine board_feed_page
   // result (BoardFeedItem[]) carries those. Both branches still run
   // fully in parallel with the other two calls below.
-  const [waitingCount, keptUserIds, searchResults, boardFeedResult] = await Promise.all([
+  const [waitingCount, keptUserIds, searchResults, boardFeedResult, introSeen] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getKeptUserIds(supabase, user.id),
     query ? searchDispatches(supabase, query) : Promise.resolve(null),
     query ? Promise.resolve(null) : getBoardFeedPage(supabase, { sessionStartedAt: s!, seed: seed!, cursor: null }),
+    hasCompletedGuide(supabase, user.id, 'board'),
   ])
 
   const dispatches: DispatchListItem[] = query ? searchResults! : boardFeedResult!.items
@@ -98,6 +101,24 @@ export default async function BoardPage({
             </div>
             <WriteDispatchButton />
           </div>
+
+          {/* Onboarding & First-Use checkpoint — shown once, the first
+              time this member ever encounters the Board; dismissing it
+              marks 'board' complete in guide_completions. Replayable
+              later from You → Tempa Guide. */}
+          {!introSeen && (
+            <FeatureIntroduction guideKey="board" title="The Board" ctaLabel="See what's on the Board">
+              <p className="italic">Writing meant to be stumbled upon.</p>
+              <p>
+                Dispatches are public pieces Tempa members leave behind — stories, observations,
+                questions, things they&rsquo;ve been thinking about.
+              </p>
+              <p>
+                Read whatever catches you. If the person behind it interests you, you can visit
+                their profile or write to them privately.
+              </p>
+            </FeatureIntroduction>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DispatchSearch initialQuery={query} />

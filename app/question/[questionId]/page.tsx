@@ -21,7 +21,7 @@ export default async function QuestionWritePage({
   const question = await getQuestionById(supabase, questionId)
 
   if (!question) {
-    redirect('/minds?view=answer')
+    redirect('/you/responses?tab=new')
   }
 
   const [{ data: answer }, eligibleQuestions] = await Promise.all([

@@ -51,6 +51,7 @@ import {
 import { processImageForUpload } from '@/lib/image-processing'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
 import { getActivePostcards, type PostcardCatalogEntry } from '@/lib/postcards'
+import FeatureIntroduction from '@/app/feature-introduction'
 import type { LetterPostcardDraft } from '@/lib/moments'
 import { DispatchPhotoMoment } from './dispatch-photo-moment-node'
 import { MomentAffordance } from '@/app/letters/[letterId]/moment-affordance-extension'
@@ -172,6 +173,8 @@ export default function DispatchComposer({
   authorPseudonym = '',
   mode = 'create',
   existingDispatch,
+  showComposerIntro = false,
+  showPostcardIntro = false,
 }: {
   authorId: string
   /** Dispatch Postcards Checkpoint 2 — the author's CURRENT pseudonym,
@@ -183,6 +186,15 @@ export default function DispatchComposer({
   authorPseudonym?: string
   mode?: 'create' | 'edit'
   existingDispatch?: ExistingDispatchForEditing
+  /** Onboarding & First-Use checkpoint — server-resolved
+   * !hasCompletedGuide(...,'dispatch_composer'), passed down rather than
+   * fetched here (this is a client component). Create mode only — a
+   * member editing an existing Dispatch already knows how this works. */
+  showComposerIntro?: boolean
+  /** Same pattern, keyed 'postcard' — shown at the point of first
+   * activating the Postcard feature (the "Add a postcard" slot below),
+   * never pre-emptively before that. */
+  showPostcardIntro?: boolean
 }) {
   const isEdit = mode === 'edit' && Boolean(existingDispatch)
   const router = useRouter()
@@ -597,6 +609,25 @@ export default function DispatchComposer({
           </p>
         </div>
 
+        {/* Onboarding & First-Use checkpoint — shown once, the first
+            time this member attempts to write a Dispatch (create mode
+            only — an author editing an existing Dispatch already knows
+            how this works). Replayable later from You → Tempa Guide. */}
+        {!isEdit && showComposerIntro && (
+          <FeatureIntroduction
+            guideKey="dispatch_composer"
+            title="Leave something on the Board"
+            ctaLabel="Start writing"
+          >
+            <p>
+              A Dispatch is public writing. It might be a story from your day, something
+              you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something
+              worth putting into words.
+            </p>
+            <p>It doesn&rsquo;t need to sound important. It just needs to sound like you.</p>
+          </FeatureIntroduction>
+        )}
+
         <input
           type="text"
           value={title}
@@ -615,12 +646,30 @@ export default function DispatchComposer({
             no picker/change/remove control — via LetterheadPostcard
             directly, never this slot. */}
         {!isEdit && (
-          <PostcardComposerSlot
-            draft={postcardDraft}
-            catalogEntry={postcardCatalogEntry}
-            onAdd={() => setPostcardPickerOpen(true)}
-            onEdit={() => setPostcardEditorOpen(true)}
-          />
+          <>
+            {/* Onboarding & First-Use checkpoint — shown once, at the
+                point of first encountering the Postcard slot. Replayable
+                later from You → Tempa Guide. */}
+            {showPostcardIntro && !postcardDraft && (
+              <FeatureIntroduction
+                guideKey="postcard"
+                title="Send something from somewhere"
+                ctaLabel="Choose a Postcard"
+              >
+                <p>
+                  Postcards are little keepsakes you can tuck into a Letter or Dispatch. Choose
+                  one, write something on the front, then leave something more on the back for
+                  the reader to discover.
+                </p>
+              </FeatureIntroduction>
+            )}
+            <PostcardComposerSlot
+              draft={postcardDraft}
+              catalogEntry={postcardCatalogEntry}
+              onAdd={() => setPostcardPickerOpen(true)}
+              onEdit={() => setPostcardEditorOpen(true)}
+            />
+          </>
         )}
 
         {isEdit && existingDispatch?.postcard && (

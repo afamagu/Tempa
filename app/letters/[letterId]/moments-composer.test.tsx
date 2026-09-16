@@ -332,3 +332,50 @@ describe('MomentsComposer — Moment menu anchored to the tapped control', () =>
     expect(source).toContain('onCancel={() => setOpenPicker(null)}')
   })
 })
+
+// Onboarding & First-Use checkpoint (Checkpoint 2B, Section A) — the
+// Letter composer's own Postcard first-encounter, completing the
+// cross-surface contract the Dispatch composer already has
+// (app/board/dispatch-composer.tsx). Same shared 'postcard' guide key,
+// same FeatureIntroduction component, never a second 'letter_postcard'
+// key or a duplicated introduction implementation.
+describe('MomentsComposer — Postcard FeatureIntroduction (cross-surface first encounter)', () => {
+  it('shows the Postcard introduction when showPostcardIntro is true and the slot is actually usable (momentsQualified)', () => {
+    const html = renderComposer({ showPostcardIntro: true, momentsQualified: true })
+    expect(html).toContain('Send something from somewhere')
+    expect(html).toContain('Choose a Postcard')
+  })
+
+  it('never shows it when showPostcardIntro is false — the default, matching "not seen yet" being unknown until the caller resolves it', () => {
+    const html = renderComposer({ momentsQualified: true })
+    expect(html).not.toContain('Send something from somewhere')
+  })
+
+  it('never shows it while the Postcard slot itself is not yet usable (momentsQualified false) — never globally on every composer render', () => {
+    const html = renderComposer({ showPostcardIntro: true, momentsQualified: false })
+    expect(html).not.toContain('Send something from somewhere')
+  })
+
+  it('uses the exact same FeatureIntroduction component and guide key as the Dispatch composer — never a duplicated implementation or a second key', () => {
+    expect(source).toContain("import FeatureIntroduction from '@/app/feature-introduction'")
+    expect(source).toContain('guideKey="postcard"')
+    expect(source).not.toContain('letter_postcard')
+    expect(source).not.toMatch(/function\s+FeatureIntroduction/)
+  })
+
+  it('is positioned before the Postcard slot itself, at the point of first encountering it', () => {
+    const introIndex = source.indexOf('guideKey="postcard"')
+    const slotIndex = source.indexOf('<PostcardComposerSlot')
+    expect(introIndex).toBeGreaterThan(-1)
+    expect(slotIndex).toBeGreaterThan(introIndex)
+  })
+
+  it('never alters Postcard artwork/catalogue/sending mechanics or Letter sending/correspondence mechanics — no new query, RPC, or send-path change introduced by this addition', () => {
+    const introStart = source.indexOf('guideKey="postcard"')
+    const introEnd = source.indexOf('<PostcardComposerSlot', introStart)
+    const introBlock = source.slice(introStart, introEnd)
+    expect(introBlock).not.toContain('.rpc(')
+    expect(introBlock).not.toContain('write_letter')
+    expect(introBlock).not.toContain('getActivePostcards')
+  })
+})

@@ -25,6 +25,32 @@ describe('hasCompletedGuide', () => {
     // Same guide key, different user -> still not completed.
     expect(await hasCompletedGuide(client(supabase), 'user-2', 'minds')).toBe(false)
   })
+
+  // Onboarding & First-Use checkpoint — the four new FeatureIntroduction
+  // keys (people/board/dispatch_composer/postcard) are plain additions
+  // to the free-text GuideKey union, reusing the exact same
+  // guide_completions table/RPC-free INSERT path as 'moments'/'minds' —
+  // no new SQL, no new persistence system. These prove that.
+  it('the new FeatureIntroduction guide keys round-trip through the same guide_completions mechanism as the existing walkthroughs', async () => {
+    const supabase = createFakeSupabase({ user: { id: 'user-1' } })
+    for (const key of ['people', 'board', 'dispatch_composer', 'postcard'] as const) {
+      expect(await hasCompletedGuide(client(supabase), 'user-1', key)).toBe(false)
+      const { error } = await markGuideCompleted(client(supabase), key)
+      expect(error).toBeNull()
+      expect(await hasCompletedGuide(client(supabase), 'user-1', key)).toBe(true)
+    }
+  })
+
+  it('the four new keys remain fully independent of each other and of the existing walkthroughs', async () => {
+    const supabase = createFakeSupabase({ user: { id: 'user-1' } })
+    await markGuideCompleted(client(supabase), 'people')
+    expect(await hasCompletedGuide(client(supabase), 'user-1', 'people')).toBe(true)
+    expect(await hasCompletedGuide(client(supabase), 'user-1', 'board')).toBe(false)
+    expect(await hasCompletedGuide(client(supabase), 'user-1', 'dispatch_composer')).toBe(false)
+    expect(await hasCompletedGuide(client(supabase), 'user-1', 'postcard')).toBe(false)
+    expect(await hasCompletedGuide(client(supabase), 'user-1', 'minds')).toBe(false)
+    expect(await hasCompletedGuide(client(supabase), 'user-1', 'moments')).toBe(false)
+  })
 })
 
 describe('markGuideCompleted', () => {

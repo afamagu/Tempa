@@ -5,12 +5,20 @@ import { getWaitingLetterCount } from '@/lib/letters'
 import { sectionTitleClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 
-// Deliberately small — one guide exists today. Architected so future
-// guides (First letters, Photos & trust, Postcards, Closing a
-// correspondence, Safety) are additional rows here, not a redesign.
+// Deliberately small — architected so future guides (First letters,
+// Photos & trust, Closing a correspondence, Safety) are additional rows
+// here, not a redesign. Onboarding & First-Use checkpoint — the four
+// lightweight FeatureIntroduction rows below (People/Board/Dispatch
+// composer/Postcard) are exactly this kind of addition: same list,
+// same shape, each just replaying a small quiet introduction instead of
+// a full walkthrough.
 const GUIDES = [
   { key: 'minds', title: 'Welcome to Minds', href: '/you/guide/minds' },
   { key: 'moments', title: 'Writing with Moments', href: '/you/guide/moments' },
+  { key: 'people', title: 'People worth writing to', href: '/you/guide/people' },
+  { key: 'board', title: 'The Board', href: '/you/guide/board' },
+  { key: 'dispatch_composer', title: 'Leave something on the Board', href: '/you/guide/dispatch-composer' },
+  { key: 'postcard', title: 'Send something from somewhere', href: '/you/guide/postcard' },
 ]
 
 export default async function TempaGuidePage() {

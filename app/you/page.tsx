@@ -55,6 +55,16 @@ export default async function YouPage() {
             View your profile
           </Link>
 
+          {/* Onboarding & First-Use checkpoint — People Information
+              Architecture: response management (formerly "My answers"/
+              "Answer a Question" tabs on /minds) now lives here. */}
+          <Link
+            href="/you/responses"
+            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
+          >
+            Your responses
+          </Link>
+
           <Link
             href="/you/keepsakes"
             className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"

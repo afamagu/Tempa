@@ -31,7 +31,12 @@ describe('DispatchComposer — initial render (editor not yet mounted)', () => {
   it('never uses any other composer\'s button vocabulary', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
     expect(html).not.toContain('Send letter')
-    expect(html).not.toContain('Save answer')
+    // Onboarding & First-Use checkpoint — the Question composer's own
+    // button relabeled "Save answer" → "Save response" (terminology
+    // pass, Section H); this assertion follows that rename so it keeps
+    // proving genuine cross-composer separation rather than trivially
+    // passing against retired copy.
+    expect(html).not.toContain('Save response')
     expect(html).not.toMatch(/>Post</)
     expect(html).not.toMatch(/>Submit</)
   })
@@ -190,5 +195,57 @@ describe('DispatchComposer — Postcard (Checkpoint 2)', () => {
     expect(html).not.toContain('Change postcard')
     expect(html).not.toContain('>Remove<')
     expect(html).not.toContain('Add a postcard')
+  })
+})
+
+// Onboarding & First-Use checkpoint — the Dispatch composer + Postcard
+// FeatureIntroductions, server-resolved and passed down as plain
+// booleans (app/board/write/page.tsx), so both ARE directly
+// prop-testable here without needing a mounted editor.
+describe('DispatchComposer — FeatureIntroduction wiring', () => {
+  it('shows the composer introduction only when showComposerIntro is true', () => {
+    const shown = renderToStaticMarkup(<DispatchComposer authorId="author-1" showComposerIntro />)
+    expect(shown).toContain('Leave something on the Board')
+    expect(shown).toContain('Start writing')
+
+    const hidden = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
+    expect(hidden).not.toContain('Leave something on the Board')
+  })
+
+  it('shows the Postcard introduction only when showPostcardIntro is true and no Postcard is already drafted', () => {
+    const shown = renderToStaticMarkup(<DispatchComposer authorId="author-1" showPostcardIntro />)
+    expect(shown).toContain('Send something from somewhere')
+    expect(shown).toContain('Choose a Postcard')
+
+    const hidden = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
+    expect(hidden).not.toContain('Send something from somewhere')
+  })
+
+  it('neither introduction renders in edit mode — an author editing an existing Dispatch already knows how this works', () => {
+    const html = renderToStaticMarkup(
+      <DispatchComposer
+        authorId="author-1"
+        mode="edit"
+        showComposerIntro
+        showPostcardIntro
+        existingDispatch={{
+          id: 'd-1',
+          title: 'A title',
+          body: 'A body.',
+          topics: [],
+          moments: [],
+          postcard: null,
+        }}
+      />
+    )
+    expect(html).not.toContain('Leave something on the Board')
+    expect(html).not.toContain('Send something from somewhere')
+  })
+
+  it('both introductions use the shared FeatureIntroduction card (clay-free, accent-bordered), never inline TempaNote treatment', () => {
+    const html = renderToStaticMarkup(
+      <DispatchComposer authorId="author-1" showComposerIntro showPostcardIntro />
+    )
+    expect(html).toMatch(/rounded-lg border border-accent\/20/)
   })
 })

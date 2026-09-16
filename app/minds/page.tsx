@@ -7,11 +7,12 @@ import {
   getActiveCorrespondencePartnerIds,
   getContactedAnswerIds,
 } from '@/lib/letters'
-import { sectionTitleClass, helperTextClass, secondaryButtonClass, pillClass } from '@/app/profile/ui'
+import { hasCompletedGuide } from '@/lib/guide'
+import { sectionTitleClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
+import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from './filter-disclosure'
 import DiscoveryResults, { type DiscoveryEntry } from './discovery-results'
-import QuestionWorkspace from './question-workspace'
 import QuestionIncompleteNotice from './question-incomplete-notice'
 
 const BATCH_SIZE = 6
@@ -58,51 +59,17 @@ function buildQuery(params: {
   return query.toString()
 }
 
-type MindsView = 'explore' | 'answers' | 'answer'
-
-// A small, quiet dot — never a count, never urgent-red — the
-// persistent half of the non-blocking Question-completion nudge (see
-// QuestionIncompleteNotice for the openable, dismissible half).
-function IncompleteDot() {
-  return (
-    <span
-      aria-hidden="true"
-      className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle"
-    />
-  )
-}
-
-function MindsTabs({ view, needsAnswer }: { view: MindsView; needsAnswer: boolean }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Link href="/minds" className={pillClass(view === 'explore')}>
-        Explore
-      </Link>
-      <Link href="/minds?view=answers" className={pillClass(view === 'answers')}>
-        My answers
-      </Link>
-      <Link href="/minds?view=answer" className={pillClass(view === 'answer')}>
-        Answer a Question
-        {needsAnswer && <IncompleteDot />}
-      </Link>
-    </div>
-  )
-}
-
 export default async function MindsPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    view?: string
     country?: string
     gender?: string
     age?: string
     batch?: string
   }>
 }) {
-  const { view: viewParam, country, gender, age, batch: batchParam } = await searchParams
-  const view: MindsView =
-    viewParam === 'answers' ? 'answers' : viewParam === 'answer' ? 'answer' : 'explore'
+  const { country, gender, age, batch: batchParam } = await searchParams
   const batch = Math.max(0, Number(batchParam) || 0)
 
   const supabase = await createClient()
@@ -114,35 +81,20 @@ export default async function MindsPage({
     redirect('/sign-in')
   }
 
-  const [waitingCount, eligibleQuestions, myAnswers] = await Promise.all([
+  const [waitingCount, eligibleQuestions, myAnswers, introSeen] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getEligibleQuestions(supabase, user.id),
     getMyAnswers(supabase, user.id),
+    hasCompletedGuide(supabase, user.id, 'people'),
   ])
-  // Encouragement, never a gate: a quiet dot on the "Answer a Question"
-  // tab (both branches below) plus an openable, dismissible notice on
-  // Explore specifically (see QuestionIncompleteNotice) — replaces the
-  // old forced redirect into the Question flow, which discarded
-  // wherever the member actually meant to go.
+  // Encouragement, never a gate: an openable, dismissible notice (see
+  // QuestionIncompleteNotice) — replaces the old forced redirect into
+  // the Question flow, which discarded wherever the member actually
+  // meant to go. Response management itself (My responses/Answer a
+  // Question) now lives at /you/responses, not here — People is
+  // discovery-only (Onboarding & First-Use checkpoint, People
+  // Information Architecture).
   const needsAnswer = needsParticipationGate(eligibleQuestions.length, myAnswers.length)
-
-  if (view !== 'explore') {
-    return (
-      <AppShell active="minds" waitingLetterCount={waitingCount}>
-        <main className="min-h-screen flex justify-center p-6">
-          <div className="w-full max-w-2xl space-y-8 py-10">
-            <h1 className={sectionTitleClass}>Minds</h1>
-            <MindsTabs view={view} needsAnswer={needsAnswer} />
-            <QuestionWorkspace
-              tab={view === 'answer' ? 'new' : 'answers'}
-              questions={eligibleQuestions}
-              answers={myAnswers}
-            />
-          </div>
-        </main>
-      </AppShell>
-    )
-  }
 
   // Discovery's pool is strictly "answers to the current Flagship
   // Question," never is_current (member-choosable, and no longer what
@@ -240,8 +192,21 @@ export default async function MindsPage({
     <AppShell active="minds" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
         <div className="w-full max-w-2xl space-y-8 py-10">
-          <h1 className={sectionTitleClass}>Minds</h1>
-          <MindsTabs view={view} needsAnswer={needsAnswer} />
+          <h1 className={sectionTitleClass}>People</h1>
+
+          {/* Onboarding & First-Use checkpoint — shown once, the first
+              time this member ever encounters People; dismissing it
+              marks 'people' complete in guide_completions and it never
+              reappears. Replayable later from You → Tempa Guide. */}
+          {!introSeen && (
+            <FeatureIntroduction guideKey="people" title="People worth writing to" ctaLabel="Start exploring">
+              <p>
+                Tempa isn&rsquo;t about collecting followers. Take your time. Open someone&rsquo;s
+                profile, read a little of what they&rsquo;ve shared, and write when somebody
+                genuinely catches your attention.
+              </p>
+            </FeatureIntroduction>
+          )}
 
           {needsAnswer && <QuestionIncompleteNotice />}
 
@@ -264,11 +229,11 @@ export default async function MindsPage({
               <p className={helperTextClass}>
                 {poolExhausted
                   ? "You've seen everyone in this pool for now."
-                  : 'No answers match right now.'}
+                  : 'No responses match right now.'}
               </p>
               {!poolExhausted && (
                 <p className={helperTextClass}>
-                  Try widening your filters, or check back as more minds answer.
+                  Try widening your filters, or check back as more people respond.
                 </p>
               )}
             </div>

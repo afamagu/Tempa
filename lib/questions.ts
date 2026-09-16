@@ -281,8 +281,8 @@ export function needsParticipationGate(
  * is no longer what this copy announces.
  */
 export function questionSaveConfirmationCopy(isFlagship: boolean, hadExistingAnswer: boolean): string {
-  if (isFlagship && !hadExistingAnswer) return 'Saved. This is now your primary Minds answer.'
-  return 'Answer saved.'
+  if (isFlagship && !hadExistingAnswer) return 'Saved. This is now your primary response.'
+  return 'Response saved.'
 }
 
 export async function getQuestionById(

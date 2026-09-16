@@ -46,7 +46,7 @@ function AnsweredQuestionRow({ answer }: { answer: MyQuestionAnswer }) {
         </div>
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        {answer.isPrimary && <span className={helperTextClass}>Your primary Minds answer</span>}
+        {answer.isPrimary && <span className={helperTextClass}>Your primary response</span>}
         {/* Admin Phase 2A-1 — only ever true for the answer's own
             author (question_answers' RLS excludes a hidden row from
             everyone else entirely); a calm, private notice, never a
@@ -101,7 +101,7 @@ export default function QuestionWorkspace({
       return (
         <div className="space-y-4">
           <p className={helperTextClass}>You haven&apos;t answered a Question yet.</p>
-          <Link href="/minds?view=answer" className={quietLinkClass}>
+          <Link href="/you/responses?tab=new" className={quietLinkClass}>
             Answer a new Question
           </Link>
         </div>
@@ -124,6 +124,11 @@ export default function QuestionWorkspace({
           Choose whichever gives you the best opportunity to say something real.
         </p>
       </div>
+      {/* Onboarding & First-Use checkpoint — People Information
+          Architecture: this component's own two tabs (host-controlled
+          via the `tab` prop) now live at /you/responses instead of as a
+          third co-equal Minds/People tab (see that route's own doc
+          comment). Nothing in this component's own internals changed. */}
       {questions.length === 0 ? (
         <p className={helperTextClass}>Nothing new to answer right now — check back later.</p>
       ) : (

@@ -26,6 +26,31 @@ function mobileNavHtml(html: string): string {
   return html.slice(start)
 }
 
+// Onboarding & First-Use checkpoint (Section E) — the primary
+// user-visible navigation/discovery noun is now "People," never "Minds"
+// — the route itself (`/minds`) is deliberately unchanged (see this
+// component's own doc comment and app/minds/page.tsx).
+describe('AppShell — People rename (Onboarding & First-Use checkpoint)', () => {
+  it('the "minds" nav item is labeled People, not Minds, in both the desktop sidebar and mobile bar', () => {
+    const html = renderToStaticMarkup(
+      <AppShell active="minds" waitingLetterCount={0}>
+        <div>content</div>
+      </AppShell>
+    )
+    expect(html).not.toContain('>Minds<')
+    expect((html.match(/>People</g) ?? []).length).toBe(2)
+  })
+
+  it('the underlying route stays /minds — only the visible label changed', () => {
+    const html = renderToStaticMarkup(
+      <AppShell active="minds" waitingLetterCount={0}>
+        <div>content</div>
+      </AppShell>
+    )
+    expect(html).toContain('href="/minds"')
+  })
+})
+
 describe('AppShell — mobile bottom nav active-location treatment', () => {
   it.each(NAV_KEYS)('marks exactly the %s nav item active when that key is the active prop', (activeKey) => {
     const html = renderToStaticMarkup(

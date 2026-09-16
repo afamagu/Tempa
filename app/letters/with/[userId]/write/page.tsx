@@ -9,6 +9,7 @@ import {
   isPhotoDecisionOutstandingForUser,
   resolveReplyToId,
 } from '@/lib/letters'
+import { hasCompletedGuide } from '@/lib/guide'
 import { helperTextClass, secondaryButtonClass, systemHeadingClass } from '@/app/profile/ui'
 import MomentsComposer from '@/app/letters/[letterId]/moments-composer'
 
@@ -137,13 +138,19 @@ export default async function WriteToPersonPage({
     user.id
   )
 
-  const [lockedElsewhere, momentsQualified] = await Promise.all([
+  const [lockedElsewhere, momentsQualified, postcardIntroSeen] = await Promise.all([
     getFirstLockedPhotoLetterMoment(supabase, correspondence.id),
     // Distinct from establishedForViewer above: Write Anytime access to
     // THIS composer only requires establishment; whether a Moment may
     // actually be attached in it needs Letter 2 to have delivered too.
     // See isMomentsQualifiedForViewer's own doc comment (lib/letters.ts).
     isMomentsQualifiedForViewer(supabase, correspondence.id),
+    // Onboarding & First-Use checkpoint (Checkpoint 2B, Section A) — the
+    // SAME 'postcard' guide_completions key the Dispatch composer's own
+    // Postcard slot uses (app/board/write/page.tsx) — Postcard is one
+    // cross-surface feature, taught once on whichever surface a member
+    // reaches it first, never a second surface-specific guide key.
+    hasCompletedGuide(supabase, user.id, 'postcard'),
   ])
   const reviewPhotoHref = lockedElsewhere
     ? `/letters/${lockedElsewhere.letterId}#locked-photo-${lockedElsewhere.momentId}`
@@ -176,6 +183,7 @@ export default async function WriteToPersonPage({
             recipientPseudonym={profile.pseudonym}
             senderPseudonym={myPseudonym}
             cancelHref={cancelHref}
+            showPostcardIntro={!postcardIntroSeen}
           />
         </div>
       </div>

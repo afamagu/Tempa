@@ -5,9 +5,9 @@ import QuestionIncompleteNotice from './question-incomplete-notice'
 describe('QuestionIncompleteNotice', () => {
   it('uses the established tone — no guilt, streaks, or urgency — with a clear CTA and a Not now dismissal', () => {
     const html = renderToStaticMarkup(<QuestionIncompleteNotice />)
-    expect(html).toContain("Share your answer when you&#x27;re ready.")
+    expect(html).toContain("Share your response when you&#x27;re ready.")
     expect(html).toContain('It helps other minds discover you.')
-    expect(html).toContain('href="/minds?view=answer"')
+    expect(html).toContain('href="/you/responses?tab=new"')
     expect(html).toContain('Not now')
   })
 

@@ -51,6 +51,7 @@ export default function QuestionAnswer({
   isFlagship = false,
   isActive = true,
   nextQuestion = null,
+  onboarding = false,
 }: {
   userId: string
   questionId: string
@@ -71,6 +72,19 @@ export default function QuestionAnswer({
    * there's a saved answer to show (never during active editing, so
    * Next can't discard unsaved text). */
   nextQuestion?: LibraryQuestion | null
+  /** Onboarding & First-Use checkpoint — true ONLY when reached via the
+   * new required-first-Question onboarding step (app/profile/question/
+   * page.tsx), never via the ordinary /question/[questionId] route.
+   * Adds the three-Question education copy before a genuinely first
+   * save, and swaps the normal post-save "view" buttons for the
+   * onboarding completion state (Meet some people / Answer another
+   * Question) — but ONLY immediately after a fresh save this visit
+   * (gated on `confirmation`, same as the existing save-confirmation
+   * text below). A later revisit to this same page (no fresh
+   * `confirmation`) falls through to the ordinary view-mode UI
+   * unchanged — this is a one-time onboarding moment, not a permanent
+   * alternate mode for the Flagship Question. */
+  onboarding?: boolean
 }) {
   const router = useRouter()
 
@@ -196,7 +210,44 @@ export default function QuestionAnswer({
           <h1 className={promptClass}>{prompt}</h1>
         </div>
 
-        {mode === 'view' && publishedBody ? (
+        {mode === 'view' && publishedBody && onboarding && confirmation ? (
+          // Onboarding & First-Use checkpoint — the one-time completion
+          // moment immediately after a member's very first (Flagship)
+          // response saves. Gated on `confirmation` (never restored from
+          // a page load, same as the ordinary save-confirmation text) so
+          // a LATER revisit to this exact page falls through to the
+          // ordinary view-mode branch below, unchanged.
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <h2 className={proseSubheadingClass}>That&rsquo;s your first response.</h2>
+              <p className={helperTextClass}>
+                You can answer the other two whenever you feel like it. For now, there are people
+                to meet.
+              </p>
+              <div className="rounded-md bg-surface-shell p-4 sm:p-5">
+                <p className={`whitespace-pre-wrap ${proseBodyClass}`}>{publishedBody}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/minds" className={primaryButtonClass}>
+                Meet some people
+              </Link>
+              {/* "Use the existing Question infrastructure for the
+                  secondary path" — the same nextQuestion the ordinary
+                  view-mode Next button already resolves server-side, no
+                  second lookup. */}
+              {nextQuestion ? (
+                <Link href={`/question/${nextQuestion.id}`} className={secondaryButtonClass}>
+                  Answer another Question
+                </Link>
+              ) : (
+                <Link href="/you/responses?tab=new" className={secondaryButtonClass}>
+                  Answer another Question
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : mode === 'view' && publishedBody ? (
           <div className="space-y-8">
             <div className="space-y-4">
               {confirmation && <p className={helperTextClass}>{confirmation}</p>}
@@ -210,8 +261,8 @@ export default function QuestionAnswer({
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/minds?view=answers" className={secondaryButtonClass}>
-                Back to my answers
+              <Link href="/you/responses" className={secondaryButtonClass}>
+                Back to my responses
               </Link>
               {/* Editable regardless of isActive: "no longer open" governs
                   whether a NEW answer can be started, not whether a
@@ -225,7 +276,7 @@ export default function QuestionAnswer({
                 }}
                 className={secondaryButtonClass}
               >
-                Edit answer
+                Edit response
               </button>
               {/* Only reachable once there's a saved answer on screen —
                   never during active editing, so Next can never discard
@@ -242,12 +293,36 @@ export default function QuestionAnswer({
             <p className={helperTextClass}>
               This Question is no longer open, and you haven&apos;t answered it.
             </p>
-            <Link href="/minds?view=answers" className={secondaryButtonClass}>
-              Back to my answers
+            <Link href="/you/responses" className={secondaryButtonClass}>
+              Back to my responses
             </Link>
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Onboarding & First-Use checkpoint — the three-Question
+                education, shown ONLY before a member's genuinely first
+                save (never when re-editing an existing response later,
+                even if reached through the onboarding route in that
+                edge case). */}
+            {onboarding && !hadExistingAnswer && (
+              <div className="space-y-2 border-l-2 border-clay/50 pl-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">
+                  One last thing before you meet everyone
+                </p>
+                <div className={`italic ${helperTextClass}`}>
+                  <p>
+                    Tempa gives you three Questions designed to reveal a little more than a
+                    profile ever could.
+                  </p>
+                  <p className="mt-2">
+                    Your responses give people something real to discover — and sometimes the
+                    beginning of a letter.
+                  </p>
+                  <p className="mt-2">Start with this one. The other two can wait.</p>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-1 border-b border-foreground/10 pb-2">
               <EmojiPicker onSelect={insertEmoji} />
             </div>
@@ -268,16 +343,23 @@ export default function QuestionAnswer({
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <div className="flex flex-wrap gap-3">
-              <Link href="/minds?view=answers" className={secondaryButtonClass}>
-                Back to my answers
-              </Link>
+              {/* No "back" escape hatch during the required first-time
+                  onboarding save — explained from the start as the final
+                  onboarding step (Section B), never a second forced
+                  intercept elsewhere; this is simply not offering a
+                  bypass ON this one page. */}
+              {!(onboarding && !hadExistingAnswer) && (
+                <Link href="/you/responses" className={secondaryButtonClass}>
+                  Back to my responses
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handlePublish}
                 disabled={!canPublish}
                 className={primaryButtonClass}
               >
-                {saving ? 'Saving…' : 'Save answer'}
+                {saving ? 'Saving…' : 'Save response'}
               </button>
             </div>
           </div>

@@ -49,6 +49,45 @@ function validatePseudonym(raw: string) {
   return { valid: true, value, message: '' }
 }
 
+// Onboarding & First-Use checkpoint (Section K) — one specific, human
+// message per required section, in the exact top-to-bottom DOM order
+// the fields themselves render in, so "the first incomplete
+// requirement" (both for the returned object's key order — plain
+// string keys iterate in insertion order — and for scrollToField below)
+// is unambiguous. Pseudonym is deliberately NOT included here: it
+// already has its own real-time, specific validation path above,
+// checked separately and first in handleSubmit.
+export type RequiredFieldKey =
+  | 'country'
+  | 'age'
+  | 'languages'
+  | 'intent'
+  | 'interests'
+  | 'writingStyle'
+  | 'receiving'
+
+export function validateRequiredFields(state: {
+  country: string
+  ageRange: string
+  languages: string[]
+  intentSelections: string[]
+  readingInterestsCount: number
+  aiPreference: string
+  receivingPreference: string
+}): Partial<Record<RequiredFieldKey, string>> {
+  const errors: Partial<Record<RequiredFieldKey, string>> = {}
+  if (!state.country) errors.country = 'Choose your country.'
+  if (!state.ageRange) errors.age = 'Choose your age range.'
+  if (state.languages.length === 0) errors.languages = 'Add at least one language.'
+  if (state.intentSelections.length === 0) errors.intent = 'Choose what brings you to Tempa.'
+  if (!isReadingInterestsCountValidForNewProfile(state.readingInterestsCount)) {
+    errors.interests = `Choose at least ${MIN_RECOMMENDED_INTERESTS} things you enjoy reading about (up to ${MAX_INTERESTS}).`
+  }
+  if (!state.aiPreference) errors.writingStyle = 'Choose how you usually write your letters.'
+  if (!state.receivingPreference) errors.receiving = "Choose what you're comfortable receiving."
+  return errors
+}
+
 export default function ProfileForm({ userId }: { userId: string }) {
   const router = useRouter()
 
@@ -70,8 +109,32 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<RequiredFieldKey, string>>>({})
 
   const checkIdRef = useRef(0)
+  const pseudonymFieldRef = useRef<HTMLInputElement | null>(null)
+  const fieldRefs = useRef<Partial<Record<RequiredFieldKey, HTMLDivElement | null>>>({})
+
+  function registerFieldRef(key: RequiredFieldKey) {
+    return (el: HTMLDivElement | null) => {
+      fieldRefs.current[key] = el
+    }
+  }
+
+  // Scrolls to, and best-effort focuses, the first incomplete
+  // requirement — "move/focus/scroll to the first incomplete
+  // requirement where technically appropriate" (Section K). A plain
+  // container scroll (never a full input-level ref) since several
+  // required fields render through custom controls (SearchableSelect/
+  // ChoiceGroup) that don't necessarily forward a ref of their own; the
+  // first focusable element inside that container is still a real,
+  // useful focus target for keyboard/screen-reader users.
+  function scrollToField(key: RequiredFieldKey) {
+    const el = fieldRefs.current[key]
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.querySelector<HTMLElement>('input, button, [tabindex]')?.focus()
+  }
 
   const regionOptions = useMemo(() => getRegionOptions(country), [country])
   const hasStructuredRegions = regionOptions.length > 0
@@ -156,24 +219,30 @@ export default function ProfileForm({ userId }: { userId: string }) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setFormError(null)
+    setFieldErrors({})
 
     const { valid, value, message } = validatePseudonym(pseudonym)
     if (!valid) {
       setPseudonymStatus('invalid')
       setFormError(message)
+      pseudonymFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      pseudonymFieldRef.current?.focus()
       return
     }
 
-    if (
-      !country ||
-      !ageRange ||
-      languages.length === 0 ||
-      intentSelections.length === 0 ||
-      !isReadingInterestsCountValidForNewProfile(readingInterests.length) ||
-      !aiPreference ||
-      !receivingPreference
-    ) {
-      setFormError('Please fill in the required fields.')
+    const errors = validateRequiredFields({
+      country,
+      ageRange,
+      languages,
+      intentSelections,
+      readingInterestsCount: readingInterests.length,
+      aiPreference,
+      receivingPreference,
+    })
+    const firstInvalidKey = (Object.keys(errors) as RequiredFieldKey[])[0]
+    if (firstInvalidKey) {
+      setFieldErrors(errors)
+      scrollToField(firstInvalidKey)
       return
     }
 
@@ -267,7 +336,16 @@ export default function ProfileForm({ userId }: { userId: string }) {
       await setProfileInterests(supabase, readingInterests)
     }
 
-    router.push('/home')
+    // Onboarding & First-Use checkpoint — the required Flagship Question
+    // is now the final onboarding step, not a later soft nudge on Home
+    // (Section A/B). This is the ONLY place that changes: a brand-new
+    // member has just inserted their first profiles row, so this is the
+    // one moment "new onboarding" can be distinguished from "an existing
+    // member returning" without any schema/heuristic at all — an
+    // existing member never reaches this handler again (app/profile/
+    // page.tsx already redirects them straight to /home once a profiles
+    // row exists, unchanged).
+    router.push('/profile/question')
     router.refresh()
   }
 
@@ -278,9 +356,9 @@ export default function ProfileForm({ userId }: { userId: string }) {
           <p className="font-serif text-xs italic tracking-[0.2em] text-muted">
             Tempa
           </p>
-          <h1 className="font-serif text-2xl font-medium">Choose your name</h1>
+          <h1 className="font-serif text-2xl font-medium">Choose your name on Tempa</h1>
           <p className="text-sm text-muted">
-            This is the name other minds will know you by.
+            This is the name other members will know you by.
           </p>
         </div>
 
@@ -290,18 +368,21 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
             <div className="space-y-1.5">
               <label htmlFor="pseudonym" className={fieldLabelClass}>
-                Your name
+                Name on Tempa
               </label>
               <input
                 id="pseudonym"
+                ref={pseudonymFieldRef}
                 value={pseudonym}
                 onChange={(e) => setPseudonym(e.target.value)}
                 placeholder="e.g. Quiet Harbor"
                 autoComplete="off"
+                aria-invalid={pseudonymStatus === 'invalid' || pseudonymStatus === 'taken'}
                 className={inputClass}
               />
               <p className={helperTextClass}>
-                3–24 characters. Letters, numbers, spaces, or hyphens.
+                How you&rsquo;d like to be known here. Your first name, a nickname, initials or a
+                pen name all work — 3–24 characters, letters, numbers, spaces, or hyphens.
               </p>
 
               {pseudonymStatus === 'invalid' && formError === null && (
@@ -338,7 +419,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('country')}>
               <label htmlFor="country" className={fieldLabelClass}>
                 Country
               </label>
@@ -349,6 +430,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 options={COUNTRY_OPTIONS}
                 placeholder="Search countries"
               />
+              {fieldErrors.country && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.country}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -382,7 +468,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('age')}>
               <p className={fieldLabelClass}>Age range</p>
               <ChoiceGroup
                 ariaLabel="Age range"
@@ -391,9 +477,14 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 onToggle={setAgeRange}
                 layout="pill"
               />
+              {fieldErrors.age && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.age}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('languages')}>
               <label htmlFor="languages" className={fieldLabelClass}>
                 Languages
               </label>
@@ -405,6 +496,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 placeholder="Search languages"
                 allowCustom
               />
+              {fieldErrors.languages && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.languages}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -436,7 +532,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
           <section className="space-y-3">
             <p className={sectionLabelClass}>What brings you here?</p>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('intent')}>
               <p className={helperTextClass}>Choose as many as feel true.</p>
               <ChoiceGroup
                 ariaLabel="What brings you here?"
@@ -454,13 +550,18 @@ export default function ProfileForm({ userId }: { userId: string }) {
                   className={inputClass}
                 />
               )}
+              {fieldErrors.intent && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.intent}
+                </p>
+              )}
             </div>
           </section>
 
           <section className="space-y-3">
             <p className={sectionLabelClass}>What do you love reading about?</p>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('interests')}>
               <p className={helperTextClass}>
                 Choose at least {MIN_RECOMMENDED_INTERESTS}. You can change these anytime.
               </p>
@@ -471,13 +572,18 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 onToggle={toggleInterest}
                 layout="pill"
               />
+              {fieldErrors.interests && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.interests}
+                </p>
+              )}
             </div>
           </section>
 
           <section className="space-y-6">
             <p className={sectionLabelClass}>Your correspondence</p>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('writingStyle')}>
               <p className={fieldLabelClass}>
                 How do you usually write your letters?
               </p>
@@ -488,9 +594,14 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 onToggle={setAiPreference}
                 layout="card"
               />
+              {fieldErrors.writingStyle && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.writingStyle}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" ref={registerFieldRef('receiving')}>
               <p className={fieldLabelClass}>
                 What are you comfortable receiving?
               </p>
@@ -501,6 +612,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 onToggle={setReceivingPreference}
                 layout="pill"
               />
+              {fieldErrors.receiving && (
+                <p className="text-xs text-red-600" role="alert">
+                  {fieldErrors.receiving}
+                </p>
+              )}
             </div>
           </section>
 

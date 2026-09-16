@@ -5,7 +5,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // need a migration to add. 'moments' and 'minds' exist today, tracked
 // as fully independent completions — finishing one never marks the
 // other, and neither is ever recurring once completed.
-export type GuideKey = 'moments' | 'minds'
+//
+// Onboarding & First-Use checkpoint — 'people'/'board'/'dispatch_
+// composer'/'postcard' added for the new lightweight FeatureIntroduction
+// system (app/feature-introduction.tsx). Same guide_completions table,
+// same free-text column, zero SQL — this is exactly the extensibility
+// this type's own original comment anticipated. Each is a small, quiet,
+// point-of-first-encounter introduction, never the full walkthrough
+// treatment 'moments'/'minds' get.
+export type GuideKey = 'moments' | 'minds' | 'people' | 'board' | 'dispatch_composer' | 'postcard'
 
 export type GuideWriteError = { message: string; code?: string } | null
 
