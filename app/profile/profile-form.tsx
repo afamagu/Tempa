@@ -23,6 +23,13 @@ import {
   helperTextClass,
   fieldLabelClass,
 } from './ui'
+import {
+  INTEREST_TAXONOMY,
+  MIN_RECOMMENDED_INTERESTS,
+  MAX_INTERESTS,
+  isReadingInterestsCountValidForNewProfile,
+} from '@/lib/interests'
+import { setProfileInterests } from '@/lib/profile-interests'
 
 type PseudonymStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken'
 
@@ -57,6 +64,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
   const [genderCustom, setGenderCustom] = useState('')
   const [intentSelections, setIntentSelections] = useState<string[]>([])
   const [intentOther, setIntentOther] = useState('')
+  const [readingInterests, setReadingInterests] = useState<string[]>([])
   const [aiPreference, setAiPreference] = useState('')
   const [receivingPreference, setReceivingPreference] = useState('')
 
@@ -133,6 +141,18 @@ export default function ProfileForm({ userId }: { userId: string }) {
     )
   }
 
+  /** Never blocks a selection outright at the cap — a silent no-op
+   * past MAX_INTERESTS reads more calmly than a disabled/greyed chip
+   * the reader has to figure out why it won't respond; the helper text
+   * beneath the group already explains the limit. */
+  function toggleInterest(key: string) {
+    setReadingInterests((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key)
+      if (prev.length >= MAX_INTERESTS) return prev
+      return [...prev, key]
+    })
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setFormError(null)
@@ -149,6 +169,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
       !ageRange ||
       languages.length === 0 ||
       intentSelections.length === 0 ||
+      !isReadingInterestsCountValidForNewProfile(readingInterests.length) ||
       !aiPreference ||
       !receivingPreference
     ) {
@@ -236,6 +257,14 @@ export default function ProfileForm({ userId }: { userId: string }) {
         )
       }
       return
+    }
+
+    // Best-effort, never blocks account creation: a failure here (e.g.
+    // a transient network error) still leaves the member with a fully
+    // usable account and the Phase 2A Board experience — they can
+    // always add reading interests later from /you/interests.
+    if (readingInterests.length > 0) {
+      await setProfileInterests(supabase, readingInterests)
     }
 
     router.push('/home')
@@ -425,6 +454,23 @@ export default function ProfileForm({ userId }: { userId: string }) {
                   className={inputClass}
                 />
               )}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <p className={sectionLabelClass}>What do you love reading about?</p>
+
+            <div className="space-y-1.5">
+              <p className={helperTextClass}>
+                Choose at least {MIN_RECOMMENDED_INTERESTS}. You can change these anytime.
+              </p>
+              <ChoiceGroup
+                ariaLabel="What do you love reading about?"
+                options={INTEREST_TAXONOMY.map((i) => ({ value: i.key, label: i.label }))}
+                selected={readingInterests}
+                onToggle={toggleInterest}
+                layout="pill"
+              />
             </div>
           </section>
 

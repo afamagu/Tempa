@@ -1,3 +1,5 @@
+import { dispatchMatchesInterests } from '../interests'
+
 // A minimal Supabase-client stand-in for exactly the query shapes
 // lib/dispatches.ts issues against dispatches, dispatch_topics,
 // public_profiles, kept_minds, and dispatch_views.
@@ -84,6 +86,16 @@ export type FakeCorrespondenceRow = {
   established_at?: string | null
 }
 
+/** Board Personalization Phase 2B — mirrors public.profile_interests
+ * (docs/sql/2026-09-27-topical-interests.sql). One row per (viewer,
+ * selected interest key) — no session-stability rule, matching the
+ * real table's own reasoning (an Interest selection is never treated
+ * as a relationship signal). */
+export type FakeProfileInterestRow = {
+  viewer_user_id: string
+  interest_key: string
+}
+
 export type FakeShareRow = { id: string; dispatch_id: string; revoked_at: string | null }
 export type FakeMomentRow = { id: string; dispatch_id: string; position: number; image_path: string }
 /** Safety & Trust Checkpoint 1B/1C: mirrors blocked_users' shape —
@@ -165,6 +177,7 @@ export function createFakeDispatches(options: {
   kept?: FakeKeptRow[]
   views?: FakeViewRow[]
   correspondences?: FakeCorrespondenceRow[]
+  profileInterests?: FakeProfileInterestRow[]
   shares?: FakeShareRow[]
   moments?: FakeMomentRow[]
   blocked?: FakeBlockRow[]
@@ -183,6 +196,7 @@ export function createFakeDispatches(options: {
   const kept = options.kept ?? []
   const views = options.views ?? []
   const correspondences = options.correspondences ?? []
+  const profileInterests = options.profileInterests ?? []
   const shares = options.shares ?? []
   const moments = options.moments ?? []
   const blocked = options.blocked ?? []
@@ -698,7 +712,31 @@ export function createFakeDispatches(options: {
     if (table === 'dispatch_replies') return repliesFrom()
     if (table === 'dispatch_worth_reading') return worthReadingFrom()
     if (table === 'dispatch_postcards') return dispatchPostcardsFrom()
+    if (table === 'profile_interests') return profileInterestsFrom()
     throw new Error(`fakeDispatches does not simulate table "${table}"`)
+  }
+
+  // profile_interests — mirrors profile_interests_select_own's RLS
+  // predicate (auth.uid() = viewer_user_id): scoped to the caller's own
+  // rows only, matching getProfileInterestKeys' own query shape
+  // exactly (select interest_key where viewer_user_id = <userId>).
+  function profileInterestsFrom() {
+    const filters: { viewerUserId?: string } = {}
+    const applyFilters = () =>
+      profileInterests.filter((pi) => (filters.viewerUserId ? pi.viewer_user_id === filters.viewerUserId : true))
+    const builder = {
+      select() {
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        if (column === 'viewer_user_id') filters.viewerUserId = value as string
+        return builder
+      },
+      then(resolve: (value: { data: FakeProfileInterestRow[]; error: null }) => void) {
+        resolve({ data: applyFilters(), error: null })
+      },
+    }
+    return builder
   }
 
   // A minimal stand-in for supabase.storage — just enough to exercise
@@ -941,11 +979,30 @@ export function createFakeDispatches(options: {
       for (const r of eligibleGlobal) combinedById.set(r.id, r)
       for (const r of augmentRows) combinedById.set(r.id, r)
 
+      // Board Personalization Phase 2B — the viewer's own selected
+      // Interests (no session-stability rule; read live, mirroring
+      // docs/sql/2026-09-27-topical-interests.sql's own viewer_
+      // interests CTE) and, per candidate, whether ANY of its topics
+      // match ANY of them — reusing the exact same pure matching
+      // function the SQL migration's alias table mirrors.
+      const viewerInterestKeys = profileInterests
+        .filter((pi) => pi.viewer_user_id === viewerId)
+        .map((pi) => pi.interest_key)
+
       const classified = [...combinedById.values()].map((r) => {
         const isKept = isKeptByAuthor.get(r.author_id) ?? false
         const isFamiliar = isKeptByAuthor.has(r.author_id)
         const seenBucket = seenPreSession(r.id) ? 1 : 0
-        return { ...r, is_kept: isKept, is_familiar: isFamiliar, seen_bucket: seenBucket, seed_hash: seedHash(r.id) }
+        const dispatchTopics = topics.filter((t) => t.dispatch_id === r.id).map((t) => t.topic)
+        const isTopicalMatch = dispatchMatchesInterests(dispatchTopics, viewerInterestKeys)
+        return {
+          ...r,
+          is_kept: isKept,
+          is_familiar: isFamiliar,
+          seen_bucket: seenBucket,
+          seed_hash: seedHash(r.id),
+          is_topical_match: isTopicalMatch,
+        }
       })
 
       // Author diversity — computed once per (seen_bucket, author_id),
@@ -965,10 +1022,25 @@ export function createFakeDispatches(options: {
         })
 
       type Streamed = (typeof authorDiverse)[number]
+      // Phase 2B: topical_rank (0=matched, 1=unmatched) sits between
+      // author_seq and seed_hash — it can only reorder rows that
+      // already tied on author_seq, mirroring docs/sql/2026-09-27-
+      // topical-interests.sql's own stream ORDER BY exactly. When no
+      // row in a tie group is a topical match (including the entire
+      // zero-interest case), topical_rank is the same constant (1) for
+      // all of them, so this sort collapses back to exactly Phase 2A's
+      // own `author_seq, seed_hash` — the zero-interest degrade proof,
+      // reproduced here in JS the same way the SQL comment proves it.
       function streamRank(bucket: number, rows: Streamed[]): Map<string, number> {
         const inBucket = rows
           .filter((r) => r.seen_bucket === bucket)
-          .sort((a, b) => (a.author_seq !== b.author_seq ? a.author_seq - b.author_seq : a.seed_hash - b.seed_hash))
+          .sort((a, b) => {
+            if (a.author_seq !== b.author_seq) return a.author_seq - b.author_seq
+            const aTopicalRank = a.is_topical_match ? 0 : 1
+            const bTopicalRank = b.is_topical_match ? 0 : 1
+            if (aTopicalRank !== bTopicalRank) return aTopicalRank - bTopicalRank
+            return a.seed_hash - b.seed_hash
+          })
         const result = new Map<string, number>()
         inBucket.forEach((r, i) => result.set(r.id, i + 1))
         return result
@@ -1529,6 +1601,29 @@ export function createFakeDispatches(options: {
       }
       if (!worthReading.some((w) => w.dispatch_id === dispatchId && w.user_id === viewerId)) {
         worthReading.push({ dispatch_id: dispatchId, user_id: viewerId, created_at: new Date().toISOString() })
+      }
+      return { data: null, error: null }
+    }
+
+    // Board Personalization Phase 2B — mirrors set_profile_interests
+    // (docs/sql/2026-09-27-topical-interests.sql): auth required, at
+    // most 8 keys, then an atomic delete-then-insert of the caller's
+    // own rows only (mutating the SAME `profileInterests` array
+    // reference, matching every other RPC's own in-place-mutation
+    // convention in this file).
+    if (fn === 'set_profile_interests') {
+      if (!viewerId) {
+        return { data: null, error: { message: 'Authentication required.', code: '42501' } }
+      }
+      const keys = (params?.p_interest_keys as string[] | null | undefined) ?? []
+      if (keys.length > 8) {
+        return { data: null, error: { message: 'You can select at most 8 interests.', code: 'P0001' } }
+      }
+      for (let i = profileInterests.length - 1; i >= 0; i--) {
+        if (profileInterests[i].viewer_user_id === viewerId) profileInterests.splice(i, 1)
+      }
+      for (const key of keys) {
+        profileInterests.push({ viewer_user_id: viewerId, interest_key: key })
       }
       return { data: null, error: null }
     }
