@@ -57,6 +57,7 @@ export default function AuthorActionsMenu({
   initialShareToken,
   initialIsPinned,
   momentImagePaths,
+  editable,
 }: {
   dispatchId: string
   initialShareToken: string | null
@@ -66,6 +67,17 @@ export default function AuthorActionsMenu({
    * dispatch_moments rows naming these paths are already gone, so the
    * caller must already hold them to clean up storage afterward. */
   momentImagePaths: string[]
+  /**
+   * Smoke-test contract completion checkpoint — server-resolved
+   * canEditDispatch (lib/dispatches.ts): "the product should not tease
+   * an unavailable action." This is a UI HINT only, not the authority —
+   * update_dispatch re-checks both the 30-minute window and the reply
+   * lock itself, fresh, on every save, regardless of what this prop
+   * says. A stale `true` here (e.g. a reply landed after this page
+   * rendered) simply means Save fails safely with a restrained error;
+   * it never means an ineligible edit can succeed.
+   */
+  editable: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -200,13 +212,15 @@ export default function AuthorActionsMenu({
           >
             {!confirmingDelete ? (
               <div className="flex flex-col gap-1.5">
-                <Link
-                  href={`/board/${dispatchId}/edit`}
-                  className={secondaryButtonClass}
-                  onClick={closeMenu}
-                >
-                  Edit Dispatch
-                </Link>
+                {editable && (
+                  <Link
+                    href={`/board/${dispatchId}/edit`}
+                    className={secondaryButtonClass}
+                    onClick={closeMenu}
+                  >
+                    Edit Dispatch
+                  </Link>
+                )}
                 <button type="button" onClick={handleTogglePin} disabled={busy} className={secondaryButtonClass}>
                   {isPinned ? 'Unpin from profile' : 'Pin to profile'}
                 </button>

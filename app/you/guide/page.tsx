@@ -13,12 +13,13 @@ import AppShell from '@/app/app-shell'
 // same shape, each just replaying a small quiet introduction instead of
 // a full walkthrough.
 const GUIDES = [
-  { key: 'minds', title: 'Welcome to Minds', href: '/you/guide/minds' },
+  { key: 'minds', title: 'Welcome to People', href: '/you/guide/minds' },
   { key: 'moments', title: 'Writing with Moments', href: '/you/guide/moments' },
   { key: 'people', title: 'People worth writing to', href: '/you/guide/people' },
   { key: 'board', title: 'The Board', href: '/you/guide/board' },
   { key: 'dispatch_composer', title: 'Leave something on the Board', href: '/you/guide/dispatch-composer' },
   { key: 'postcard', title: 'Send something from somewhere', href: '/you/guide/postcard' },
+  { key: 'dispatch_reading', title: 'Reading a Dispatch', href: '/you/guide/dispatch-reading' },
 ]
 
 export default async function TempaGuidePage() {

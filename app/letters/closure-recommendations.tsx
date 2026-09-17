@@ -82,16 +82,18 @@ export default async function ClosureRecommendations({
 
   const rows = data as RecommendationRow[]
 
+  // Post-onboarding corrections checkpoint — DiscoveryEntry.response
+  // became optional so People can show a person with no Flagship
+  // answer, but this recommendation surface is unaffected in behavior:
+  // get_post_closure_recommendations only ever returns rows that ARE an
+  // answer, so every entry here still carries one, unconditionally.
   const entries: DiscoveryEntry[] = rows.map((row) => ({
-    id: row.answer_id,
     userId: row.user_id,
-    questionId: row.question_id,
-    body: row.body,
     pseudonym: row.pseudonym,
     country: row.country,
     genderDisplay: genderDisplay(row.gender, row.gender_custom),
     ageRange: row.age_range,
-    prompt: row.prompt,
+    response: { id: row.answer_id, body: row.body, prompt: row.prompt },
   }))
 
   return (

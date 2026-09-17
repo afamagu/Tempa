@@ -195,6 +195,17 @@ export function PostcardBack({
     <div className="grid h-full grid-cols-[1fr_auto_1fr] rounded-sm bg-background p-3">
       {/* Message side */}
       <div className="flex min-w-0 flex-col justify-between pr-3">
+        {/* Post-onboarding corrections checkpoint (Section L) — a live
+            smoke test flagged this text as very small. Audited against
+            profile/ui.ts's own documented type scale: this was
+            text-[12px]/text-[13px], BELOW even that scale's smallest
+            tier ("metadata only," 13–14px) despite being genuine
+            reading content, not a throwaway label. Bumped one
+            conservative step to sit AT that floor (13px/14px) rather
+            than jumping to a full reading size (proseBodyClass,
+            18–20px) — the message column is narrow (roughly a third of
+            a small card), so a bigger jump risks clipping/overflow the
+            physical-postcard layout was never built for. */}
         {editable ? (
           <textarea
             value={editable.value}
@@ -203,19 +214,19 @@ export function PostcardBack({
             placeholder={POSTCARD_BACK_PLACEHOLDER}
             aria-label="Postcard message"
             rows={5}
-            className="w-full min-w-0 resize-none border-0 bg-transparent font-serif text-[12px] leading-relaxed text-foreground outline-none placeholder:text-muted sm:text-[13px]"
+            className="w-full min-w-0 resize-none border-0 bg-transparent font-serif text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted sm:text-[14px]"
           />
         ) : (
           <div className="space-y-2">
             {postcard.backMessage.split('\n\n').map((paragraph, i) => (
-              <p key={i} className="font-serif text-[12px] leading-relaxed text-foreground sm:text-[13px]">
+              <p key={i} className="font-serif text-[13px] leading-relaxed text-foreground sm:text-[14px]">
                 {paragraph}
               </p>
             ))}
           </div>
         )}
         {postcard.senderName && (
-          <p className="mt-3 text-right font-serif text-[12px] italic text-foreground/80 sm:text-[13px]">
+          <p className="mt-3 text-right font-serif text-[13px] italic text-foreground/80 sm:text-[14px]">
             — {postcard.senderName}
           </p>
         )}

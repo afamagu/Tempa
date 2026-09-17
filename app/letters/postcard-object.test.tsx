@@ -86,6 +86,35 @@ describe('PostcardObject — K. back content (message, sender, postmark) still r
     expect(html).toContain('— Youssef')
     expect(html).toContain('ESSAOUIRA')
   })
+
+  // Post-onboarding corrections checkpoint (Section L) — a live smoke
+  // test found the back message text very small. Audited against
+  // profile/ui.ts's own documented type scale: text-[12px]/text-[13px]
+  // sat BELOW even that scale's smallest ("metadata only," 13–14px)
+  // tier despite being genuine reading content. Bumped one conservative
+  // step to text-[13px]/text-[14px] — enough to clear that floor
+  // without risking overflow in the narrow message column.
+  it('the back message text is at least 13px/14px (profile/ui.ts\'s documented "metadata" floor), never the old sub-floor 12px/13px', () => {
+    const html = renderToStaticMarkup(<PostcardObject postcard={STATIC_ESSAOUIRA} />)
+    // Scoped to the message paragraph itself — the card's unrelated
+    // address block legitimately uses its own separate text-[12px] a
+    // few lines later, so a blanket "never 12px anywhere" check would
+    // be a false positive against that unrelated element.
+    expect(html).toMatch(
+      /font-serif text-\[13px\] leading-relaxed text-foreground sm:text-\[14px\]">I took the long way/
+    )
+  })
+
+  it('the same size applies to the editable back (composer) and the sender signature line, not just the static read view', () => {
+    const editableHtml = renderToStaticMarkup(
+      <PostcardObject
+        postcard={STATIC_ESSAOUIRA}
+        editableBack={{ value: 'A short note.', onChange: () => {}, maxLength: 200 }}
+      />
+    )
+    expect(editableHtml).toContain('text-[13px]')
+    expect(editableHtml).toContain('sm:text-[14px]')
+  })
 })
 
 // B. Historical MomentDisplay type='postcard' delegates to PostcardObject

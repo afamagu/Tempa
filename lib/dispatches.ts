@@ -103,7 +103,12 @@ export function dispatchIsRich(body: string): boolean {
   return isRichBody(body)
 }
 
-const TITLE_MAX_CHARS = 70
+// Smoke-test contract completion checkpoint — doubled from the original
+// 70, mirroring publish_dispatch's AND update_dispatch's own
+// char_length(p_title) > 140 checks exactly (docs/sql/2026-09-28-title-
+// postcard-and-edit-window.sql). A single shared value: create and edit
+// have always used, and continue to use, the exact same ceiling.
+const TITLE_MAX_CHARS = 140
 
 /**
  * Pure: the composer's own title validation, mirroring
@@ -1007,6 +1012,56 @@ export async function publishDispatch(
   }
 
   return { data: toDispatch(data as DispatchRow), error: null }
+}
+
+// Smoke-test contract completion checkpoint — Published Dispatch
+// editing contract, Sections E/F/G. Mirrors update_dispatch's own two
+// new eligibility checks exactly (docs/sql/2026-09-28-title-postcard-
+// and-edit-window.sql): now() <= published_at + 30 minutes, AND no
+// dispatch_replies row exists for this Dispatch (checked as bare row
+// EXISTENCE — never filtered by moderation_status/deleted_at — since
+// neither a member's own tombstone (delete_reply) nor a moderator hide
+// (admin_hide_reply) ever removes the row itself; see
+// docs/sql/2026-09-23-dispatch-replies.sql. "Once somebody has joined
+// the public conversation, the published original becomes part of that
+// conversation record," permanently, is therefore a real, durable
+// guarantee the schema already supports — not something this checkpoint
+// had to invent.
+export const DISPATCH_EDIT_WINDOW_MINUTES = 30
+
+/**
+ * Pure: whether `now` still falls within the post-publish edit window.
+ * The authoritative timestamp is ALWAYS publishedAt — never
+ * updated_at (dispatches has no such column at all) and never a
+ * client clock snapshot frozen at page load; callers pass a fresh
+ * `now` (defaulting to `new Date()`) each time this is evaluated. This
+ * is a UI HINT only, exactly like canEditDispatch below — the real,
+ * authoritative check runs inside update_dispatch itself, freshly, on
+ * every save, which is what actually closes the race a stale client
+ * read could otherwise open.
+ */
+export function isWithinDispatchEditWindow(publishedAt: string, now: Date = new Date()): boolean {
+  return now.getTime() <= new Date(publishedAt).getTime() + DISPATCH_EDIT_WINDOW_MINUTES * 60 * 1000
+}
+
+/**
+ * Pure: whether the ordinary Edit affordance should be OFFERED at all —
+ * "the product should not tease an unavailable action." This is a UI
+ * hint, never the authority: `replyExists` is typically derived from an
+ * RLS-governed read (getDispatchReplies), which can undercount a Reply
+ * that is currently moderator-hidden and authored by someone other than
+ * the Dispatch's own author (dispatch_replies_select_published's
+ * own-author exception is scoped to the REPLY's author, not the
+ * Dispatch's) — a disclosed, accepted imprecision for a hint only,
+ * since update_dispatch re-checks unconditional row existence itself,
+ * server-side, regardless of what this function ever returned.
+ */
+export function canEditDispatch(state: {
+  isAuthor: boolean
+  withinEditWindow: boolean
+  replyExists: boolean
+}): boolean {
+  return state.isAuthor && state.withinEditWindow && !state.replyExists
 }
 
 /**

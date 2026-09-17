@@ -20,7 +20,13 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {}, refresh:
 describe('AuthorActionsMenu — restrained trigger (item 10)', () => {
   it('renders one real, accessibly-labeled trigger, not four separate large buttons', () => {
     const html = renderToStaticMarkup(
-      <AuthorActionsMenu dispatchId="d-1" initialShareToken={null} initialIsPinned={false} momentImagePaths={[]} />
+      <AuthorActionsMenu
+        dispatchId="d-1"
+        initialShareToken={null}
+        initialIsPinned={false}
+        momentImagePaths={[]}
+        editable
+      />
     )
     expect(html).toMatch(/<button[^>]*aria-label="Dispatch options"/)
     // The sheet's own action labels must not be present until opened.
@@ -31,9 +37,35 @@ describe('AuthorActionsMenu — restrained trigger (item 10)', () => {
 
   it('never uses a native window.confirm — no such call appears in the rendered output as inline script', () => {
     const html = renderToStaticMarkup(
-      <AuthorActionsMenu dispatchId="d-1" initialShareToken={null} initialIsPinned={false} momentImagePaths={[]} />
+      <AuthorActionsMenu
+        dispatchId="d-1"
+        initialShareToken={null}
+        initialIsPinned={false}
+        momentImagePaths={[]}
+        editable
+      />
     )
     expect(html).not.toContain('window.confirm')
+  })
+})
+
+// Smoke-test contract completion checkpoint (Section G) — "the product
+// should not tease an unavailable action." Same SSR-only limitation as
+// above (the sheet only opens via click-driven state, not a prop), so
+// the conditional gating itself is proven via source inspection —
+// consistent with this file's own established convention.
+describe('AuthorActionsMenu — Edit Dispatch affordance gated on server-resolved eligibility (Section G)', () => {
+  it('the Edit Dispatch link is wrapped in {editable && (...)}, never rendered unconditionally', () => {
+    expect(source).toContain('{editable && (')
+    const gateStart = source.indexOf('{editable && (')
+    const gateEnd = source.indexOf(')}', gateStart)
+    expect(source.slice(gateStart, gateEnd)).toContain('Edit Dispatch')
+  })
+
+  it('editable is documented as a hint only — update_dispatch remains the actual authority regardless of this prop', () => {
+    const propDocStart = source.indexOf('editable: boolean')
+    const propDocRegion = source.slice(Math.max(0, propDocStart - 700), propDocStart)
+    expect(propDocRegion).toContain('UI HINT only, not the authority')
   })
 })
 

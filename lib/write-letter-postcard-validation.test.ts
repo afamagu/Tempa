@@ -96,14 +96,24 @@ describe('p_postcard validation — write_letter/reply_to_letter (docs/sql/2026-
     ).toThrow('A Postcard needs its own written message before it can be sent.')
   })
 
-  it('rejects a back message longer than 200 characters once trimmed', () => {
+  // Smoke-test contract completion checkpoint: 200 -> 300.
+  it('rejects a back message longer than 300 characters once trimmed', () => {
     expect(() =>
       simulatePostcardValidation(CATALOG, VERSIONS, {
         postcardKey: 'essaouira',
         revealLine: null,
-        backMessage: 'x'.repeat(201),
+        backMessage: 'x'.repeat(301),
       })
     ).toThrow("A Postcard's back message is too long.")
+  })
+
+  it('accepts a back message at exactly 300 characters — the Letter Postcard surface uses the new 300 ceiling', () => {
+    const result = simulatePostcardValidation(CATALOG, VERSIONS, {
+      postcardKey: 'essaouira',
+      revealLine: null,
+      backMessage: 'x'.repeat(300),
+    })
+    expect(result?.backMessage).toHaveLength(300)
   })
 
   it('stores the back message TRIMMED, matching the live table\'s own CHECK constraint', () => {

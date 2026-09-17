@@ -1,6 +1,13 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getDispatchById, getDispatchMomentsForEditing, getDispatchPostcard } from '@/lib/dispatches'
+import {
+  getDispatchById,
+  getDispatchMomentsForEditing,
+  getDispatchPostcard,
+  isWithinDispatchEditWindow,
+  canEditDispatch,
+} from '@/lib/dispatches'
+import { getDispatchReplies } from '@/lib/replies'
 import DispatchComposer from '../../dispatch-composer'
 
 /**
@@ -13,6 +20,18 @@ import DispatchComposer from '../../dispatch-composer'
  * like the reader itself does for a missing/unpublished Dispatch —
  * never a distinguishable "not yours" error that would reveal the
  * Dispatch's existence to someone who shouldn't be editing it.
+ *
+ * Smoke-test contract completion checkpoint (Section G) — a direct/
+ * bookmarked visit after the 30-minute window closes or a Reply has
+ * landed is redirected away the same way, rather than opening a
+ * composer whose Save is guaranteed to fail. This is a courtesy
+ * (avoids loading a dead-end screen), never the enforcement boundary —
+ * update_dispatch itself is what actually refuses the write, so this
+ * redirect being based on a possibly-stale read (see canEditDispatch's
+ * own doc comment) can never create an unsafe edit, only, at worst, let
+ * an already-ineligible author briefly see the composer before Save
+ * rejects it (the same safely-handled case Section G explicitly
+ * anticipates).
  */
 export default async function EditDispatchPage({
   params,
@@ -35,6 +54,17 @@ export default async function EditDispatchPage({
   }
 
   if (dispatch.authorId !== user.id) {
+    redirect(`/board/${dispatch.id}`)
+  }
+
+  const replies = await getDispatchReplies(supabase, dispatch.id)
+  const editable = canEditDispatch({
+    isAuthor: true,
+    withinEditWindow: isWithinDispatchEditWindow(dispatch.publishedAt),
+    replyExists: replies.length > 0,
+  })
+
+  if (!editable) {
     redirect(`/board/${dispatch.id}`)
   }
 

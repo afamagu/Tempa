@@ -13,7 +13,12 @@ export default async function ReplayBoardGuide() {
   }
 
   return (
-    <ReplayFeatureIntroduction guideKey="board" title="The Board" ctaLabel="See what's on the Board">
+    <ReplayFeatureIntroduction
+      guideKey="board"
+      title="The Board"
+      ctaLabel="See what's on the Board"
+      destinationHref="/board"
+    >
       <p className="italic">Writing meant to be stumbled upon.</p>
       <p>
         Dispatches are public pieces Tempa members leave behind — stories, observations,

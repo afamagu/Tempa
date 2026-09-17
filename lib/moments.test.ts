@@ -377,8 +377,9 @@ describe('resolveLetterPostcardDisplay', () => {
 })
 
 describe('POSTCARD_BACK_MESSAGE_MAX_LENGTH', () => {
-  it('is 200, the product-locked hard maximum for a letter-level Postcard back', () => {
-    expect(POSTCARD_BACK_MESSAGE_MAX_LENGTH).toBe(200)
+  // Smoke-test contract completion checkpoint: 200 -> 300.
+  it('is 300, the product-locked hard maximum for a Postcard back (shared by the Letter and Dispatch surfaces)', () => {
+    expect(POSTCARD_BACK_MESSAGE_MAX_LENGTH).toBe(300)
   })
 })
 

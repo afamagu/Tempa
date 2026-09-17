@@ -9,7 +9,7 @@ import path from 'node:path'
 const source = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8')
 
 describe('Tempa Guide index — replayable FeatureIntroductions added to the existing list', () => {
-  it('lists all four new lightweight introductions alongside the two existing full walkthroughs', () => {
+  it('lists all five lightweight introductions alongside the two existing full walkthroughs', () => {
     for (const href of [
       '/you/guide/minds',
       '/you/guide/moments',
@@ -17,6 +17,7 @@ describe('Tempa Guide index — replayable FeatureIntroductions added to the exi
       '/you/guide/board',
       '/you/guide/dispatch-composer',
       '/you/guide/postcard',
+      '/you/guide/dispatch-reading',
     ]) {
       expect(source).toContain(`href: '${href}'`)
     }

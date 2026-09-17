@@ -770,7 +770,8 @@ export function createFakeDispatches(options: {
       if (title.trim().length === 0) {
         return { data: null, error: { message: 'A Dispatch needs a title.', code: 'P0001' } }
       }
-      if (title.length > 70) {
+      // Smoke-test contract completion checkpoint: 70 -> 140.
+      if (title.length > 140) {
         return { data: null, error: { message: 'Title is too long.', code: 'P0001' } }
       }
       const topics = (params?.p_topics as string[]) ?? []
@@ -816,7 +817,8 @@ export function createFakeDispatches(options: {
             error: { message: 'A Postcard needs its own written message before it can be published.', code: 'P0001' },
           }
         }
-        if (backMessage.length > 200) {
+        // Smoke-test contract completion checkpoint: 200 -> 300.
+        if (backMessage.length > 300) {
           return { data: null, error: { message: "A Postcard's back message is too long.", code: 'P0001' } }
         }
         const authorProfile = profiles.find((p) => p.id === viewerId)
@@ -1244,11 +1246,26 @@ export function createFakeDispatches(options: {
           error: { message: 'Only the author of a published Dispatch may edit it.', code: 'P0001' },
         }
       }
+      // Smoke-test contract completion checkpoint — mirrors
+      // update_dispatch's own two NEW eligibility checks exactly (docs/
+      // sql/2026-09-28-title-postcard-and-edit-window.sql): the
+      // 30-minute post-publish window, anchored to published_at only
+      // (never updated_at, which doesn't exist), then the reply lock —
+      // bare row EXISTENCE in `replies`, deliberately unfiltered by
+      // moderation_status/deleted_at, same reasoning delete_dispatch's
+      // own fake reply-guard above already established.
+      if (Date.parse(dispatch.published_at) + 30 * 60 * 1000 < Date.now()) {
+        return { data: null, error: { message: 'This Dispatch can no longer be edited.', code: 'P0001' } }
+      }
+      if (replies.some((r) => r.dispatch_id === dispatchId)) {
+        return { data: null, error: { message: 'This Dispatch can no longer be edited.', code: 'P0001' } }
+      }
       const title = (params?.p_title as string) ?? ''
       if (title.trim().length === 0) {
         return { data: null, error: { message: 'A Dispatch needs a title.', code: 'P0001' } }
       }
-      if (title.length > 70) {
+      // Smoke-test contract completion checkpoint: 70 -> 140.
+      if (title.length > 140) {
         return { data: null, error: { message: 'Title is too long.', code: 'P0001' } }
       }
       const newTopics = (params?.p_topics as string[]) ?? []

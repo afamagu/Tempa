@@ -22,6 +22,8 @@ import {
   getFirstMomentThumbnails,
   getDispatchPostcard,
   dispatchPostcardToBaseContent,
+  isWithinDispatchEditWindow,
+  canEditDispatch,
 } from '@/lib/dispatches'
 import { getDispatchReplies } from '@/lib/replies'
 import { isDispatchWorthReading } from '@/lib/worth-reading'
@@ -30,7 +32,9 @@ import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import { sectionTitleClass, metadataTextClass, sectionLabelClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { iconButtonClass } from '@/app/profile/ui'
+import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
+import FeatureIntroduction from '@/app/feature-introduction'
 import Mindform from '@/app/mindform'
 import CountryFlag from '@/app/country-flag'
 import ReportButton from '@/app/report-button'
@@ -166,6 +170,7 @@ export default async function DispatchPage({
     authorAnswers,
     activePartnerIds,
     contactedAnswerIds,
+    readingIntroSeen,
   ] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getDispatchMoments(supabase, dispatch.id),
@@ -204,6 +209,14 @@ export default async function DispatchPage({
     isAuthor ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
     isAuthor ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
     isAuthor ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id),
+    // Post-onboarding corrections checkpoint (Q2) — the first-read
+    // Dispatch introduction, same account-persisted guide_completions
+    // gate every other FeatureIntroduction in this codebase uses. This
+    // is the AUTHENTICATED reader only (app/board/[dispatchId]/page.tsx);
+    // the anonymous/public shared-Dispatch reader (/d/[shareToken]) is a
+    // wholly separate page that never imports this component at all, so
+    // it structurally can't show here.
+    hasCompletedGuide(supabase, user.id, 'dispatch_reading'),
   ])
 
   // Same batched first-Moment lookup every other Dispatch listing
@@ -230,6 +243,22 @@ export default async function DispatchPage({
     : []
 
   const isPinned = isAuthor && pinnedRow.data?.pinned_dispatch_id === dispatch.id
+
+  // Smoke-test contract completion checkpoint (Section G) — a UI HINT
+  // only, deciding whether the Edit Dispatch affordance is even offered
+  // ("the product should not tease an unavailable action"). The real
+  // authority is update_dispatch itself, re-checked fresh on every
+  // save. `replies` above is read under the viewer's OWN RLS-governed
+  // session, which can undercount a Reply that's currently moderator-
+  // hidden and authored by someone other than this Dispatch's author
+  // (see canEditDispatch's own doc comment in lib/dispatches.ts) — an
+  // accepted imprecision for a hint, never a safety gap, since the RPC
+  // itself checks unconditional row existence regardless of this value.
+  const dispatchEditable = canEditDispatch({
+    isAuthor,
+    withinEditWindow: isWithinDispatchEditWindow(dispatch.publishedAt),
+    replyExists: replies.length > 0,
+  })
 
   // Dispatch → Correspondence Entry Point checkpoint — identical
   // derivation to app/minds/[userId]/page.tsx's own primaryAnswer/
@@ -295,6 +324,7 @@ export default async function DispatchPage({
                     initialShareToken={activeShare?.id ?? null}
                     initialIsPinned={isPinned}
                     momentImagePaths={editableMoments.map((m) => m.imagePath)}
+                    editable={dispatchEditable}
                   />
                 ) : (
                   <>
@@ -339,6 +369,26 @@ export default async function DispatchPage({
                   senderPseudonym={postcard.senderPseudonymSnapshot}
                 />
               </div>
+            )}
+
+            {/* Post-onboarding corrections checkpoint (Q2) — shown once,
+                immediately before the reading surface itself, the first
+                time this member opens a Dispatch to read (never on the
+                Board, and never stacked with the Board introduction,
+                which is a separate page). Explains the overall reading
+                grammar; MomentHint below stays separate contextual
+                microcopy specifically about Moments — the two are
+                deliberately not merged. Replayable later from You →
+                Tempa Guide. */}
+            {!readingIntroSeen && (
+              <FeatureIntroduction guideKey="dispatch_reading" title="Reading a Dispatch" ctaLabel="Start reading">
+                <p>
+                  Take your time. A Dispatch may have little Moments tucked into the writing —
+                  glimpses from the writer&rsquo;s world that you can open as you go. At the end,
+                  you can mark it Worth Reading, reply publicly, or write privately if
+                  you&rsquo;d like to know the writer.
+                </p>
+              </FeatureIntroduction>
             )}
 
             <div className="rounded-md bg-surface-shell p-4 sm:p-6">

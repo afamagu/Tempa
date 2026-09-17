@@ -227,6 +227,21 @@ export default function MomentsComposer({
   const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
   const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
+  // Post-onboarding corrections checkpoint (Section G) — same fix as
+  // the Dispatch composer's own postcardIntroActive: showPostcardIntro
+  // (still-unseen, per guide_completions) used to be enough on its own
+  // to render the introduction the instant this composer mounted. It
+  // now only appears once the member actually activates the slot — see
+  // handleAddPostcard below.
+  const [postcardIntroActive, setPostcardIntroActive] = useState(false)
+
+  function handleAddPostcard() {
+    if (showPostcardIntro) {
+      setPostcardIntroActive(true)
+    } else {
+      setPostcardPickerOpen(true)
+    }
+  }
   // Admin Phase 2A-2 — the live, ACTIVE DB-backed catalogue
   // (lib/postcards.ts), fetched once on mount. This, not the static
   // POSTCARD_CATALOG, is now the source of truth for what the picker
@@ -700,19 +715,29 @@ export default function MomentsComposer({
         onChange={handleFileChosen}
       />
 
-      {/* Onboarding & First-Use checkpoint (Checkpoint 2B) — shown once,
-          at the point of first encountering the Postcard slot, and only
-          once it's actually usable (momentsQualified) — never on every
-          composer render before Postcards have genuinely been
-          approached. Same shared 'postcard' guide key as the Dispatch
+      {/* Post-onboarding corrections checkpoint (Section G/H/I) — shown
+          only once the member actually activates the Postcard slot
+          below (handleAddPostcard) and only once it's actually usable
+          (momentsQualified), never pre-emptively on composer mount. Its
+          CTA both completes the guide AND opens the real picker,
+          immediately. Same shared 'postcard' guide key as the Dispatch
           composer's own introduction; completing/dismissing it on
           either surface prevents it reappearing on the other. */}
-      {momentsQualified && showPostcardIntro && !postcardDraft && (
-        <FeatureIntroduction guideKey="postcard" title="Send something from somewhere" ctaLabel="Choose a Postcard">
+      {momentsQualified && postcardIntroActive && !postcardDraft && (
+        <FeatureIntroduction
+          guideKey="postcard"
+          title="Postcards"
+          ctaLabel="Choose a postcard"
+          onDismiss={() => setPostcardIntroActive(false)}
+          onCta={() => {
+            setPostcardIntroActive(false)
+            setPostcardPickerOpen(true)
+          }}
+        >
+          <p className="italic">Send a little piece of a place.</p>
           <p>
-            Postcards are little keepsakes you can tuck into a Letter or Dispatch. Choose one,
-            write something on the front, then leave something more on the back for the reader
-            to discover.
+            Choose a postcard, add a few words to the front, and write something more on the
+            back — then send it along with your Letter or Dispatch as a small keepsake.
           </p>
         </FeatureIntroduction>
       )}
@@ -724,7 +749,7 @@ export default function MomentsComposer({
         draft={postcardDraft}
         catalogEntry={postcardCatalogEntry}
         disabled={!momentsQualified}
-        onAdd={() => setPostcardPickerOpen(true)}
+        onAdd={handleAddPostcard}
         onEdit={() => {
           setPostcardEditorStartOnBack(false)
           setPostcardEditorOpen(true)

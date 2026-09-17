@@ -13,10 +13,16 @@ export default async function ReplayPostcardGuide() {
   }
 
   return (
-    <ReplayFeatureIntroduction guideKey="postcard" title="Send something from somewhere" ctaLabel="Choose a Postcard">
+    <ReplayFeatureIntroduction
+      guideKey="postcard"
+      title="Postcards"
+      ctaLabel="Choose a postcard"
+      destinationHref="/board/write"
+    >
+      <p className="italic">Send a little piece of a place.</p>
       <p>
-        Postcards are little keepsakes you can tuck into a Letter or Dispatch. Choose one, write
-        something on the front, then leave something more on the back for the reader to discover.
+        Choose a postcard, add a few words to the front, and write something more on the back —
+        then send it along with your Letter or Dispatch as a small keepsake.
       </p>
     </ReplayFeatureIntroduction>
   )

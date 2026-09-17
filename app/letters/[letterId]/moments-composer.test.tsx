@@ -340,20 +340,35 @@ describe('MomentsComposer — Moment menu anchored to the tapped control', () =>
 // same FeatureIntroduction component, never a second 'letter_postcard'
 // key or a duplicated introduction implementation.
 describe('MomentsComposer — Postcard FeatureIntroduction (cross-surface first encounter)', () => {
-  it('shows the Postcard introduction when showPostcardIntro is true and the slot is actually usable (momentsQualified)', () => {
+  // Post-onboarding corrections checkpoint (Section G) — showPostcardIntro
+  // alone used to be enough to render this the instant the composer
+  // mounted. It now needs a genuine slot activation too
+  // (postcardIntroActive, starts false) — covered by source inspection
+  // below since renderToStaticMarkup can't exercise the click.
+  it('never renders on initial render, even when showPostcardIntro is true and the slot is usable — it needs a genuine slot activation first', () => {
     const html = renderComposer({ showPostcardIntro: true, momentsQualified: true })
-    expect(html).toContain('Send something from somewhere')
-    expect(html).toContain('Choose a Postcard')
-  })
-
-  it('never shows it when showPostcardIntro is false — the default, matching "not seen yet" being unknown until the caller resolves it', () => {
-    const html = renderComposer({ momentsQualified: true })
-    expect(html).not.toContain('Send something from somewhere')
+    expect(html).not.toContain('Postcards')
+    expect(html).not.toContain('Choose a postcard')
+    expect(html).toContain('Add a postcard')
   })
 
   it('never shows it while the Postcard slot itself is not yet usable (momentsQualified false) — never globally on every composer render', () => {
     const html = renderComposer({ showPostcardIntro: true, momentsQualified: false })
-    expect(html).not.toContain('Send something from somewhere')
+    expect(html).not.toContain('Postcards')
+  })
+
+  it('the Postcard slot activation is gated on showPostcardIntro, and its CTA opens the real picker, not just a dismissal (Section G/H)', () => {
+    expect(source).toContain('function handleAddPostcard() {')
+    const fnStart = source.indexOf('function handleAddPostcard() {')
+    const fnEnd = source.indexOf('\n  }', fnStart)
+    const fnBody = source.slice(fnStart, fnEnd)
+    expect(fnBody).toContain('if (showPostcardIntro) {')
+    expect(fnBody).toContain('setPostcardIntroActive(true)')
+    expect(fnBody).toContain('setPostcardPickerOpen(true)')
+
+    expect(source).toContain('onAdd={handleAddPostcard}')
+    const normalized = source.replace(/\s+/g, ' ')
+    expect(normalized).toContain('onCta={() => { setPostcardIntroActive(false) setPostcardPickerOpen(true) }}')
   })
 
   it('uses the exact same FeatureIntroduction component and guide key as the Dispatch composer — never a duplicated implementation or a second key', () => {

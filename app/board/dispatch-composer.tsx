@@ -64,7 +64,14 @@ import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
 import DispatchPreview from './dispatch-preview'
 
-const TITLE_MAX_CHARS = 70
+// Smoke-test contract completion checkpoint — 70 -> 140, mirroring
+// lib/dispatches.ts's own TITLE_MAX_CHARS and the server-side
+// publish_dispatch/update_dispatch checks exactly (docs/sql/2026-09-28-
+// title-postcard-and-edit-window.sql). Kept as its own constant here
+// (not imported) — the same duplication that already existed at 70,
+// now visibly consistent at 140 and covered by a same-value regression
+// test (dispatch-composer.test.tsx).
+const TITLE_MAX_CHARS = 140
 
 // Publish-failure diagnostic checkpoint (2026-09-08). Development-only:
 // appends the literal Supabase/Postgres error detail to the generic
@@ -244,6 +251,23 @@ export default function DispatchComposer({
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
   const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
   const [activePostcards, setActivePostcards] = useState<PostcardCatalogEntry[]>([])
+  // Post-onboarding corrections checkpoint (Section G) — the Postcard
+  // introduction used to render unconditionally alongside the Dispatch-
+  // writing introduction the moment this composer opened (stacking two
+  // lessons at once). It now only appears once the member genuinely
+  // activates the Postcard slot — see handleAddPostcard below — so
+  // showPostcardIntro (whether it's still unseen, per guide_completions)
+  // and postcardIntroActive (whether the member has actually reached
+  // for it this visit) are deliberately two separate booleans.
+  const [postcardIntroActive, setPostcardIntroActive] = useState(false)
+
+  function handleAddPostcard() {
+    if (showPostcardIntro) {
+      setPostcardIntroActive(true)
+    } else {
+      setPostcardPickerOpen(true)
+    }
+  }
 
   useEffect(() => {
     if (isEdit) return
@@ -544,12 +568,27 @@ export default function DispatchComposer({
           hint: submitError?.hint,
         })
         const devDetail = process.env.NODE_ENV === 'development' ? formatDevErrorDetail(submitError) : ''
+        // Smoke-test contract completion checkpoint (Section G) —
+        // update_dispatch's own edit-window/reply-lock rejection is a
+        // specific, permanent, accurately-worded condition ("Please try
+        // again" would be misleading, same reasoning author-actions-
+        // menu.tsx's own delete-with-Replies guard already established),
+        // so it's shown verbatim rather than folded into the generic
+        // retry copy. This is the safe-rejection path Section G
+        // describes: eligibility can change between page load and Save
+        // (another reply arrives, or the window closes) — the RPC
+        // itself, not this composer, is what actually catches that.
+        const editLockMessage = 'This Dispatch can no longer be edited.'
         // Account enforcement messaging (pre-beta UX polish batch 1) —
         // restricted/suspended/banned all fully block publish_dispatch,
         // so the caller's own already-known status (never decoded from
         // the RPC's shared generic message) can replace the generic
         // retry-implying fallback outright when it applies.
-        setError(`${accountBlockedMessage(myStatus) ?? genericErrorMessage}${devDetail}`)
+        setError(
+          submitError?.message === editLockMessage
+            ? editLockMessage
+            : `${accountBlockedMessage(myStatus) ?? genericErrorMessage}${devDetail}`
+        )
         return
       }
 
@@ -637,6 +676,14 @@ export default function DispatchComposer({
           aria-label="Dispatch title"
           className={inputClass}
         />
+        {/* Post-onboarding corrections checkpoint (Section J) — a live
+            smoke test found the title limit restrictive with no visible
+            indication of it. Muted at rest; turns to the same red the
+            field's own validation error already uses once at/over the
+            limit — never red from the first character. */}
+        <p className={`text-right text-[12px] ${title.length >= TITLE_MAX_CHARS ? 'text-red-600' : helperTextClass}`}>
+          {title.length} / {TITLE_MAX_CHARS}
+        </p>
 
         {/* Dispatch Postcards Checkpoint 2 — CREATE MODE ONLY: the same
             letterhead-position slot the Letter composer uses, sitting
@@ -647,26 +694,35 @@ export default function DispatchComposer({
             directly, never this slot. */}
         {!isEdit && (
           <>
-            {/* Onboarding & First-Use checkpoint — shown once, at the
-                point of first encountering the Postcard slot. Replayable
-                later from You → Tempa Guide. */}
-            {showPostcardIntro && !postcardDraft && (
+            {/* Post-onboarding corrections checkpoint (Section G/H/I) —
+                shown only once the member actually activates the
+                Postcard slot below (handleAddPostcard), never
+                pre-emptively at page load. Its CTA both completes the
+                guide AND opens the real picker, immediately — never just
+                a dismissal wearing a misleading label. Replayable later
+                from You → Tempa Guide. */}
+            {postcardIntroActive && !postcardDraft && (
               <FeatureIntroduction
                 guideKey="postcard"
-                title="Send something from somewhere"
-                ctaLabel="Choose a Postcard"
+                title="Postcards"
+                ctaLabel="Choose a postcard"
+                onDismiss={() => setPostcardIntroActive(false)}
+                onCta={() => {
+                  setPostcardIntroActive(false)
+                  setPostcardPickerOpen(true)
+                }}
               >
+                <p className="italic">Send a little piece of a place.</p>
                 <p>
-                  Postcards are little keepsakes you can tuck into a Letter or Dispatch. Choose
-                  one, write something on the front, then leave something more on the back for
-                  the reader to discover.
+                  Choose a postcard, add a few words to the front, and write something more on
+                  the back — then send it along with your Letter or Dispatch as a small keepsake.
                 </p>
               </FeatureIntroduction>
             )}
             <PostcardComposerSlot
               draft={postcardDraft}
               catalogEntry={postcardCatalogEntry}
-              onAdd={() => setPostcardPickerOpen(true)}
+              onAdd={handleAddPostcard}
               onEdit={() => setPostcardEditorOpen(true)}
             />
           </>

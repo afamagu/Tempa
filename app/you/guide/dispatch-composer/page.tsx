@@ -17,6 +17,7 @@ export default async function ReplayDispatchComposerGuide() {
       guideKey="dispatch_composer"
       title="Leave something on the Board"
       ctaLabel="Start writing"
+      destinationHref="/board/write"
     >
       <p>
         A Dispatch is public writing. It might be a story from your day, something you&rsquo;ve

@@ -197,7 +197,7 @@ export default function FirstLetterComposer({
             Your letter to {recipientPseudonym} has been sent.
           </p>
           <Link href="/minds" className={secondaryButtonClass}>
-            Back to Minds
+            Back to People
           </Link>
         </div>
       </main>
@@ -241,7 +241,7 @@ export default function FirstLetterComposer({
 
           <div className="flex flex-wrap gap-3">
             <Link href="/minds" className={secondaryButtonClass}>
-              Back to Minds
+              Back to People
             </Link>
             <button
               type="button"

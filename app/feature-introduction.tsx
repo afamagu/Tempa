@@ -39,6 +39,7 @@ export default function FeatureIntroduction({
   children,
   ctaLabel,
   onDismiss,
+  onCta,
 }: {
   guideKey: GuideKey
   title: string
@@ -47,22 +48,42 @@ export default function FeatureIntroduction({
   /** Called after the completion write settles (success or failure —
    * dismissal always proceeds locally either way, matching every other
    * dismissible notice in this codebase, e.g. MomentHint's own "no
-   * persistence available" fallback). Guide replay pages use this to
-   * navigate back to /you/guide once acknowledged again. */
+   * persistence available" fallback), from the small "×" close ONLY —
+   * a plain "never mind, close this." Guide replay pages use this to
+   * return to /you/guide. */
   onDismiss?: () => void
+  /**
+   * Post-onboarding corrections checkpoint (Section F/H) — called
+   * instead of onDismiss when the labeled CTA button itself is what's
+   * clicked, so a CTA that promises a real action ("See what's on the
+   * Board", "Choose a postcard") can actually DO that action instead of
+   * just closing the card. Falls back to onDismiss when not given, so
+   * every existing call site — where the CTA and × always meant exactly
+   * the same "acknowledge and move on" — keeps behaving identically.
+   */
+  onCta?: () => void
 }) {
   const [dismissed, setDismissed] = useState(false)
 
   if (dismissed) return null
 
-  async function dismiss() {
+  async function complete() {
     setDismissed(true)
     const supabase = createClient()
     const { error } = await markGuideCompleted(supabase, guideKey)
     if (error) {
       console.error('[feature-introduction] completion write failed', { guideKey, ...error })
     }
+  }
+
+  async function handleClose() {
+    await complete()
     onDismiss?.()
+  }
+
+  async function handleCta() {
+    await complete()
+    ;(onCta ?? onDismiss)?.()
   }
 
   return (
@@ -71,7 +92,7 @@ export default function FeatureIntroduction({
         <p className="font-serif text-lg italic text-foreground">{title}</p>
         <button
           type="button"
-          onClick={dismiss}
+          onClick={handleClose}
           aria-label="Dismiss"
           className="shrink-0 text-foreground/40 transition-colors hover:text-foreground/70"
         >
@@ -81,7 +102,7 @@ export default function FeatureIntroduction({
       <div className={`space-y-2 ${systemBodyClass}`}>{children}</div>
       <button
         type="button"
-        onClick={dismiss}
+        onClick={handleCta}
         className="inline-flex items-center justify-center rounded-md bg-accent text-accent-foreground px-4 py-2 text-[14px] font-medium transition-colors hover:bg-accent/90"
       >
         {ctaLabel}

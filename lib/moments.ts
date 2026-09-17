@@ -248,7 +248,16 @@ export type LetterPostcardDraft = {
   backMessage: string
 }
 
-export const POSTCARD_BACK_MESSAGE_MAX_LENGTH = 200
+// Smoke-test contract completion checkpoint — 200 -> 300, mirroring
+// write_letter/reply_to_letter (Letter Postcards) and publish_dispatch
+// (Dispatch Postcards) server-side checks exactly, and the
+// letter_postcards_back_message_length / dispatch_postcards_back_
+// message_length CHECK constraints (docs/sql/2026-09-28-title-postcard-
+// and-edit-window.sql). One shared constant reused by both the Dispatch
+// and Letter Postcard composers (both mount the same PostcardEditor/
+// PostcardObject) — the front-side Reveal Line limit
+// (REVEAL_LINE_MAX_LENGTH) is untouched by this checkpoint.
+export const POSTCARD_BACK_MESSAGE_MAX_LENGTH = 300
 
 /**
  * Postcard back copy + recipient cleanup (2026-09-14); placeholder

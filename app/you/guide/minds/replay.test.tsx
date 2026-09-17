@@ -18,6 +18,6 @@ describe('ReplayMindsGuide', () => {
   it('renders the Minds walkthrough with a Close affordance — an opt-in replay, not an auto-shown gate', () => {
     const html = renderToStaticMarkup(<ReplayMindsGuide />)
     expect(html).toContain('aria-label="Close"')
-    expect(html).toContain('Welcome to Minds')
+    expect(html).toContain('Welcome to People')
   })
 })

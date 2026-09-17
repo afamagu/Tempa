@@ -19,4 +19,15 @@ describe('MindsWalkthrough', () => {
     expect(html.toLowerCase()).not.toContain('send letter')
     expect(html.toLowerCase()).not.toContain('mail call')
   })
+
+  // Post-onboarding corrections checkpoint (Section E) — this replay-only
+  // walkthrough (guide key 'minds', reached from /you/guide/minds) still
+  // said "Welcome to Minds" after the product-wide People rename. Fixed
+  // to "Welcome to People"; the route and guide_key stay 'minds'
+  // deliberately (internal identifiers, not user-visible copy).
+  it('says "Welcome to People", never "Welcome to Minds" — screen 1 is user-visible copy, not an internal identifier', () => {
+    const html = renderToStaticMarkup(<MindsWalkthrough onExit={() => {}} onFinish={() => {}} />)
+    expect(html).toContain('Welcome to People')
+    expect(html).not.toContain('Welcome to Minds')
+  })
 })

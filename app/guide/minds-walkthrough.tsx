@@ -5,7 +5,7 @@ import { helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app
 import SystemIntro from '@/app/profile/system-intro'
 import TempaPose from '@/app/tempa-pose'
 
-const MINDS_MARKER = '◎ Minds'
+const MINDS_MARKER = '◎ People'
 
 function Screen({
   children,
@@ -67,12 +67,12 @@ export default function MindsWalkthrough({
             <TempaPose pose="welcome" />
             <SystemIntro
               marker={MINDS_MARKER}
-              heading="Welcome to Minds"
+              heading="Welcome to People"
               body={
                 <>
                   <p>
-                    Minds is where people discover one another through what they think, not how
-                    they look.
+                    People is where you discover one another through what you think, not how you
+                    look.
                   </p>
                   <p className="font-medium text-foreground">
                     Answer a Question to give other people something meaningful to discover about
@@ -97,7 +97,7 @@ export default function MindsWalkthrough({
                   </p>
                   <p>
                     <span className="font-medium text-foreground">My answers</span> holds
-                    everything you&apos;ve published. Only one of your answers appears in Minds at
+                    everything you&apos;ve published. Only one of your answers appears in People at
                     a time, and you choose which one represents you.
                   </p>
                 </>

@@ -1,9 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DispatchComposer from './dispatch-composer'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {} }) }))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))
+
+const dispatchComposerSource = readFileSync(new URL('./dispatch-composer.tsx', import.meta.url), 'utf8')
 
 // Same structural limitation accepted for every other Tiptap composer
 // in this codebase (see moments-composer.test.tsx, first-letter-
@@ -46,9 +49,38 @@ describe('DispatchComposer — initial render (editor not yet mounted)', () => {
     expect(html).toContain('What is this about, in one line?')
   })
 
-  it('the title input enforces the 70-character ceiling at the HTML level', () => {
+  // Smoke-test contract completion checkpoint: 70 -> 140 (the migration
+  // this earlier checkpoint deferred, docs/sql/2026-09-28-title-
+  // postcard-and-edit-window.sql, has now been prepared for approval).
+  it('the title input enforces the 140-character ceiling at the HTML level', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(html).toMatch(/maxLength="70"/)
+    expect(html).toMatch(/maxLength="140"/)
+  })
+
+  // Post-onboarding corrections checkpoint (Section J) — the title
+  // counter, muted at rest, never red from the first character. The
+  // counter is written against whatever TITLE_MAX_CHARS currently is,
+  // so it picked up the new 140 value automatically once that migration
+  // was prepared, with no change to the counter's own logic.
+  it('shows a live "N / 140" title counter, muted at rest (an empty title is not an error state)', () => {
+    const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
+    expect(html).toContain('0 / 140')
+    expect(html).not.toContain('text-red-600')
+  })
+
+  it('the counter reflects typed length, still muted well below the ceiling', () => {
+    const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" existingDispatch={undefined} />)
+    // Static render only proves the initial (empty) state — live typing
+    // needs a real browser, same limitation as every other Tiptap
+    // composer test in this file. The color-escalation rule itself is
+    // pinned by source inspection instead.
+    expect(html).toContain('0 / 140')
+  })
+
+  it('the counter turns the same red used for the field\'s own validation error once length reaches the ceiling — never before', () => {
+    expect(dispatchComposerSource).toContain(
+      "title.length >= TITLE_MAX_CHARS ? 'text-red-600' : helperTextClass"
+    )
   })
 
   // No product-level length limit for the body — this file never
@@ -212,13 +244,43 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     expect(hidden).not.toContain('Leave something on the Board')
   })
 
-  it('shows the Postcard introduction only when showPostcardIntro is true and no Postcard is already drafted', () => {
+  // Post-onboarding corrections checkpoint (Section G) — a live smoke
+  // test found the Postcard introduction stacked directly below the
+  // Dispatch-writing introduction the instant the composer opened, too
+  // much teaching at once. showPostcardIntro alone (still-unseen, per
+  // guide_completions) is no longer sufficient to render it — only
+  // actually activating the Postcard slot does (postcardIntroActive,
+  // covered by source inspection below, since renderToStaticMarkup
+  // can't exercise a click).
+  it('never renders the Postcard introduction on initial render, even when showPostcardIntro is true — it needs a genuine slot activation first', () => {
     const shown = renderToStaticMarkup(<DispatchComposer authorId="author-1" showPostcardIntro />)
-    expect(shown).toContain('Send something from somewhere')
-    expect(shown).toContain('Choose a Postcard')
+    expect(shown).not.toContain('Postcards')
+    expect(shown).not.toContain('Choose a postcard')
+    // The empty slot itself is what's shown instead, waiting to be
+    // activated.
+    expect(shown).toContain('Add a postcard')
+  })
 
-    const hidden = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(hidden).not.toContain('Send something from somewhere')
+  it('does not stack the Postcard introduction under the Dispatch-writing introduction — only one lesson shows at a time on open', () => {
+    const html = renderToStaticMarkup(
+      <DispatchComposer authorId="author-1" showComposerIntro showPostcardIntro />
+    )
+    expect(html).toContain('Leave something on the Board')
+    expect(html).not.toContain('Postcards')
+  })
+
+  it('the Postcard slot activation is gated on showPostcardIntro, and its CTA opens the real picker, not just a dismissal (Section G/H)', () => {
+    expect(dispatchComposerSource).toContain('function handleAddPostcard() {')
+    const fnStart = dispatchComposerSource.indexOf('function handleAddPostcard() {')
+    const fnEnd = dispatchComposerSource.indexOf('\n  }', fnStart)
+    const fnBody = dispatchComposerSource.slice(fnStart, fnEnd)
+    expect(fnBody).toContain('if (showPostcardIntro) {')
+    expect(fnBody).toContain('setPostcardIntroActive(true)')
+    expect(fnBody).toContain('setPostcardPickerOpen(true)')
+
+    expect(dispatchComposerSource).toContain('onAdd={handleAddPostcard}')
+    const normalized = dispatchComposerSource.replace(/\s+/g, ' ')
+    expect(normalized).toContain('onCta={() => { setPostcardIntroActive(false) setPostcardPickerOpen(true) }}')
   })
 
   it('neither introduction renders in edit mode — an author editing an existing Dispatch already knows how this works', () => {
@@ -239,13 +301,11 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
       />
     )
     expect(html).not.toContain('Leave something on the Board')
-    expect(html).not.toContain('Send something from somewhere')
+    expect(html).not.toContain('Postcards')
   })
 
-  it('both introductions use the shared FeatureIntroduction card (clay-free, accent-bordered), never inline TempaNote treatment', () => {
-    const html = renderToStaticMarkup(
-      <DispatchComposer authorId="author-1" showComposerIntro showPostcardIntro />
-    )
+  it('the composer introduction uses the shared FeatureIntroduction card (clay-free, accent-bordered), never inline TempaNote treatment', () => {
+    const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" showComposerIntro />)
     expect(html).toMatch(/rounded-lg border border-accent\/20/)
   })
 })

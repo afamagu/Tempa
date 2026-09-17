@@ -13,7 +13,12 @@ export default async function ReplayPeopleGuide() {
   }
 
   return (
-    <ReplayFeatureIntroduction guideKey="people" title="People worth writing to" ctaLabel="Start exploring">
+    <ReplayFeatureIntroduction
+      guideKey="people"
+      title="People worth writing to"
+      ctaLabel="Start exploring"
+      destinationHref="/minds"
+    >
       <p>
         Tempa isn&rsquo;t about collecting followers. Take your time. Open someone&rsquo;s
         profile, read a little of what they&rsquo;ve shared, and write when somebody genuinely

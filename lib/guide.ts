@@ -13,7 +13,22 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // this type's own original comment anticipated. Each is a small, quiet,
 // point-of-first-encounter introduction, never the full walkthrough
 // treatment 'moments'/'minds' get.
-export type GuideKey = 'moments' | 'minds' | 'people' | 'board' | 'dispatch_composer' | 'postcard'
+//
+// Post-onboarding corrections checkpoint (Q2) — 'dispatch_reading' added
+// for the first-authenticated-read Dispatch introduction
+// (app/board/[dispatchId]/page.tsx), same lightweight pattern. Deliberately
+// its own key, never reused from 'dispatch_composer' (writing a Dispatch)
+// or 'board' (browsing the Board) — completing either of those must never
+// silently mark the reading introduction complete, since they teach
+// different moments a member encounters at different times.
+export type GuideKey =
+  | 'moments'
+  | 'minds'
+  | 'people'
+  | 'board'
+  | 'dispatch_composer'
+  | 'postcard'
+  | 'dispatch_reading'
 
 export type GuideWriteError = { message: string; code?: string } | null
 

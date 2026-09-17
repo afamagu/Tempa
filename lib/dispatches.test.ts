@@ -35,6 +35,8 @@ import {
   getNextTrailItems,
   CONTINUE_READING_COUNT,
   getDispatchPostcard,
+  isWithinDispatchEditWindow,
+  canEditDispatch,
   type BoardFeedCursor,
   type BoardFeedItem,
 } from './dispatches'
@@ -178,10 +180,11 @@ describe('publishDispatch', () => {
     expect(error?.message).toContain('needs a title')
   })
 
+  // Smoke-test contract completion checkpoint: 70 -> 140.
   it('2. title max length is enforced', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
     const { data, error } = await publishDispatch(client(fake), {
-      title: 'x'.repeat(71),
+      title: 'x'.repeat(141),
       body: 'x',
       topics: [],
     })
@@ -189,15 +192,16 @@ describe('publishDispatch', () => {
     expect(error?.message).toContain('too long')
   })
 
-  it('a title at exactly 70 characters succeeds', async () => {
+  // Smoke-test contract completion checkpoint: 70 -> 140.
+  it('a title at exactly 140 characters succeeds', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
     const { data, error } = await publishDispatch(client(fake), {
-      title: 'x'.repeat(70),
+      title: 'x'.repeat(140),
       body: 'A long-form Dispatch.',
       topics: [],
     })
     expect(error).toBeNull()
-    expect(data?.title).toHaveLength(70)
+    expect(data?.title).toHaveLength(140)
   })
 
   it('a successful publish returns the new row, authored by the caller', async () => {
@@ -353,7 +357,8 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
     expect(error?.message).toContain('Reveal Line')
   })
 
-  it('a back message over 200 characters is rejected', async () => {
+  // Smoke-test contract completion checkpoint: 200 -> 300.
+  it('a back message over 300 characters is rejected', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
       rows: [],
@@ -365,10 +370,28 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       title: 'Too long a back message',
       body: 'x',
       topics: [],
-      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'x'.repeat(201) },
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'x'.repeat(301) },
     })
     expect(data).toBeNull()
     expect(error?.message).toContain('too long')
+  })
+
+  it('a back message at exactly 300 characters is accepted — the Dispatch Postcard surface uses the new 300 ceiling', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [],
+      profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }],
+      postcardCatalog: ACTIVE_CATALOG,
+      postcardVersions: [CURRENT_VERSION],
+    })
+    const { data, error } = await publishDispatch(client(fake), {
+      title: 'A long back message',
+      body: 'x',
+      topics: [],
+      postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'x'.repeat(300) },
+    })
+    expect(error).toBeNull()
+    expect(fake._dispatchPostcards.find((p) => p.dispatch_id === data!.id)?.back_message).toHaveLength(300)
   })
 
   it('one Postcard maximum — two separate publishes each get their own single row, never more than one per Dispatch', async () => {
@@ -487,17 +510,68 @@ describe('searchDispatches', () => {
   })
 })
 
+// Smoke-test contract completion checkpoint — the two pure UI-hint
+// helpers directly, mock-free (same precedent as canWriteToMind's own
+// direct-predicate tests), independent of the fake-RPC integration
+// tests above.
+describe('isWithinDispatchEditWindow', () => {
+  it('is true immediately at publish time', () => {
+    expect(isWithinDispatchEditWindow(new Date().toISOString(), new Date())).toBe(true)
+  })
+
+  it('is true just before the 30-minute boundary', () => {
+    const now = new Date('2026-01-01T00:30:00Z')
+    const publishedAt = new Date('2026-01-01T00:00:01Z').toISOString()
+    expect(isWithinDispatchEditWindow(publishedAt, now)).toBe(true)
+  })
+
+  it('is true exactly at the 30-minute boundary — the boundary itself is still editable (<=, not <)', () => {
+    const publishedAt = new Date('2026-01-01T00:00:00Z').toISOString()
+    const now = new Date('2026-01-01T00:30:00Z')
+    expect(isWithinDispatchEditWindow(publishedAt, now)).toBe(true)
+  })
+
+  it('is false just after the 30-minute boundary', () => {
+    const publishedAt = new Date('2026-01-01T00:00:00Z').toISOString()
+    const now = new Date('2026-01-01T00:30:00.001Z')
+    expect(isWithinDispatchEditWindow(publishedAt, now)).toBe(false)
+  })
+
+  it('defaults `now` to the current time when not given', () => {
+    expect(isWithinDispatchEditWindow(new Date(Date.now() - 60 * 60 * 1000).toISOString())).toBe(false)
+  })
+})
+
+describe('canEditDispatch', () => {
+  it('true only when the viewer is the author, within the window, and no reply exists', () => {
+    expect(canEditDispatch({ isAuthor: true, withinEditWindow: true, replyExists: false })).toBe(true)
+  })
+
+  it('false for a non-author, regardless of window/reply state', () => {
+    expect(canEditDispatch({ isAuthor: false, withinEditWindow: true, replyExists: false })).toBe(false)
+  })
+
+  it('false once the window has closed, even for the author with no replies', () => {
+    expect(canEditDispatch({ isAuthor: true, withinEditWindow: false, replyExists: false })).toBe(false)
+  })
+
+  it('false once a reply exists, even for the author within the window', () => {
+    expect(canEditDispatch({ isAuthor: true, withinEditWindow: true, replyExists: true })).toBe(false)
+  })
+})
+
 describe('dispatchTitleError', () => {
   it('rejects a blank title', () => {
     expect(dispatchTitleError('   ')).toBe('A Dispatch needs a title.')
   })
 
-  it('rejects a title over 70 characters', () => {
-    expect(dispatchTitleError('x'.repeat(71))).toBe('Title is too long.')
+  // Smoke-test contract completion checkpoint: 70 -> 140.
+  it('rejects a title over 140 characters', () => {
+    expect(dispatchTitleError('x'.repeat(141))).toBe('Title is too long.')
   })
 
-  it('accepts a title at exactly 70 characters', () => {
-    expect(dispatchTitleError('x'.repeat(70))).toBeNull()
+  it('accepts a title at exactly 140 characters', () => {
+    expect(dispatchTitleError('x'.repeat(140))).toBeNull()
   })
 
   it('accepts an ordinary one-line title', () => {
@@ -944,10 +1018,21 @@ describe('Board usability checkpoint — sharing broadened to any authenticated 
 })
 
 describe('Board usability checkpoint — updateDispatch (edit)', () => {
+  // Smoke-test contract completion checkpoint — row()'s own default
+  // published_at ('2026-09-07T00:00:00Z') is now permanently outside
+  // any 30-minute edit window relative to whenever tests actually run.
+  // Every fixture below that means to represent an ordinarily-editable
+  // Dispatch (not specifically testing the window itself) overrides
+  // published_at to "now" — this isn't weakening the tests, it's
+  // supplying the one new piece of state a real edit-window contract
+  // now needs, for a fixture whose ORIGINAL intent was always "a
+  // normal, freshly-published, editable Dispatch."
+  const justPublished = () => new Date().toISOString()
+
   it('the author can edit their own published Dispatch', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old title' })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old title', published_at: justPublished() })],
     })
     const { data, error } = await updateDispatch(client(fake), 'd-1', {
       title: 'New title',
@@ -962,7 +1047,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
   it('a non-author cannot edit', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_B,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
     const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Hijacked', body: 'x', topics: [] })
     expect(data).toBeNull()
@@ -972,7 +1057,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
   it('editing preserves the Dispatch id — it is the same row, not a replacement', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
     const { data } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
     expect(data?.id).toBe('d-1')
@@ -981,7 +1066,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
   it('editing does not create a new external share token — an existing active token survives untouched', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
     const share = await shareDispatch(client(fake), 'd-1')
     await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
@@ -989,10 +1074,20 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
     expect(stillActive?.id).toBe(share.data?.id)
   })
 
+  it('editing does not reset or extend published_at — the edit window\'s clock is untouched by editing itself', async () => {
+    const original = justPublished()
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: original })],
+    })
+    const { data } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(data?.publishedAt).toBe(original)
+  })
+
   it('a failed edit (blank title) does not destroy the existing Dispatch', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Untouched' })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Untouched', published_at: justPublished() })],
     })
     const { error } = await updateDispatch(client(fake), 'd-1', { title: '  ', body: 'x', topics: [] })
     expect(error).not.toBeNull()
@@ -1001,13 +1096,28 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
     expect(stillThere?.title).toBe('Untouched')
   })
 
-  it('validation matches publishing: a 71-character title is rejected the same way', async () => {
+  // Smoke-test contract completion checkpoint — 70 -> 140.
+  it('validation matches publishing: a 141-character title is rejected the same way', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
-    const tooLong = await updateDispatch(client(fake), 'd-1', { title: 'x'.repeat(71), body: 'x', topics: [] })
+    const tooLong = await updateDispatch(client(fake), 'd-1', { title: 'x'.repeat(141), body: 'x', topics: [] })
     expect(tooLong.error?.message).toContain('too long')
+  })
+
+  it('a 140-character title is accepted — create and edit agree on the exact same ceiling', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
+    })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', {
+      title: 'x'.repeat(140),
+      body: 'x',
+      topics: [],
+    })
+    expect(error).toBeNull()
+    expect(data?.title).toHaveLength(140)
   })
 
   it('validation matches publishing: topics are capped at 3 client-side before the RPC ever sees them (normalizeTopics)', async () => {
@@ -1018,7 +1128,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
     // wrapper — this test proves the wrapper's own contract instead.
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
     const { error } = await updateDispatch(client(fake), 'd-1', {
       title: 'Fine',
@@ -1033,7 +1143,15 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
   it('independent review item 4: a HIDDEN Dispatch cannot be edited by its own still-active author', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Frozen while hidden', moderation_status: 'hidden' })],
+      rows: [
+        row({
+          id: 'd-1',
+          author_id: AUTHOR_A,
+          title: 'Frozen while hidden',
+          moderation_status: 'hidden',
+          published_at: justPublished(),
+        }),
+      ],
     })
     const { data, error } = await updateDispatch(client(fake), 'd-1', {
       title: 'Sneaky rewrite',
@@ -1051,11 +1169,199 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
   it('restoring a Dispatch makes it editable by its author again', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
-      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old', moderation_status: 'hidden' })],
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old', moderation_status: 'hidden', published_at: justPublished() })],
     })
     fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
     const { error } = await updateDispatch(client(fake), 'd-1', { title: 'New', body: 'x', topics: [] })
     expect(error).toBeNull()
+  })
+})
+
+// Smoke-test contract completion checkpoint (Section E/F/H/I) — the
+// published-Dispatch edit window and reply lock, tested against the
+// fake update_dispatch RPC (lib/__tests__/fakeDispatches.ts), which
+// mirrors the real SQL's two new checks exactly: now() <= published_at
+// + 30 minutes, and bare dispatch_replies row EXISTENCE (never filtered
+// by moderation_status/deleted_at).
+describe('Smoke-test contract completion — published Dispatch edit window / reply lock', () => {
+  const MINUTES = 60 * 1000
+  const minutesAgo = (n: number) => new Date(Date.now() - n * MINUTES).toISOString()
+
+  it('10. the author can edit a just-published Dispatch with zero replies', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(0) })],
+    })
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(error).toBeNull()
+  })
+
+  it('11. a non-author cannot edit, independent of the window/reply-lock checks', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_B,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(0) })],
+    })
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Hijacked', body: 'x', topics: [] })
+    expect(error?.message).toContain('author')
+  })
+
+  it('12. the author can edit before the 30-minute boundary, with zero replies', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(29) })],
+    })
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(error).toBeNull()
+  })
+
+  it('13. the author cannot edit after the 30-minute boundary', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(31) })],
+    })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Too late', body: 'x', topics: [] })
+    expect(data).toBeNull()
+    expect(error?.message).toBe('This Dispatch can no longer be edited.')
+  })
+
+  it('15. the author cannot edit once a qualifying public reply exists, even well within the 30-minute window', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(1) })],
+      replies: [
+        {
+          id: 'r-1',
+          dispatch_id: 'd-1',
+          author_id: AUTHOR_B,
+          body: 'A real reply.',
+          parent_reply_id: null,
+          root_reply_id: null,
+          reply_to_user_id: null,
+          moderation_status: 'visible',
+          deleted_at: null,
+          created_at: minutesAgo(1),
+        },
+      ],
+    })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Too late', body: 'x', topics: [] })
+    expect(data).toBeNull()
+    expect(error?.message).toBe('This Dispatch can no longer be edited.')
+  })
+
+  it('16. a stale edit submission is rejected if a reply arrives after the page (conceptually) loaded — the RPC re-checks eligibility itself, not a client-held snapshot', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(1) })],
+    })
+    // "Page load": eligibility was fine (no replies yet) — this app
+    // never trusts that moment; it only ever calls updateDispatch,
+    // which re-derives eligibility fresh, right now.
+    const beforeReply = await updateDispatch(client(fake), 'd-1', { title: 'First edit', body: 'x', topics: [] })
+    expect(beforeReply.error).toBeNull()
+
+    // A reply lands.
+    fake._replies.push({
+      id: 'r-1',
+      dispatch_id: 'd-1',
+      author_id: AUTHOR_B,
+      body: 'Just replied.',
+      parent_reply_id: null,
+      root_reply_id: null,
+      reply_to_user_id: null,
+      moderation_status: 'visible',
+      deleted_at: null,
+      created_at: new Date().toISOString(),
+    })
+
+    // The "stale" submission — same author, same Dispatch, submitted as
+    // though nothing had changed since their own earlier successful edit.
+    const staleSubmission = await updateDispatch(client(fake), 'd-1', { title: 'Stale edit', body: 'x', topics: [] })
+    expect(staleSubmission.data).toBeNull()
+    expect(staleSubmission.error?.message).toBe('This Dispatch can no longer be edited.')
+  })
+
+  it('17. the reply lock is keyed on real row existence in dispatch_replies — never on any client-held/UI state', async () => {
+    // No client-side flag of any kind is passed to updateDispatch at
+    // all (its own TypeScript input type has no such field) — the lock
+    // can only ever be driven by what the fake's own `replies` fixture
+    // (standing in for the real dispatch_replies table) actually
+    // contains, proving there is no alternate, weaker path to bypass it.
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(1) })],
+      replies: [
+        {
+          id: 'r-1',
+          dispatch_id: 'd-1',
+          author_id: AUTHOR_A,
+          body: 'The author replying to their own Dispatch still counts.',
+          parent_reply_id: null,
+          root_reply_id: null,
+          reply_to_user_id: null,
+          moderation_status: 'visible',
+          deleted_at: null,
+          created_at: minutesAgo(1),
+        },
+      ],
+    })
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(error?.message).toBe('This Dispatch can no longer be edited.')
+  })
+
+  it('18. a moderator-HIDDEN reply still locks editing — the lock is bare row existence, never filtered by moderation_status', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(1) })],
+      replies: [
+        {
+          id: 'r-1',
+          dispatch_id: 'd-1',
+          author_id: AUTHOR_B,
+          body: '',
+          parent_reply_id: null,
+          root_reply_id: null,
+          reply_to_user_id: null,
+          moderation_status: 'hidden',
+          deleted_at: null,
+          created_at: minutesAgo(1),
+        },
+      ],
+    })
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(error?.message).toBe('This Dispatch can no longer be edited.')
+  })
+
+  it('19. a member-DELETED (soft-tombstoned) reply still locks editing — the lock is bare row existence, never filtered by deleted_at', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(1) })],
+      replies: [
+        {
+          id: 'r-1',
+          dispatch_id: 'd-1',
+          author_id: AUTHOR_B,
+          body: '',
+          parent_reply_id: null,
+          root_reply_id: null,
+          reply_to_user_id: null,
+          moderation_status: 'visible',
+          deleted_at: minutesAgo(1),
+          created_at: minutesAgo(1),
+        },
+      ],
+    })
+    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(error?.message).toBe('This Dispatch can no longer be edited.')
+  })
+
+  it('20. an unpublished Dispatch\'s (non-)editability is unaffected by this checkpoint — still refused for the same original reason', async () => {
+    const fake = createFakeDispatches({
+      viewerId: AUTHOR_A,
+      rows: [row({ id: 'd-1', author_id: AUTHOR_A, status: 'unpublished', published_at: minutesAgo(0) })],
+    })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    expect(data).toBeNull()
+    expect(error?.message).toContain('author')
   })
 })
 

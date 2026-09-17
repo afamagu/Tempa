@@ -96,72 +96,65 @@ export default async function MindsPage({
   // Information Architecture).
   const needsAnswer = needsParticipationGate(eligibleQuestions.length, myAnswers.length)
 
-  // Discovery's pool is strictly "answers to the current Flagship
-  // Question," never is_current (member-choosable, and no longer what
-  // determines Minds eligibility at all). Flagship is a separate,
-  // admin-chosen bit of state (questions.is_flagship) — NEVER
-  // permanently tied to slot #1 or any other particular slot number
-  // (getFlagshipQuestion resolves it directly; this file never reads
-  // current_position to find it). A member who hasn't answered the
-  // current Flagship — even if they have a perfectly good answer to
-  // another current Question, even if is_current happens to point
-  // elsewhere — is simply not in this pool. No fallback, ever.
+  // People-first discovery (Post-onboarding corrections checkpoint,
+  // Section A/B): the default population is every eligible PERSON —
+  // sourced from public_profiles directly — never gated on having
+  // answered any particular Question. public_profiles is itself
+  // full-block-aware at the view/RLS level (see
+  // docs/sql/2026-09-12-scoped-blocking-and-fixes.sql, section 2: its
+  // block-check helper was redefined to mean "scope = 'full' only"), so
+  // a full block is already excluded here for free, and a
+  // 'letters'-only (Stop Letters) block correctly does NOT hide a
+  // profile from this surface, matching the established safety
+  // contract. The Flagship Question's answer (if any) is fetched
+  // separately and merged on afterward, purely to decide what a card
+  // previews — it is never what decides who's IN the pool.
   const flagship = await getFlagshipQuestion(supabase)
+  const flagshipPrompt = flagship?.prompt ?? ''
 
-  const [{ data: answers }, excludedPartnerIds, contactedAnswerIds] = await Promise.all([
+  const [{ data: profiles }, { data: flagshipAnswers }, excludedPartnerIds, contactedAnswerIds] = await Promise.all([
+    supabase
+      .from('public_profiles')
+      .select('id, pseudonym, country, gender, gender_custom, age_range')
+      .neq('id', user.id),
     flagship
       ? supabase
           .from('question_answers')
-          .select('id, user_id, question_id, body')
+          .select('id, user_id, body')
           .eq('question_id', flagship.id)
           .eq('moderation_status', 'visible')
-          .neq('user_id', user.id)
-      : Promise.resolve({ data: [] as { id: string; user_id: string; question_id: string; body: string }[] }),
+      : Promise.resolve({ data: [] as { id: string; user_id: string; body: string }[] }),
     getActiveCorrespondencePartnerIds(supabase, user.id),
     getContactedAnswerIds(supabase, user.id),
   ])
 
-  const eligible = (answers ?? []).filter(
-    (a) => !excludedPartnerIds.has(a.user_id) && !contactedAnswerIds.has(a.id)
+  const flagshipAnswerByUserId = new Map(
+    (flagshipAnswers ?? []).map((a) => [a.user_id, { id: a.id, body: a.body }])
   )
 
-  // Every entry in this pool answers the SAME Question (the flagship),
-  // so there is exactly one prompt to resolve, not a per-answer lookup.
-  const flagshipPrompt = flagship?.prompt ?? ''
-
-  const userIds = [...new Set(eligible.map((a) => a.user_id))]
-  const profilesById = new Map<
-    string,
-    { pseudonym: string; country: string; gender: string | null; gender_custom: string | null; age_range: string }
-  >()
-
-  if (userIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from('public_profiles')
-      .select('id, pseudonym, country, gender, gender_custom, age_range')
-      .in('id', userIds)
-
-    for (const p of profiles ?? []) {
-      profilesById.set(p.id, p)
-    }
-  }
+  // Active-correspondence partners are excluded outright (existing pen
+  // pals belong in Letters, not discovery). A person whose Flagship
+  // answer has already been written to (getContactedAnswerIds — the
+  // exact same "don't resurface what I already acted on" exclusion this
+  // page has always applied) is excluded too, preserving today's
+  // behavior for anyone with a response; it never applies to someone
+  // with no Flagship answer, since there's nothing yet to have
+  // contacted them about.
+  const eligibleProfiles = (profiles ?? []).filter((p) => {
+    if (excludedPartnerIds.has(p.id)) return false
+    const answer = flagshipAnswerByUserId.get(p.id)
+    if (answer && contactedAnswerIds.has(answer.id)) return false
+    return true
+  })
 
   // "Any" (an empty filter value) means no constraint on that field — it
   // is never compared against a stored column value.
-  const pool = eligible
-    .map((a) => ({ ...a, profile: profilesById.get(a.user_id) }))
-    .filter(
-      (a): a is typeof a & { profile: NonNullable<typeof a.profile> } =>
-        a.profile !== undefined
+  const pool = eligibleProfiles
+    .filter((p) => (country ? p.country === country : true))
+    .filter((p) =>
+      gender ? genderDisplay(p.gender, p.gender_custom) === gender || p.gender === gender : true
     )
-    .filter((a) => (country ? a.profile.country === country : true))
-    .filter((a) =>
-      gender
-        ? genderDisplay(a.profile.gender, a.profile.gender_custom) === gender ||
-          a.profile.gender === gender
-        : true
-    )
-    .filter((a) => (age ? a.profile.age_range === age : true))
+    .filter((p) => (age ? p.age_range === age : true))
 
   const ordered = stableShuffle(pool, user.id)
   const windowStart = batch * BATCH_SIZE
@@ -169,17 +162,17 @@ export default async function MindsPage({
   const hasMore = windowStart + page.length < ordered.length
   const poolExhausted = ordered.length > 0 && page.length === 0
 
-  const entries: DiscoveryEntry[] = page.map((a) => ({
-    id: a.id,
-    userId: a.user_id,
-    questionId: a.question_id,
-    body: a.body,
-    pseudonym: a.profile.pseudonym,
-    country: a.profile.country,
-    genderDisplay: genderDisplay(a.profile.gender, a.profile.gender_custom),
-    ageRange: a.profile.age_range,
-    prompt: flagshipPrompt,
-  }))
+  const entries: DiscoveryEntry[] = page.map((p) => {
+    const answer = flagshipAnswerByUserId.get(p.id)
+    return {
+      userId: p.id,
+      pseudonym: p.pseudonym,
+      country: p.country,
+      genderDisplay: genderDisplay(p.gender, p.gender_custom),
+      ageRange: p.age_range,
+      response: answer ? { id: answer.id, body: answer.body, prompt: flagshipPrompt } : null,
+    }
+  })
 
   const moreHref = `/minds?${buildQuery({
     country,
@@ -226,15 +219,25 @@ export default async function MindsPage({
 
           {entries.length === 0 ? (
             <div className="space-y-2">
+              {/* People-level empty states (Post-onboarding corrections
+                  checkpoint, Section C) — this is a directory of people,
+                  never a response search, so the copy never claims
+                  "responses" didn't match. Three distinct, calm cases:
+                  paged past everyone in the pool; filters narrowed an
+                  otherwise non-empty pool to zero; or there is genuinely
+                  no one new to discover yet, regardless of filters. */}
               <p className={helperTextClass}>
                 {poolExhausted
                   ? "You've seen everyone in this pool for now."
-                  : 'No responses match right now.'}
+                  : eligibleProfiles.length === 0
+                    ? "There's no one new to discover right now."
+                    : 'No one matches those filters right now.'}
               </p>
-              {!poolExhausted && (
-                <p className={helperTextClass}>
-                  Try widening your filters, or check back as more people respond.
-                </p>
+              {!poolExhausted && eligibleProfiles.length > 0 && (
+                <p className={helperTextClass}>Try widening your filters.</p>
+              )}
+              {!poolExhausted && eligibleProfiles.length === 0 && (
+                <p className={helperTextClass}>Check back soon as more people join.</p>
               )}
             </div>
           ) : (

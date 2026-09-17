@@ -15,17 +15,28 @@ import type { GuideKey } from '@/lib/guide'
  * FeatureIntroduction when !hasCompletedGuide) — a member can revisit
  * the explanation any time, without any database state reset. Dismissing
  * it here (harmlessly, idempotently) re-confirms completion, same as it
- * already would be, then returns to /you/guide.
+ * already would be.
+ *
+ * Post-onboarding corrections checkpoint (Section F) — a live smoke test
+ * found every one of these replay CTAs (e.g. Board's "See what's on the
+ * Board") just returned to /you/guide, contradicting what the label
+ * promised — both the × and the CTA called the same onDismiss. The ×
+ * still returns to /you/guide (a plain "never mind, close this"); the
+ * CTA now gets its own onCta, defaulting to /you/guide too so a call
+ * site only needs to pass destinationHref when its CTA promises
+ * somewhere specific to go.
  */
 export default function ReplayFeatureIntroduction({
   guideKey,
   title,
   ctaLabel,
+  destinationHref = '/you/guide',
   children,
 }: {
   guideKey: GuideKey
   title: string
   ctaLabel: string
+  destinationHref?: string
   children: ReactNode
 }) {
   const router = useRouter()
@@ -38,6 +49,7 @@ export default function ReplayFeatureIntroduction({
           title={title}
           ctaLabel={ctaLabel}
           onDismiss={() => router.push('/you/guide')}
+          onCta={() => router.push(destinationHref)}
         >
           {children}
         </FeatureIntroduction>
