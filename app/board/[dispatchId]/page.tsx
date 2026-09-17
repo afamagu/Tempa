@@ -401,30 +401,49 @@ export default async function DispatchPage({
               />
             </div>
 
-            {!isAuthor && <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />}
+            {/* Dispatch/author actions row (Small Dispatch Reader Layout
+                Correction) — Worth Reading and the correspondence entry
+                point are siblings of the SAME row, not stacked with the
+                latter reading like a Replies affordance. Worth Reading
+                stays at its existing left position; "Write to this
+                mind"/"Open your correspondence" moves to the row's right
+                edge. flex-wrap lets the link drop to its own line on
+                narrow screens rather than squeezing against the Worth
+                Reading control. The divider that used to sit directly
+                above the correspondence link now sits below the whole
+                row, so Replies only ever begins after BOTH actions have
+                been presented as a single "Dispatch/author actions"
+                concept — see this page's own test for the exact DOM
+                relationship this establishes. */}
+            {!isAuthor && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />
 
-            {/* Dispatch → Correspondence Entry Point checkpoint — a
-                quiet, editorial invitation into the EXISTING private
-                correspondence flow, never a social engagement bar. Same
-                three-state contract as app/minds/[userId]/page.tsx
-                (write / already-corresponding / nothing), reusing its
-                exact destinations — no new writing flow, no relationship
-                label ("Correspondent" etc.) ever shown. quietLinkClass
-                (a restrained underlined text link, not a button) keeps
-                this visually subordinate to the Dispatch itself, and
-                deliberately NOT sticky/floating — an ordinary in-flow
-                element, safe on mobile alongside AppShell's bottom nav. */}
-            {!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (
-              <div className="border-t border-foreground/10 pt-4">
-                {showWriteToAuthor && authorPrimaryAnswer ? (
-                  <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
-                    Write to this mind
-                  </Link>
-                ) : (
-                  <Link href="/letters" className={quietLinkClass}>
-                    Open your correspondence
-                  </Link>
-                )}
+                  {/* Dispatch → Correspondence Entry Point checkpoint — a
+                      quiet, editorial invitation into the EXISTING private
+                      correspondence flow, never a social engagement bar. Same
+                      three-state contract as app/minds/[userId]/page.tsx
+                      (write / already-corresponding / nothing), reusing its
+                      exact destinations — no new writing flow, no relationship
+                      label ("Correspondent" etc.) ever shown. quietLinkClass
+                      (a restrained underlined text link, not a button) keeps
+                      this visually subordinate to the Dispatch itself, and
+                      deliberately NOT sticky/floating — an ordinary in-flow
+                      element, safe on mobile alongside AppShell's bottom nav. */}
+                  {(showWriteToAuthor || alreadyCorrespondingWithAuthor) &&
+                    (showWriteToAuthor && authorPrimaryAnswer ? (
+                      <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
+                        Write to this mind
+                      </Link>
+                    ) : (
+                      <Link href="/letters" className={quietLinkClass}>
+                        Open your correspondence
+                      </Link>
+                    ))}
+                </div>
+
+                <div className="border-t border-foreground/10" />
               </div>
             )}
 
