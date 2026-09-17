@@ -407,9 +407,11 @@ export default async function DispatchPage({
                 latter reading like a Replies affordance. Worth Reading
                 stays at its existing left position; "Write to this
                 mind"/"Open your correspondence" moves to the row's right
-                edge. flex-wrap lets the link drop to its own line on
-                narrow screens rather than squeezing against the Worth
-                Reading control. The divider that used to sit directly
+                edge. The row deliberately does not wrap: at very narrow
+                widths the restrained text link may wrap within its own
+                right-aligned flex item, but it remains paired with Worth
+                Reading instead of becoming a separate stacked action.
+                The divider that used to sit directly
                 above the correspondence link now sits below the whole
                 row, so Replies only ever begins after BOTH actions have
                 been presented as a single "Dispatch/author actions"
@@ -417,7 +419,7 @@ export default async function DispatchPage({
                 relationship this establishes. */}
             {!isAuthor && (
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />
 
                   {/* Dispatch → Correspondence Entry Point checkpoint — a
@@ -431,16 +433,18 @@ export default async function DispatchPage({
                       this visually subordinate to the Dispatch itself, and
                       deliberately NOT sticky/floating — an ordinary in-flow
                       element, safe on mobile alongside AppShell's bottom nav. */}
-                  {(showWriteToAuthor || alreadyCorrespondingWithAuthor) &&
-                    (showWriteToAuthor && authorPrimaryAnswer ? (
-                      <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
-                        Write to this mind
-                      </Link>
-                    ) : (
-                      <Link href="/letters" className={quietLinkClass}>
-                        Open your correspondence
-                      </Link>
-                    ))}
+                  <div className="min-w-0 text-right leading-snug">
+                    {(showWriteToAuthor || alreadyCorrespondingWithAuthor) &&
+                      (showWriteToAuthor && authorPrimaryAnswer ? (
+                        <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
+                          Write to this mind
+                        </Link>
+                      ) : (
+                        <Link href="/letters" className={quietLinkClass}>
+                          Open your correspondence
+                        </Link>
+                      ))}
+                  </div>
                 </div>
 
                 <div className="border-t border-foreground/10" />
