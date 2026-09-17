@@ -35,8 +35,9 @@ import {
   generateWashMassPoints,
   cutToneColor,
   washPigmentColor,
-  generateWeaveStrands,
+  generateWeaveTiles,
   generateContourRings,
+  contourLevelColor,
   generateGlyphAnchors,
   type RGB,
   type Point,
@@ -1173,11 +1174,12 @@ describe('cutToneColor / washPigmentColor — source hue preserved, family-speci
 describe('WEAVE / CONTOUR / GLYPH architectural primitives', () => {
   const stats = baseCutWashStats({ centroid: { x: 19, y: 27 }, orientationRad: Math.PI / 5, elongation: 2.2, pixelCount: 180, meanColor: [70, 130, 190] })
 
-  it('WEAVE deterministically produces curved strands rather than pixels or closed contours', () => {
-    const a = generateWeaveStrands(stats, 6)
-    expect(a).toEqual(generateWeaveStrands({ ...stats }, 6))
-    expect(a).toHaveLength(6)
-    expect(a.every((strand) => strand.width > 0 && strand.start && strand.control && strand.end)).toBe(true)
+  it('WEAVE deterministically combines broad horizontal, vertical, and local colour signals', () => {
+    const samples = Array.from({ length: 48 * 48 }, (_, index): RGB => [index % 255, Math.floor(index / 48) % 255, 90])
+    const a = generateWeaveTiles(samples, 48, 6, 6)
+    expect(a).toEqual(generateWeaveTiles(samples, 48, 6, 6))
+    expect(a).toHaveLength(36)
+    expect(new Set(a.map((tile) => tile.color.join(','))).size).toBeGreaterThan(6)
   })
 
   it('CONTOUR deterministically produces a bounded small number of broad rings', () => {
@@ -1187,12 +1189,22 @@ describe('WEAVE / CONTOUR / GLYPH architectural primitives', () => {
     expect(rings.every((ring) => ring.length === 20)).toBe(true)
   })
 
-  it('GLYPH makes one centre-bound anchor route and does not reuse strand or ring geometry', () => {
+  it('CONTOUR quantizes source hue into five visibly separated luminance levels', () => {
+    const source: RGB = [180, 75, 45]
+    const colors = Array.from({ length: 5 }, (_, level) => contourLevelColor(source, level, 5))
+    const sourceHue = rgbToHsl(source)[0]
+    expect(colors.map((color) => rgbToHsl(color)[2])).toEqual([...colors.map((color) => rgbToHsl(color)[2])].sort((a, b) => b - a))
+    for (const color of colors) expect(rgbToHsl(color)[0]).toBeCloseTo(sourceHue, 2)
+  })
+
+  it('GLYPH makes one deterministic canvas-spanning route and does not reuse tile or ring geometry', () => {
     const second = baseCutWashStats({ label: 9, centroid: { x: 36, y: 12 }, pixelCount: 90 })
     const anchors = generateGlyphAnchors([stats, second], 48)
     expect(anchors).toEqual(generateGlyphAnchors([stats, second], 48))
-    expect(anchors[0]).toEqual({ x: 24, y: 24 })
-    expect(anchors.at(-1)).toEqual({ x: 24, y: 24 })
-    expect(anchors).toHaveLength(4)
+    expect(anchors).toHaveLength(12)
+    const width = Math.max(...anchors.map((point) => point.x)) - Math.min(...anchors.map((point) => point.x))
+    const height = Math.max(...anchors.map((point) => point.y)) - Math.min(...anchors.map((point) => point.y))
+    expect(width).toBeGreaterThan(24)
+    expect(height).toBeGreaterThan(24)
   })
 })

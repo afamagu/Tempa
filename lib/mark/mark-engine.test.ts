@@ -277,7 +277,7 @@ describe('"Choose Your Mark" checkpoint — v2 and v3 are untouched controls', (
     const sharedSectionStart = source.indexOf('SHARED COMPOSITIONAL-MASS EXTRACTION')
     const v2Body = source.slice(v2Start, v3Start)
     const v3Body = source.slice(v3Start, sharedSectionStart)
-    for (const forbidden of ['extractCompositionalMasses', 'WEAVE_TUNING', 'CONTOUR_TUNING', 'GLYPH_TUNING', 'generateWeaveStrands', 'generateContourRings', 'generateGlyphAnchors']) {
+    for (const forbidden of ['extractCompositionalMasses', 'WEAVE_TUNING', 'CONTOUR_TUNING', 'GLYPH_TUNING', 'generateWeaveTiles', 'generateContourRings', 'generateGlyphAnchors']) {
       expect(v2Body).not.toContain(forbidden)
       expect(v3Body).not.toContain(forbidden)
     }
@@ -330,15 +330,21 @@ describe('"Choose Your Mark" — new families are architecturally distinct', () 
     return source.slice(start, end)
   }
 
-  it('WEAVE uses curved strands, never region tracing, rings, or glyph anchors', () => {
+  it('WEAVE uses a coarse horizontal/vertical tile grammar, never traced regions, rings, or glyph anchors', () => {
     const weave = body('generateMarkWeave', 'generateMarkContour')
-    expect(weave).toContain('generateWeaveStrands(')
+    expect(weave).toContain('generateWeaveTiles(samples, ANALYSIS_GRID, columns, rows)')
+    expect(weave).toContain('const columns = 6')
+    expect(weave).toContain('const rows = 6')
+    expect(weave).toContain('mctx.fillRect(')
     for (const forbidden of ['traceRegionContours(', 'generateContourRings(', 'generateGlyphAnchors(', 'drawImage(']) expect(weave).not.toContain(forbidden)
   })
 
   it('CONTOUR uses broad abstract rings, never traced edges, strands, or glyph anchors', () => {
     const contour = body('generateMarkContour', 'generateMarkGlyph')
     expect(contour).toContain('generateContourRings(')
+    expect(contour).toContain('mctx.fill(pathFromLoops([scaled]))')
+    expect(contour).toContain("mctx.strokeStyle = 'rgba(255, 250, 241, 0.94)'")
+    expect(contour.indexOf('const structureDataUrl')).toBeLessThan(contour.indexOf("mctx.strokeStyle = 'rgba(255, 250, 241, 0.94)'"))
     for (const forbidden of ['traceRegionContours(', 'generateWeaveStrands(', 'generateGlyphAnchors(', 'drawImage(']) expect(contour).not.toContain(forbidden)
   })
 
@@ -346,12 +352,15 @@ describe('"Choose Your Mark" — new families are architecturally distinct', () 
     const glyph = body('generateMarkGlyph')
     expect(glyph).toContain('generateGlyphAnchors(')
     expect((glyph.match(/mctx\.beginPath\(\)/g) ?? [])).toHaveLength(1)
+    expect(glyph).toContain('mctx.lineWidth = 30')
+    expect(glyph).toContain('mctx.fillRect(0, 0, MASTER_SIZE, MASTER_SIZE)')
     for (const forbidden of ['traceRegionContours(', 'generateWeaveStrands(', 'generateContourRings(', 'drawImage(']) expect(glyph).not.toContain(forbidden)
   })
 
   it('all new families use measured source colours and no fixed house palette', () => {
-    expect(body('generateMarkWeave', 'generateMarkContour')).toContain('mass.stats.meanColor')
+    expect(body('generateMarkWeave', 'generateMarkContour')).toContain('tile.color')
     expect(body('generateMarkContour', 'generateMarkGlyph')).toContain('mass.stats.meanColor')
-    expect(body('generateMarkGlyph')).toContain('palette[i].stats.meanColor')
+    expect(body('generateMarkGlyph')).toContain('darkest?.stats.meanColor')
+    expect(body('generateMarkGlyph')).toContain('mostSaturated?.stats.meanColor')
   })
 })

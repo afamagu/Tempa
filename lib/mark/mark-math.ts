@@ -1141,20 +1141,11 @@ export function chooseAccentMass(
 }
 
 // ============================================================
-// "CHOOSE YOUR MARK" CHECKPOINT — V4 CUT / V5 WASH RENDERING
-// PRIMITIVES
+// "CHOOSE YOUR MARK" — prototype family rendering primitives
 // ============================================================
-// v2 and v3 are now permanent, independent Mark FAMILIES (not
-// generations replacing one another) — the member will eventually
-// choose between several genuinely different artistic interpretations
-// of the same source photograph. V4 CUT and V5 WASH are independent
-// candidate additional families. They reuse the SAME upstream
-// compositional-mass extraction as v3 (see extractCompositionalMasses
-// in mark-engine.ts, parameterized by each family's own tuning
-// constants) but diverge completely from v2, v3, and each other below
-// this point: their own silhouette generators, their own tonal
-// treatment, their own layering/translucency rules. Nothing here
-// inspects what a mass depicts.
+// V2 remains untouched. The pure helpers below support the independent
+// WEAVE, CONTOUR, and GLYPH prototype grammars. Nothing here inspects
+// what a mass depicts.
 
 /** The axis-aligned bounding circle-ish extent of a point set, in its
  * own coordinate space — used only to size a radial gradient around a
@@ -1350,43 +1341,56 @@ export function washPigmentColor(meanColor: RGB, density: number): RGB {
   return hslToRgb([h, harmonizedS, targetL])
 }
 
-export type WeaveStrand = {
-  start: Point
-  control: Point
-  end: Point
-  width: number
+export type WeaveTile = { row: number; column: number; color: RGB }
+
+function averageSampleRect(
+  samples: RGB[], gridSize: number, x0: number, y0: number, x1: number, y1: number
+): RGB {
+  let r = 0
+  let g = 0
+  let b = 0
+  let count = 0
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const color = samples[y * gridSize + x]
+      if (!color) continue
+      r += color[0]
+      g += color[1]
+      b += color[2]
+      count++
+    }
+  }
+  return count ? [Math.round(r / count), Math.round(g / count), Math.round(b / count)] : [0, 0, 0]
 }
 
-/** Abstract woven strokes seeded by mass statistics. The strands use
- * centroid, orientation, area and elongation, never region boundaries
- * or source pixels, so they cannot become a gridded reconstruction. */
-export function generateWeaveStrands(stats: MassStats, count = 5): WeaveStrand[] {
-  const radius = Math.max(2, Math.sqrt(stats.pixelCount / Math.PI))
-  const major = radius * Math.max(1, Math.sqrt(stats.elongation))
-  const minor = radius / Math.max(1, Math.sqrt(stats.elongation))
-  const seed = hashInts([
-    Math.round(stats.centroid.x * 100), Math.round(stats.centroid.y * 100),
-    stats.pixelCount, ...stats.meanColor, 6101,
-  ])
-  const random = createSeededRandom(seed)
-  const strands: WeaveStrand[] = []
-  for (let i = 0; i < count; i++) {
-    const across = count === 1 ? 0 : (i / (count - 1) - 0.5) * minor * 1.7
-    const angle = stats.orientationRad + (i % 2 === 0 ? 0 : Math.PI / 2)
-    const length = i % 2 === 0 ? major * 1.7 : minor * 2.4
-    const normal = angle + Math.PI / 2
-    const offset = across + (random() - 0.5) * minor * 0.22
-    const cx = stats.centroid.x + Math.cos(normal) * offset
-    const cy = stats.centroid.y + Math.sin(normal) * offset
-    const bend = (random() - 0.5) * minor * 0.75
-    strands.push({
-      start: { x: cx - Math.cos(angle) * length, y: cy - Math.sin(angle) * length },
-      control: { x: cx + Math.cos(normal) * bend, y: cy + Math.sin(normal) * bend },
-      end: { x: cx + Math.cos(angle) * length, y: cy + Math.sin(angle) * length },
-      width: Math.max(0.7, minor * (0.18 + random() * 0.12)),
-    })
+/** A deliberately coarse colour weave. Each tile combines one broad
+ * horizontal signal, one broad vertical signal and a restrained local
+ * average. At 6x6 this retains source balance and placement without
+ * becoming a pixelated reconstruction of the photograph. */
+export function generateWeaveTiles(samples: RGB[], gridSize: number, columns = 6, rows = 6): WeaveTile[] {
+  const tiles: WeaveTile[] = []
+  for (let row = 0; row < rows; row++) {
+    const y0 = Math.floor(row * gridSize / rows)
+    const y1 = Math.max(y0 + 1, Math.floor((row + 1) * gridSize / rows))
+    const horizontal = averageSampleRect(samples, gridSize, 0, y0, gridSize, y1)
+    for (let column = 0; column < columns; column++) {
+      const x0 = Math.floor(column * gridSize / columns)
+      const x1 = Math.max(x0 + 1, Math.floor((column + 1) * gridSize / columns))
+      const vertical = averageSampleRect(samples, gridSize, x0, 0, x1, gridSize)
+      const local = averageSampleRect(samples, gridSize, x0, y0, x1, y1)
+      const horizontalWeight = (row + column) % 2 === 0 ? 0.38 : 0.27
+      const verticalWeight = (row + column) % 2 === 0 ? 0.27 : 0.38
+      const localWeight = 0.35
+      tiles.push({
+        row,
+        column,
+        color: [0, 1, 2].map((channel) => Math.round(
+          horizontal[channel] * horizontalWeight + vertical[channel] * verticalWeight + local[channel] * localWeight
+        )) as RGB,
+      })
+    }
   }
-  return strands
+  return tiles
 }
 
 /** Broad topographic rings derived from mass moments, not traced
@@ -1394,13 +1398,13 @@ export function generateWeaveStrands(stats: MassStats, count = 5): WeaveStrand[]
  * fixed ring count prevents literal silhouette reconstruction. */
 export function generateContourRings(stats: MassStats, ringCount = 4, pointCount = 20): Point[][] {
   const radius = Math.max(2, Math.sqrt(stats.pixelCount / Math.PI))
-  const rx = radius * Math.max(1, Math.sqrt(stats.elongation))
-  const ry = radius / Math.max(1, Math.sqrt(stats.elongation))
+  const rx = radius * Math.max(1, Math.sqrt(stats.elongation)) * 1.34
+  const ry = radius / Math.max(1, Math.sqrt(stats.elongation)) * 1.34
   const seed = hashInts([stats.pixelCount, ...stats.meanColor, Math.round(stats.orientationRad * 1000), 6203])
   const random = createSeededRandom(seed)
   const phase = random() * Math.PI * 2
   return Array.from({ length: ringCount }, (_, ringIndex) => {
-    const scale = 1 - ringIndex * 0.18
+    const scale = 1 - ringIndex * 0.2
     return Array.from({ length: pointCount }, (__, pointIndex) => {
       const t = pointIndex / pointCount * Math.PI * 2
       const pulse = 1 + Math.sin(t * 3 + phase) * 0.07
@@ -1414,25 +1418,47 @@ export function generateContourRings(stats: MassStats, ringCount = 4, pointCount
   })
 }
 
+/** Source-hued colour for one filled topographic level. Luminance is
+ * quantized into a small, high-contrast family while hue remains tied
+ * to the measured mass colour. */
+export function contourLevelColor(meanColor: RGB, level: number, levelCount: number): RGB {
+  const [h, s, l] = rgbToHsl(meanColor)
+  const t = levelCount <= 1 ? 0.5 : level / (levelCount - 1)
+  return hslToRgb([h, clamp(s * 0.88, 0.12, 0.68), clamp(l + (0.5 - t) * 0.34, 0.1, 0.9)])
+}
+
 /** One emblematic route through compositional mass centres. Anchors
  * are deliberately pulled toward a shared centre and angularly
  * quantized, producing a glyph rather than a portrait/object trace. */
 export function generateGlyphAnchors(stats: MassStats[], canvasSize: number): Point[] {
   if (stats.length === 0) return []
-  const centre = { x: canvasSize / 2, y: canvasSize / 2 }
   const ordered = [...stats]
     .sort((a, b) => b.pixelCount - a.pixelCount || a.label - b.label)
     .slice(0, 7)
-  const anchors: Point[] = [{ x: centre.x, y: centre.y }]
-  for (let i = 0; i < ordered.length; i++) {
-    const item = ordered[i]
-    const dx = (item.centroid.x - centre.x) * 0.62
-    const dy = (item.centroid.y - centre.y) * 0.62
-    const distance = Math.max(canvasSize * 0.1, Math.hypot(dx, dy))
-    const rawAngle = Math.atan2(dy, dx) + item.orientationRad * 0.18
-    const angle = Math.round(rawAngle / (Math.PI / 8)) * (Math.PI / 8)
-    anchors.push({ x: centre.x + Math.cos(angle) * distance, y: centre.y + Math.sin(angle) * distance })
+  const totalWeight = ordered.reduce((sum, item) => sum + item.pixelCount, 0)
+  const centre = {
+    x: ordered.reduce((sum, item) => sum + item.centroid.x * item.pixelCount, 0) / totalWeight,
+    y: ordered.reduce((sum, item) => sum + item.centroid.y * item.pixelCount, 0) / totalWeight,
   }
-  anchors.push({ x: centre.x, y: centre.y })
-  return anchors
+  const seed = hashInts(ordered.flatMap((item) => [item.label, item.pixelCount, ...item.meanColor]))
+  const random = createSeededRandom(seed)
+  const template: Point[] = [
+    { x: -0.7, y: 0.72 }, { x: -0.78, y: 0.1 }, { x: -0.58, y: -0.58 },
+    { x: -0.05, y: -0.78 }, { x: 0.62, y: -0.55 }, { x: 0.76, y: -0.04 },
+    { x: 0.32, y: 0.12 }, { x: 0.66, y: 0.52 }, { x: 0.08, y: 0.74 },
+    { x: -0.28, y: 0.25 }, { x: 0.12, y: 0.02 }, { x: -0.04, y: 0.7 },
+  ]
+  const dominantAngle = ordered[0].orientationRad * 0.22
+  const extent = canvasSize * 0.43
+  return template.map((point, index) => {
+    const source = ordered[index % ordered.length]
+    const jitterX = (source.centroid.x - centre.x) * 0.08 + (random() - 0.5) * canvasSize * 0.035
+    const jitterY = (source.centroid.y - centre.y) * 0.08 + (random() - 0.5) * canvasSize * 0.035
+    const x = point.x * extent
+    const y = point.y * extent
+    return {
+      x: canvasSize / 2 + x * Math.cos(dominantAngle) - y * Math.sin(dominantAngle) + jitterX,
+      y: canvasSize / 2 + x * Math.sin(dominantAngle) + y * Math.cos(dominantAngle) + jitterY,
+    }
+  })
 }

@@ -48,12 +48,13 @@ import {
   classifyMassShape,
   computeMassStatistics,
   computeSquareFitRect,
+  contourLevelColor,
   createSeededRandom,
   extractPalette,
   findConnectedComponents,
   generateContourRings,
   generateGlyphAnchors,
-  generateWeaveStrands,
+  generateWeaveTiles,
   generateNestedBands,
   generateRegularizedMassPoints,
   harmonizePalette,
@@ -82,10 +83,8 @@ import {
 export const MARK_ALGORITHM_VERSION = 3
 export const MARK_ALGORITHM_VERSION_V2 = 2
 export const MARK_ALGORITHM_VERSION_V3 = 3
-/** "Choose Your Mark" checkpoint: v2/v3/CUT/WASH are independent
- * artistic FAMILIES the member will eventually choose between, not
- * generations superseding one another. These ordinals are internal
- * development labels only — see generateMarkCut/generateMarkWash. */
+/** Prototype-only family versions. V2 remains the preserved control;
+ * WEAVE, CONTOUR, and GLYPH are independent candidate grammars. */
 export const MARK_ALGORITHM_VERSION_WEAVE = 4
 export const MARK_ALGORITHM_VERSION_CONTOUR = 5
 export const MARK_ALGORITHM_VERSION_GLYPH = 6
@@ -611,7 +610,7 @@ function colorForBand(stats: MassStats, t: number): RGB {
 // duplication of v3's own mass-extraction+hierarchy logic (blur ->
 // cluster -> reduce -> merge -> connected components -> per-mass
 // statistics -> generic hierarchy scoring), factored out ONLY for the
-// two new candidate families below, parameterized so each family can
+// three new candidate families below, parameterized so each family can
 // have its own mass-count character from one tested implementation
 // rather than four independent copies of the whole analysis pipeline.
 // (Role itself is v3's own type, declared above, in scope here too.)
@@ -631,7 +630,7 @@ type CompositionalMass = { stats: MassStats; role: Role }
 async function extractCompositionalMasses(
   file: File,
   tuning: CompositionalTuning
-): Promise<{ masses: CompositionalMass[]; totalArea: number; seed: number; random: () => number }> {
+): Promise<{ masses: CompositionalMass[]; samples: RGB[]; totalArea: number; seed: number; random: () => number }> {
   const samples = await loadCroppedAnalysisGrid(file)
   const blurred = boxBlurGrid(samples, ANALYSIS_GRID, ANALYSIS_GRID, tuning.blurRadius)
 
@@ -711,25 +710,16 @@ async function extractCompositionalMasses(
     role: roles.get(stats.label) ?? 'secondary',
   }))
 
-  return { masses, totalArea, seed, random }
+  return { masses, samples, totalArea, seed, random }
 }
 
 const ROLE_ORDER: Record<Role, number> = { atmosphere: 0, dominant: 1, secondary: 2, focal: 3, accent: 4 }
 
 // ============================================================
-// V4 CUT — first new candidate family. Reuses the shared extraction
-// above with its own tuning constants aimed at MORE, smaller-but-
-// still-restrained territories than v3 ("approximately 5-8 dominant
-// pieces where the source supports them," a safety ceiling not a
-// target — a busy or simple photo may still resolve into fewer).
-// Diverges completely from v2 and v3 in rendering: an asymmetric,
-// elegant "cut form" silhouette (generateCutMassPoints) instead of
-// v3's perfect ellipse or v2's literal traced contour; a continuous
-// two-stop tonal gradient per shape instead of v3's discrete nested
-// bands; restrained per-shape translucency plus a soft drop-shadow for
-// layered "cut and placed" depth instead of v3's systematic outline
-// stroke — CUT has NO outline stroke at all, a deliberate, visible
-// point of difference from v3.
+// WEAVE — an edge-to-edge, deliberately coarse colour weave. Broad
+// horizontal and vertical averages cross inside a 6x6 field, retaining
+// source balance and placement without turning the photograph into a
+// recognizable pixel mosaic.
 // ============================================================
 
 const WEAVE_TUNING: CompositionalTuning = {
@@ -743,33 +733,24 @@ const WEAVE_TUNING: CompositionalTuning = {
 }
 
 export async function generateMarkWeave(file: File): Promise<MarkResult> {
-  const { masses, seed, random } = await extractCompositionalMasses(file, WEAVE_TUNING)
+  const { samples, seed, random } = await extractCompositionalMasses(file, WEAVE_TUNING)
 
-  const sorted = [...masses].sort(
-    (a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || b.stats.pixelCount - a.stats.pixelCount
-  )
-
-  const scale = MASTER_SIZE / ANALYSIS_GRID
   const master = document.createElement('canvas')
   master.width = MASTER_SIZE
   master.height = MASTER_SIZE
   const mctx = master.getContext('2d')
   if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
 
-  for (const mass of sorted) {
-    const strands = generateWeaveStrands(mass.stats, mass.role === 'atmosphere' ? 4 : 6)
-    mctx.save()
-    mctx.strokeStyle = rgbToCss(mass.stats.meanColor)
-    mctx.globalAlpha = mass.role === 'accent' ? 0.95 : 0.78
-    mctx.lineCap = 'round'
-    for (const strand of strands) {
-      mctx.lineWidth = strand.width * scale
-      mctx.beginPath()
-      mctx.moveTo(strand.start.x * scale, strand.start.y * scale)
-      mctx.quadraticCurveTo(strand.control.x * scale, strand.control.y * scale, strand.end.x * scale, strand.end.y * scale)
-      mctx.stroke()
-    }
-    mctx.restore()
+  const columns = 6
+  const rows = 6
+  const tiles = generateWeaveTiles(samples, ANALYSIS_GRID, columns, rows)
+  for (const tile of tiles) {
+    const left = Math.floor(tile.column * MASTER_SIZE / columns)
+    const top = Math.floor(tile.row * MASTER_SIZE / rows)
+    const right = Math.ceil((tile.column + 1) * MASTER_SIZE / columns)
+    const bottom = Math.ceil((tile.row + 1) * MASTER_SIZE / rows)
+    mctx.fillStyle = rgbToCss(tile.color)
+    mctx.fillRect(left, top, right - left, bottom - top)
   }
 
   const structureDataUrl = master.toDataURL('image/png')
@@ -786,21 +767,17 @@ export async function generateMarkWeave(file: File): Promise<MarkResult> {
     blob,
     structureDataUrl,
     size: MASTER_SIZE,
-    regionCount: sorted.length,
+    regionCount: tiles.length,
     seed,
     algorithmVersion: MARK_ALGORITHM_VERSION_WEAVE,
   }
 }
 
 // ============================================================
-// V5 WASH — a genuinely separate fourth family. It shares only the
-// source-derived compositional analysis above, tuned toward a quiet set
-// of broad territories, then interprets each mass through its own
-// low-frequency organic perimeter and layered pigment-density grammar.
-// No traced contour, regularized lobe, CUT form, facet, outline, or
-// seam survives into this renderer. Broad translucent bodies preserve
-// placement/orientation; a pair of restrained, offset concentrations
-// creates pigment pooling without obvious concentric bands.
+// CONTOUR — broad source-derived masses become filled topographic
+// levels. Hue and placement come from the source; luminance is reduced
+// to a small tonal vocabulary and pale separator lines clarify the
+// nested structure at avatar scale.
 // ============================================================
 
 const CONTOUR_TUNING: CompositionalTuning = {
@@ -827,20 +804,31 @@ export async function generateMarkContour(file: File): Promise<MarkResult> {
   const mctx = master.getContext('2d')
   if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
 
+  const backgroundMass = sorted.find((mass) => mass.role === 'atmosphere') ?? sorted[0]
+  mctx.fillStyle = rgbToCss(backgroundMass?.stats.meanColor ?? [236, 230, 220])
+  mctx.fillRect(0, 0, MASTER_SIZE, MASTER_SIZE)
+
+  const renderedRings: Point[][] = []
+
   for (const mass of sorted) {
-    const rings = generateContourRings(mass.stats, mass.role === 'atmosphere' ? 3 : 4)
-    mctx.save()
-    mctx.strokeStyle = rgbToCss(mass.stats.meanColor)
-    mctx.globalAlpha = mass.role === 'accent' ? 0.94 : 0.72
-    mctx.lineWidth = mass.role === 'accent' ? 8 : 5
-    for (const ring of rings) {
-      strokeLoop(mctx, ring.map((point) => ({ x: point.x * scale, y: point.y * scale })))
+    const ringCount = mass.role === 'atmosphere' ? 3 : 5
+    const rings = generateContourRings(mass.stats, ringCount, 28)
+    for (let level = 0; level < rings.length; level++) {
+      const scaled = rings[level].map((point) => ({ x: point.x * scale, y: point.y * scale }))
+      mctx.fillStyle = rgbToCss(contourLevelColor(mass.stats.meanColor, level, ringCount))
+      mctx.globalAlpha = mass.role === 'atmosphere' ? 0.88 : 0.96
+      mctx.fill(pathFromLoops([scaled]))
+      renderedRings.push(scaled)
     }
-    mctx.restore()
   }
 
   const structureDataUrl = master.toDataURL('image/png')
-  drawDeterministicTexture(mctx, random, MASTER_SIZE, 0.1)
+  mctx.save()
+  mctx.strokeStyle = 'rgba(255, 250, 241, 0.94)'
+  mctx.lineWidth = 6
+  for (const ring of renderedRings) strokeLoop(mctx, ring)
+  mctx.restore()
+  drawDeterministicTexture(mctx, random, MASTER_SIZE, 0.06)
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     master.toBlob((b) => (b ? resolve(b) : reject(new MarkGenerationError('Could not render this Mark.'))), 'image/png')
@@ -879,13 +867,20 @@ export async function generateMarkGlyph(file: File): Promise<MarkResult> {
   if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
 
   const palette = [...masses].sort((a, b) => b.stats.pixelCount - a.stats.pixelCount)
+  const lightest = [...palette].sort((a, b) => b.stats.meanColor.reduce((sum, channel) => sum + channel, 0) - a.stats.meanColor.reduce((sum, channel) => sum + channel, 0))[0]
+  const [backgroundHue, backgroundSaturation] = rgbToHsl(lightest?.stats.meanColor ?? [230, 225, 216])
+  mctx.fillStyle = rgbToCss(hslToRgb([backgroundHue, Math.min(0.18, backgroundSaturation * 0.35), 0.91]))
+  mctx.fillRect(0, 0, MASTER_SIZE, MASTER_SIZE)
+
   const gradient = mctx.createLinearGradient(0, 0, MASTER_SIZE, MASTER_SIZE)
-  for (let i = 0; i < Math.max(1, palette.length); i++) {
-    gradient.addColorStop(palette.length === 1 ? 0 : i / (palette.length - 1), rgbToCss(palette[i].stats.meanColor))
-  }
+  const darkest = [...palette].sort((a, b) => a.stats.meanColor.reduce((sum, channel) => sum + channel, 0) - b.stats.meanColor.reduce((sum, channel) => sum + channel, 0))[0]
+  const mostSaturated = [...palette].sort((a, b) => rgbToHsl(b.stats.meanColor)[1] - rgbToHsl(a.stats.meanColor)[1])[0]
+  gradient.addColorStop(0, rgbToCss(darkest?.stats.meanColor ?? [35, 27, 22]))
+  gradient.addColorStop(0.62, rgbToCss(darkest?.stats.meanColor ?? [35, 27, 22]))
+  gradient.addColorStop(1, rgbToCss(mostSaturated?.stats.meanColor ?? [145, 45, 35]))
   mctx.save()
   mctx.strokeStyle = gradient
-  mctx.lineWidth = 24
+  mctx.lineWidth = 30
   mctx.lineCap = 'round'
   mctx.lineJoin = 'round'
   mctx.beginPath()
@@ -893,8 +888,8 @@ export async function generateMarkGlyph(file: File): Promise<MarkResult> {
   for (let i = 1; i < anchors.length; i++) {
     const previous = anchors[i - 1]
     const current = anchors[i]
-    const controlX = (previous.x + current.x) / 2 * scale
-    const controlY = (i % 2 === 0 ? previous.y : current.y) * scale
+    const controlX = ((previous.x + current.x) / 2 + (i % 2 === 0 ? 1.4 : -1.4)) * scale
+    const controlY = ((previous.y + current.y) / 2 + (i % 3 === 0 ? -1.2 : 1.2)) * scale
     mctx.quadraticCurveTo(controlX, controlY, current.x * scale, current.y * scale)
   }
   mctx.stroke()
