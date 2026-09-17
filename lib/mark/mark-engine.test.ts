@@ -40,8 +40,8 @@ describe('Your Mark engine — the raw source is never persisted (either version
     expect(source).not.toContain('upload(')
   })
 
-  it('neither generateMarkV2 nor generateMarkV3 returns the decoded <img> element or the input File — only the derived MarkResult', () => {
-    for (const fnName of ['generateMarkV2', 'generateMarkV3']) {
+  it('no family returns the decoded <img> element or the input File — only the derived MarkResult', () => {
+    for (const fnName of ['generateMarkV2', 'generateMarkWeave', 'generateMarkContour', 'generateMarkGlyph']) {
       const fnStart = source.indexOf(`export async function ${fnName}(`)
       expect(fnStart, `expected to find ${fnName}`).toBeGreaterThan(-1)
       const returnStart = source.indexOf('return {', fnStart)
@@ -236,8 +236,8 @@ describe('Algorithm v3 — compositional abstraction, not a tuned v2 (architectu
 })
 
 describe('Your Mark engine — "Show structure" diagnostic contract, all families', () => {
-  it('every family captures structureDataUrl BEFORE any accent stroke or texture is drawn', () => {
-    for (const fnName of ['generateMarkV2', 'generateMarkV3', 'generateMarkCut', 'generateMarkGlass']) {
+  it('all four compared families capture structureDataUrl before texture treatment', () => {
+    for (const fnName of ['generateMarkV2', 'generateMarkWeave', 'generateMarkContour', 'generateMarkGlyph']) {
       const fnStart = source.indexOf(`export async function ${fnName}(`)
       const nextFnStart = source.indexOf('\nexport async function', fnStart + 10)
       const body = source.slice(fnStart, nextFnStart === -1 ? undefined : nextFnStart)
@@ -247,6 +247,7 @@ describe('Your Mark engine — "Show structure" diagnostic contract, all familie
       expect(textureIndex).toBeGreaterThan(structureIndex)
     }
   })
+
 })
 
 describe('Your Mark engine — composition is never subject/face-detection-driven (either version)', () => {
@@ -257,7 +258,7 @@ describe('Your Mark engine — composition is never subject/face-detection-drive
 
 // ============================================================
 // "CHOOSE YOUR MARK" CHECKPOINT — v2/v3 preservation + V4 CUT / V5
-// GLASS architectural contracts
+// WASH architectural contracts
 // ============================================================
 
 describe('"Choose Your Mark" checkpoint — v2 and v3 are untouched controls', () => {
@@ -266,17 +267,17 @@ describe('"Choose Your Mark" checkpoint — v2 and v3 are untouched controls', (
     expect(source).toContain('export const MARK_ALGORITHM_VERSION_V3 = 3')
   })
 
-  it('v2 and v3 function bodies never reference the new CUT/GLASS-only identifiers — no accidental coupling', () => {
+  it('v2 and v3 function bodies never reference the three new-family identifiers', () => {
     const v2Start = source.indexOf('export async function generateMarkV2(')
     const v3Start = source.indexOf('export async function generateMarkV3(')
     // v3's own body ends where the new shared "Choose Your Mark" section
-    // begins (CUT/GLASS's own code necessarily mentions these
+    // begins (CUT/WASH's own code necessarily mentions these
     // identifiers textually below that point — this boundary isolates
     // v3's OWN unmodified function body from that new section).
     const sharedSectionStart = source.indexOf('SHARED COMPOSITIONAL-MASS EXTRACTION')
     const v2Body = source.slice(v2Start, v3Start)
     const v3Body = source.slice(v3Start, sharedSectionStart)
-    for (const forbidden of ['extractCompositionalMasses', 'CUT_TUNING', 'GLASS_TUNING', 'generateCutMassPoints', 'generateGlassMassPoints']) {
+    for (const forbidden of ['extractCompositionalMasses', 'WEAVE_TUNING', 'CONTOUR_TUNING', 'GLYPH_TUNING', 'generateWeaveStrands', 'generateContourRings', 'generateGlyphAnchors']) {
       expect(v2Body).not.toContain(forbidden)
       expect(v3Body).not.toContain(forbidden)
     }
@@ -292,34 +293,26 @@ describe('"Choose Your Mark" checkpoint — v2 and v3 are untouched controls', (
 })
 
 describe('"Choose Your Mark" checkpoint — shared compositional-mass extraction, family-specific tuning', () => {
-  it('both new families call the same shared extraction function, not four independent copies of the pipeline', () => {
-    const cutStart = source.indexOf('export async function generateMarkCut(')
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    expect(source.slice(cutStart, cutStart + 400)).toContain('extractCompositionalMasses(file, CUT_TUNING)')
-    expect(source.slice(glassStart, glassStart + 400)).toContain('extractCompositionalMasses(file, GLASS_TUNING)')
+  it('all three new families use shared compositional extraction with family-specific tuning', () => {
+    for (const [family, tuning] of [['Weave', 'WEAVE_TUNING'], ['Contour', 'CONTOUR_TUNING'], ['Glyph', 'GLYPH_TUNING']]) {
+      const start = source.indexOf(`export async function generateMark${family}(`)
+      expect(start).toBeGreaterThan(-1)
+      expect(source.slice(start, start + 400)).toContain(`extractCompositionalMasses(file, ${tuning})`)
+    }
   })
 
-  it('CUT and GLASS use genuinely different tuning constants, not a cosmetic-only difference', () => {
-    const cutTuningStart = source.indexOf('const CUT_TUNING: CompositionalTuning = {')
-    const glassTuningStart = source.indexOf('const GLASS_TUNING: CompositionalTuning = {')
-    const cutTuning = source.slice(cutTuningStart, source.indexOf('}', cutTuningStart))
-    const glassTuning = source.slice(glassTuningStart, source.indexOf('}', glassTuningStart))
-    expect(cutTuning).not.toBe(glassTuning)
-    // Specifically: GLASS is tuned toward fewer/broader masses than CUT
-    // (Section F "small number of large forms" vs Section E
-    // "approximately 5-8 dominant pieces").
-    expect(cutTuning).toContain('maxMasses: 8')
-    expect(glassTuning).toContain('maxMasses: 7')
-    expect(cutTuning).toContain('minMassFraction: 0.02')
-    expect(glassTuning).toContain('minMassFraction: 0.045')
+  it('the three new families have independent tuning blocks', () => {
+    for (const tuning of ['WEAVE_TUNING', 'CONTOUR_TUNING', 'GLYPH_TUNING']) {
+      expect(source).toContain(`const ${tuning}: CompositionalTuning = {`)
+    }
   })
 
-  it('v2, v3, CUT, and GLASS all have distinct, non-overlapping algorithm-version constants', () => {
+  it('V2, WEAVE, CONTOUR, and GLYPH have distinct algorithm versions', () => {
     const versions = [
       /export const MARK_ALGORITHM_VERSION_V2 = (\d+)/,
-      /export const MARK_ALGORITHM_VERSION_V3 = (\d+)/,
-      /export const MARK_ALGORITHM_VERSION_V4_CUT = (\d+)/,
-      /export const MARK_ALGORITHM_VERSION_V5_GLASS = (\d+)/,
+      /export const MARK_ALGORITHM_VERSION_WEAVE = (\d+)/,
+      /export const MARK_ALGORITHM_VERSION_CONTOUR = (\d+)/,
+      /export const MARK_ALGORITHM_VERSION_GLYPH = (\d+)/,
     ].map((re) => {
       const match = source.match(re)
       expect(match, re.toString()).not.toBeNull()
@@ -329,68 +322,36 @@ describe('"Choose Your Mark" checkpoint — shared compositional-mass extraction
   })
 })
 
-describe('"Choose Your Mark" checkpoint — V4 CUT: rendering grammar diverges from v3', () => {
-  it('has NO systematic per-mass outline stroke — a deliberate, visible difference from v3', () => {
-    const cutStart = source.indexOf('export async function generateMarkCut(')
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const cutBody = source.slice(cutStart, glassStart)
-    expect(cutBody).not.toContain('strokeLoop(')
-    expect(cutBody).not.toContain('V3_STROKE_STYLE')
+describe('"Choose Your Mark" — new families are architecturally distinct', () => {
+  const body = (name: string, next?: string) => {
+    const start = source.indexOf(`export async function ${name}(`)
+    expect(start, name).toBeGreaterThan(-1)
+    const end = next ? source.indexOf(`export async function ${next}(`, start) : source.length
+    return source.slice(start, end)
+  }
+
+  it('WEAVE uses curved strands, never region tracing, rings, or glyph anchors', () => {
+    const weave = body('generateMarkWeave', 'generateMarkContour')
+    expect(weave).toContain('generateWeaveStrands(')
+    for (const forbidden of ['traceRegionContours(', 'generateContourRings(', 'generateGlyphAnchors(', 'drawImage(']) expect(weave).not.toContain(forbidden)
   })
 
-  it('uses its own asymmetric silhouette generator, never v3\'s ellipse generator or v2\'s literal contour trace', () => {
-    const cutStart = source.indexOf('export async function generateMarkCut(')
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const cutBody = source.slice(cutStart, glassStart)
-    expect(cutBody).toContain('generateCutMassPoints(')
-    expect(cutBody).not.toContain('generateRegularizedMassPoints(')
-    expect(cutBody).not.toContain('traceRegionContours(')
+  it('CONTOUR uses broad abstract rings, never traced edges, strands, or glyph anchors', () => {
+    const contour = body('generateMarkContour', 'generateMarkGlyph')
+    expect(contour).toContain('generateContourRings(')
+    for (const forbidden of ['traceRegionContours(', 'generateWeaveStrands(', 'generateGlyphAnchors(', 'drawImage(']) expect(contour).not.toContain(forbidden)
   })
 
-  it('renders a continuous two-stop gradient per shape, never v3\'s discrete nested bands', () => {
-    const cutStart = source.indexOf('export async function generateMarkCut(')
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const cutBody = source.slice(cutStart, glassStart)
-    expect(cutBody).toContain('createRadialGradient(')
-    expect(cutBody).not.toContain('generateNestedBands(')
+  it('GLYPH draws exactly one continuous route from abstract anchors, not portrait contours', () => {
+    const glyph = body('generateMarkGlyph')
+    expect(glyph).toContain('generateGlyphAnchors(')
+    expect((glyph.match(/mctx\.beginPath\(\)/g) ?? [])).toHaveLength(1)
+    for (const forbidden of ['traceRegionContours(', 'generateWeaveStrands(', 'generateContourRings(', 'drawImage(']) expect(glyph).not.toContain(forbidden)
   })
 
-  it('shape TYPE selection still comes from the shared, generic classifyMassShape — no new semantic classifier', () => {
-    const cutStart = source.indexOf('export async function generateMarkCut(')
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    expect(source.slice(cutStart, glassStart)).toContain('classifyMassShape(mass.stats, totalArea)')
-  })
-})
-
-describe('"Choose Your Mark" checkpoint — V5 GLASS: rendering grammar diverges from v2/v3/CUT', () => {
-  it('uses partial opacity (translucency) for its fills — the "luminous intersection" mechanism', () => {
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const glassBody = source.slice(glassStart)
-    expect(glassBody).toMatch(/mctx\.globalAlpha = mass\.role/)
-  })
-
-  it('the warm seam is restrained to focal/accent masses only, never systematic across every mass', () => {
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const glassBody = source.slice(glassStart)
-    expect(glassBody).toContain("loop.role !== 'focal' && loop.role !== 'accent'")
-  })
-
-  it('uses its own low-vertex faceted silhouette generator, never CUT\'s or v3\'s generators', () => {
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const glassBody = source.slice(glassStart)
-    expect(glassBody).toContain('generateGlassMassPoints(')
-    expect(glassBody).not.toContain('generateCutMassPoints(')
-    expect(glassBody).not.toContain('generateRegularizedMassPoints(')
-  })
-})
-
-describe('"Choose Your Mark" checkpoint — colour still descends from source, no house palette', () => {
-  it('CUT and GLASS both derive tone from each mass\'s own measured meanColor, never a fixed/hardcoded colour literal', () => {
-    const cutStart = source.indexOf('export async function generateMarkCut(')
-    const glassStart = source.indexOf('export async function generateMarkGlass(')
-    const cutBody = source.slice(cutStart, glassStart)
-    const glassBody = source.slice(glassStart)
-    expect(cutBody).toContain('cutToneColor(mass.stats.meanColor,')
-    expect(glassBody).toContain('glassToneColor(mass.stats.meanColor,')
+  it('all new families use measured source colours and no fixed house palette', () => {
+    expect(body('generateMarkWeave', 'generateMarkContour')).toContain('mass.stats.meanColor')
+    expect(body('generateMarkContour', 'generateMarkGlyph')).toContain('mass.stats.meanColor')
+    expect(body('generateMarkGlyph')).toContain('palette[i].stats.meanColor')
   })
 })

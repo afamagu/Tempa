@@ -1141,13 +1141,13 @@ export function chooseAccentMass(
 }
 
 // ============================================================
-// "CHOOSE YOUR MARK" CHECKPOINT — V4 CUT / V5 GLASS SHARED RENDERING
+// "CHOOSE YOUR MARK" CHECKPOINT — V4 CUT / V5 WASH RENDERING
 // PRIMITIVES
 // ============================================================
 // v2 and v3 are now permanent, independent Mark FAMILIES (not
 // generations replacing one another) — the member will eventually
 // choose between several genuinely different artistic interpretations
-// of the same source photograph. V4 CUT and V5 GLASS are the first two
+// of the same source photograph. V4 CUT and V5 WASH are independent
 // candidate additional families. They reuse the SAME upstream
 // compositional-mass extraction as v3 (see extractCompositionalMasses
 // in mark-engine.ts, parameterized by each family's own tuning
@@ -1177,7 +1177,7 @@ export function boundsOfPoints(points: Point[]): { cx: number; cy: number; rx: n
 
 /** A continuous analogue of v3's discrete bandCountFor: maps a mass's
  * textureEnergy to a bounded internal-gradient contrast, used by V4
- * CUT / V5 GLASS's continuous two-stop tonal gradient (rather than
+ * CUT's continuous two-stop tonal gradient (rather than
  * v3's discrete nested-band shapes). Same underlying idea — "texture
  * becomes a tonal-range statistic, never new geometry" — expressed
  * through a different rendering technique. */
@@ -1259,26 +1259,25 @@ export function generateCutMassPoints(
 }
 
 /**
- * V5 GLASS's silhouette generator — a low-vertex-count "faceted"
- * rounded polygon (fewer sides than v3's smooth 24-sided ellipse),
- * with a small deterministic per-facet radius jitter derived from this
- * mass's own statistics. Meant to be finished with heavier Chaikin
- * smoothing by the caller, producing a soft, rounded, gem/mineral-like
- * pane rather than a mathematically perfect ellipse. `isField` mirrors
- * the same restrained edge-aware expansion as generateCutMassPoints,
- * for a pane that plausibly spans toward a touched canvas edge.
+ * V5 WASH's organic perimeter. The mass's measured centroid,
+ * orientation, area, elongation, and edge contact establish the broad
+ * footprint. Three low-frequency, mass-seeded waves then introduce a
+ * restrained spreading/contraction rhythm. This is neither a traced
+ * contour nor a faceted/regularized polygon: it is a smooth,
+ * deterministic interpretation of how diluted pigment might settle
+ * around that particular source-derived territory.
  */
-export function generateGlassMassPoints(
+export function generateWashMassPoints(
   stats: MassStats,
   canvasSize: number,
   isField: boolean,
-  facets = 7
+  pointCount = 24
 ): Point[] {
   const { centroid, orientationRad, elongation, pixelCount, touchesEdge } = stats
-  const fieldFactor = isField ? 1.2 : 1
-  const halfMajor = Math.max(1.4, Math.sqrt(pixelCount / Math.PI) * Math.max(1, Math.sqrt(elongation)) * fieldFactor)
+  const fieldFactor = isField ? 1.16 : 1.06
+  const halfMajor = Math.max(1.6, Math.sqrt(pixelCount / Math.PI) * Math.max(1, Math.sqrt(elongation)) * fieldFactor)
   const halfMinor = Math.max(
-    1.0,
+    1.2,
     (Math.sqrt(pixelCount / Math.PI) / Math.max(1, Math.sqrt(elongation))) * fieldFactor
   )
 
@@ -1287,27 +1286,38 @@ export function generateGlassMassPoints(
     Math.round(centroid.y * 100),
     pixelCount,
     ...stats.meanColor,
-    5002,
+    Math.round(orientationRad * 1000),
+    5007,
   ])
   const rand = createSeededRandom(seed)
+  const phaseA = rand() * Math.PI * 2
+  const phaseB = rand() * Math.PI * 2
+  const phaseC = rand() * Math.PI * 2
+  const amplitudeA = 0.07 + rand() * 0.035
+  const amplitudeB = 0.035 + rand() * 0.025
+  const amplitudeC = 0.02 + rand() * 0.02
 
   const cx = centroid.x
   const cy = centroid.y
   let rx = halfMajor
   let ry = halfMinor
   if (isField) {
-    if (touchesEdge.left) rx = Math.max(rx, cx + rx * 0.3)
-    if (touchesEdge.right) rx = Math.max(rx, canvasSize - cx + rx * 0.3)
-    if (touchesEdge.top) ry = Math.max(ry, cy + ry * 0.3)
-    if (touchesEdge.bottom) ry = Math.max(ry, canvasSize - cy + ry * 0.3)
+    if (touchesEdge.left) rx = Math.max(rx, cx + rx * 0.18)
+    if (touchesEdge.right) rx = Math.max(rx, canvasSize - cx + rx * 0.18)
+    if (touchesEdge.top) ry = Math.max(ry, cy + ry * 0.18)
+    if (touchesEdge.bottom) ry = Math.max(ry, canvasSize - cy + ry * 0.18)
   }
 
   const points: Point[] = []
-  for (let i = 0; i < facets; i++) {
-    const t = (i / facets) * Math.PI * 2
-    const jitter = 0.92 + rand() * 0.16 // subtle ~[0.92, 1.08]
-    const ex = rx * jitter * Math.cos(t)
-    const ey = ry * jitter * Math.sin(t)
+  for (let i = 0; i < pointCount; i++) {
+    const t = (i / pointCount) * Math.PI * 2
+    const spread =
+      1 +
+      Math.sin(t * 2 + phaseA) * amplitudeA +
+      Math.sin(t * 3 + phaseB) * amplitudeB +
+      Math.sin(t + phaseC) * amplitudeC
+    const ex = rx * spread * Math.cos(t)
+    const ey = ry * spread * Math.sin(t)
     points.push({
       x: cx + ex * Math.cos(orientationRad) - ey * Math.sin(orientationRad),
       y: cy + ex * Math.sin(orientationRad) + ey * Math.cos(orientationRad),
@@ -1328,14 +1338,101 @@ export function cutToneColor(meanColor: RGB, t: number, contrast: number): RGB {
   return hslToRgb([h, harmonizedS, targetL])
 }
 
-/** V5 GLASS's per-shape tone: keeps the mass's real hue, pushes
- * lightness higher and saturation gently lower than CUT for a
- * translucent/luminous "mineral" quality, using the same t/contrast
- * gradient shape as cutToneColor. */
-export function glassToneColor(meanColor: RGB, t: number, contrast: number): RGB {
+/** V5 WASH pigment tone. Density changes the measured source colour's
+ * lightness and saturation gently: dilute body colour is quieter and
+ * lighter; concentrated pigment is a little deeper and fuller. Hue is
+ * never replaced, so relationships still come from the photograph. */
+export function washPigmentColor(meanColor: RGB, density: number): RGB {
   const [h, s, l] = rgbToHsl(meanColor)
-  const harmonizedS = clamp(s * 0.7, 0.1, 0.46)
-  const liftedL = clamp(l * 1.12 + 0.06, 0.22, 0.92)
-  const targetL = clamp(liftedL + (t - 0.5) * contrast * 2, 0.16, 0.94)
+  const d = clamp(density, 0, 1)
+  const harmonizedS = clamp(s * (0.62 + d * 0.25), 0.1, 0.58)
+  const targetL = clamp(l + (0.5 - d) * 0.2, 0.14, 0.9)
   return hslToRgb([h, harmonizedS, targetL])
+}
+
+export type WeaveStrand = {
+  start: Point
+  control: Point
+  end: Point
+  width: number
+}
+
+/** Abstract woven strokes seeded by mass statistics. The strands use
+ * centroid, orientation, area and elongation, never region boundaries
+ * or source pixels, so they cannot become a gridded reconstruction. */
+export function generateWeaveStrands(stats: MassStats, count = 5): WeaveStrand[] {
+  const radius = Math.max(2, Math.sqrt(stats.pixelCount / Math.PI))
+  const major = radius * Math.max(1, Math.sqrt(stats.elongation))
+  const minor = radius / Math.max(1, Math.sqrt(stats.elongation))
+  const seed = hashInts([
+    Math.round(stats.centroid.x * 100), Math.round(stats.centroid.y * 100),
+    stats.pixelCount, ...stats.meanColor, 6101,
+  ])
+  const random = createSeededRandom(seed)
+  const strands: WeaveStrand[] = []
+  for (let i = 0; i < count; i++) {
+    const across = count === 1 ? 0 : (i / (count - 1) - 0.5) * minor * 1.7
+    const angle = stats.orientationRad + (i % 2 === 0 ? 0 : Math.PI / 2)
+    const length = i % 2 === 0 ? major * 1.7 : minor * 2.4
+    const normal = angle + Math.PI / 2
+    const offset = across + (random() - 0.5) * minor * 0.22
+    const cx = stats.centroid.x + Math.cos(normal) * offset
+    const cy = stats.centroid.y + Math.sin(normal) * offset
+    const bend = (random() - 0.5) * minor * 0.75
+    strands.push({
+      start: { x: cx - Math.cos(angle) * length, y: cy - Math.sin(angle) * length },
+      control: { x: cx + Math.cos(normal) * bend, y: cy + Math.sin(normal) * bend },
+      end: { x: cx + Math.cos(angle) * length, y: cy + Math.sin(angle) * length },
+      width: Math.max(0.7, minor * (0.18 + random() * 0.12)),
+    })
+  }
+  return strands
+}
+
+/** Broad topographic rings derived from mass moments, not traced
+ * edges. Low-frequency perturbation keeps the family organic while a
+ * fixed ring count prevents literal silhouette reconstruction. */
+export function generateContourRings(stats: MassStats, ringCount = 4, pointCount = 20): Point[][] {
+  const radius = Math.max(2, Math.sqrt(stats.pixelCount / Math.PI))
+  const rx = radius * Math.max(1, Math.sqrt(stats.elongation))
+  const ry = radius / Math.max(1, Math.sqrt(stats.elongation))
+  const seed = hashInts([stats.pixelCount, ...stats.meanColor, Math.round(stats.orientationRad * 1000), 6203])
+  const random = createSeededRandom(seed)
+  const phase = random() * Math.PI * 2
+  return Array.from({ length: ringCount }, (_, ringIndex) => {
+    const scale = 1 - ringIndex * 0.18
+    return Array.from({ length: pointCount }, (__, pointIndex) => {
+      const t = pointIndex / pointCount * Math.PI * 2
+      const pulse = 1 + Math.sin(t * 3 + phase) * 0.07
+      const ex = rx * scale * pulse * Math.cos(t)
+      const ey = ry * scale * pulse * Math.sin(t)
+      return {
+        x: stats.centroid.x + ex * Math.cos(stats.orientationRad) - ey * Math.sin(stats.orientationRad),
+        y: stats.centroid.y + ex * Math.sin(stats.orientationRad) + ey * Math.cos(stats.orientationRad),
+      }
+    })
+  })
+}
+
+/** One emblematic route through compositional mass centres. Anchors
+ * are deliberately pulled toward a shared centre and angularly
+ * quantized, producing a glyph rather than a portrait/object trace. */
+export function generateGlyphAnchors(stats: MassStats[], canvasSize: number): Point[] {
+  if (stats.length === 0) return []
+  const centre = { x: canvasSize / 2, y: canvasSize / 2 }
+  const ordered = [...stats]
+    .sort((a, b) => b.pixelCount - a.pixelCount || a.label - b.label)
+    .slice(0, 7)
+  const anchors: Point[] = [{ x: centre.x, y: centre.y }]
+  for (let i = 0; i < ordered.length; i++) {
+    const item = ordered[i]
+    const dx = (item.centroid.x - centre.x) * 0.62
+    const dy = (item.centroid.y - centre.y) * 0.62
+    const distance = Math.max(canvasSize * 0.1, Math.hypot(dx, dy))
+    const rawAngle = Math.atan2(dy, dx) + item.orientationRad * 0.18
+    const angle = Math.round(rawAngle / (Math.PI / 8)) * (Math.PI / 8)
+    anchors.push({ x: centre.x + Math.cos(angle) * distance, y: centre.y + Math.sin(angle) * distance })
+  }
+  anchors.push({ x: centre.x, y: centre.y })
+  return anchors
 }

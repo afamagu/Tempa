@@ -5,7 +5,8 @@
 // v2-vs-reference visual audit (v2 vs v3 side by side), and extended
 // again for the "Choose Your Mark" checkpoint: v2 and v3 are no longer
 // treated as one algorithm superseding another — they are independent
-// artistic FAMILIES, alongside two new candidates (V4 CUT, V5 GLASS),
+// artistic FAMILIES, alongside three new candidates (WEAVE, CONTOUR,
+// GLYPH),
 // that a member will eventually choose between. This page runs a
 // single source photo through all four and displays them side by side
 // so that choice can actually be evaluated, not just described.
@@ -31,10 +32,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  generateMarkCut,
-  generateMarkGlass,
+  generateMarkContour,
+  generateMarkGlyph,
   generateMarkV2,
-  generateMarkV3,
+  generateMarkWeave,
   type MarkResult,
 } from '@/lib/mark/mark-engine'
 
@@ -43,9 +44,9 @@ type Sample = {
   fileName: string
   sourcePreviewUrl: string
   v2: MarkResult
-  v3: MarkResult
-  cut: MarkResult
-  glass: MarkResult
+  weave: MarkResult
+  contour: MarkResult
+  glyph: MarkResult
 }
 
 const SQUIRCLE_RADIUS = '26%'
@@ -97,18 +98,19 @@ export default function YourMarkPrototypePage() {
   const [error, setError] = useState<string | null>(null)
   const [showStructure, setShowStructure] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const sourcePreviewUrlsRef = useRef(new Set<string>())
 
   // Every object URL this page itself creates (for the SOURCE preview
   // only — each engine's own internal object URL is created and
   // revoked entirely inside its own generateMark* function, before
-  // this component ever sees anything) is revoked when the sample list
-  // changes or this page unmounts, so nothing lingers in memory across
-  // comparisons.
+  // this component ever sees anything) is revoked when the prototype
+  // page unmounts. A ref holds the live set so cleanup never captures
+  // the initial empty samples array.
   useEffect(() => {
     return () => {
-      for (const s of samples) URL.revokeObjectURL(s.sourcePreviewUrl)
+      for (const url of sourcePreviewUrlsRef.current) URL.revokeObjectURL(url)
+      sourcePreviewUrlsRef.current.clear()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleFiles(fileList: FileList | null) {
@@ -122,12 +124,14 @@ export default function YourMarkPrototypePage() {
         // All four families run against the SAME decoded pixels — "one
         // member photo, several private interpretations," the actual
         // product concept this checkpoint is testing.
-        const [v2, v3, cut, glass] = await Promise.all([
+        const [v2, weave, contour, glyph] = await Promise.all([
           generateMarkV2(file),
-          generateMarkV3(file),
-          generateMarkCut(file),
-          generateMarkGlass(file),
+          generateMarkWeave(file),
+          generateMarkContour(file),
+          generateMarkGlyph(file),
         ])
+        const sourcePreviewUrl = URL.createObjectURL(file)
+        sourcePreviewUrlsRef.current.add(sourcePreviewUrl)
         next.push({
           id: `${file.name}-${file.lastModified}-${Math.round(performance.now())}`,
           fileName: file.name,
@@ -135,11 +139,11 @@ export default function YourMarkPrototypePage() {
           // sent anywhere, revoked on cleanup above. Distinct from each
           // engine's own internal handling of the file, none of which
           // persists the source at all (see mark-engine.ts).
-          sourcePreviewUrl: URL.createObjectURL(file),
+          sourcePreviewUrl,
           v2,
-          v3,
-          cut,
-          glass,
+          weave,
+          contour,
+          glyph,
         })
       }
       setSamples((prev) => [...next, ...prev])
@@ -159,7 +163,7 @@ export default function YourMarkPrototypePage() {
           <h1 className="text-2xl font-semibold text-foreground">Choose Your Mark — family comparison</h1>
           <p className="text-[15px] leading-relaxed text-foreground/80">
             Choose a photo. It is processed entirely in this browser tab — never uploaded, never sent to any
-            server. Each photo runs through four independent artistic families (V2, V3, CUT, GLASS) so they can be
+            server. Each photo runs through four independent artistic families (V2, WEAVE, CONTOUR, GLYPH) so they can be
             compared directly, at full, medium, and small (avatar-scale) size — the "choose your Mark" experience
             this checkpoint is testing.
           </p>
@@ -224,9 +228,9 @@ export default function YourMarkPrototypePage() {
 
               <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
                 <MarkColumn label="V2" mark={sample.v2} showStructure={showStructure} />
-                <MarkColumn label="V3" mark={sample.v3} showStructure={showStructure} />
-                <MarkColumn label="V4 CUT" mark={sample.cut} showStructure={showStructure} />
-                <MarkColumn label="V5 GLASS" mark={sample.glass} showStructure={showStructure} />
+                <MarkColumn label="WEAVE" mark={sample.weave} showStructure={showStructure} />
+                <MarkColumn label="CONTOUR" mark={sample.contour} showStructure={showStructure} />
+                <MarkColumn label="GLYPH" mark={sample.glyph} showStructure={showStructure} />
               </div>
             </div>
           ))}

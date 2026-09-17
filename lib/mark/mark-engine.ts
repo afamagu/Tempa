@@ -19,7 +19,7 @@
 // functions in mark-math.ts, deliberately kept out of this file so
 // those contracts can be verified without a real <canvas>.
 //
-// PRIVACY (both v2 and v3 alike): no network request of any kind. The
+// PRIVACY (all four families alike): no network request of any kind. The
 // source File is read via a transient blob: object URL, released the
 // instant the pixels have been drawn into the analysis canvas — never
 // uploaded, never cached at module scope, never written to any browser
@@ -33,7 +33,7 @@
 // any network-hosted processing — this remains an artistic
 // de-identification technique, never a biometric-anonymity guarantee.
 //
-// DETERMINISM (both v2 and v3): given the same decoded source pixels,
+// DETERMINISM (all four families): given the same decoded source pixels,
 // the same algorithm version, and the same tuning constants, generation
 // always produces the same output. The only "randomness" (accent
 // choice, texture grain) is a seeded PRNG whose seed is derived from
@@ -41,7 +41,6 @@
 // RNG call) — see mark-math.ts's createSeededRandom.
 
 import {
-  boundsOfPoints,
   boxBlurGrid,
   buildAdjacency,
   chaikinSmooth,
@@ -50,15 +49,13 @@ import {
   computeMassStatistics,
   computeSquareFitRect,
   createSeededRandom,
-  cutToneColor,
   extractPalette,
   findConnectedComponents,
-  generateCutMassPoints,
-  generateGlassMassPoints,
+  generateContourRings,
+  generateGlyphAnchors,
+  generateWeaveStrands,
   generateNestedBands,
   generateRegularizedMassPoints,
-  glassToneColor,
-  gradientContrastFor,
   harmonizePalette,
   hashInts,
   hslToRgb,
@@ -85,12 +82,13 @@ import {
 export const MARK_ALGORITHM_VERSION = 3
 export const MARK_ALGORITHM_VERSION_V2 = 2
 export const MARK_ALGORITHM_VERSION_V3 = 3
-/** "Choose Your Mark" checkpoint: v2/v3/CUT/GLASS are independent
+/** "Choose Your Mark" checkpoint: v2/v3/CUT/WASH are independent
  * artistic FAMILIES the member will eventually choose between, not
  * generations superseding one another. These ordinals are internal
- * development labels only — see generateMarkCut/generateMarkGlass. */
-export const MARK_ALGORITHM_VERSION_V4_CUT = 4
-export const MARK_ALGORITHM_VERSION_V5_GLASS = 5
+ * development labels only — see generateMarkCut/generateMarkWash. */
+export const MARK_ALGORITHM_VERSION_WEAVE = 4
+export const MARK_ALGORITHM_VERSION_CONTOUR = 5
+export const MARK_ALGORITHM_VERSION_GLYPH = 6
 
 const ANALYSIS_GRID = 48
 const MASTER_SIZE = 512
@@ -734,18 +732,18 @@ const ROLE_ORDER: Record<Role, number> = { atmosphere: 0, dominant: 1, secondary
 // point of difference from v3.
 // ============================================================
 
-const CUT_TUNING: CompositionalTuning = {
+const WEAVE_TUNING: CompositionalTuning = {
   blurRadius: 3,
-  initialPaletteSize: 12,
-  colorMergeThresholdSq: 4200,
-  maxMasses: 8,
-  minMassFraction: 0.02,
+  initialPaletteSize: 10,
+  colorMergeThresholdSq: 4800,
+  maxMasses: 7,
+  minMassFraction: 0.025,
   accentMinFraction: 0.015,
   accentMaxFraction: 0.12,
 }
 
-export async function generateMarkCut(file: File): Promise<MarkResult> {
-  const { masses, totalArea, seed, random } = await extractCompositionalMasses(file, CUT_TUNING)
+export async function generateMarkWeave(file: File): Promise<MarkResult> {
+  const { masses, seed, random } = await extractCompositionalMasses(file, WEAVE_TUNING)
 
   const sorted = [...masses].sort(
     (a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || b.stats.pixelCount - a.stats.pixelCount
@@ -758,156 +756,23 @@ export async function generateMarkCut(file: File): Promise<MarkResult> {
   const mctx = master.getContext('2d')
   if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
 
-  // Every piece gets the SAME soft, consistent drop-shadow — the
-  // "layered, cut and placed" depth cue — never a per-mass decorative
-  // choice, and never a literal paper texture.
-  mctx.save()
-  mctx.shadowColor = 'rgba(30, 24, 18, 0.22)'
-  mctx.shadowBlur = MASTER_SIZE * 0.02
-  mctx.shadowOffsetY = MASTER_SIZE * 0.012
-
   for (const mass of sorted) {
-    const isField = classifyMassShape(mass.stats, totalArea) === 'field'
-    const basePoints = generateCutMassPoints(mass.stats, ANALYSIS_GRID, isField)
-    const smoothed = chaikinSmooth(basePoints, 2, true)
-    const scaledPoints = smoothed.map((p) => ({ x: p.x * scale, y: p.y * scale }))
-    const path = pathFromLoops([scaledPoints])
-
-    const contrast = gradientContrastFor(mass.stats.textureEnergy)
-    const accentBoost = mass.role === 'accent' ? 1.15 : 1
-    const outer = cutToneColor(mass.stats.meanColor, 0, contrast * accentBoost)
-    const inner = cutToneColor(mass.stats.meanColor, 1, contrast * accentBoost)
-    const bounds = boundsOfPoints(scaledPoints)
-    const gradient = mctx.createRadialGradient(
-      bounds.cx,
-      bounds.cy,
-      0,
-      bounds.cx,
-      bounds.cy,
-      Math.max(1, bounds.rx, bounds.ry)
-    )
-    gradient.addColorStop(0, rgbToCss(inner))
-    gradient.addColorStop(1, rgbToCss(outer))
-    mctx.fillStyle = gradient
-    mctx.globalAlpha = mass.role === 'accent' ? 0.97 : 0.93
-    mctx.fill(path)
-  }
-  mctx.restore()
-
-  const structureDataUrl = master.toDataURL('image/png')
-
-  // A very light grain only — editorial restraint, not a literal
-  // paper/cardstock texture, and far sparser than v2/v3's texture pass.
-  drawDeterministicTexture(mctx, random, MASTER_SIZE, 0.15)
-
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    master.toBlob((b) => (b ? resolve(b) : reject(new MarkGenerationError('Could not render this Mark.'))), 'image/png')
-  })
-  const dataUrl = master.toDataURL('image/png')
-
-  return {
-    dataUrl,
-    blob,
-    structureDataUrl,
-    size: MASTER_SIZE,
-    regionCount: sorted.length,
-    seed,
-    algorithmVersion: MARK_ALGORITHM_VERSION_V4_CUT,
-  }
-}
-
-// ============================================================
-// V5 GLASS — second new candidate family. Reuses the same shared
-// extraction, with its own tuning constants pushed toward FEWER,
-// BROADER panes than even v3 (heavier blur, fewer starting palette
-// entries, higher merge threshold, larger minimum mass size) — "a
-// small number of large source-derived forms," never a mosaic.
-// Diverges from v2/v3/CUT in rendering: a low-vertex "faceted" pane
-// silhouette (generateGlassMassPoints) finished with heavier
-// smoothing; PARTIAL-opacity fills so overlapping panes visibly mix
-// colour (the "luminous intersection" effect, achieved through
-// ordinary alpha compositing, not a blend-mode trick); no systematic
-// outline — instead a very thin warm seam ONLY on the focal and accent
-// masses ("occasional extremely fine warm seams where composition
-// warrants them," not systematic linework).
-// ============================================================
-
-const GLASS_TUNING: CompositionalTuning = {
-  blurRadius: 4,
-  initialPaletteSize: 8,
-  colorMergeThresholdSq: 7000,
-  maxMasses: 7,
-  minMassFraction: 0.045,
-  accentMinFraction: 0.02,
-  accentMaxFraction: 0.14,
-}
-
-const GLASS_SEAM_STYLE = 'rgba(255, 236, 200, 0.35)'
-
-export async function generateMarkGlass(file: File): Promise<MarkResult> {
-  const { masses, totalArea, seed, random } = await extractCompositionalMasses(file, GLASS_TUNING)
-
-  const sorted = [...masses].sort(
-    (a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || b.stats.pixelCount - a.stats.pixelCount
-  )
-
-  const scale = MASTER_SIZE / ANALYSIS_GRID
-  const master = document.createElement('canvas')
-  master.width = MASTER_SIZE
-  master.height = MASTER_SIZE
-  const mctx = master.getContext('2d')
-  if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
-
-  const renderedLoops: { points: Point[]; role: Role }[] = []
-
-  for (const mass of sorted) {
-    const isField = classifyMassShape(mass.stats, totalArea) === 'field'
-    const basePoints = generateGlassMassPoints(mass.stats, ANALYSIS_GRID, isField)
-    const smoothed = chaikinSmooth(basePoints, 3, true)
-    const scaledPoints = smoothed.map((p) => ({ x: p.x * scale, y: p.y * scale }))
-    const path = pathFromLoops([scaledPoints])
-
-    const contrast = gradientContrastFor(mass.stats.textureEnergy)
-    const bounds = boundsOfPoints(scaledPoints)
-    const outer = glassToneColor(mass.stats.meanColor, 0, contrast)
-    const inner = glassToneColor(mass.stats.meanColor, 1, contrast)
-    const gradient = mctx.createRadialGradient(
-      bounds.cx,
-      bounds.cy,
-      0,
-      bounds.cx,
-      bounds.cy,
-      Math.max(1, bounds.rx, bounds.ry)
-    )
-    gradient.addColorStop(0, rgbToCss(inner))
-    gradient.addColorStop(1, rgbToCss(outer))
-
+    const strands = generateWeaveStrands(mass.stats, mass.role === 'atmosphere' ? 4 : 6)
     mctx.save()
-    // Partial opacity is the core "translucent pane" mechanism — where
-    // two panes overlap, ordinary alpha compositing visibly mixes their
-    // colour, which is what reads as a "luminous intersection" without
-    // needing a blend-mode trick that could blow out to white.
-    mctx.globalAlpha = mass.role === 'atmosphere' || mass.role === 'dominant' ? 0.62 : 0.72
-    mctx.fillStyle = gradient
-    mctx.fill(path)
+    mctx.strokeStyle = rgbToCss(mass.stats.meanColor)
+    mctx.globalAlpha = mass.role === 'accent' ? 0.95 : 0.78
+    mctx.lineCap = 'round'
+    for (const strand of strands) {
+      mctx.lineWidth = strand.width * scale
+      mctx.beginPath()
+      mctx.moveTo(strand.start.x * scale, strand.start.y * scale)
+      mctx.quadraticCurveTo(strand.control.x * scale, strand.control.y * scale, strand.end.x * scale, strand.end.y * scale)
+      mctx.stroke()
+    }
     mctx.restore()
-
-    renderedLoops.push({ points: scaledPoints, role: mass.role })
   }
 
   const structureDataUrl = master.toDataURL('image/png')
-
-  // Restrained, not systematic: only the focal and accent masses (if
-  // any) get a very fine warm seam — "occasional... where composition
-  // warrants them," not linework on every shape like v3.
-  mctx.save()
-  mctx.strokeStyle = GLASS_SEAM_STYLE
-  mctx.lineWidth = Math.max(0.75, MASTER_SIZE * 0.0015)
-  for (const loop of renderedLoops) {
-    if (loop.role !== 'focal' && loop.role !== 'accent') continue
-    strokeLoop(mctx, loop.points)
-  }
-  mctx.restore()
 
   drawDeterministicTexture(mctx, random, MASTER_SIZE, 0.12)
 
@@ -923,6 +788,126 @@ export async function generateMarkGlass(file: File): Promise<MarkResult> {
     size: MASTER_SIZE,
     regionCount: sorted.length,
     seed,
-    algorithmVersion: MARK_ALGORITHM_VERSION_V5_GLASS,
+    algorithmVersion: MARK_ALGORITHM_VERSION_WEAVE,
+  }
+}
+
+// ============================================================
+// V5 WASH — a genuinely separate fourth family. It shares only the
+// source-derived compositional analysis above, tuned toward a quiet set
+// of broad territories, then interprets each mass through its own
+// low-frequency organic perimeter and layered pigment-density grammar.
+// No traced contour, regularized lobe, CUT form, facet, outline, or
+// seam survives into this renderer. Broad translucent bodies preserve
+// placement/orientation; a pair of restrained, offset concentrations
+// creates pigment pooling without obvious concentric bands.
+// ============================================================
+
+const CONTOUR_TUNING: CompositionalTuning = {
+  blurRadius: 4,
+  initialPaletteSize: 8,
+  colorMergeThresholdSq: 7200,
+  maxMasses: 6,
+  minMassFraction: 0.05,
+  accentMinFraction: 0.02,
+  accentMaxFraction: 0.12,
+}
+
+export async function generateMarkContour(file: File): Promise<MarkResult> {
+  const { masses, seed, random } = await extractCompositionalMasses(file, CONTOUR_TUNING)
+
+  const sorted = [...masses].sort(
+    (a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || b.stats.pixelCount - a.stats.pixelCount
+  )
+
+  const scale = MASTER_SIZE / ANALYSIS_GRID
+  const master = document.createElement('canvas')
+  master.width = MASTER_SIZE
+  master.height = MASTER_SIZE
+  const mctx = master.getContext('2d')
+  if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
+
+  for (const mass of sorted) {
+    const rings = generateContourRings(mass.stats, mass.role === 'atmosphere' ? 3 : 4)
+    mctx.save()
+    mctx.strokeStyle = rgbToCss(mass.stats.meanColor)
+    mctx.globalAlpha = mass.role === 'accent' ? 0.94 : 0.72
+    mctx.lineWidth = mass.role === 'accent' ? 8 : 5
+    for (const ring of rings) {
+      strokeLoop(mctx, ring.map((point) => ({ x: point.x * scale, y: point.y * scale })))
+    }
+    mctx.restore()
+  }
+
+  const structureDataUrl = master.toDataURL('image/png')
+  drawDeterministicTexture(mctx, random, MASTER_SIZE, 0.1)
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    master.toBlob((b) => (b ? resolve(b) : reject(new MarkGenerationError('Could not render this Mark.'))), 'image/png')
+  })
+  const dataUrl = master.toDataURL('image/png')
+
+  return {
+    dataUrl,
+    blob,
+    structureDataUrl,
+    size: MASTER_SIZE,
+    regionCount: sorted.length,
+    seed,
+    algorithmVersion: MARK_ALGORITHM_VERSION_CONTOUR,
+  }
+}
+
+const GLYPH_TUNING: CompositionalTuning = {
+  blurRadius: 5,
+  initialPaletteSize: 7,
+  colorMergeThresholdSq: 7600,
+  maxMasses: 7,
+  minMassFraction: 0.04,
+  accentMinFraction: 0.02,
+  accentMaxFraction: 0.12,
+}
+
+export async function generateMarkGlyph(file: File): Promise<MarkResult> {
+  const { masses, seed, random } = await extractCompositionalMasses(file, GLYPH_TUNING)
+  const anchors = generateGlyphAnchors(masses.map((mass) => mass.stats), ANALYSIS_GRID)
+  const scale = MASTER_SIZE / ANALYSIS_GRID
+  const master = document.createElement('canvas')
+  master.width = MASTER_SIZE
+  master.height = MASTER_SIZE
+  const mctx = master.getContext('2d')
+  if (!mctx) throw new MarkGenerationError('This browser cannot process images.')
+
+  const palette = [...masses].sort((a, b) => b.stats.pixelCount - a.stats.pixelCount)
+  const gradient = mctx.createLinearGradient(0, 0, MASTER_SIZE, MASTER_SIZE)
+  for (let i = 0; i < Math.max(1, palette.length); i++) {
+    gradient.addColorStop(palette.length === 1 ? 0 : i / (palette.length - 1), rgbToCss(palette[i].stats.meanColor))
+  }
+  mctx.save()
+  mctx.strokeStyle = gradient
+  mctx.lineWidth = 24
+  mctx.lineCap = 'round'
+  mctx.lineJoin = 'round'
+  mctx.beginPath()
+  if (anchors.length) mctx.moveTo(anchors[0].x * scale, anchors[0].y * scale)
+  for (let i = 1; i < anchors.length; i++) {
+    const previous = anchors[i - 1]
+    const current = anchors[i]
+    const controlX = (previous.x + current.x) / 2 * scale
+    const controlY = (i % 2 === 0 ? previous.y : current.y) * scale
+    mctx.quadraticCurveTo(controlX, controlY, current.x * scale, current.y * scale)
+  }
+  mctx.stroke()
+  mctx.restore()
+
+  const structureDataUrl = master.toDataURL('image/png')
+  drawDeterministicTexture(mctx, random, MASTER_SIZE, 0.06)
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    master.toBlob((b) => (b ? resolve(b) : reject(new MarkGenerationError('Could not render this Mark.'))), 'image/png')
+  })
+  return {
+    dataUrl: master.toDataURL('image/png'), blob, structureDataUrl,
+    size: MASTER_SIZE, regionCount: 1, seed,
+    algorithmVersion: MARK_ALGORITHM_VERSION_GLYPH,
   }
 }

@@ -32,9 +32,12 @@ import {
   boundsOfPoints,
   gradientContrastFor,
   generateCutMassPoints,
-  generateGlassMassPoints,
+  generateWashMassPoints,
   cutToneColor,
-  glassToneColor,
+  washPigmentColor,
+  generateWeaveStrands,
+  generateContourRings,
+  generateGlyphAnchors,
   type RGB,
   type Point,
   type MassStats,
@@ -968,10 +971,10 @@ describe('Checkpoint 1B pipeline pieces compose deterministically end-to-end', (
 })
 
 // ============================================================
-// "CHOOSE YOUR MARK" CHECKPOINT — V4 CUT / V5 GLASS SHARED PRIMITIVES
+// "CHOOSE YOUR MARK" CHECKPOINT — V4 CUT / V5 WASH PRIMITIVES
 // ============================================================
 
-function baseCutGlassStats(overrides: Partial<MassStats>): MassStats {
+function baseCutWashStats(overrides: Partial<MassStats>): MassStats {
   return {
     label: 0,
     centroid: { x: 24, y: 24 },
@@ -1031,18 +1034,18 @@ describe('gradientContrastFor — continuous analogue of v3\'s discrete bandCoun
 
 describe('generateCutMassPoints — asymmetric "cut form" silhouette, never a perfect ellipse', () => {
   it('returns the requested number of points', () => {
-    expect(generateCutMassPoints(baseCutGlassStats({}), 48, false, 16)).toHaveLength(16)
+    expect(generateCutMassPoints(baseCutWashStats({}), 48, false, 16)).toHaveLength(16)
   })
 
   it('is deterministic for the same statistics', () => {
-    const stats = baseCutGlassStats({ elongation: 1.4 })
+    const stats = baseCutWashStats({ elongation: 1.4 })
     const a = generateCutMassPoints(stats, 48, false, 16)
     const b = generateCutMassPoints({ ...stats }, 48, false, 16)
     expect(a).toEqual(b)
   })
 
   it('is NOT a perfect ellipse — radii vary beyond what elongation alone explains', () => {
-    const stats = baseCutGlassStats({ elongation: 1 }) // a perfect ellipse would be a circle here
+    const stats = baseCutWashStats({ elongation: 1 }) // a perfect ellipse would be a circle here
     const points = generateCutMassPoints(stats, 48, false, 32)
     const radii = points.map((p) => Math.hypot(p.x - 24, p.y - 24))
     const min = Math.min(...radii)
@@ -1053,7 +1056,7 @@ describe('generateCutMassPoints — asymmetric "cut form" silhouette, never a pe
   })
 
   it('a field mass expands further than a non-field mass with identical statistics', () => {
-    const stats = baseCutGlassStats({})
+    const stats = baseCutWashStats({})
     const normal = generateCutMassPoints(stats, 48, false, 24)
     const field = generateCutMassPoints(stats, 48, true, 24)
     const avgRadius = (pts: Point[]) => pts.reduce((s, p) => s + Math.hypot(p.x - 24, p.y - 24), 0) / pts.length
@@ -1061,52 +1064,69 @@ describe('generateCutMassPoints — asymmetric "cut form" silhouette, never a pe
   })
 
   it('different masses (different centroid/colour/size) produce different silhouettes', () => {
-    const a = generateCutMassPoints(baseCutGlassStats({ centroid: { x: 10, y: 10 } }), 48, false, 16)
-    const b = generateCutMassPoints(baseCutGlassStats({ centroid: { x: 40, y: 40 } }), 48, false, 16)
+    const a = generateCutMassPoints(baseCutWashStats({ centroid: { x: 10, y: 10 } }), 48, false, 16)
+    const b = generateCutMassPoints(baseCutWashStats({ centroid: { x: 40, y: 40 } }), 48, false, 16)
     expect(a).not.toEqual(b)
   })
 })
 
-describe('generateGlassMassPoints — low-vertex faceted pane, never a mosaic of many pieces', () => {
-  it('returns the requested number of facet points', () => {
-    expect(generateGlassMassPoints(baseCutGlassStats({}), 48, false, 7)).toHaveLength(7)
+describe('generateWashMassPoints — broad, organic, source-oriented perimeter', () => {
+  it('returns a restrained requested point count, never a pathological point cloud', () => {
+    expect(generateWashMassPoints(baseCutWashStats({}), 48, false, 24)).toHaveLength(24)
   })
 
   it('is deterministic for the same statistics', () => {
-    const stats = baseCutGlassStats({ elongation: 2 })
-    const a = generateGlassMassPoints(stats, 48, false, 7)
-    const b = generateGlassMassPoints({ ...stats }, 48, false, 7)
+    const stats = baseCutWashStats({ elongation: 2 })
+    const a = generateWashMassPoints(stats, 48, false, 24)
+    const b = generateWashMassPoints({ ...stats }, 48, false, 24)
     expect(a).toEqual(b)
   })
 
-  it('facet jitter stays subtle — radii vary only mildly around the base ellipse', () => {
-    const stats = baseCutGlassStats({ elongation: 1 })
-    const points = generateGlassMassPoints(stats, 48, false, 24)
+  it('bounded low-frequency irregularity prevents both a perfect ellipse and a spiky perimeter', () => {
+    const stats = baseCutWashStats({ elongation: 1 })
+    const points = generateWashMassPoints(stats, 48, false, 48)
     const radii = points.map((p) => Math.hypot(p.x - 24, p.y - 24))
     const min = Math.min(...radii)
     const max = Math.max(...radii)
-    // Subtle facet jitter (~[0.92, 1.08]) — visibly faceted but never
-    // as irregular as CUT's bulge treatment.
-    expect(max / min).toBeLessThan(1.2)
+    expect(max / min).toBeGreaterThan(1.03)
+    expect(max / min).toBeLessThan(1.4)
   })
 
-  it('a field mass expands further than a non-field mass with identical statistics', () => {
-    const stats = baseCutGlassStats({})
-    const normal = generateGlassMassPoints(stats, 48, false, 24)
-    const field = generateGlassMassPoints(stats, 48, true, 24)
+  it('a field mass expands further without automatically filling the canvas', () => {
+    const stats = baseCutWashStats({})
+    const normal = generateWashMassPoints(stats, 48, false, 24)
+    const field = generateWashMassPoints(stats, 48, true, 24)
     const avgRadius = (pts: Point[]) => pts.reduce((s, p) => s + Math.hypot(p.x - 24, p.y - 24), 0) / pts.length
     expect(avgRadius(field)).toBeGreaterThan(avgRadius(normal))
+    expect(Math.max(...field.map((p) => Math.hypot(p.x - 24, p.y - 24)))).toBeLessThan(48)
   })
 
-  it('CUT and GLASS silhouette generators produce different points for the same mass', () => {
-    const stats = baseCutGlassStats({ elongation: 1.3 })
-    const cut = generateCutMassPoints(stats, 48, false, 16)
-    const glass = generateGlassMassPoints(stats, 48, false, 16)
-    expect(cut).not.toEqual(glass)
+  it('responds to measured orientation', () => {
+    const horizontal = generateWashMassPoints(baseCutWashStats({ elongation: 3, orientationRad: 0 }), 48, false, 32)
+    const vertical = generateWashMassPoints(baseCutWashStats({ elongation: 3, orientationRad: Math.PI / 2 }), 48, false, 32)
+    const extent = (points: Point[]) => ({
+      width: Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x)),
+      height: Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y)),
+    })
+    expect(extent(horizontal).width).toBeGreaterThan(extent(horizontal).height)
+    expect(extent(vertical).height).toBeGreaterThan(extent(vertical).width)
+  })
+
+  it('moves with the source mass centroid instead of drifting to a fixed decorative position', () => {
+    const a = generateWashMassPoints(baseCutWashStats({ centroid: { x: 10, y: 12 } }), 48, false, 24)
+    const b = generateWashMassPoints(baseCutWashStats({ centroid: { x: 36, y: 34 } }), 48, false, 24)
+    const mean = (points: Point[]) => ({
+      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+      y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+    })
+    expect(mean(a).x).toBeCloseTo(10, 0)
+    expect(mean(a).y).toBeCloseTo(12, 0)
+    expect(mean(b).x).toBeCloseTo(36, 0)
+    expect(mean(b).y).toBeCloseTo(34, 0)
   })
 })
 
-describe('cutToneColor / glassToneColor — source hue preserved, family-specific tonal treatment', () => {
+describe('cutToneColor / washPigmentColor — source hue preserved, family-specific tonal treatment', () => {
   it('cutToneColor preserves the source hue', () => {
     const warmRed: RGB = [200, 60, 40]
     const [sourceHue] = rgbToHsl(warmRed)
@@ -1114,35 +1134,31 @@ describe('cutToneColor / glassToneColor — source hue preserved, family-specifi
     expect(outHue).toBeCloseTo(sourceHue, 2)
   })
 
-  it('glassToneColor preserves the source hue', () => {
+  it('washPigmentColor preserves the source hue', () => {
     const coolBlue: RGB = [40, 90, 200]
     const [sourceHue] = rgbToHsl(coolBlue)
-    const [outHue] = rgbToHsl(glassToneColor(coolBlue, 0.5, 0.2))
+    const [outHue] = rgbToHsl(washPigmentColor(coolBlue, 0.5))
     expect(outHue).toBeCloseTo(sourceHue, 2)
   })
 
-  it('glassToneColor is lighter than cutToneColor for the same colour and band position', () => {
+  it('denser WASH pigment is darker than the diluted body without changing hue family', () => {
     const color: RGB = [90, 90, 90]
-    const [, , cutL] = rgbToHsl(cutToneColor(color, 0.5, 0.2))
-    const [, , glassL] = rgbToHsl(glassToneColor(color, 0.5, 0.2))
-    expect(glassL).toBeGreaterThan(cutL)
+    const [, , diluteL] = rgbToHsl(washPigmentColor(color, 0.2))
+    const [, , denseL] = rgbToHsl(washPigmentColor(color, 0.9))
+    expect(denseL).toBeLessThan(diluteL)
   })
 
-  it('t=1 (inner) is lighter than t=0 (outer) for both families, given positive contrast', () => {
+  it('CUT retains its accepted inner/outer tonal behavior', () => {
     const color: RGB = [120, 100, 80]
     const [, , cutOuterL] = rgbToHsl(cutToneColor(color, 0, 0.25))
     const [, , cutInnerL] = rgbToHsl(cutToneColor(color, 1, 0.25))
     expect(cutInnerL).toBeGreaterThan(cutOuterL)
-
-    const [, , glassOuterL] = rgbToHsl(glassToneColor(color, 0, 0.25))
-    const [, , glassInnerL] = rgbToHsl(glassToneColor(color, 1, 0.25))
-    expect(glassInnerL).toBeGreaterThan(glassOuterL)
   })
 
   it('both are deterministic', () => {
     const color: RGB = [77, 133, 200]
     expect(cutToneColor(color, 0.3, 0.15)).toEqual(cutToneColor(color, 0.3, 0.15))
-    expect(glassToneColor(color, 0.3, 0.15)).toEqual(glassToneColor(color, 0.3, 0.15))
+    expect(washPigmentColor(color, 0.3)).toEqual(washPigmentColor(color, 0.3))
   })
 
   it('never fabricates a hue unrelated to the source (two very different source colours stay distinguishable)', () => {
@@ -1151,5 +1167,32 @@ describe('cutToneColor / glassToneColor — source hue preserved, family-specifi
     const [redHue] = rgbToHsl(cutToneColor(red, 0.5, 0.2))
     const [tealHue] = rgbToHsl(cutToneColor(teal, 0.5, 0.2))
     expect(Math.abs(redHue - tealHue)).toBeGreaterThan(0.1)
+  })
+})
+
+describe('WEAVE / CONTOUR / GLYPH architectural primitives', () => {
+  const stats = baseCutWashStats({ centroid: { x: 19, y: 27 }, orientationRad: Math.PI / 5, elongation: 2.2, pixelCount: 180, meanColor: [70, 130, 190] })
+
+  it('WEAVE deterministically produces curved strands rather than pixels or closed contours', () => {
+    const a = generateWeaveStrands(stats, 6)
+    expect(a).toEqual(generateWeaveStrands({ ...stats }, 6))
+    expect(a).toHaveLength(6)
+    expect(a.every((strand) => strand.width > 0 && strand.start && strand.control && strand.end)).toBe(true)
+  })
+
+  it('CONTOUR deterministically produces a bounded small number of broad rings', () => {
+    const rings = generateContourRings(stats, 4, 20)
+    expect(rings).toEqual(generateContourRings({ ...stats }, 4, 20))
+    expect(rings).toHaveLength(4)
+    expect(rings.every((ring) => ring.length === 20)).toBe(true)
+  })
+
+  it('GLYPH makes one centre-bound anchor route and does not reuse strand or ring geometry', () => {
+    const second = baseCutWashStats({ label: 9, centroid: { x: 36, y: 12 }, pixelCount: 90 })
+    const anchors = generateGlyphAnchors([stats, second], 48)
+    expect(anchors).toEqual(generateGlyphAnchors([stats, second], 48))
+    expect(anchors[0]).toEqual({ x: 24, y: 24 })
+    expect(anchors.at(-1)).toEqual({ x: 24, y: 24 })
+    expect(anchors).toHaveLength(4)
   })
 })
