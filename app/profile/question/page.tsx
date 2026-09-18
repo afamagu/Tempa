@@ -13,12 +13,14 @@ import QuestionAnswer from '@/app/question/question-answer'
  */
 export function resolveOnboardingQuestionDestination(state: {
   hasProfile: boolean
+  onboardingStage: 'mark' | 'question' | 'complete' | null
   hasFlagshipQuestion: boolean
   hasFlagshipAnswer: boolean
-}): 'render' | '/profile' | '/minds' {
+}): 'render' | 'recover' | '/profile' | '/profile/mark' | '/minds' {
   if (!state.hasProfile) return '/profile'
-  if (!state.hasFlagshipQuestion) return '/minds'
-  if (state.hasFlagshipAnswer) return '/minds'
+  if (state.onboardingStage === 'mark') return '/profile/mark'
+  if (state.onboardingStage === 'complete') return '/minds'
+  if (!state.hasFlagshipQuestion || state.hasFlagshipAnswer) return 'recover'
   return 'render'
 }
 
@@ -26,10 +28,9 @@ export function resolveOnboardingQuestionDestination(state: {
  * Onboarding & First-Use checkpoint (Checkpoint 2, Section A/B) — the
  * required first Question, now the final onboarding step itself rather
  * than a later soft nudge. Reached ONLY from profile-form.tsx's own
- * post-insert redirect, immediately after a brand-new member's first
- * profiles row is created — never linked to from anywhere else, and
- * never enforced as a gate anywhere else in the app (see this file's
- * own existing-member-safety note below). Reuses the exact same
+ * final stage after a brand-new member has created a profile and Mark.
+ * The shared central guard resumes incomplete members here, while this
+ * route repeats the stage checks as defense in depth. Reuses the same
  * QuestionAnswer component and publish_question_answer RPC every other
  * Question save already uses (app/question/[questionId]/page.tsx) —
  * `onboarding` is the one new prop that changes its copy/post-save
@@ -41,27 +42,12 @@ export function resolveOnboardingQuestionDestination(state: {
  * lib/questions.ts's getFlagshipQuestion/getPrimaryAnswer doc
  * comments), matching the Checkpoint 1 audit finding this resolves.
  *
- * Existing-member safety (Section R): this page performs NO new GLOBAL
- * completion check and gates nothing beyond itself — it never becomes a
- * site-wide mandatory redirect. A member only ever reaches it via the
- * profile-form.tsx redirect immediately after inserting their first
- * profiles row — an existing member (who already has a profiles row) is
- * already redirected away from /profile entirely (app/profile/page.tsx)
- * and can never land here again. Its own guard here is deliberately the
- * OPPOSITE of /profile's: it requires a profiles row to exist (a
- * prerequisite — "the profile step already happened") rather than
- * redirecting because one exists, which is exactly why a just-created
- * member can still reach and use this page despite their profiles row
- * already being present. If a brand-new member navigates away before
- * answering, nothing elsewhere in the app chases them back here — they
- * simply continue to see the existing, unchanged, non-blocking
- * QuestionIncompleteNotice/needsParticipationGate nudge everywhere it
- * already appears, exactly as any other member without a Flagship
- * response does today. This is deliberate: the previous forced-redirect
- * gate was removed specifically because it could intercept a member
- * elsewhere in the app, and this checkpoint must not recreate that.
+ * The private profiles.onboarding_stage is now the durable authority:
+ * mark cannot bypass /profile/mark, question resumes here, and complete
+ * members are not put back through onboarding. Existing profiles were
+ * grandfathered complete by the prepared migration.
  *
- * Checkpoint 2B, Section B correction — a member who has ALREADY
+ * A member who has ALREADY
  * published a response to the current Flagship Question (durable,
  * already-queryable state: a question_answers row for (user_id,
  * flagship.id), the exact same read this page already performs, no new
@@ -81,7 +67,11 @@ export default async function OnboardingQuestionPage() {
     redirect('/sign-in')
   }
 
-  const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, onboarding_stage')
+    .eq('id', user.id)
+    .maybeSingle()
 
   // Each guard below mirrors resolveOnboardingQuestionDestination above
   // exactly (see that function's own tests) — expressed as direct
@@ -94,12 +84,24 @@ export default async function OnboardingQuestionPage() {
     redirect('/profile')
   }
 
+  if (profile.onboarding_stage === 'mark') {
+    redirect('/profile/mark')
+  }
+
+  if (profile.onboarding_stage === 'complete') {
+    redirect('/minds')
+  }
+
   const flagship = await getFlagshipQuestion(supabase)
 
-  // No Flagship Question currently configured (an admin-curation gap,
-  // not something a member should ever be blocked by) — nothing
-  // required to ask, so onboarding is simply complete.
+  // No Flagship Question currently configured: durably complete the
+  // question stage before leaving, otherwise the central guard would
+  // correctly send this member straight back here forever.
   if (!flagship) {
+    const { error } = await supabase.rpc('complete_flagship_onboarding')
+    if (error) {
+      return <OnboardingRecoveryError />
+    }
     redirect('/minds')
   }
 
@@ -118,6 +120,10 @@ export default async function OnboardingQuestionPage() {
   // is done, redirect to the approved destination rather than showing
   // the view/edit UI at an onboarding-only URL.
   if (answer) {
+    const { error } = await supabase.rpc('complete_flagship_onboarding')
+    if (error) {
+      return <OnboardingRecoveryError />
+    }
     redirect('/minds')
   }
 
@@ -140,5 +146,16 @@ export default async function OnboardingQuestionPage() {
       nextQuestion={nextQuestion}
       onboarding
     />
+  )
+}
+
+function OnboardingRecoveryError() {
+  return (
+    <main className="flex min-h-screen items-center justify-center p-6">
+      <div className="w-full max-w-md space-y-4 text-center">
+        <h1 className="font-serif text-2xl font-medium">One moment</h1>
+        <p className="text-sm text-muted">We couldn&rsquo;t finish this step. Refresh the page to try again.</p>
+      </div>
+    </main>
   )
 }

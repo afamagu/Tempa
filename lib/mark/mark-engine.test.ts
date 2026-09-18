@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 
 // Your Mark — Checkpoint 1 (engine audit + visual prototype), extended
@@ -18,6 +19,18 @@ import path from 'node:path'
 // source inspection, the established convention this codebase already
 // uses for exactly this class of claim.
 const source = readFileSync(path.join(__dirname, 'mark-engine.ts'), 'utf8')
+
+describe('production V2 regression lock', () => {
+  it('keeps the approved generateMarkV2 implementation byte-for-byte unchanged', () => {
+    const start = source.indexOf('export async function generateMarkV2(')
+    const end = source.indexOf('\nfunction dilateLoop', start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    expect(createHash('sha256').update(source.slice(start, end)).digest('hex')).toBe(
+      '0841197932e719d9615b3b38774a7a18830b4e96026cce15cd3d598a50bc7bc0'
+    )
+  })
+})
 
 describe('Your Mark engine — no network request is required for generation', () => {
   it('never calls fetch, XMLHttpRequest, or any Supabase client', () => {

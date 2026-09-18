@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { resolveOnboardingDestination, type OnboardingStage } from '@/lib/onboarding'
+import YourMarkStep from './your-mark-step'
 
-export default async function RootPage() {
+export default async function YourMarkPage() {
   const supabase = await createClient()
   const {
     data: { user },
@@ -16,14 +16,10 @@ export default async function RootPage() {
     .eq('id', user.id)
     .maybeSingle()
 
-  redirect(
-    resolveOnboardingDestination(
-      {
-        authenticated: true,
-        hasProfile: Boolean(profile),
-        onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
-      },
-      '/home'
-    )
-  )
+  if (!profile) redirect('/profile')
+  if (profile.onboarding_stage === 'question') redirect('/profile/question')
+  if (profile.onboarding_stage === 'complete') redirect('/home')
+
+  return <YourMarkStep />
 }
+

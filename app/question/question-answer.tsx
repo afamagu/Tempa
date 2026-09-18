@@ -199,7 +199,10 @@ export default function QuestionAnswer({
     setPublishedBody(trimmed)
     setBody(trimmed)
     setMode('view')
-    router.refresh()
+    // On the required onboarding Question, keep the existing quiet
+    // completion reveal mounted. Its links navigate into Tempa, while
+    // every later request is guarded by the now-complete durable stage.
+    if (!onboarding) router.refresh()
   }
 
   return (
