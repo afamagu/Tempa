@@ -788,7 +788,6 @@ describe('excludeHiddenLetters', () => {
 describe('deriveArrivals', () => {
   const VIEWER = 'viewer-id'
   const future = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString()
-  const past = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
 
   function letter(overrides: Partial<Letter> = {}): Letter {
     return {
@@ -802,7 +801,7 @@ describe('deriveArrivals', () => {
       status: 'sent',
       createdAt: '2026-01-01T00:00:00Z',
       expiresAt: future,
-      isUnread: false,
+      isUnread: true,
       repliedAt: null,
       closedAt: null,
       closedBy: null,
@@ -811,9 +810,18 @@ describe('deriveArrivals', () => {
     }
   }
 
-  it('a delivered, visible, unreplied letter to this viewer appears in Arrivals', () => {
+  it('an incoming unread letter appears in Arrivals', () => {
     const result = deriveArrivals([letter()], VIEWER)
     expect(result).toHaveLength(1)
+  })
+
+  it('an incoming read letter does not appear even when its lifecycle status is still sent', () => {
+    expect(deriveArrivals([letter({ isUnread: false, status: 'sent' })], VIEWER)).toHaveLength(0)
+  })
+
+  it('unread state, not sent/replied lifecycle status, controls the Home waiting result', () => {
+    expect(deriveArrivals([letter({ isUnread: true, status: 'replied' })], VIEWER)).toHaveLength(1)
+    expect(deriveArrivals([letter({ isUnread: false, status: 'sent' })], VIEWER)).toHaveLength(0)
   })
 
   it('a letter this viewer SENT (not received) never appears in Arrivals', () => {
@@ -821,9 +829,9 @@ describe('deriveArrivals', () => {
     expect(deriveArrivals([sent], VIEWER)).toHaveLength(0)
   })
 
-  it('an already-expired, unreplied letter does not appear', () => {
-    const expired = letter({ expiresAt: past })
-    expect(deriveArrivals([expired], VIEWER)).toHaveLength(0)
+  it('multiple incoming unread letters remain multiple waiting letters', () => {
+    const result = deriveArrivals([letter({ id: 'l-1' }), letter({ id: 'l-2' })], VIEWER)
+    expect(result).toHaveLength(2)
   })
 
   it('input is always sourced from letters_for_participant, which never returns an undelivered incoming letter at all — so an empty input (the pre-delivery case) produces an empty Arrivals list, never a fabricated one', () => {

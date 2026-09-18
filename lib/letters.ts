@@ -191,20 +191,16 @@ export function isEffectivelyExpired(letter: Letter, established: boolean): bool
 }
 
 /**
- * Pure: Home's "has anything arrived for me" list — every letter this
- * viewer is the recipient of that's still awaiting their reply and
- * hasn't effectively expired. `established` is passed as false
- * unconditionally, same as before this was extracted — Home's
- * relationship with established/Write-Anytime letters is a separate,
- * not-yet-scoped concern. `letters` is always sourced from getMyLetters
- * (letters_for_participant), which already enforces the one delivery
- * boundary that matters here (an incoming letter is invisible to its
- * recipient until deliver_at) — an undelivered letter never appears in
- * this function's input in the first place, so it structurally cannot
- * appear in Arrivals either.
+ * Pure: Home's unread-arrival list — every delivered, visible letter
+ * this viewer received and has not opened yet. `letters` is always
+ * sourced from getMyLetters (letters_for_participant), so isUnread is
+ * the participant-safe projection of opened_at and an undelivered
+ * incoming letter never appears in this function's input. Letter
+ * lifecycle status is deliberately irrelevant: Home's "letter waiting"
+ * language describes unread mail, not whether a letter awaits a reply.
  */
 export function deriveArrivals(letters: Letter[], userId: string): Letter[] {
-  return letters.filter((l) => l.recipientId === userId && l.status === 'sent' && !isEffectivelyExpired(l, false))
+  return letters.filter((l) => l.recipientId === userId && l.isUnread)
 }
 
 /**

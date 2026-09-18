@@ -125,6 +125,34 @@ describe('Home Phase 1B — omission/degradation behavior preserved', () => {
   })
 })
 
+describe('Home Arrivals — unread-letter source of truth', () => {
+  it('derives one unread-arrival collection after hidden correspondences are removed', () => {
+    expect(source).toContain('const allLetters = excludeHiddenLetters(allLettersRaw, hiddenCorrespondenceIds)')
+    expect(source).toContain('const awaitingReply = deriveArrivals(allLetters, user.id)')
+  })
+
+  it('uses that same collection for the displayed count, single-letter destination, sender, and preview', () => {
+    expect(source).toContain('const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null')
+    expect(source).toContain('{awaitingReply.length > 0 ? (')
+    expect(source).toContain("awaitingReply.length === 1")
+    expect(source).toContain('`${awaitingReply.length} letters waiting`')
+    expect(source).toContain('letterPreviewText(singleAwaiting.body)')
+  })
+
+  it('does not determine the Home waiting card from sent lifecycle status', () => {
+    const deriveStart = source.indexOf('const awaitingReply = deriveArrivals(allLetters, user.id)')
+    const arrivalsRenderEnd = source.indexOf('{mailOnTheWay && (', deriveStart)
+    expect(deriveStart).toBeGreaterThan(-1)
+    expect(arrivalsRenderEnd).toBeGreaterThan(deriveStart)
+    expect(source.slice(deriveStart, arrivalsRenderEnd)).not.toMatch(/status\s*===?\s*['"]sent['"]/)
+  })
+
+  it('preserves the existing navigation unread-count query independently', () => {
+    expect(source).toContain('getWaitingLetterCount(supabase, user.id)')
+    expect(source).toContain('<AppShell active="home" waitingLetterCount={waitingCount}>')
+  })
+})
+
 describe('Home Phase 1 (regression) — no infinite feed, no popularity metrics', () => {
   // Comment-stripped — this codebase's own established convention — so
   // a doc comment explicitly EXPLAINING an absence ("This is NOT an
