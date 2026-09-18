@@ -32,6 +32,20 @@ describe('Your Mark migration — durable state and profile privilege boundary',
     expect(lower).toContain("c.relname = 'questions_is_flagship_unique'")
     expect(lower).toContain("<> 'is_flagship=true'")
   })
+
+  it('validates the live Flagship prerequisite before the first Your Mark schema mutation', () => {
+    const firstTransaction = lower.indexOf('begin;')
+    const prerequisiteFailure = lower.indexOf(
+      "raise exception 'verify failed: live questions_is_flagship_unique prerequisite is absent or malformed.'"
+    )
+    const prerequisiteEnd = lower.indexOf('$flagship_prerequisite$;', prerequisiteFailure)
+    const firstSchemaMutation = lower.indexOf('alter table public.profiles')
+
+    expect(firstTransaction).toBeGreaterThan(-1)
+    expect(prerequisiteFailure).toBeGreaterThan(firstTransaction)
+    expect(prerequisiteEnd).toBeGreaterThan(prerequisiteFailure)
+    expect(prerequisiteEnd).toBeLessThan(firstSchemaMutation)
+  })
 })
 describe('Your Mark migration — opaque ownership and deterministic recovery', () => {
   it('allows one pending and one active Mark per owner', () => {

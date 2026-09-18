@@ -9,6 +9,42 @@
 
 begin;
 
+-- Fail closed before any Your Mark mutation if the documented-live
+-- Flagship prerequisite differs in any material way. It is deliberately
+-- verified, never recreated.
+do $flagship_prerequisite$
+declare
+  v_unique boolean;
+  v_valid boolean;
+  v_ready boolean;
+  v_live boolean;
+  v_predicate text;
+  v_definition text;
+begin
+  select i.indisunique, i.indisvalid, i.indisready, i.indislive,
+         pg_get_expr(i.indpred, i.indrelid), pg_get_indexdef(i.indexrelid)
+  into v_unique, v_valid, v_ready, v_live, v_predicate, v_definition
+  from pg_index i
+  join pg_class c on c.oid = i.indexrelid
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public'
+    and c.relname = 'questions_is_flagship_unique';
+
+  if not found
+     or not coalesce(v_unique, false)
+     or not coalesce(v_valid, false)
+     or not coalesce(v_ready, false)
+     or not coalesce(v_live, false)
+     or v_definition not ilike '%public.questions%'
+     or v_definition not ilike '%(is_flagship)%'
+     or v_predicate is null
+     or regexp_replace(lower(v_predicate), '[[:space:]()]', '', 'g') <> 'is_flagship=true'
+  then
+    raise exception 'VERIFY FAILED: live questions_is_flagship_unique prerequisite is absent or malformed.';
+  end if;
+end;
+$flagship_prerequisite$;
+
 -- Existing profiles are grandfathered. A trigger below forces every
 -- profile inserted after this migration to start at `mark`.
 alter table public.profiles
@@ -485,39 +521,8 @@ $function$;
 revoke all on function public.publish_question_answer(uuid, text) from public, anon;
 grant execute on function public.publish_question_answer(uuid, text) to authenticated;
 
--- Fail closed if the documented-live Flagship prerequisite differs in
--- any material way. It is deliberately verified, never recreated.
 do $verification$
-declare
-  v_unique boolean;
-  v_valid boolean;
-  v_ready boolean;
-  v_live boolean;
-  v_predicate text;
-  v_definition text;
 begin
-  select i.indisunique, i.indisvalid, i.indisready, i.indislive,
-         pg_get_expr(i.indpred, i.indrelid), pg_get_indexdef(i.indexrelid)
-  into v_unique, v_valid, v_ready, v_live, v_predicate, v_definition
-  from pg_index i
-  join pg_class c on c.oid = i.indexrelid
-  join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public'
-    and c.relname = 'questions_is_flagship_unique';
-
-  if not found
-     or not coalesce(v_unique, false)
-     or not coalesce(v_valid, false)
-     or not coalesce(v_ready, false)
-     or not coalesce(v_live, false)
-     or v_definition not ilike '%public.questions%'
-     or v_definition not ilike '%(is_flagship)%'
-     or v_predicate is null
-     or regexp_replace(lower(v_predicate), '[[:space:]()]', '', 'g') <> 'is_flagship=true'
-  then
-    raise exception 'VERIFY FAILED: live questions_is_flagship_unique prerequisite is absent or malformed.';
-  end if;
-
   if has_table_privilege('authenticated', 'public.profiles', 'UPDATE') then
     raise exception 'VERIFY FAILED: authenticated retains table-level profiles UPDATE.';
   end if;
