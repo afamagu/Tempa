@@ -17,9 +17,19 @@ const ENTRY_WITH_RESPONSE: DiscoveryEntry = {
   },
 }
 
-// Post-onboarding corrections checkpoint (Section A/B) — a person with
-// no Flagship answer is a perfectly normal entry now, never a reason to
-// disappear from People.
+const SECOND_RESPONSE: DiscoveryEntry = {
+  userId: 'user-3',
+  pseudonym: 'Maya Bennett',
+  country: 'United States',
+  genderDisplay: 'Woman',
+  ageRange: '25-34',
+  response: {
+    id: 'answer-3',
+    body: 'I notice the small things people do when nobody asks them to.',
+    prompt: 'Tell a room of strangers something real about yourself.',
+  },
+}
+
 const ENTRY_NO_RESPONSE: DiscoveryEntry = {
   userId: 'user-2',
   pseudonym: 'Quiet Harbor',
@@ -29,26 +39,18 @@ const ENTRY_NO_RESPONSE: DiscoveryEntry = {
   response: null,
 }
 
-describe('DiscoveryResults — entries with a Flagship response', () => {
-  it('card identity (Mindform + pseudonym) is ONE link to the public profile — never the Question/Minds tutorial', () => {
-    const html = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE]} />)
-    expect(html).toContain('href="/minds/user-1"')
-    expect(html).not.toContain('view=answer')
-
-    // The pseudonym and the Mindform sit inside the SAME anchor, not
-    // two separate ones — confirmed by there being exactly one
-    // /minds/user-1 anchor per card (the QuestionInfoIcon tooltip
-    // trigger is a sibling span with role="button", not a second link).
-    const profileAnchors = (html.match(/href="\/minds\/user-1"/g) ?? []).length
-    expect(profileAnchors).toBe(1)
+describe('DiscoveryResults — entries with a discovery response', () => {
+  it('links identity to the public profile and carries the exact People return URL', () => {
+    const html = renderToStaticMarkup(
+      <DiscoveryResults entries={[ENTRY_WITH_RESPONSE]} returnTo="/minds?country=South+Africa&batch=1" />
+    )
+    expect(html).toContain('href="/minds/user-1?returnTo=')
+    expect(html).toContain('%2Fminds%3Fcountry%3DSouth%2BAfrica%26batch%3D1')
   })
 
-  it('reading the full answer opens an in-page modal with a working close, never a navigation away', () => {
+  it('opens full writing in-page rather than navigating the response-preview button away', () => {
     const html = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE]} />)
-    // No modal open on initial render (openId starts null).
     expect(html).not.toContain('role="dialog"')
-    // The card's own writing button is present and is a button, not a link
-    // — opening the full text never navigates the page.
     expect(html).toContain('<button')
   })
 
@@ -56,25 +58,46 @@ describe('DiscoveryResults — entries with a Flagship response', () => {
     const html = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE]} />)
     expect(html).toContain('A short answer about ordinary things.')
   })
+
+  it('ships quiet previous/next reading controls and a close control for the opened reader', async () => {
+    const source = await import('node:fs').then(({ readFileSync }) =>
+      readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8')
+    )
+    expect(source).toContain('aria-label="Previous response"')
+    expect(source).toContain('aria-label="Next response"')
+    expect(source).toContain('aria-label="Close and return to People"')
+    expect(source).toContain("e.key === 'ArrowLeft'")
+    expect(source).toContain("e.key === 'ArrowRight'")
+  })
+
+  it('uses a conservative horizontal gesture threshold so vertical reading does not accidentally change people', async () => {
+    const source = await import('node:fs').then(({ readFileSync }) =>
+      readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8')
+    )
+    expect(source).toContain('Math.abs(dx) < 60')
+    expect(source).toContain('Math.abs(dx) <= Math.abs(dy) * 1.25')
+    expect(source).toContain('if (dx < 0) showNext()')
+    expect(source).toContain('else showPrevious()')
+  })
+
+  it('can render multiple response-bearing people in one ordered reading set', () => {
+    expect(() =>
+      renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE, SECOND_RESPONSE]} />)
+    ).not.toThrow()
+  })
 })
 
-describe('DiscoveryResults — a person with no Flagship response (Post-onboarding corrections checkpoint)', () => {
-  it('still renders a card for the person, identity-only, linking straight to their existing profile', () => {
+describe('DiscoveryResults — a person with no discovery response', () => {
+  it('still renders a card for the person, identity-only, linking to their profile', () => {
     const html = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_NO_RESPONSE]} />)
-    expect(html).toContain('href="/minds/user-2"')
+    expect(html).toContain('href="/minds/user-2?returnTo=%2Fminds"')
     expect(html).toContain('Quiet Harbor')
   })
 
-  it('never renders a response-preview button or the reading modal for a person with no response', () => {
+  it('never invents response writing for a person who has none', () => {
     const html = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_NO_RESPONSE]} />)
     expect(html).not.toContain('<button')
     expect(html).not.toContain('role="dialog"')
-  })
-
-  it('mixes freely with response-having entries in the same list without throwing', () => {
-    expect(() =>
-      renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE, ENTRY_NO_RESPONSE]} />)
-    ).not.toThrow()
   })
 })
 

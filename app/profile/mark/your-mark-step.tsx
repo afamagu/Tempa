@@ -50,8 +50,6 @@ export default function YourMarkStep() {
 
   useEffect(() => {
     void loadReservation()
-    // This RPC is idempotent and returns the one deterministic pending
-    // candidate. It intentionally runs only for this mounted route.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -76,8 +74,6 @@ export default function YourMarkStep() {
     setError(null)
     setPhase('generating')
     try {
-      // The source File crosses exactly one boundary: into the local,
-      // browser-only V2 generator. It is never passed to persistence.
       const result = await generateMarkV2(file)
       const validationError = validateGeneratedMarkPng(result.blob)
       if (validationError) throw new Error(validationError)
@@ -102,9 +98,6 @@ export default function YourMarkStep() {
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Your Mark could not be saved. Please try again.')
-      // A successful finalization whose response was lost has already
-      // advanced the durable stage; refresh lets the server guard route
-      // it forward. Otherwise the same uploaded reservation is recovered.
       router.refresh()
       try {
         const supabase = createClient()
@@ -112,7 +105,7 @@ export default function YourMarkStep() {
         setReservation(recovered)
         if (recovered.uploaded) setRecoveredUrl(publicProfileMarkUrl(supabase, recovered.objectName))
       } catch {
-        // Preserve the current reveal and original actionable error.
+        // Preserve the reveal and original actionable error.
       }
       setPhase('reveal')
     }
@@ -154,7 +147,9 @@ export default function YourMarkStep() {
     <main className="flex min-h-screen items-center justify-center p-6 sm:p-8">
       <div className="w-full max-w-md space-y-8 py-8 text-center sm:py-10">
         <div className="space-y-3">
-          <p className="font-serif text-xs italic uppercase tracking-[0.2em] text-muted">Your Mark</p>
+          <p className="font-serif text-sm font-medium italic uppercase tracking-[0.22em] text-foreground/70 sm:text-[15px]">
+            Your Mark
+          </p>
           {phase !== 'reveal' && phase !== 'saving' && phase !== 'discarding' && (
             <>
               <h1 className="font-serif text-2xl font-medium">Choose a photograph that means something to you.</h1>
@@ -214,6 +209,9 @@ export default function YourMarkStep() {
                 It began with your photograph. Others will see only what remains.
               </p>
               <p className="font-serif text-base font-medium">Every Mark you meet began the same way.</p>
+              <p className="text-sm leading-relaxed text-foreground/70">
+                Choose the one that feels like yours. Once you continue, this becomes your Mark on Tempa.
+              </p>
             </div>
             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row">
               <button type="button" onClick={handleContinue} disabled={busy} className={primaryButtonClass}>
@@ -229,4 +227,3 @@ export default function YourMarkStep() {
     </main>
   )
 }
-

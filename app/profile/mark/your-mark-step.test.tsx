@@ -20,7 +20,7 @@ describe('production Your Mark experience', () => {
     expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|fetch\(/)
   })
 
-  it('contains the exact approved copy and authoritative single-Mark actions', () => {
+  it('keeps the approved reveal copy and adds a calm choose-carefully permanence cue', () => {
     for (const text of [
       'Choose a photograph that means something to you.',
       'It can be you, a place, an object — anything.',
@@ -29,10 +29,17 @@ describe('production Your Mark experience', () => {
       'This is your Mark.',
       'It began with your photograph. Others will see only what remains.',
       'Every Mark you meet began the same way.',
+      'Choose the one that feels like yours. Once you continue, this becomes your Mark on Tempa.',
       'Continue',
       'Choose another photograph',
     ]) expect(source).toContain(text)
     expect(source).not.toMatch(/>\s*(?:Full|Medium|Small|V2|seed|piece count)\s*</i)
+  })
+
+  it('makes the first introduction of YOUR MARK materially more prominent without turning it into a competing hero heading', () => {
+    expect(source).toContain('text-sm font-medium italic uppercase tracking-[0.22em]')
+    expect(source).toContain('sm:text-[15px]')
+    expect(source).not.toContain('font-serif text-xs italic uppercase tracking-[0.2em] text-muted')
   })
 
   it('provides an accessible single image chooser, live status, reveal focus, alt text and responsive sizing', () => {
