@@ -89,10 +89,14 @@ export default async function MindsPage({
     (flagshipAnswers ?? []).map((a) => [a.user_id, { id: a.id, body: a.body }])
   )
 
+  // People is a discovery-through-writing surface. A profile does not enter
+  // the pool until it has a visible Flagship response, so every card has the
+  // same promise and the same interaction: open the response reader first.
   const eligibleProfiles = (profiles ?? []).filter((p) => {
     if (excludedPartnerIds.has(p.id)) return false
     const answer = flagshipAnswerByUserId.get(p.id)
-    if (answer && contactedAnswerIds.has(answer.id)) return false
+    if (!answer) return false
+    if (contactedAnswerIds.has(answer.id)) return false
     return true
   })
 
@@ -108,14 +112,14 @@ export default async function MindsPage({
   const poolExhausted = ordered.length > 0 && page.length === 0
 
   const entries: DiscoveryEntry[] = page.map((p) => {
-    const answer = flagshipAnswerByUserId.get(p.id)
+    const answer = flagshipAnswerByUserId.get(p.id)!
     return {
       userId: p.id,
       pseudonym: p.pseudonym,
       country: p.country,
       genderDisplay: genderDisplay(p.gender, p.gender_custom),
       ageRange: p.age_range,
-      response: answer ? { id: answer.id, body: answer.body, prompt: flagshipPrompt } : null,
+      response: { id: answer.id, body: answer.body, prompt: flagshipPrompt },
     }
   })
 
@@ -137,9 +141,8 @@ export default async function MindsPage({
           {!introSeen && (
             <FeatureIntroduction guideKey="people" title="People worth writing to" ctaLabel="Start exploring">
               <p>
-                Tempa isn&rsquo;t about collecting followers. Take your time. Open someone&rsquo;s
-                profile, read a little of what they&rsquo;ve shared, and write when somebody
-                genuinely catches your attention.
+                Tempa isn&rsquo;t about collecting followers. Take your time. Read a little of what
+                someone has shared, and write when somebody genuinely catches your attention.
               </p>
             </FeatureIntroduction>
           )}
