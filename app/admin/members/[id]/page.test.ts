@@ -23,9 +23,11 @@ describe('Admin member workspace', () => {
     expect(page).toContain('href={`/letters/with/${member.id}`}')
   })
 
-  it('uses the dedicated first-contact RPC, respects the established body limit, and refreshes the workspace', () => {
+  it('uses the dedicated first-contact RPC, shares the canonical first-contact cap, and refreshes the workspace', () => {
     expect(contact).toContain('sendAdminFirstLetter(createClient(), memberId, trimmed)')
-    expect(contact).toContain('maxLength={4000}')
+    expect(contact).toContain("import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'")
+    expect(contact).toContain('maxLength={QUESTION_ANSWER_MAX_CHARS}')
+    expect(contact).not.toContain('4000')
     expect(contact).toContain('router.refresh()')
     expect(contact).not.toContain('.from(\'letters\')')
     expect(contact).not.toContain('.from(\'correspondences\')')

@@ -27,6 +27,12 @@ describe('Mark management migration contract', () => {
     expect(lower).toContain("to_regclass('public.profile_marks')")
     expect(lower).toContain("to_regprocedure('public.finalize_profile_mark(uuid)')")
     expect(lower).toContain("to_regprocedure('tempa_private.is_correspondence_blocked_pair(uuid,uuid)')")
+    expect(lower).toContain("to_regprocedure('public.send_first_letter(uuid,uuid,text)')")
+    expect(lower).toContain("to_regprocedure('public.reply_to_letter(uuid,text,jsonb,jsonb)')")
+    expect(lower).toContain("i.relname = 'correspondences_one_open_per_pair'")
+    expect(lower).toContain("x.indisunique and x.indisvalid and x.indisready and x.indislive")
+    expect(lower).toContain("= '(status = any (array[''pending''::text, ''active''::text]))'")
+    expect(lower).not.toContain('correspondences_one_active_per_pair')
   })
 
   it('enforces the 30-day replacement cooldown in both reservation and finalization while allowing a first Mark', () => {
@@ -48,15 +54,48 @@ describe('Mark management migration contract', () => {
 })
 
 describe('Admin member workspace migration contract', () => {
-  it('requires staff, preserves blocking, and creates an ordinary participant correspondence and letter', () => {
+  it('requires staff and normal account/block eligibility before creating participant-owned correspondence', () => {
     const body = functionBody('admin_send_first_letter(p_member_id uuid, p_body text)', 'revoke all on function public.admin_send_first_letter')
     expect(body).toContain('if not public.is_staff()')
+    expect(body).toContain('public.current_account_status()')
+    expect(body).toContain("in ('restricted', 'suspended', 'banned')")
     expect(body).toContain('tempa_private.is_correspondence_blocked_pair')
     expect(body).toContain('insert into public.correspondences')
     expect(body).toContain('insert into public.letters')
-    expect(body).toContain("c.status = 'active'")
-    expect(body).toContain('char_length(v_body) > 4000')
     expect(body).not.toContain('service_role')
+  })
+
+  it('uses the pending/active one-open lifecycle without uniqueness errors as normal control flow', () => {
+    const body = functionBody('admin_send_first_letter(p_member_id uuid, p_body text)', 'revoke all on function public.admin_send_first_letter')
+    expect(body).toContain('on conflict (participant_low, participant_high)')
+    expect(body).toContain("where status = any (array['pending'::text, 'active'::text])")
+    expect(body).toContain('do nothing')
+    expect(body).toContain("c.status in ('pending', 'active')")
+    expect(body).toContain("v_correspondence_status = 'active' or v_established_at is not null")
+    expect(body).toContain("l.reply_to_id is null")
+    expect(body).toContain('l.sender_id = auth.uid()')
+    expect(body).toContain("using errcode = '23505'")
+    expect(body).not.toMatch(/where\s+(?:c\.)?status = 'active'\s*\)?\s*do nothing/)
+  })
+
+  it('matches normal first-contact delivery and body contracts, exempting only the Discovery answer', () => {
+    const body = functionBody('admin_send_first_letter(p_member_id uuid, p_body text)', 'revoke all on function public.admin_send_first_letter')
+    expect(body).toContain('v_deliver_at := now()')
+    expect(body).toContain("v_expires_at := v_deliver_at + interval '72 hours'")
+    expect(body).toContain('question_answer_id, correspondence_id')
+    expect(body).toMatch(/p_body,\s*v_deliver_at,\s*v_expires_at/)
+    expect(body).not.toContain('question_answers')
+    expect(body).not.toContain('char_length(')
+    expect(body).not.toContain('4000')
+  })
+
+  it('records only correspondence and letter identifiers in the Admin audit entry', () => {
+    const body = functionBody('admin_send_first_letter(p_member_id uuid, p_body text)', 'revoke all on function public.admin_send_first_letter')
+    const audit = body.slice(body.indexOf('insert into public.admin_audit_log'))
+    expect(audit).toContain("jsonb_build_object('correspondence_id', v_correspondence_id, 'letter_id', v_new_id)")
+    expect(audit).not.toContain('p_body')
+    expect(audit).not.toContain('v_body')
+    expect(audit).not.toMatch(/['"]body['"]/)
   })
 
   it('adds only legitimate staff member fields and does not expose onboarding or Mark ownership state', () => {
@@ -77,15 +116,38 @@ describe('Admin member workspace migration contract', () => {
 })
 
 describe('read-only verifier', () => {
-  it('contains no mutating SQL and checks cooldown, staff/blocking, member shape, and storage limits', () => {
+  it('contains no mutating SQL and checks lifecycle, security, Mark recovery, storage, and privacy contracts', () => {
     expect(verify).not.toMatch(/^\s*(insert|update|delete|alter|create|drop|grant|revoke|truncate)\b/im)
     for (const marker of [
-      'reserve_enforces_cooldown',
-      'finalize_rechecks_cooldown',
-      'admin_contact_checks_staff',
-      'admin_contact_respects_blocks',
-      'staff_detail_has_mark',
-      'png_one_mib_unchanged',
+      'open_index_pending_and_active',
+      'new_correspondences_start_pending',
+      'correspondence_statuses_exact',
+      'all_owned_by_postgres',
+      'all_security_definer',
+      'all_restrict_search_path',
+      'public_cannot_execute',
+      'first_mark_exempt_at_reservation',
+      'first_mark_exempt_at_finalization',
+      'idempotent_retry_precedes_cooldown',
+      'reservation_and_finalization_owner_scoped',
+      'one_pending_mark_per_owner',
+      'one_active_mark_per_owner',
+      'owner_checked_insert_policy',
+      'no_mark_object_overwrite_policy',
+      'conflict_safe_open_episode_resolution',
+      'pending_reused_active_rejected',
+      'first_contact_delivery_window_preserved',
+      'audit_has_identifiers_not_private_body',
+      'reply_requires_delivered_recipient_letter',
+      'first_reply_requires_unexpired_root',
+      'first_reply_establishes_correspondence',
+      'no_staff_private_row_bypass',
     ]) expect(verify).toContain(marker)
+  })
+
+  it('cannot silently regress back to the obsolete active-only correspondence index', () => {
+    expect(verify).toContain("i.relname = 'correspondences_one_open_per_pair'")
+    expect(verify).toContain("'(status = ANY (ARRAY[''pending''::text, ''active''::text]))'")
+    expect(verify).not.toContain('correspondences_one_active_per_pair')
   })
 })

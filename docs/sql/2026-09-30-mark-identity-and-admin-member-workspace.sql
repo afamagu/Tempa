@@ -24,10 +24,49 @@ begin
      or to_regprocedure('public.admin_list_members(text,text,text,timestamptz,timestamptz,integer,integer)') is null
      or to_regprocedure('public.admin_get_member(uuid)') is null
      or to_regprocedure('public.get_blocked_profiles()') is null
+     or to_regprocedure('public.current_account_status()') is null
+     or to_regprocedure('public.send_first_letter(uuid,uuid,text)') is null
+     or to_regprocedure('public.reply_to_letter(uuid,text,jsonb,jsonb)') is null
      or to_regprocedure('tempa_private.is_correspondence_blocked_pair(uuid,uuid)') is null
-     or to_regclass('public.correspondences_one_active_per_pair') is null
      or to_regclass('public.admin_audit_log') is null then
     raise exception 'PREREQUISITE FAILED: live Admin, correspondence, or scoped-blocking contract is missing.';
+  end if;
+
+  -- Correspondence episodes now distinguish an unanswered first contact
+  -- (pending) from one established by its first reply (active). Require the
+  -- exact live one-open-episode invariant rather than the superseded
+  -- active-only index before replacing any function.
+  if not exists (
+    select 1
+    from pg_catalog.pg_class i
+    join pg_catalog.pg_namespace n on n.oid = i.relnamespace
+    join pg_catalog.pg_index x on x.indexrelid = i.oid
+    where n.nspname = 'public'
+      and i.relname = 'correspondences_one_open_per_pair'
+      and x.indrelid = 'public.correspondences'::regclass
+      and x.indisunique and x.indisvalid and x.indisready and x.indislive
+      and x.indnkeyatts = 2
+      and pg_catalog.pg_get_indexdef(x.indexrelid, 1, true) = 'participant_low'
+      and pg_catalog.pg_get_indexdef(x.indexrelid, 2, true) = 'participant_high'
+      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, true)
+        = '(status = ANY (ARRAY[''pending''::text, ''active''::text]))'
+  ) then
+    raise exception 'PREREQUISITE FAILED: public.correspondences_one_open_per_pair must uniquely cover pending and active episodes.';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'correspondences'
+      and column_name = 'status' and column_default = '''pending''::text'
+  ) or not exists (
+    select 1
+    from pg_catalog.pg_constraint c
+    where c.conrelid = 'public.correspondences'::regclass
+      and c.conname = 'correspondences_status_check'
+      and pg_catalog.pg_get_constraintdef(c.oid, true)
+        = 'CHECK (status = ANY (ARRAY[''pending''::text, ''active''::text, ''closed''::text]))'
+  ) then
+    raise exception 'PREREQUISITE FAILED: correspondence pending/active/closed lifecycle is missing.';
   end if;
 end
 $prerequisite$;
@@ -302,13 +341,21 @@ security definer
 set search_path to 'pg_catalog'
 as $function$
 declare
-  v_body text;
+  v_new_id uuid;
   v_correspondence_id uuid;
-  v_letter_id uuid;
+  v_participant_low uuid;
+  v_participant_high uuid;
+  v_correspondence_status text;
+  v_established_at timestamptz;
+  v_deliver_at timestamptz;
+  v_expires_at timestamptz;
 begin
   if auth.uid() is null then raise exception 'Authentication required.'; end if;
   if not public.is_staff() then raise exception 'Not authorized.'; end if;
   if p_member_id = auth.uid() then raise exception 'You cannot write to yourself.'; end if;
+  if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+    raise exception 'Member not found.';
+  end if;
   if not exists (select 1 from public.profiles p where p.id = p_member_id) then
     raise exception 'Member not found.';
   end if;
@@ -316,30 +363,63 @@ begin
     raise exception 'This correspondence is not available.';
   end if;
 
-  v_body := trim(both from coalesce(p_body, ''));
-  if char_length(v_body) = 0 then raise exception 'A letter needs some writing.'; end if;
-  if char_length(v_body) > 4000 then raise exception 'Letter is too long.'; end if;
+  v_participant_low := least(auth.uid(), p_member_id);
+  v_participant_high := greatest(auth.uid(), p_member_id);
 
-  if exists (
-    select 1 from public.correspondences c
-    where c.participant_low = least(auth.uid(), p_member_id)
-      and c.participant_high = greatest(auth.uid(), p_member_id)
-      and c.status = 'active'
-  ) then
-    raise exception 'An active correspondence already exists with this member.';
-  end if;
-
+  -- Match send_first_letter's open-episode resolution, except that staff do
+  -- not need a public Discovery answer. A pending episode is reused so
+  -- crossed first contacts share one correspondence; an active episode is
+  -- rejected in favour of write_letter; closed history does not block a new
+  -- pending episode. ON CONFLICT handles a concurrent opener without using a
+  -- uniqueness exception as ordinary control flow.
   insert into public.correspondences(participant_low, participant_high)
-  values (least(auth.uid(), p_member_id), greatest(auth.uid(), p_member_id))
+  values (v_participant_low, v_participant_high)
+  on conflict (participant_low, participant_high)
+    where status = any (array['pending'::text, 'active'::text])
+  do nothing
   returning id into v_correspondence_id;
 
+  if v_correspondence_id is null then
+    select c.id, c.status, c.established_at
+    into v_correspondence_id, v_correspondence_status, v_established_at
+    from public.correspondences c
+    where c.participant_low = v_participant_low
+      and c.participant_high = v_participant_high
+      and c.status in ('pending', 'active')
+    for update;
+  else
+    select c.status, c.established_at
+    into v_correspondence_status, v_established_at
+    from public.correspondences c
+    where c.id = v_correspondence_id
+    for update;
+  end if;
+
+  if v_correspondence_status = 'active' or v_established_at is not null then
+    raise exception 'This correspondence is already established. Use write_letter instead.';
+  end if;
+
+  if exists (
+    select 1 from public.letters l
+    where l.correspondence_id = v_correspondence_id
+      and l.reply_to_id is null
+      and l.sender_id = auth.uid()
+  ) then
+    raise exception 'You have already sent a first-contact letter to this member.'
+      using errcode = '23505';
+  end if;
+
+  v_new_id := pg_catalog.gen_random_uuid();
+  v_deliver_at := now();
+  v_expires_at := v_deliver_at + interval '72 hours';
+
   insert into public.letters(
-    sender_id, recipient_id, question_answer_id, correspondence_id,
+    id, sender_id, recipient_id, question_answer_id, correspondence_id,
     body, deliver_at, expires_at
   ) values (
-    auth.uid(), p_member_id, null, v_correspondence_id,
-    v_body, now(), now() + interval '72 hours'
-  ) returning id into v_letter_id;
+    v_new_id, auth.uid(), p_member_id, null, v_correspondence_id,
+    p_body, v_deliver_at, v_expires_at
+  );
 
   insert into public.admin_audit_log(
     actor_id, actor_identifier_snapshot, action,
@@ -347,12 +427,12 @@ begin
   )
   select auth.uid(), coalesce(ap.pseudonym, auth.uid()::text), 'member_contacted',
     'member_correspondence', p_member_id, mp.pseudonym,
-    jsonb_build_object('correspondence_id', v_correspondence_id, 'letter_id', v_letter_id)
+    jsonb_build_object('correspondence_id', v_correspondence_id, 'letter_id', v_new_id)
   from public.profiles mp
   left join public.profiles ap on ap.id = auth.uid()
   where mp.id = p_member_id;
 
-  return v_letter_id;
+  return v_new_id;
 end;
 $function$;
 revoke all on function public.admin_send_first_letter(uuid,text) from public, anon;

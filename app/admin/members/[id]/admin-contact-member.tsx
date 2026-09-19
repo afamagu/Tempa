@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { sendAdminFirstLetter } from '@/lib/admin'
+import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'
 import { fieldLabelClass, inputClass, primaryButtonClass } from '@/app/profile/ui'
 
 export default function AdminContactMember({ memberId }: { memberId: string }) {
@@ -33,9 +34,9 @@ export default function AdminContactMember({ memberId }: { memberId: string }) {
       <textarea
         id="admin-member-letter"
         value={body}
-        onChange={(event) => setBody(event.target.value.slice(0, 4000))}
+        onChange={(event) => setBody(event.target.value.slice(0, QUESTION_ANSWER_MAX_CHARS))}
         rows={5}
-        maxLength={4000}
+        maxLength={QUESTION_ANSWER_MAX_CHARS}
         className={inputClass}
       />
       {error && <p className="text-sm text-red-600">{error}</p>}
