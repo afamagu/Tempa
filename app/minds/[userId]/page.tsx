@@ -57,10 +57,7 @@ export default async function PublicProfilePage({
   const { userId } = await params
   const { returnTo } = await searchParams
   const supabase = await createClient()
-  const {
-    data: { user: viewer },
-  } = await supabase.auth.getUser()
-
+  const { data: { user: viewer } } = await supabase.auth.getUser()
   if (!viewer) redirect('/sign-in')
 
   const [{ data: profile }, waitingCount] = await Promise.all([
@@ -71,7 +68,6 @@ export default async function PublicProfilePage({
       .maybeSingle(),
     getWaitingLetterCount(supabase, viewer.id),
   ])
-
   if (!profile) notFound()
 
   const { data: extra, error: extraError } = await supabase
@@ -81,7 +77,6 @@ export default async function PublicProfilePage({
     .maybeSingle()
   const languages: string[] = extraError ? [] : extra?.languages ?? []
   const intent: string[] = extraError ? [] : extra?.intent ?? []
-
   const isSelf = viewer.id === userId
 
   const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope] = await Promise.all([
@@ -95,21 +90,15 @@ export default async function PublicProfilePage({
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
   const primaryAnswer = rawAnswers.find((a) => a.isPrimary) ?? null
-  const otherAnswers = rawAnswers
-    .filter((a) => !a.isPrimary)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-
+  const otherAnswers = rawAnswers.filter((a) => !a.isPrimary).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const alreadyCorresponding = activePartnerIds.has(userId)
-  const primaryAnswerAlreadyContacted = primaryAnswer
-    ? contactedAnswerIds.has(primaryAnswer.id)
-    : false
+  const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryAnswer.id) : false
   const showWriteToMind = canWriteToMind({
     isSelf,
     alreadyCorresponding,
     hasCurrentAnswer: primaryAnswer !== null,
     currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted,
   })
-
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
     .filter(Boolean)
     .join(' · ')
@@ -125,9 +114,7 @@ export default async function PublicProfilePage({
             <div className="min-w-0">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
               {demographics && <p className={metadataTextClass}>{demographics}</p>}
-              {languages.length > 0 && (
-                <p className={`mt-1 ${metadataTextClass}`}>Speaks {languages.join(', ')}</p>
-              )}
+              {languages.length > 0 && <p className={`mt-1 ${metadataTextClass}`}>Speaks {languages.join(', ')}</p>}
               {intent.length > 0 && (
                 <div className="mt-2">
                   <p className={sectionLabelClass}>Interests</p>
@@ -173,15 +160,11 @@ export default async function PublicProfilePage({
             <div className="space-y-3 border-t border-foreground/10 pt-6">
               <div className="flex items-center justify-between gap-3">
                 <p className={sectionLabelClass}>Dispatches</p>
-                <Link href={`/minds/${userId}/dispatches`} className={quietLinkClass}>
-                  See all Dispatches
-                </Link>
+                <Link href={`/minds/${userId}/dispatches`} className={quietLinkClass}>See all Dispatches</Link>
               </div>
               {recentDispatches.length > 0 && (
                 <div className="space-y-4">
-                  {recentDispatches.map((dispatch) => (
-                    <DispatchCard key={dispatch.id} dispatch={dispatch} />
-                  ))}
+                  {recentDispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}
                 </div>
               )}
             </div>
@@ -191,11 +174,11 @@ export default async function PublicProfilePage({
             <div className="space-y-3">
               {showWriteToMind && primaryAnswer ? (
                 <Link href={`/write/${profile.id}?a=${primaryAnswer.id}`} className={primaryButtonClass}>
-                  Write to this mind
+                  Write to {profile.pseudonym}
                 </Link>
               ) : alreadyCorresponding ? (
                 <Link href="/letters" className={secondaryButtonClass}>
-                  Open your correspondence
+                  Open your correspondence with {profile.pseudonym}
                 </Link>
               ) : null}
 
