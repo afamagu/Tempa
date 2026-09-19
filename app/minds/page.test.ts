@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { chooseDiscoveryAnswer } from './page'
 
 const source = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8')
 
@@ -47,29 +48,27 @@ describe('People page — discovery information architecture', () => {
   })
 })
 
-// Live onboarding review, 2026-09-19: People is response-first. Identity-only
-// cards created an inconsistent discovery path (some cards opened a response,
-// others unexpectedly navigated to a profile). A discoverable People entry now
-// requires the current visible Flagship response; profiles remain reachable as
-// a deliberate secondary action from the response reader.
+// People remains response-first: every card opens writing. The representative
+// response prefers today's Flagship, but a Flagship rotation must not erase an
+// established member who has other legitimate visible writing.
 describe('People page — response-first discovery contract', () => {
   it('sources candidate identities from the block-aware public_profiles view', () => {
     expect(source).toContain(".from('public_profiles')")
-    expect(source).toContain(".select('id, pseudonym, country, gender, gender_custom, age_range')")
+    expect(source).toContain(".select('id, pseudonym, country, gender, gender_custom, age_range, mark_id')")
     expect(source).not.toContain('getBlockedUsers')
     expect(source).not.toContain('getBlockedProfiles')
     expect(source).not.toContain('is_blocked_pair')
   })
 
-  it('requires a visible current Flagship response before creating a People entry', () => {
-    expect(source).toContain('const answer = flagshipAnswerByUserId.get(p.id)')
+  it('requires a visible representative response without requiring the current Flagship specifically', () => {
+    expect(source).toContain('const answer = discoveryAnswerByUserId.get(profile.id)')
     expect(source).toContain('if (!answer) return false')
-    expect(source).toContain('response: { id: answer.id, body: answer.body, prompt: flagshipPrompt }')
+    expect(source).toContain('prompt: promptsById.get(answer.question_id)')
     expect(source).not.toContain('response: answer ?')
   })
 
   it('keeps active-correspondence and already-contacted exclusions intact', () => {
-    expect(source).toContain('excludedPartnerIds.has(p.id)')
+    expect(source).toContain('excludedPartnerIds.has(profile.id)')
     expect(source).toContain('contactedAnswerIds.has(answer.id)')
   })
 
@@ -90,5 +89,43 @@ describe('People page — response-first discovery contract', () => {
     expect(emptyStateBody).not.toContain('error')
     expect(emptyStateBody).not.toContain('try again')
     expect(emptyStateBody).not.toContain('broken')
+  })
+
+  it('resolves saved Marks from opaque mark_id values and leaves null for legacy profiles', () => {
+    expect(source).toContain("publicProfileMarkUrl(supabase, `${profile.mark_id}.png`)")
+    expect(source).toContain(': null')
+  })
+})
+
+describe('chooseDiscoveryAnswer — established-member continuity', () => {
+  const answer = (overrides: Partial<Parameters<typeof chooseDiscoveryAnswer>[0][number]> = {}) => ({
+    id: 'answer-1',
+    user_id: 'user-1',
+    question_id: 'old-question',
+    body: 'An established response',
+    updated_at: '2026-09-01T00:00:00Z',
+    is_current: false,
+    ...overrides,
+  })
+
+  it('prefers the current Flagship response when one exists', () => {
+    const legacy = answer({ id: 'legacy', is_current: true })
+    const flagship = answer({ id: 'flagship', question_id: 'current-flagship' })
+    expect(chooseDiscoveryAnswer([legacy, flagship], 'current-flagship')?.id).toBe('flagship')
+  })
+
+  it('falls back to an established member\'s current response when they have not answered the new Flagship', () => {
+    const current = answer({ id: 'legacy-current', is_current: true })
+    expect(chooseDiscoveryAnswer([current], 'new-flagship')?.id).toBe('legacy-current')
+  })
+
+  it('falls back deterministically to the latest visible response for historical rows without is_current', () => {
+    const older = answer({ id: 'older', updated_at: '2026-08-01T00:00:00Z' })
+    const newer = answer({ id: 'newer', updated_at: '2026-09-01T00:00:00Z' })
+    expect(chooseDiscoveryAnswer([older, newer], 'new-flagship')?.id).toBe('newer')
+  })
+
+  it('still excludes profiles with no visible response', () => {
+    expect(chooseDiscoveryAnswer([], 'current-flagship')).toBeNull()
   })
 })

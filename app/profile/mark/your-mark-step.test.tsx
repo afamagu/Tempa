@@ -20,7 +20,7 @@ describe('production Your Mark experience', () => {
     expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|fetch\(/)
   })
 
-  it('keeps the approved reveal copy and adds a calm choose-carefully permanence cue', () => {
+  it('keeps the approved one-Mark reveal copy without implying a choice among generated candidates', () => {
     for (const text of [
       'Choose a photograph that means something to you.',
       'It can be you, a place, an object — anything.',
@@ -29,10 +29,10 @@ describe('production Your Mark experience', () => {
       'This is your Mark.',
       'It began with your photograph. Others will see only what remains.',
       'Every Mark you meet began the same way.',
-      'Choose the one that feels like yours. Once you continue, this becomes your Mark on Tempa.',
       'Continue',
       'Choose another photograph',
     ]) expect(source).toContain(text)
+    expect(source).not.toContain('Choose the one')
     expect(source).not.toMatch(/>\s*(?:Full|Medium|Small|V2|seed|piece count)\s*</i)
   })
 

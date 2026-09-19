@@ -9,6 +9,8 @@ import {
 } from '@/lib/letters'
 import { getPublishedDispatchesByAuthor, getPinnedDispatch } from '@/lib/dispatches'
 import { getBlockScope } from '@/lib/blocking'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import type { MyQuestionAnswer } from '@/lib/questions'
 import {
   sectionTitleClass,
   sectionLabelClass,
@@ -47,6 +49,19 @@ export function canWriteToMind(state: {
   )
 }
 
+/** The same continuity rule used by People discovery, expressed over the
+ * resolved profile-answer shape: Flagship first, then the member's historical
+ * current response, then their latest response. This keeps established users
+ * readable after a Flagship rotation without weakening response-first People. */
+export function chooseProfileAnswer(answers: MyQuestionAnswer[]): MyQuestionAnswer | null {
+  return (
+    answers.find((answer) => answer.isPrimary) ??
+    answers.find((answer) => answer.isCurrent) ??
+    [...answers].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ??
+    null
+  )
+}
+
 export default async function PublicProfilePage({
   params,
   searchParams,
@@ -63,7 +78,7 @@ export default async function PublicProfilePage({
   const [{ data: profile }, waitingCount] = await Promise.all([
     supabase
       .from('public_profiles')
-      .select('id, pseudonym, country, gender, gender_custom, age_range')
+      .select('id, pseudonym, country, gender, gender_custom, age_range, mark_id')
       .eq('id', userId)
       .maybeSingle(),
     getWaitingLetterCount(supabase, viewer.id),
@@ -89,8 +104,10 @@ export default async function PublicProfilePage({
   ])
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
-  const primaryAnswer = rawAnswers.find((a) => a.isPrimary) ?? null
-  const otherAnswers = rawAnswers.filter((a) => !a.isPrimary).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const primaryAnswer = chooseProfileAnswer(rawAnswers)
+  const otherAnswers = rawAnswers
+    .filter((answer) => answer.id !== primaryAnswer?.id)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const alreadyCorresponding = activePartnerIds.has(userId)
   const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryAnswer.id) : false
   const showWriteToMind = canWriteToMind({
@@ -102,6 +119,7 @@ export default async function PublicProfilePage({
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
     .filter(Boolean)
     .join(' · ')
+  const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
 
   return (
     <AppShell active="minds" waitingLetterCount={waitingCount}>
@@ -110,7 +128,16 @@ export default async function PublicProfilePage({
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}
 
           <div className="flex items-start gap-4">
-            <Mindform identifier={profile.id} size="lg" />
+            {markUrl ? (
+              <div
+                role="img"
+                aria-label={`${profile.pseudonym}'s Mark`}
+                className="h-14 w-14 shrink-0 rounded-full border border-foreground/10 bg-cover bg-center shadow-sm"
+                style={{ backgroundImage: `url(${markUrl})` }}
+              />
+            ) : (
+              <Mindform identifier={profile.id} size="lg" />
+            )}
             <div className="min-w-0">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
               {demographics && <p className={metadataTextClass}>{demographics}</p>}
@@ -135,7 +162,7 @@ export default async function PublicProfilePage({
                   id={primaryAnswer.id}
                   prompt={primaryAnswer.prompt}
                   body={primaryAnswer.body}
-                  isPrimary
+                  isPrimary={primaryAnswer.isPrimary}
                   showReport={!isSelf}
                 />
               )}

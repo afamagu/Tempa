@@ -209,9 +209,6 @@ export default function YourMarkStep() {
                 It began with your photograph. Others will see only what remains.
               </p>
               <p className="font-serif text-base font-medium">Every Mark you meet began the same way.</p>
-              <p className="text-sm leading-relaxed text-foreground/70">
-                Choose the one that feels like yours. Once you continue, this becomes your Mark on Tempa.
-              </p>
             </div>
             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row">
               <button type="button" onClick={handleContinue} disabled={busy} className={primaryButtonClass}>

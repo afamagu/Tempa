@@ -82,17 +82,16 @@ export default async function ClosureRecommendations({
 
   const rows = data as RecommendationRow[]
 
-  // Post-onboarding corrections checkpoint — DiscoveryEntry.response
-  // became optional so People can show a person with no Flagship
-  // answer, but this recommendation surface is unaffected in behavior:
-  // get_post_closure_recommendations only ever returns rows that ARE an
-  // answer, so every entry here still carries one, unconditionally.
+  // This older recommendation RPC does not expose mark_id. Keep its existing
+  // response-first behavior and use the explicit legacy identity fallback;
+  // expanding this RPC would require an out-of-scope SQL change.
   const entries: DiscoveryEntry[] = rows.map((row) => ({
     userId: row.user_id,
     pseudonym: row.pseudonym,
     country: row.country,
     genderDisplay: genderDisplay(row.gender, row.gender_custom),
     ageRange: row.age_range,
+    markUrl: null,
     response: { id: row.answer_id, body: row.body, prompt: row.prompt },
   }))
 
