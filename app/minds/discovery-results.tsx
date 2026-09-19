@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { helperTextClass, primaryButtonClass, proseBodyClass, contextQuestionClass } from '@/app/profile/ui'
+import { helperTextClass, primaryButtonClass, proseBodyClass, contextQuestionClass, quietLinkClass } from '@/app/profile/ui'
 import Mindform from '@/app/mindform'
 import QuestionInfoIcon from '@/app/question-info-icon'
 
@@ -26,14 +26,6 @@ function profileHref(userId: string, returnTo: string) {
     : `/minds/${userId}`
 }
 
-/**
- * People is a directory of people, with their discovery response shown
- * whenever one exists. Opening the writing enters a reading sequence,
- * not a voting/swipe deck: horizontal gestures, arrow keys and quiet
- * previous/next controls only move through the response-bearing people
- * already present in this exact result set. Closing returns to the list
- * without disturbing its filters or scroll position.
- */
 export default function DiscoveryResults({
   entries,
   returnTo = '/minds',
@@ -67,15 +59,13 @@ export default function DiscoveryResults({
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpenId(null)
-      if (e.key === 'ArrowLeft' && openIndex > 0) {
-        setOpenId(readableEntries[openIndex - 1].userId)
-      }
+      if (e.key === 'ArrowLeft' && openIndex > 0) setOpenId(readableEntries[openIndex - 1].userId)
       if (e.key === 'ArrowRight' && openIndex < readableEntries.length - 1) {
         setOpenId(readableEntries[openIndex + 1].userId)
       }
     }
-    document.addEventListener('keydown', handleKeyDown)
 
+    document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
@@ -84,8 +74,7 @@ export default function DiscoveryResults({
 
   function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
     const touch = e.touches[0]
-    if (!touch) return
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY }
+    if (touch) touchStartRef.current = { x: touch.clientX, y: touch.clientY }
   }
 
   function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
@@ -96,8 +85,6 @@ export default function DiscoveryResults({
 
     const dx = touch.clientX - start.x
     const dy = touch.clientY - start.y
-    // Deliberately conservative: ordinary vertical reading must never
-    // accidentally change people because a finger drifted sideways.
     if (Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy) * 1.25) return
     if (dx < 0) showNext()
     else showPrevious()
@@ -106,54 +93,39 @@ export default function DiscoveryResults({
   return (
     <>
       <div className="space-y-4">
-        {entries.map((entry) =>
-          entry.response ? (
-            <div key={entry.userId} className="rounded-md border border-foreground/10 p-4">
-              <div className="flex items-start gap-3">
-                <Link
-                  href={profileHref(entry.userId, returnTo)}
-                  className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-90"
-                >
-                  <Mindform identifier={entry.userId} size="sm" />
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold text-foreground">{entry.pseudonym}</p>
-                    <p className={helperTextClass}>{identityLine(entry)}</p>
-                  </div>
-                </Link>
-                <QuestionInfoIcon prompt={entry.response.prompt} />
-              </div>
-
+        {readableEntries.map((entry) => (
+          <div key={entry.userId} className="rounded-md border border-foreground/10 p-4">
+            <div className="flex items-start gap-3">
               <button
                 type="button"
                 onClick={() => setOpenId(entry.userId)}
-                className="mt-3 block w-full rounded-md bg-surface-shell p-4 text-left"
+                className="flex min-w-0 flex-1 items-center gap-3 text-left hover:opacity-90"
+                aria-label={`Read ${entry.pseudonym}'s response`}
               >
-                <p className={`line-clamp-4 whitespace-pre-wrap ${proseBodyClass}`}>{entry.response.body}</p>
+                <Mindform identifier={entry.userId} size="sm" />
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold text-foreground">{entry.pseudonym}</p>
+                  <p className={helperTextClass}>{identityLine(entry)}</p>
+                </div>
               </button>
+              <QuestionInfoIcon prompt={entry.response!.prompt} />
             </div>
-          ) : (
-            <Link
-              key={entry.userId}
-              href={profileHref(entry.userId, returnTo)}
-              className="flex items-center gap-3 rounded-md border border-foreground/10 p-4 hover:opacity-90"
+
+            <button
+              type="button"
+              onClick={() => setOpenId(entry.userId)}
+              className="mt-3 block w-full rounded-md bg-surface-shell p-4 text-left"
+              aria-label={`Open ${entry.pseudonym}'s response`}
             >
-              <Mindform identifier={entry.userId} size="sm" />
-              <div className="min-w-0">
-                <p className="truncate text-[14px] font-semibold text-foreground">{entry.pseudonym}</p>
-                <p className={helperTextClass}>{identityLine(entry)}</p>
-              </div>
-            </Link>
-          )
-        )}
+              <p className={`line-clamp-4 whitespace-pre-wrap ${proseBodyClass}`}>{entry.response!.body}</p>
+            </button>
+          </div>
+        ))}
       </div>
 
       {openEntry?.response && (
         <div className="fixed inset-0 z-50 flex sm:items-center sm:justify-center">
-          <div
-            className="absolute inset-0 bg-foreground/40"
-            onClick={() => setOpenId(null)}
-            aria-hidden="true"
-          />
+          <div className="absolute inset-0 bg-foreground/40" onClick={() => setOpenId(null)} aria-hidden="true" />
           <div
             role="dialog"
             aria-modal="true"
@@ -163,16 +135,13 @@ export default function DiscoveryResults({
             className="relative flex w-full flex-col overflow-hidden bg-background sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-xl sm:rounded-lg sm:border sm:border-foreground/10"
           >
             <div className="flex items-center justify-between gap-3 border-b border-foreground/10 px-5 py-4">
-              <Link
-                href={profileHref(openEntry.userId, returnTo)}
-                className="flex min-w-0 items-center gap-3 hover:opacity-90"
-              >
+              <div className="flex min-w-0 items-center gap-3">
                 <Mindform identifier={openEntry.userId} size="sm" />
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold text-foreground">{openEntry.pseudonym}</p>
                   <p className={helperTextClass}>{identityLine(openEntry)}</p>
                 </div>
-              </Link>
+              </div>
               <button
                 type="button"
                 onClick={() => setOpenId(null)}
@@ -191,34 +160,39 @@ export default function DiscoveryResults({
               <p className={`whitespace-pre-wrap ${proseBodyClass}`}>{openEntry.response.body}</p>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-foreground/10 px-5 py-4">
-              <div className="flex items-center gap-1">
+            <div className="space-y-3 border-t border-foreground/10 px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={showPrevious}
+                    disabled={!hasPrevious}
+                    aria-label="Previous response"
+                    className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={showNext}
+                    disabled={!hasNext}
+                    aria-label="Next response"
+                    className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25"
+                  >
+                    →
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={showPrevious}
-                  disabled={!hasPrevious}
-                  aria-label="Previous response"
-                  className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25"
+                  onClick={() => router.push(`/write/${openEntry.userId}?a=${openEntry.response!.id}`)}
+                  className={primaryButtonClass}
                 >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  onClick={showNext}
-                  disabled={!hasNext}
-                  aria-label="Next response"
-                  className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25"
-                >
-                  →
+                  Write to {openEntry.pseudonym}
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => router.push(`/write/${openEntry.userId}?a=${openEntry.response!.id}`)}
-                className={primaryButtonClass}
-              >
-                Write to this mind
-              </button>
+              <Link href={profileHref(openEntry.userId, returnTo)} className={quietLinkClass}>
+                View {openEntry.pseudonym}&rsquo;s profile
+              </Link>
             </div>
           </div>
         </div>
