@@ -1,0 +1,16 @@
+# Keep repository text deterministic across Windows, macOS, and Linux.
+# A number of regression/verifier tests intentionally inspect source text
+# byte-for-byte or with LF-delimited sentinels; CRLF checkout conversion on
+# Windows otherwise creates false failures (including the Your Mark V2 hash
+# lock) even when the committed implementation is unchanged.
+* text=auto eol=lf
+
+# Preserve binary assets as binary.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
