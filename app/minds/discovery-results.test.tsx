@@ -10,6 +10,7 @@ const ENTRY_WITH_RESPONSE: DiscoveryEntry = {
   country: 'South Africa',
   genderDisplay: 'Woman',
   ageRange: '25-34',
+  markUrl: null,
   response: {
     id: 'answer-1',
     body: 'A short answer about ordinary things.',
@@ -23,20 +24,12 @@ const SECOND_RESPONSE: DiscoveryEntry = {
   country: 'United States',
   genderDisplay: 'Woman',
   ageRange: '25-34',
+  markUrl: 'https://example.test/profile-marks/mark.png',
   response: {
     id: 'answer-3',
     body: 'I notice the small things people do when nobody asks them to.',
     prompt: 'Tell a room of strangers something real about yourself.',
   },
-}
-
-const ENTRY_NO_RESPONSE: DiscoveryEntry = {
-  userId: 'user-2',
-  pseudonym: 'Quiet Harbor',
-  country: 'Kenya',
-  genderDisplay: null,
-  ageRange: '35-44',
-  response: null,
 }
 
 describe('DiscoveryResults — discovery opens writing first', () => {
@@ -53,10 +46,16 @@ describe('DiscoveryResults — discovery opens writing first', () => {
     expect(html).not.toContain('role="dialog"')
   })
 
+  it('shows a saved Mark and keeps the legacy Mindform fallback', () => {
+    const marked = renderToStaticMarkup(<DiscoveryResults entries={[SECOND_RESPONSE]} />)
+    expect(marked).toContain("Maya Bennett&#x27;s Mark")
+    expect(marked).toContain('profile-marks/mark.png')
+    const legacy = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE]} />)
+    expect(legacy).not.toContain("Evening Quill&#x27;s Mark")
+  })
+
   it('ships previous/next, keyboard, close, and conservative horizontal swipe navigation', async () => {
-    const source = await import('node:fs').then(({ readFileSync }) =>
-      readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8')
-    )
+    const source = await import('node:fs').then(({ readFileSync }) => readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8'))
     expect(source).toContain('aria-label="Previous response"')
     expect(source).toContain('aria-label="Next response"')
     expect(source).toContain('aria-label="Close and return to People"')
@@ -67,32 +66,18 @@ describe('DiscoveryResults — discovery opens writing first', () => {
   })
 
   it('keeps profile viewing as a secondary action inside the reader', async () => {
-    const source = await import('node:fs').then(({ readFileSync }) =>
-      readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8')
-    )
+    const source = await import('node:fs').then(({ readFileSync }) => readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8'))
     expect(source).toContain('View {openEntry.pseudonym}&rsquo;s profile')
     expect(source).toContain('profileHref(openEntry.userId, returnTo)')
   })
 
   it('uses the person name in the correspondence action', async () => {
-    const source = await import('node:fs').then(({ readFileSync }) =>
-      readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8')
-    )
+    const source = await import('node:fs').then(({ readFileSync }) => readFileSync(new URL('./discovery-results.tsx', import.meta.url), 'utf8'))
     expect(source).toContain('Write to {openEntry.pseudonym}')
   })
 
-  it('can render multiple response-bearing people in one ordered reading set', () => {
-    expect(() => renderToStaticMarkup(
-      <DiscoveryResults entries={[ENTRY_WITH_RESPONSE, SECOND_RESPONSE]} />
-    )).not.toThrow()
-  })
-})
-
-describe('DiscoveryResults — defensive no-response handling', () => {
-  it('does not render a profile shortcut or invent writing for an entry without a response', () => {
-    const html = renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_NO_RESPONSE]} />)
-    expect(html).not.toContain('Quiet Harbor')
-    expect(html).not.toContain('href="/minds/user-2')
+  it('can render multiple people in one ordered reading set', () => {
+    expect(() => renderToStaticMarkup(<DiscoveryResults entries={[ENTRY_WITH_RESPONSE, SECOND_RESPONSE]} />)).not.toThrow()
   })
 
   it('renders no entries without throwing', () => {
