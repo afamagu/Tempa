@@ -13,21 +13,40 @@ import {
   proseBodyClass,
   contextQuestionClass,
 } from '@/app/profile/ui'
-import { questionSaveConfirmationCopy, QUESTION_ANSWER_MAX_CHARS, type LibraryQuestion } from '@/lib/questions'
+import {
+  questionSaveConfirmationCopy,
+  QUESTION_ANSWER_MAX_CHARS,
+  type LibraryQuestion,
+} from '@/lib/questions'
 import { insertAtCursor } from '@/lib/textarea-insert'
 import EmojiPicker from '@/app/letters/emoji-picker'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
 
-function charLength(text: string) { return Array.from(text).length }
-function draftKey(questionId: string, userId: string) { return `tempa-question-draft:${questionId}:${userId}` }
+function charLength(text: string) {
+  return Array.from(text).length
+}
+
+function draftKey(questionId: string, userId: string) {
+  return `tempa-question-draft:${questionId}:${userId}`
+}
+
 function readDraft(questionId: string, userId: string): string | null {
   if (typeof window === 'undefined') return null
   try { return window.localStorage.getItem(draftKey(questionId, userId)) } catch { return null }
 }
 
-export default function QuestionAnswer({ userId, questionId, prompt, initialAnswer, isFlagship = false, isActive = true, nextQuestion = null, onboarding = false }: {
+export default function QuestionAnswer({
+  userId,
+  questionId,
+  prompt,
+  initialAnswer,
+  isFlagship = false,
+  isActive = true,
+  nextQuestion = null,
+  onboarding = false,
+}: {
   userId: string
   questionId: string
   prompt: string
@@ -45,6 +64,7 @@ export default function QuestionAnswer({ userId, questionId, prompt, initialAnsw
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<string | null>(null)
+
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
   const aboveMax = charCount > MAX_CHARS
@@ -58,29 +78,50 @@ export default function QuestionAnswer({ userId, questionId, prompt, initialAnsw
     setBody(next)
     try { window.localStorage.setItem(draftKey(questionId, userId), next) } catch { /* ignore */ }
   }
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) { updateBody(e.target.value) }
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    updateBody(e.target.value)
+  }
+
   function insertEmoji(emoji: string) {
     const el = textareaRef.current
     const start = el?.selectionStart ?? body.length
     const end = el?.selectionEnd ?? body.length
     const { value: next, cursor } = insertAtCursor(body, start, end, emoji)
     updateBody(next)
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(cursor, cursor) })
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(cursor, cursor)
+    })
   }
 
   async function handlePublish() {
     if (!canPublish) return
     setSaving(true)
     setError(null)
+
     const supabase = createClient()
     const trimmed = body.trim()
-    const { error: publishError } = await supabase.rpc('publish_question_answer', { p_question_id: questionId, p_body: trimmed })
+    const { error: publishError } = await supabase.rpc('publish_question_answer', {
+      p_question_id: questionId,
+      p_body: trimmed,
+    })
     setSaving(false)
+
     if (publishError) {
-      console.error('[question] publish failed', { message: publishError.message, details: publishError.details, hint: publishError.hint, code: publishError.code })
-      setError('Could not save your answer. Please try again.' + (process.env.NODE_ENV === 'development' ? ` (${publishError.message})` : ''))
+      console.error('[question] publish failed', {
+        message: publishError.message,
+        details: publishError.details,
+        hint: publishError.hint,
+        code: publishError.code,
+      })
+      setError(
+        'Could not save your answer. Please try again.' +
+          (process.env.NODE_ENV === 'development' ? ` (${publishError.message})` : '')
+      )
       return
     }
+
     try { window.localStorage.removeItem(draftKey(questionId, userId)) } catch { /* ignore */ }
     setConfirmation(questionSaveConfirmationCopy(isFlagship, hadExistingAnswer))
     setPublishedBody(trimmed)
@@ -110,7 +151,11 @@ export default function QuestionAnswer({ userId, questionId, prompt, initialAnsw
             </div>
             <div className="flex flex-wrap gap-3">
               <Link href="/minds" className={primaryButtonClass}>Meet some people</Link>
-              {nextQuestion ? <Link href={`/question/${nextQuestion.id}`} className={secondaryButtonClass}>Answer another Question</Link> : <Link href="/you/responses?tab=new" className={secondaryButtonClass}>Answer another Question</Link>}
+              {nextQuestion ? (
+                <Link href={`/question/${nextQuestion.id}`} className={secondaryButtonClass}>Answer another Question</Link>
+              ) : (
+                <Link href="/you/responses?tab=new" className={secondaryButtonClass}>Answer another Question</Link>
+              )}
             </div>
           </div>
         ) : mode === 'view' && publishedBody ? (
@@ -118,11 +163,19 @@ export default function QuestionAnswer({ userId, questionId, prompt, initialAnsw
             <div className="space-y-4">
               {confirmation && <p className={helperTextClass}>{confirmation}</p>}
               <p className={helperTextClass}>{isActive ? 'Published' : 'This Question is no longer open'}</p>
-              <div className="rounded-md bg-surface-shell p-4 sm:p-5"><p className={`whitespace-pre-wrap ${proseBodyClass}`}>{publishedBody}</p></div>
+              <div className="rounded-md bg-surface-shell p-4 sm:p-5">
+                <p className={`whitespace-pre-wrap ${proseBodyClass}`}>{publishedBody}</p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <Link href="/you/responses" className={secondaryButtonClass}>Back to my responses</Link>
-              <button type="button" onClick={() => { setConfirmation(null); setMode('edit') }} className={secondaryButtonClass}>Edit response</button>
+              <button
+                type="button"
+                onClick={() => { setConfirmation(null); setMode('edit') }}
+                className={secondaryButtonClass}
+              >
+                Edit response
+              </button>
               {nextQuestion && <Link href={`/question/${nextQuestion.id}`} className={primaryButtonClass}>Next</Link>}
             </div>
           </div>
@@ -143,13 +196,29 @@ export default function QuestionAnswer({ userId, questionId, prompt, initialAnsw
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-1 border-b border-foreground/10 pb-2"><EmojiPicker onSelect={insertEmoji} /></div>
-            <textarea ref={textareaRef} value={body} onChange={handleChange} rows={16} placeholder="Begin writing…" className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent" />
+
+            <div className="flex items-center gap-1 border-b border-foreground/10 pb-2">
+              <EmojiPicker onSelect={insertEmoji} />
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={body}
+              onChange={handleChange}
+              rows={16}
+              placeholder="Begin writing…"
+              className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent"
+            />
+
             {showCharCount && <p className={helperTextClass}>{charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
+
             <div className="flex flex-wrap gap-3">
-              {!(onboarding && !hadExistingAnswer) && <Link href="/you/responses" className={secondaryButtonClass}>Back to my responses</Link>}
-              <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>{saving ? 'Saving…' : 'Save response'}</button>
+              {!(onboarding && !hadExistingAnswer) && (
+                <Link href="/you/responses" className={secondaryButtonClass}>Back to my responses</Link>
+              )}
+              <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>
+                {saving ? 'Saving…' : 'Save response'}
+              </button>
             </div>
           </div>
         )}
