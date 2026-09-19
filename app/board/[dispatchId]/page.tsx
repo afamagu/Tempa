@@ -35,7 +35,7 @@ import { iconButtonClass } from '@/app/profile/ui'
 import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import CountryFlag from '@/app/country-flag'
 import ReportButton from '@/app/report-button'
 import MomentHint from '../moment-hint'
@@ -303,7 +303,12 @@ export default async function DispatchPage({
                 href={`/minds/${dispatch.authorId}`}
                 className="flex min-w-0 items-center gap-3 hover:opacity-80"
               >
-                <Mindform identifier={dispatch.authorId} size="md" />
+                <ProfileIdentityMark
+                  identifier={dispatch.authorId}
+                  markUrl={dispatch.authorMarkUrl ?? null}
+                  label={dispatch.authorMarkUrl ? `${dispatch.authorPseudonym}'s Mark` : undefined}
+                  size="md"
+                />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="truncate text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>

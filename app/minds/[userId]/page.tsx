@@ -20,7 +20,7 @@ import {
   quietLinkClass,
 } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import BlockButton from '@/app/block-button'
 import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
@@ -128,16 +128,12 @@ export default async function PublicProfilePage({
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}
 
           <div className="flex items-start gap-4">
-            {markUrl ? (
-              <div
-                role="img"
-                aria-label={`${profile.pseudonym}'s Mark`}
-                className="h-14 w-14 shrink-0 rounded-full border border-foreground/10 bg-cover bg-center shadow-sm"
-                style={{ backgroundImage: `url(${markUrl})` }}
-              />
-            ) : (
-              <Mindform identifier={profile.id} size="lg" />
-            )}
+            <ProfileIdentityMark
+              identifier={profile.id}
+              markUrl={markUrl}
+              label={markUrl ? `${profile.pseudonym}'s Mark` : undefined}
+              size="lg"
+            />
             <div className="min-w-0">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
               {demographics && <p className={metadataTextClass}>{demographics}</p>}

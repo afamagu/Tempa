@@ -124,6 +124,7 @@ export type BlockedProfile = {
   country: string | null
   scope: BlockScope
   createdAt: string
+  markId: string | null
 }
 
 /**
@@ -142,6 +143,6 @@ export type BlockedProfile = {
 export async function getBlockedProfiles(supabase: SupabaseClient): Promise<BlockedProfile[]> {
   const { data } = await supabase.rpc('get_blocked_profiles')
   return (
-    (data ?? []) as { id: string; pseudonym: string; country: string | null; scope: BlockScope; created_at: string }[]
-  ).map((row) => ({ id: row.id, pseudonym: row.pseudonym, country: row.country, scope: row.scope, createdAt: row.created_at }))
+    (data ?? []) as { id: string; pseudonym: string; country: string | null; scope: BlockScope; created_at: string; mark_id?: string | null }[]
+  ).map((row) => ({ id: row.id, pseudonym: row.pseudonym, country: row.country, scope: row.scope, createdAt: row.created_at, markId: row.mark_id ?? null }))
 }

@@ -67,6 +67,15 @@ describe('DispatchPreview — shows the Dispatch substantially as a reader will 
     expect(html).toContain('Second paragraph.')
   })
 
+  it('previews the author\'s saved Mark in its native composition', () => {
+    const html = renderToStaticMarkup(
+      <DispatchPreview {...baseProps({ authorMarkUrl: 'https://example.test/mark.png' })} />
+    )
+    expect(html).toContain('src="https://example.test/mark.png"')
+    expect(html).toContain('object-contain')
+    expect(html).not.toContain('object-cover')
+  })
+
   it('renders Moments using the real reader presentation component (DispatchBody), in their actual positions', () => {
     const html = renderToStaticMarkup(
       <DispatchPreview

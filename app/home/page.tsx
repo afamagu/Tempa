@@ -36,6 +36,7 @@ import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
 import BoardTitleStrip from './board-title-strip'
 import AnnouncementTeaser from './announcement-teaser'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 const STRIP_ITEM_COUNT = 6
 
@@ -168,14 +169,19 @@ export default async function HomePage() {
   // person waiting there's no single identity to attach a profile link
   // to, so none is shown (see PeopleGrid/DiscoveryResults for the same
   // "audit context, don't indiscriminately linkify" principle).
-  let singleAwaitingSender: { pseudonym: string } | null = null
+  let singleAwaitingSender: { pseudonym: string; markUrl: string | null } | null = null
   if (singleAwaiting) {
     const { data } = await supabase
       .from('public_profiles')
-      .select('pseudonym')
+      .select('pseudonym, mark_id')
       .eq('id', singleAwaiting.senderId)
       .maybeSingle()
     singleAwaitingSender = data
+      ? {
+          pseudonym: data.pseudonym,
+          markUrl: data.mark_id ? publicProfileMarkUrl(supabase, `${data.mark_id}.png`) : null,
+        }
+      : null
   }
 
   // A small, compact taste of Minds — not a second Discovery surface.
@@ -206,7 +212,7 @@ export default async function HomePage() {
 
     const { data: profiles } = await supabase
       .from('public_profiles')
-      .select('id, pseudonym, country, gender, gender_custom, age_range')
+      .select('id, pseudonym, country, gender, gender_custom, age_range, mark_id')
       .in('id', ordered)
 
     const byId = new Map((profiles ?? []).map((p) => [p.id, p]))
@@ -219,6 +225,7 @@ export default async function HomePage() {
         country: p.country,
         genderDisplay: genderDisplay(p.gender, p.gender_custom),
         ageRange: p.age_range,
+        markUrl: p.mark_id ? publicProfileMarkUrl(supabase, `${p.mark_id}.png`) : null,
       }))
   }
 
@@ -249,6 +256,7 @@ export default async function HomePage() {
                     <ArrivalSenderLink
                       senderId={singleAwaiting.senderId}
                       pseudonym={singleAwaitingSender.pseudonym}
+                      markUrl={singleAwaitingSender.markUrl}
                     />
                   )}
                   <Link

@@ -8,6 +8,7 @@ export type SearchPersonResult = {
   kind: 'person'
   personId: string
   pseudonym: string
+  markUrl?: string | null
 }
 
 export type SearchLetterResult = {

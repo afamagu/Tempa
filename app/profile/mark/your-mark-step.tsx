@@ -17,7 +17,13 @@ import { helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app
 type Phase = 'loading' | 'choose' | 'generating' | 'reveal' | 'saving' | 'discarding'
 const MAX_SOURCE_FILE_BYTES = 20 * 1024 * 1024
 
-export default function YourMarkStep() {
+export default function YourMarkStep({
+  destination = '/profile/question',
+  continueLabel = 'Continue',
+}: {
+  destination?: string
+  continueLabel?: string
+}) {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('loading')
   const [reservation, setReservation] = useState<ProfileMarkReservation | null>(null)
@@ -94,7 +100,7 @@ export default function YourMarkStep() {
     try {
       const supabase = createClient()
       await persistGeneratedMark(supabase, generated?.blob ?? null, reservation)
-      router.push('/profile/question')
+      router.push(destination)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Your Mark could not be saved. Please try again.')
@@ -199,7 +205,7 @@ export default function YourMarkStep() {
             <img
               src={markUrl}
               alt="Your generated Mark"
-              className="mx-auto aspect-square w-full max-w-[20rem] rounded-[26%] object-cover sm:max-w-[22.5rem]"
+              className="mx-auto aspect-square w-full max-w-[20rem] object-contain sm:max-w-[22.5rem]"
             />
             <div className="space-y-3">
               <h1 ref={revealHeadingRef} tabIndex={-1} className="font-serif text-3xl font-medium outline-none">
@@ -212,7 +218,7 @@ export default function YourMarkStep() {
             </div>
             <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row">
               <button type="button" onClick={handleContinue} disabled={busy} className={primaryButtonClass}>
-                Continue
+                {continueLabel}
               </button>
               <button type="button" onClick={handleChooseAnother} disabled={busy} className={secondaryButtonClass}>
                 Choose another photograph

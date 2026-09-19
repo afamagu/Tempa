@@ -288,6 +288,31 @@ describe('buildLetterboxPeople', () => {
     [PRIYA, { pseudonym: 'Priya', country: 'IN', age_range: '35-44' }],
   ])
 
+  it('resolves a saved Mark for Letterbox identity while leaving legacy members on the fallback path', () => {
+    const profiles = new Map([
+      [ELVIS, { pseudonym: 'Elvis', country: 'US', age_range: '25-34', mark_id: 'mark-elvis' }],
+      [PRIYA, { pseudonym: 'Priya', country: 'IN', age_range: '35-44', mark_id: null }],
+    ])
+    const result = buildLetterboxPeople(
+      VIEWER,
+      [
+        { id: 'c-elvis', participant_low: ELVIS, participant_high: VIEWER },
+        { id: 'c-priya', participant_low: VIEWER, participant_high: PRIYA },
+      ],
+      new Set(),
+      new Map([
+        ['c-elvis', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }],
+        ['c-priya', { createdAt: '2026-01-02T00:00:00Z', body: 'b' }],
+      ]),
+      new Map(),
+      new Set(),
+      profiles,
+      (markId) => `https://example.test/${markId}.png`
+    )
+    expect(result.find((person) => person.userId === ELVIS)?.markUrl).toBe('https://example.test/mark-elvis.png')
+    expect(result.find((person) => person.userId === PRIYA)?.markUrl).toBeNull()
+  })
+
   it('1. multiple visible correspondence episodes with the same person collapse into one card', () => {
     const correspondences = [
       { id: 'c-old', participant_low: ELVIS, participant_high: VIEWER },

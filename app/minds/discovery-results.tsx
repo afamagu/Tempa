@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { helperTextClass, primaryButtonClass, proseBodyClass, contextQuestionClass, quietLinkClass } from '@/app/profile/ui'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import QuestionInfoIcon from '@/app/question-info-icon'
 
 export type DiscoveryEntry = {
@@ -26,14 +26,12 @@ function profileHref(userId: string, returnTo: string) {
 }
 
 function IdentityMark({ entry, size = 'sm' }: { entry: DiscoveryEntry; size?: 'sm' | 'md' }) {
-  if (!entry.markUrl) return <Mindform identifier={entry.userId} size={size === 'sm' ? 'sm' : 'lg'} />
-  const dimensions = size === 'sm' ? 'h-10 w-10' : 'h-14 w-14'
   return (
-    <div
-      role="img"
-      aria-label={`${entry.pseudonym}'s Mark`}
-      className={`${dimensions} shrink-0 rounded-full border border-foreground/10 bg-cover bg-center shadow-sm`}
-      style={{ backgroundImage: `url(${entry.markUrl})` }}
+    <ProfileIdentityMark
+      identifier={entry.userId}
+      markUrl={entry.markUrl}
+      label={entry.markUrl ? `${entry.pseudonym}'s Mark` : undefined}
+      size={size === 'sm' ? 'md' : 'lg'}
     />
   )
 }

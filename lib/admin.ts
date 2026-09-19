@@ -50,6 +50,7 @@ export type MemberListRow = {
   country: string | null
   status: AccountStatus
   createdAt: string | null
+  markId: string | null
 }
 
 export type MemberListOptions = {
@@ -69,6 +70,15 @@ export type MemberDetail = {
   status: AccountStatus
   statusReason: string | null
   statusChangedAt: string | null
+  email: string | null
+  region: string | null
+  ageRange: string | null
+  gender: string | null
+  genderCustom: string | null
+  languages: string[]
+  intent: string[]
+  createdAt: string | null
+  markId: string | null
 }
 
 export type MemberReportRow = {
@@ -241,7 +251,7 @@ export async function listMembers(
     p_offset: options.offset ?? 0,
   })
   if (error) return { data: [], error: { message: error.message, code: error.code } }
-  const rows = (data ?? []) as { id: string; pseudonym: string; country: string | null; status: AccountStatus; created_at: string | null }[]
+  const rows = (data ?? []) as { id: string; pseudonym: string; country: string | null; status: AccountStatus; created_at: string | null; mark_id?: string | null }[]
   return {
     data: rows.map((r) => ({
       id: r.id,
@@ -249,6 +259,7 @@ export async function listMembers(
       country: r.country,
       status: r.status,
       createdAt: r.created_at,
+      markId: r.mark_id ?? null,
     })),
     error: null,
   }
@@ -261,7 +272,23 @@ export async function getMember(
   const { data, error } = await supabase.rpc('admin_get_member', { p_user_id: userId })
   if (error) return { data: null, error: { message: error.message, code: error.code } }
   const row = (Array.isArray(data) ? data[0] : data) as
-    | { id: string; pseudonym: string; country: string | null; status: AccountStatus; status_reason: string | null; status_changed_at: string | null }
+    | {
+        id: string
+        pseudonym: string
+        country: string | null
+        status: AccountStatus
+        status_reason: string | null
+        status_changed_at: string | null
+        email?: string | null
+        region?: string | null
+        age_range?: string | null
+        gender?: string | null
+        gender_custom?: string | null
+        languages?: string[] | null
+        intent?: string[] | null
+        created_at?: string | null
+        mark_id?: string | null
+      }
     | undefined
   if (!row) return { data: null, error: null }
   return {
@@ -272,9 +299,31 @@ export async function getMember(
       status: row.status,
       statusReason: row.status_reason,
       statusChangedAt: row.status_changed_at,
+      email: row.email ?? null,
+      region: row.region ?? null,
+      ageRange: row.age_range ?? null,
+      gender: row.gender ?? null,
+      genderCustom: row.gender_custom ?? null,
+      languages: row.languages ?? [],
+      intent: row.intent ?? [],
+      createdAt: row.created_at ?? null,
+      markId: row.mark_id ?? null,
     },
     error: null,
   }
+}
+
+export async function sendAdminFirstLetter(
+  supabase: SupabaseClient,
+  memberId: string,
+  body: string
+): Promise<{ data: string | null; error: AdminError }> {
+  const { data, error } = await supabase.rpc('admin_send_first_letter', {
+    p_member_id: memberId,
+    p_body: body,
+  })
+  if (error) return { data: null, error: { message: error.message, code: error.code } }
+  return { data: data as string, error: null }
 }
 
 export async function listMemberReports(

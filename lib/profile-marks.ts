@@ -9,6 +9,12 @@ export type ProfileMarkReservation = {
   uploaded: boolean
 }
 
+export type ProfileMarkManagementStatus = {
+  markId: string | null
+  canChange: boolean
+  nextChangeAt: string | null
+}
+
 type ReservationRow = {
   mark_id: string
   object_name: string
@@ -45,6 +51,18 @@ export async function reserveProfileMark(supabase: SupabaseClient): Promise<Prof
 
 export function publicProfileMarkUrl(supabase: SupabaseClient, objectName: string): string {
   return supabase.storage.from(PROFILE_MARKS_BUCKET).getPublicUrl(objectName).data.publicUrl
+}
+
+/** Owner-only status returned by the server-enforced cooldown RPC. */
+export async function getProfileMarkManagementStatus(
+  supabase: SupabaseClient
+): Promise<ProfileMarkManagementStatus> {
+  const { data, error } = await supabase.rpc('get_profile_mark_management_status')
+  const row = (data as { mark_id: string | null; can_change: boolean; next_change_at: string | null }[] | null)?.[0]
+  if (error || !row) {
+    throw new ProfileMarkPersistenceError('Your Mark settings could not be loaded. Please try again.', 'reservation')
+  }
+  return { markId: row.mark_id, canChange: row.can_change, nextChangeAt: row.next_change_at }
 }
 
 /**
@@ -117,4 +135,3 @@ export async function discardUploadedProfileMark(
     )
   }
 }
-

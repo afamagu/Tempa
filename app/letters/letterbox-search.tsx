@@ -9,10 +9,30 @@ import { filterLetterboxPeople, type LetterboxFilter, type LetterboxPerson } fro
 import PeopleGrid from './people-grid'
 import LetterboxFilters from './letterbox-filters'
 import SearchResultsPanel, { type SearchStatus } from './search-results-panel'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 const DEBOUNCE_MS = 300
 const PEOPLE_LIMIT = 5
 const LETTERS_LIMIT = 20
+
+async function enrichPersonMarks(
+  supabase: ReturnType<typeof createClient>,
+  people: SearchPersonResult[]
+): Promise<SearchPersonResult[]> {
+  if (people.length === 0) return people
+  const { data } = await supabase
+    .from('public_profiles')
+    .select('id, mark_id')
+    .in('id', people.map((person) => person.personId))
+  const markIdByPersonId = new Map((data ?? []).map((profile) => [profile.id, profile.mark_id]))
+  return people.map((person) => {
+    const markId = markIdByPersonId.get(person.personId)
+    return {
+      ...person,
+      markUrl: markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null,
+    }
+  })
+}
 
 /**
  * Letterbox's search entry point — a single field near the heading.
@@ -80,7 +100,10 @@ export default function LetterboxSearch({
 
     const results = toSearchResults(data ?? [])
     const letters = results.filter((r): r is SearchLetterResult => r.kind === 'letter')
-    setPersonResults(results.filter((r): r is SearchPersonResult => r.kind === 'person'))
+    const people = results.filter((r): r is SearchPersonResult => r.kind === 'person')
+    const peopleWithMarks = await enrichPersonMarks(supabase, people)
+    if (activeQueryRef.current !== q) return
+    setPersonResults(peopleWithMarks)
     setLetterResults(letters)
     setLettersOffset(letters.length)
     setHasMoreLetters(letters.length === LETTERS_LIMIT)

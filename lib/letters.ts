@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Moment, MomentType, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 import { splitParagraphs } from './moments'
 import { stripRichBodyMarker } from './letter-editor-doc'
+import { publicProfileMarkUrl } from './profile-marks'
 
 export type LetterStatus = 'sent' | 'replied' | 'closed'
 export type ClosedBy = 'recipient' | 'system'
@@ -1243,6 +1244,7 @@ export type LetterboxPerson = {
   pseudonym: string
   country: string
   ageRange: string
+  markUrl?: string | null
   /** Epoch ms of the most recent letter across every VISIBLE
    * correspondence episode with this person — the sole sort key for
    * Level 1's grid ("newest person upper-left"). */
@@ -1287,7 +1289,8 @@ export function buildLetterboxPeople(
   latestLetterByCorrespondence: Map<string, { createdAt: string; body: string; senderId?: string }>,
   unreadCountByCorrespondence: Map<string, number>,
   sentCorrespondenceIds: Set<string>,
-  profilesById: Map<string, { pseudonym: string; country: string; age_range: string }>
+  profilesById: Map<string, { pseudonym: string; country: string; age_range: string; mark_id?: string | null }>,
+  markUrlForId: (markId: string) => string = () => ''
 ): LetterboxPerson[] {
   const activityByPerson = new Map<string, number>()
   const excerptByPerson = new Map<string, string>()
@@ -1327,6 +1330,7 @@ export function buildLetterboxPeople(
       pseudonym: profile.pseudonym,
       country: profile.country,
       ageRange: profile.age_range,
+      markUrl: profile.mark_id ? markUrlForId(profile.mark_id) : null,
       activityAt,
       unreadCount: unreadByPerson.get(otherId) ?? 0,
       latestExcerpt: excerptByPerson.get(otherId) ?? null,
@@ -1451,7 +1455,7 @@ export async function getLetterboxPeople(
 
   const { data: profiles } = await supabase
     .from('public_profiles')
-    .select('id, pseudonym, country, age_range')
+    .select('id, pseudonym, country, age_range, mark_id')
     .in('id', otherIds)
 
   const profilesById = new Map((profiles ?? []).map((p) => [p.id, p]))
@@ -1463,7 +1467,8 @@ export async function getLetterboxPeople(
     latestLetterByCorrespondence,
     unreadCountByCorrespondence,
     sentCorrespondenceIds,
-    profilesById
+    profilesById,
+    (markId) => publicProfileMarkUrl(supabase, `${markId}.png`)
   )
 }
 

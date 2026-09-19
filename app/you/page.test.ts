@@ -16,12 +16,14 @@ describe('/you — links to the new response-management route', () => {
 describe('/you — Mark-aware identity with grandfathered fallback', () => {
   it('reads mark_id privately and resolves the opaque public Mark object', () => {
     expect(source).toContain(".select('pseudonym, mark_id')")
-    expect(source).toContain("publicProfileMarkUrl(supabase, `${profile.mark_id}.png`)")
+    expect(source).toContain("publicProfileMarkUrl(supabase, `${markId}.png`)")
   })
 
   it('shows a saved Mark prominently and retains Mindform for legacy profiles', () => {
-    expect(source).toContain('aria-label="Your Mark"')
-    expect(source).toContain('<Mindform identifier={user.id} size="lg" />')
-    expect(source).toContain('Your Mark has not been created yet.')
+    expect(source).toContain('<ProfileIdentityMark')
+    expect(source).toContain("label={markUrl ? 'Your Mark' : undefined}")
+    expect(source).toContain('size="xl"')
+    expect(source).toContain('You have not created your Mark yet.')
+    expect(source).toContain('href="/you/mark"')
   })
 })

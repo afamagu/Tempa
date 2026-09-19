@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { letterPreviewText, isRichBody } from './letters'
 import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
+import { publicProfileMarkUrl } from './profile-marks'
 
 const PHOTO_SIGNED_URL_TTL_SECONDS = 60 * 10
 
@@ -56,6 +57,7 @@ export type DispatchMoment = {
 export type DispatchListItem = Dispatch & {
   authorPseudonym: string
   authorCountry: string | null
+  authorMarkUrl?: string | null
   topics: string[]
 }
 
@@ -218,12 +220,12 @@ async function attachTopicsAndAuthors(
   const authorIds = [...new Set(rows.map((r) => r.author_id))]
 
   const [{ data: profiles }, { data: topicRows }] = await Promise.all([
-    supabase.from('public_profiles').select('id, pseudonym, country').in('id', authorIds),
+    supabase.from('public_profiles').select('id, pseudonym, country, mark_id').in('id', authorIds),
     supabase.from('dispatch_topics').select('dispatch_id, topic').in('dispatch_id', dispatchIds),
   ])
 
   const profileById = new Map(
-    (profiles ?? []).map((p) => [p.id, p as { id: string; pseudonym: string; country: string | null }])
+    (profiles ?? []).map((p) => [p.id, p as { id: string; pseudonym: string; country: string | null; mark_id: string | null }])
   )
   const topicsByDispatchId = new Map<string, string[]>()
   for (const row of (topicRows ?? []) as { dispatch_id: string; topic: string }[]) {
@@ -236,6 +238,9 @@ async function attachTopicsAndAuthors(
     ...toDispatch(row),
     authorPseudonym: profileById.get(row.author_id)?.pseudonym ?? 'A member',
     authorCountry: profileById.get(row.author_id)?.country ?? null,
+    authorMarkUrl: profileById.get(row.author_id)?.mark_id
+      ? publicProfileMarkUrl(supabase, `${profileById.get(row.author_id)!.mark_id}.png`)
+      : null,
     topics: topicsByDispatchId.get(row.id) ?? [],
   }))
 }

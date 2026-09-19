@@ -4,9 +4,10 @@ import { getWaitingLetterCount } from '@/lib/letters'
 import { getBlockedProfiles } from '@/lib/blocking'
 import { sectionLabelClass, proseSubheadingClass, helperTextClass, metadataTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import CountryFlag from '@/app/country-flag'
 import UnblockButton from './unblock-button'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 /**
  * Settings → Safety → Blocked minds — Safety & Trust Checkpoint 1B,
@@ -51,7 +52,12 @@ export default async function BlockedMindsPage() {
                   className="flex items-center justify-between gap-3 rounded-md border border-foreground/10 p-3"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <Mindform identifier={b.id} size="sm" />
+                    <ProfileIdentityMark
+                      identifier={b.id}
+                      markUrl={b.markId ? publicProfileMarkUrl(supabase, `${b.markId}.png`) : null}
+                      label={b.markId ? `${b.pseudonym}'s Mark` : undefined}
+                      size="sm"
+                    />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="truncate text-[15px] font-medium text-foreground">{b.pseudonym}</p>

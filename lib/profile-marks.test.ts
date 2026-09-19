@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   MAX_MARK_PNG_BYTES,
+  getProfileMarkManagementStatus,
   persistGeneratedMark,
   reserveProfileMark,
   validateGeneratedMarkPng,
@@ -79,5 +80,21 @@ describe('production Mark persistence boundary', () => {
     const reservation = await reserveProfileMark(fake.supabase)
     await expect(persistGeneratedMark(fake.supabase, null, reservation)).rejects.toMatchObject({ phase: 'finalization' })
     expect(fake.upload).not.toHaveBeenCalled()
+  })
+})
+
+describe('Mark management status', () => {
+  it('maps the owner-only cooldown status RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ mark_id: pending.mark_id, can_change: false, next_change_at: '2026-10-19T12:00:00Z' }],
+      error: null,
+    })
+    const status = await getProfileMarkManagementStatus({ rpc } as unknown as SupabaseClient)
+    expect(rpc).toHaveBeenCalledWith('get_profile_mark_management_status')
+    expect(status).toEqual({
+      markId: pending.mark_id,
+      canChange: false,
+      nextChangeAt: '2026-10-19T12:00:00Z',
+    })
   })
 })

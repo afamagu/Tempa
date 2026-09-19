@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isStaff, setAccountStatus, listReports, getMember, markReportReviewed, listMembers, getReport } from './admin'
+import { isStaff, setAccountStatus, listReports, getMember, markReportReviewed, listMembers, getReport, sendAdminFirstLetter } from './admin'
 import { reportContent } from './reports'
 import { createFakeReports } from './__tests__/simulateReportRpcs'
 
@@ -360,5 +360,53 @@ describe('listMembers — Admin Operations Refinement: default paginated directo
 
     const { data } = await listMembers(client(fake), { limit: 25 })
     expect(data).toHaveLength(25)
+  })
+})
+
+describe('Admin member workspace additions', () => {
+  it('maps the expanded staff-only member shape without exposing database naming to the page', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{
+        id: MEMBER,
+        pseudonym: 'Evening Quill',
+        country: 'Ghana',
+        status: 'active',
+        status_reason: null,
+        status_changed_at: null,
+        email: 'member@example.test',
+        region: 'Greater Accra',
+        age_range: '35–44',
+        gender: 'Prefer not to say',
+        gender_custom: null,
+        languages: ['English'],
+        intent: ['Friendship'],
+        created_at: '2026-09-01T00:00:00Z',
+        mark_id: 'mark-1',
+      }],
+      error: null,
+    })
+    const result = await getMember({ rpc } as unknown as SupabaseClient, MEMBER)
+    expect(result.data).toMatchObject({
+      email: 'member@example.test',
+      region: 'Greater Accra',
+      ageRange: '35–44',
+      languages: ['English'],
+      intent: ['Friendship'],
+      markId: 'mark-1',
+    })
+  })
+
+  it('uses the dedicated staff first-contact RPC with only member id and letter body', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: 'letter-1', error: null })
+    const result = await sendAdminFirstLetter(
+      { rpc } as unknown as SupabaseClient,
+      MEMBER,
+      'A private note from Tempa staff.'
+    )
+    expect(rpc).toHaveBeenCalledWith('admin_send_first_letter', {
+      p_member_id: MEMBER,
+      p_body: 'A private note from Tempa staff.',
+    })
+    expect(result).toEqual({ data: 'letter-1', error: null })
   })
 })

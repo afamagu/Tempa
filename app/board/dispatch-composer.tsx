@@ -178,6 +178,7 @@ export type ExistingDispatchForEditing = {
 export default function DispatchComposer({
   authorId,
   authorPseudonym = '',
+  authorMarkUrl = null,
   mode = 'create',
   existingDispatch,
   showComposerIntro = false,
@@ -191,6 +192,7 @@ export default function DispatchComposer({
    * (lib/moments.ts's resolveLetterPostcardDisplay doc comment). Unused
    * outside the Postcard editor's own live draft preview. */
   authorPseudonym?: string
+  authorMarkUrl?: string | null
   mode?: 'create' | 'edit'
   existingDispatch?: ExistingDispatchForEditing
   /** Onboarding & First-Use checkpoint — server-resolved
@@ -820,6 +822,7 @@ export default function DispatchComposer({
         <DispatchPreview
           authorId={authorId}
           authorPseudonym={authorPseudonym}
+          authorMarkUrl={authorMarkUrl}
           title={title}
           body={docToPlainBody(docJSON)}
           topics={topics}
