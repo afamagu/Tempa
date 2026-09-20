@@ -156,6 +156,52 @@ describe('docToMomentDrafts', () => {
       { position: 2, type: 'photo', imagePath: 'corr-1/f.jpg' },
     ])
   })
+
+  it('uses collapsed body positions for the exact four-Moment Dispatch failure shape', () => {
+    const doc: LetterDocJSON = {
+      type: 'doc',
+      content: [
+        paragraph(text('Zero.')),
+        paragraph(), // an intentional empty editor paragraph disappears from p_body
+        paragraph(text('Two.'), photoMoment('author/a.jpg')),
+        paragraph(text('Three.')),
+        paragraph(text('Four.')),
+        paragraph(text('Five.'), photoMoment('author/b.jpg')),
+        paragraph(text('Six.')),
+        paragraph(text('Seven.'), photoMoment('author/c.jpg')),
+        paragraph(text('Eight.')),
+        paragraph(text('Nine.'), photoMoment('author/d.jpg')),
+      ],
+    }
+
+    const paragraphsSentToTheRpc = splitParagraphs(docToPlainBody(doc))
+    expect(paragraphsSentToTheRpc).toHaveLength(9)
+    expect(docToMomentDrafts(doc)).toEqual([
+      { position: 1, type: 'photo', imagePath: 'author/a.jpg' },
+      { position: 4, type: 'photo', imagePath: 'author/b.jpg' },
+      { position: 6, type: 'photo', imagePath: 'author/c.jpg' },
+      { position: 8, type: 'photo', imagePath: 'author/d.jpg' },
+    ])
+    for (const moment of docToMomentDrafts(doc)) {
+      expect(moment.position).toBeLessThan(paragraphsSentToTheRpc.length)
+    }
+  })
+
+  it('keeps a standalone Moment in the gap after the preceding passage', () => {
+    const doc: LetterDocJSON = {
+      type: 'doc',
+      content: [
+        paragraph(text('Before.')),
+        paragraph(photoMoment('author/gap.jpg')),
+        paragraph(text('After.')),
+      ],
+    }
+
+    expect(splitParagraphs(docToPlainBody(doc))).toEqual(['Before.', 'After.'])
+    expect(docToMomentDrafts(doc)).toEqual([
+      { position: 0, type: 'photo', imagePath: 'author/gap.jpg' },
+    ])
+  })
 })
 
 describe('letterDocHasContent', () => {
@@ -786,6 +832,22 @@ describe('docToDraftMomentDescriptors', () => {
       const descriptors = docToDraftMomentDescriptors(doc)
       expect(descriptors[0].position).toBeLessThan(collapsed.length)
       expect(descriptors[0].position).toBe(1)
+    })
+
+    it('a standalone Moment between passages remains after the preceding passage', () => {
+      const doc: LetterDocJSON = {
+        type: 'doc',
+        content: [
+          paragraph(text('Before.')),
+          paragraph(photoMoment('corr-1/gap.jpg', null)),
+          paragraph(text('After.')),
+        ],
+      }
+      const collapsed = splitParagraphs(docToPlainBody(doc))
+      expect(collapsed).toEqual(['Before.', 'After.'])
+      const descriptors = docToDraftMomentDescriptors(doc)
+      expect(descriptors[0].position).toBe(0)
+      expect(collapsed[descriptors[0].position]).toBe('Before.')
     })
 
     it('multiple empty gaps between several Moments all resolve to valid, correctly-ordered positions', () => {

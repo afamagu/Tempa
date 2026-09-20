@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getProfileMarkManagementStatus, publicProfileMarkUrl } from '@/lib/profile-marks'
 import { formatDatePlain } from '@/lib/format-date'
-import { sectionLabelClass, proseSubheadingClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
+import { sectionLabelClass, pageTitleClass, proseSubheadingClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 
@@ -46,7 +46,7 @@ export default async function YouPage() {
       <main className="flex min-h-screen justify-center px-5 py-10 sm:px-8">
         <div className="w-full max-w-2xl space-y-10 py-4 sm:py-8">
           <header className="space-y-6">
-            <p className={sectionLabelClass}>You</p>
+            <h1 className={pageTitleClass}>You</h1>
             <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
               <ProfileIdentityMark
                 identifier={user.id}
@@ -55,7 +55,7 @@ export default async function YouPage() {
                 size="xl"
               />
               <div className="min-w-0 space-y-2">
-                <h1 className={proseSubheadingClass}>{profile.pseudonym}</h1>
+                <h2 className={proseSubheadingClass}>{profile.pseudonym}</h2>
                 {markUrl ? (
                   <>
                     <p className={helperTextClass}>Your Mark</p>

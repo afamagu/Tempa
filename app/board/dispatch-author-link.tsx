@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
-import CountryFlag from '@/app/country-flag'
 
 /**
  * Shared Dispatch-author identity link — pseudonym (and identity mark)
@@ -13,7 +12,7 @@ import CountryFlag from '@/app/country-flag'
  * navigation Link to the Dispatch itself, which would have made a
  * second link invalid HTML rather than simply adding one).
  *
- * Deliberately just the identity portion (Mindform + pseudonym + flag)
+ * Deliberately just the identity portion (Mark + pseudonym + country)
  * — never the date, which sits as a separate sibling text node outside
  * this link in every caller, since a date is metadata, not an identity
  * label. Callers are responsible for keeping this OUTSIDE any other
@@ -46,7 +45,11 @@ export default function DispatchAuthorLink({
         size={size}
       />
       <p className="truncate text-[14px] text-foreground/70">{authorPseudonym}</p>
-      <CountryFlag country={authorCountry} />
+      {authorCountry && (
+        <span className="truncate text-[13px] text-muted" aria-label={`Country: ${authorCountry}`}>
+          · {authorCountry}
+        </span>
+      )}
     </Link>
   )
 }

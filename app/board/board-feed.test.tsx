@@ -59,7 +59,6 @@ function render(overrides: Partial<Parameters<typeof BoardFeed>[0]> = {}) {
       sessionStartedAt="2026-09-07T00:00:00Z"
       seed="seed1"
       initialDispatches={[item()]}
-      initialThumbnails={{}}
       initialCursor={CURSOR}
       initialKeptUserIds={[]}
       pageSize={12}
@@ -122,20 +121,19 @@ function catchBlockBody(body: string): string {
   return body.slice(start, end)
 }
 
-describe('BoardFeed — 1/4. a failed request never mutates existing Dispatches, thumbnails, or the cursor', () => {
+describe('BoardFeed — 1/4. a failed request never mutates existing Dispatches or the cursor', () => {
   const body = loadMoreBody()
   const catchBody = catchBlockBody(body)
 
-  it('the catch block calls none of setDispatches/setThumbnails/setCursor — only the failure flag', () => {
+  it('the catch block calls neither setDispatches nor setCursor — only the failure flag', () => {
     expect(catchBody).not.toContain('setDispatches')
-    expect(catchBody).not.toContain('setThumbnails')
     expect(catchBody).not.toContain('setCursor')
     expect(catchBody).toContain('setLoadMoreFailed(true)')
   })
 
-  it('setDispatches/setThumbnails/setCursor are called exactly once each in the whole function, all inside the try block (the success path only)', () => {
+  it('setDispatches/setCursor are called exactly once each in the whole function, all inside the try block (the success path only)', () => {
     const tryBody = tryBlockBody(body)
-    for (const setter of ['setDispatches', 'setThumbnails', 'setCursor']) {
+    for (const setter of ['setDispatches', 'setCursor']) {
       const occurrencesInFunction = (body.match(new RegExp(setter, 'g')) ?? []).length
       const occurrencesInTry = (tryBody.match(new RegExp(setter, 'g')) ?? []).length
       expect(occurrencesInFunction).toBe(1)

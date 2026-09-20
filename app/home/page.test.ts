@@ -21,12 +21,10 @@ const source = readFileSync(PAGE_PATH, 'utf8')
 // label string or a component reference), found via indexOf so ordering
 // is proven directly from the tracked source.
 const MARKERS = {
-  arrivals: "sectionLabelClass}>Arrivals",
+  arrivals: "pageTitleClass}>Arrivals",
   mailOnTheWay: 'title="Mail on the way"',
   questionIncomplete: '<QuestionIncompleteNotice />',
   fromTheBoard: 'sectionLabelClass}>From the Board',
-  onTheBoard: 'sectionLabelClass}>On the Board',
-  readingShelf: 'sectionLabelClass}>Your Reading Shelf',
   fromMindsYouKeep: 'sectionLabelClass}>From Minds You Keep',
   recommendedMinds: 'sectionLabelClass}>Recommended minds',
   serendipity: 'sectionLabelClass}>A Little Serendipity',
@@ -54,14 +52,12 @@ describe('Home Phase 1B — rendered section order', () => {
     expect(question).toBeLessThan(board)
   })
 
-  it('renders the full reading order: From the Board, Your Reading Shelf, From Minds You Keep, Recommended minds, A Little Serendipity', () => {
+  it('renders the simplified reading order: From the Board, From Minds You Keep, Recommended minds, A Little Serendipity', () => {
     const board = indexOfMarker('fromTheBoard')
-    const shelf = indexOfMarker('readingShelf')
     const keep = indexOfMarker('fromMindsYouKeep')
     const recommended = indexOfMarker('recommendedMinds')
     const serendipity = indexOfMarker('serendipity')
-    expect(board).toBeLessThan(shelf)
-    expect(shelf).toBeLessThan(keep)
+    expect(board).toBeLessThan(keep)
     expect(keep).toBeLessThan(recommended)
     expect(recommended).toBeLessThan(serendipity)
   })
@@ -80,12 +76,14 @@ describe('Home Phase 1B — rendered section order', () => {
     expect(announcement).toBeGreaterThan(serendipity)
   })
 
-  it('keeps ON THE BOARD as a small ambient element associated with the Board reading area, not a section that interrupts the hierarchy — it sits between Featured and the Reading Shelf', () => {
-    const board = indexOfMarker('fromTheBoard')
-    const onTheBoard = indexOfMarker('onTheBoard')
-    const shelf = indexOfMarker('readingShelf')
-    expect(onTheBoard).toBeGreaterThan(board)
-    expect(onTheBoard).toBeLessThan(shelf)
+  it('does not repeat Board material under generic Reading Shelf or ambient-strip labels', () => {
+    expect(source).not.toContain('Your Reading Shelf')
+    expect(source).not.toContain('>On the Board<')
+    expect(source).not.toContain('<BoardTitleStrip')
+  })
+
+  it('renders kept writing through the compact identity-and-title shelf', () => {
+    expect(source).toContain('<KeptDispatchShelf dispatches={fromMindsYouKeep} trailQueryFor={trailQueryFor} />')
   })
 })
 
@@ -173,21 +171,9 @@ describe('Home Phase 1 (regression) — no infinite feed, no popularity metrics'
   })
 })
 
-describe('Home Phase 1C — ON THE BOARD never duplicates an already-rendered Dispatch', () => {
-  it('builds stripItems from partitionHomeSections\' own "remainder" — the genuinely unused candidates — and nothing else', () => {
-    expect(source).toContain('const stripItems = remainder.slice(0, STRIP_ITEM_COUNT).map((item) => ({')
-  })
-
-  it('never falls back to the full boardItems pool when remainder is empty — no reused/duplicate title in the strip', () => {
-    // Home Phase 1B briefly had `remainder.length > 0 ? remainder :
-    // boardItems` here; Phase 1C removes that fallback entirely, so a
-    // sparse dataset omits the strip instead of repeating a Dispatch
-    // already shown in Featured/Shelf/etc.
-    expect(source).not.toContain('remainder.length > 0 ? remainder : boardItems')
-    expect(source).not.toMatch(/stripSource/)
-  })
-
-  it('the strip section itself is still gated on stripItems.length > 0 — a genuinely empty remainder omits it, not an empty heading', () => {
-    expect(source).toContain('{stripItems.length > 0 && (')
+describe('Home premium composition — visual competition removed', () => {
+  it('does not fetch or thread first-Moment thumbnails into Home cards', () => {
+    expect(source).not.toContain('getFirstMomentThumbnails')
+    expect(source).not.toContain('thumbnailUrl=')
   })
 })

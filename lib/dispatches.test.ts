@@ -2631,10 +2631,9 @@ describe('Home Phase 1 — partitionHomeSections', () => {
       const isFamiliar = isKept || i % 3 === 1
       return feedItem({ id: `d-${i}`, isKept, isFamiliar })
     })
-    const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
+    const { featured, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
     const allIds = [
       ...featured.map((i) => i.id),
-      ...shelf.map((i) => i.id),
       ...fromMindsYouKeep.map((i) => i.id),
       ...serendipity.map((i) => i.id),
       ...remainder.map((i) => i.id),
@@ -2644,11 +2643,10 @@ describe('Home Phase 1 — partitionHomeSections', () => {
     expect(allIds.length).toBe(items.length)
   })
 
-  it('Featured takes the first 3 rows in existing order; the Shelf takes the next 5 unused rows', () => {
+  it('Featured takes the first 3 rows in existing order without manufacturing a generic Shelf', () => {
     const items = Array.from({ length: 10 }, (_, i) => feedItem({ id: `d-${i}` }))
-    const { featured, shelf } = partitionHomeSections(items)
+    const { featured } = partitionHomeSections(items)
     expect(featured.map((i) => i.id)).toEqual(['d-0', 'd-1', 'd-2'])
-    expect(shelf.map((i) => i.id)).toEqual(['d-3', 'd-4', 'd-5', 'd-6', 'd-7'])
   })
 
   it('From Minds You Keep omits cleanly (empty array) when no unused isKept rows remain', () => {
@@ -2659,7 +2657,7 @@ describe('Home Phase 1 — partitionHomeSections', () => {
 
   it('From Minds You Keep takes up to 3 additional unused isKept rows', () => {
     const items = [
-      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => feedItem({ id: `featured-${i}` })),
       feedItem({ id: 'kept-1', isKept: true, isFamiliar: true }),
       feedItem({ id: 'kept-2', isKept: true, isFamiliar: true }),
       feedItem({ id: 'kept-3', isKept: true, isFamiliar: true }),
@@ -2669,19 +2667,19 @@ describe('Home Phase 1 — partitionHomeSections', () => {
     expect(fromMindsYouKeep.map((i) => i.id)).toEqual(['kept-1', 'kept-2', 'kept-3'])
   })
 
-  it('a correspondent-only author (isFamiliar true, isKept false) can appear in Featured/Shelf but NEVER in From Minds You Keep', () => {
+  it('a correspondent-only author (isFamiliar true, isKept false) can appear in Featured but NEVER in From Minds You Keep', () => {
     const items = [
       feedItem({ id: 'correspondent-1', isKept: false, isFamiliar: true }),
       ...Array.from({ length: 9 }, (_, i) => feedItem({ id: `shelf-${i}` })),
     ]
-    const { featured, shelf, fromMindsYouKeep } = partitionHomeSections(items)
-    expect([...featured, ...shelf].some((i) => i.id === 'correspondent-1')).toBe(true)
+    const { featured, fromMindsYouKeep } = partitionHomeSections(items)
+    expect(featured.some((i) => i.id === 'correspondent-1')).toBe(true)
     expect(fromMindsYouKeep.some((i) => i.id === 'correspondent-1')).toBe(false)
   })
 
   it('Serendipity excludes Keep authors', () => {
     const items = [
-      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => feedItem({ id: `featured-${i}` })),
       feedItem({ id: 'kept-1', isKept: true, isFamiliar: true }),
       feedItem({ id: 'serendipity-1', isKept: false, isFamiliar: false }),
     ]
@@ -2692,7 +2690,7 @@ describe('Home Phase 1 — partitionHomeSections', () => {
 
   it('Serendipity excludes correspondent/familiar (non-Keep) authors too — isFamiliar === false is the entire rule', () => {
     const items = [
-      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => feedItem({ id: `featured-${i}` })),
       feedItem({ id: 'correspondent-1', isKept: false, isFamiliar: true }),
       feedItem({ id: 'serendipity-1', isKept: false, isFamiliar: false }),
     ]
@@ -2703,7 +2701,7 @@ describe('Home Phase 1 — partitionHomeSections', () => {
 
   it('Serendipity is never backfilled with a familiar author merely to reach its target count', () => {
     const items = [
-      ...Array.from({ length: 8 }, (_, i) => feedItem({ id: `shelf-${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => feedItem({ id: `featured-${i}` })),
       feedItem({ id: 'only-discovery', isKept: false, isFamiliar: false }),
       feedItem({ id: 'familiar-1', isKept: true, isFamiliar: true }),
       feedItem({ id: 'familiar-2', isKept: false, isFamiliar: true }),
@@ -2714,17 +2712,17 @@ describe('Home Phase 1 — partitionHomeSections', () => {
 
   it('degrades gracefully — never duplicates a card when the pool is smaller than every section combined', () => {
     const items = Array.from({ length: 4 }, (_, i) => feedItem({ id: `d-${i}` }))
-    const { featured, shelf, fromMindsYouKeep, serendipity } = partitionHomeSections(items)
-    const allIds = [...featured, ...shelf, ...fromMindsYouKeep, ...serendipity].map((i) => i.id)
+    const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(items)
+    const allIds = [...featured, ...fromMindsYouKeep, ...serendipity].map((i) => i.id)
     expect(new Set(allIds).size).toBe(allIds.length)
     expect(allIds.length).toBeLessThanOrEqual(items.length)
   })
 
   it('remainder holds whatever is left over after every section has claimed its rows', () => {
     const items = Array.from({ length: 20 }, (_, i) => feedItem({ id: `d-${i}` }))
-    const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
+    const { featured, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
     expect(remainder.length).toBe(
-      items.length - featured.length - shelf.length - fromMindsYouKeep.length - serendipity.length
+      items.length - featured.length - fromMindsYouKeep.length - serendipity.length
     )
     expect(remainder.some((i) => featured.some((f) => f.id === i.id))).toBe(false)
   })

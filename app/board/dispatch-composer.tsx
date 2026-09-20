@@ -581,6 +581,7 @@ export default function DispatchComposer({
         // (another reply arrives, or the window closes) — the RPC
         // itself, not this composer, is what actually catches that.
         const editLockMessage = 'This Dispatch can no longer be edited.'
+        const momentPlacementMessage = 'Moment position is out of range for this Dispatch.'
         // Account enforcement messaging (pre-beta UX polish batch 1) —
         // restricted/suspended/banned all fully block publish_dispatch,
         // so the caller's own already-known status (never decoded from
@@ -589,7 +590,9 @@ export default function DispatchComposer({
         setError(
           submitError?.message === editLockMessage
             ? editLockMessage
-            : `${accountBlockedMessage(myStatus) ?? genericErrorMessage}${devDetail}`
+            : submitError?.message === momentPlacementMessage
+              ? `One of your Moments could not be placed. Your draft is safe. Return to editing and try placing that Moment again.${devDetail}`
+              : `${accountBlockedMessage(myStatus) ?? genericErrorMessage}${devDetail}`
         )
         return
       }

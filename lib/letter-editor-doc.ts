@@ -347,9 +347,11 @@ export function stripPostcardMoments(doc: LetterDocJSON): LetterDocJSON {
 
 export function docToMomentDrafts(doc: LetterDocJSON): MomentDraft[] {
   const paragraphs = doc.content ?? []
+  const positions = paragraphCollapsedPositions(paragraphs)
   const drafts: MomentDraft[] = []
 
-  paragraphs.forEach((paragraph, position) => {
+  paragraphs.forEach((paragraph, rawIndex) => {
+    const position = positions[rawIndex]
     for (const node of paragraph.content ?? []) {
       if (node.type === 'photoMoment') {
         drafts.push({ position, type: 'photo', imagePath: node.attrs.imagePath })
@@ -391,21 +393,21 @@ export function docToMomentDrafts(doc: LetterDocJSON): MomentDraft[] {
  * on the wrong paragraph, or not at all" that has nothing to do with
  * photo signing.
  *
- * This is intentionally scoped to Preview's own adapter only —
- * docToMomentDrafts, docToPlainBody, and splitParagraphs (and its SQL
- * mirror) are all left exactly as they are; fixing the collapse there
- * would require a matching SQL change, which this checkpoint forbids,
- * and risks the real send/read path. Making Preview predict the
- * collapse instead is safe, additive, and never touches storage.
+ * This mapping is shared by Preview AND the durable RPC payload. The
+ * old split implementation made Preview look valid while publish/send
+ * still submitted raw editor indexes; a Moment-only or blank paragraph
+ * could therefore collapse out of p_body and leave a later Moment out
+ * of range. Keeping one canonical mapping is the safety boundary: what
+ * the member previews is exactly what the RPC validates and stores.
  *
  * Every raw index is guaranteed a valid, in-range result: a paragraph
  * that survives collapse maps to its own position among the survivors;
- * one that doesn't (empty, interior or edge) maps to the nearest
- * following survivor, or the nearest preceding one if it's the last
- * paragraph(s), or 0 if the whole document is empty. A Moment can never
- * be silently dropped for landing "out of range" — Part F's explicit
- * requirement — even in the edge case where a Moment's own paragraph
- * has since had all its text deleted.
+ * a collapsed paragraph maps to the nearest preceding survivor (or the
+ * first survivor when it comes before all text). That preceding rule is
+ * deliberate for a Moment-only paragraph between two passages: readers
+ * render a Moment after its stored paragraph, so it remains in the gap
+ * where the writer placed it instead of jumping below the next passage.
+ * A Moment can never be silently dropped for landing "out of range".
  */
 function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] {
   const survivingRawIndices: number[] = []
@@ -419,10 +421,10 @@ function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] 
     const ownSlot = survivingRawIndices.indexOf(rawIndex)
     if (ownSlot !== -1) return ownSlot
 
-    const nextSlot = survivingRawIndices.findIndex((survivorIndex) => survivorIndex > rawIndex)
-    if (nextSlot !== -1) return nextSlot
+    const precedingSlots = survivingRawIndices.filter((survivorIndex) => survivorIndex < rawIndex).length
+    if (precedingSlots > 0) return precedingSlots - 1
 
-    return survivingRawIndices.length - 1
+    return 0
   })
 }
 
@@ -441,10 +443,9 @@ export type DraftMomentDescriptor =
 /**
  * Pure, synchronous: the live editor document's own Moments, positioned
  * exactly where LetterBody will actually look for them. Deliberately
- * NOT the same as docToMomentDrafts (that one feeds the RPC — durable
- * fields only, raw non-collapse-aware position, since it's validated
- * against the SAME raw-vs-collapsed reality server-side... this one
- * feeds an on-screen Preview of a document that hasn't been sent yet).
+ * Uses the SAME canonical positions as docToMomentDrafts (the RPC
+ * payload) so Preview can never approve a layout that publish rejects.
+ * This descriptor adds preview-only identity and URL information.
  * Carries no resolved `imageUrl` at all — see resolveDraftPreviewMoments
  * below, which turns these into real `Moment[]`.
  */

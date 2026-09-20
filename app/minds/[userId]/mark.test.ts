@@ -11,8 +11,8 @@ describe('public profile Mark identity', () => {
   })
 
   it('renders the profile Mark when present and preserves Mindform for grandfathered profiles', () => {
-    expect(source).toContain('<ProfileIdentityMark')
-    expect(source).toContain("label={markUrl ? `${profile.pseudonym}'s Mark` : undefined}")
+    expect(source).toContain('<ProfileMarkViewer')
+    expect(source).toContain('pseudonym={profile.pseudonym}')
     expect(source).toContain('identifier={profile.id}')
   })
 })

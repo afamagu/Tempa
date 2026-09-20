@@ -7,7 +7,7 @@ const read = (relative: string) => readFileSync(path.join(ROOT, relative), 'utf8
 
 const surfaces = [
   'app/minds/discovery-results.tsx',
-  'app/minds/[userId]/page.tsx',
+  'app/minds/[userId]/profile-mark-viewer.tsx',
   'app/letters/people-grid.tsx',
   'app/letters/search-results-panel.tsx',
   'app/letters/with/[userId]/page.tsx',
@@ -24,6 +24,10 @@ const surfaces = [
 describe('canonical member identity surfaces', () => {
   it.each(surfaces)('%s uses the shared Mark/Mindform renderer', (file) => {
     expect(read(file)).toContain('ProfileIdentityMark')
+  })
+
+  it('the public profile delegates its identity art to the interactive canonical Mark viewer', () => {
+    expect(read('app/minds/[userId]/page.tsx')).toContain('ProfileMarkViewer')
   })
 
   it('keeps saved Marks in their native composition everywhere through the canonical renderer', () => {

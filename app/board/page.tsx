@@ -7,12 +7,11 @@ import {
   searchDispatches,
   getKeptUserIds,
   getBoardFeedPage,
-  getFirstMomentThumbnails,
   generateBoardSeed,
   BOARD_FEED_PAGE_SIZE,
   type DispatchListItem,
 } from '@/lib/dispatches'
-import { sectionTitleClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
+import { pageTitleClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import DispatchCard from './dispatch-card'
@@ -85,18 +84,13 @@ export default async function BoardPage({
   // getFirstMomentThumbnails) — one call per page, whether this is the
   // first page or a later "Load more" page (see board-feed.tsx), never
   // per-card.
-  const thumbnailByDispatchId = await getFirstMomentThumbnails(
-    supabase,
-    dispatches.map((d) => d.id)
-  )
-
   return (
     <AppShell active="board" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <h1 className={sectionTitleClass}>The Board</h1>
+              <h1 className={pageTitleClass}>The Board</h1>
               <p className={helperTextClass}>Writing shared with everyone on Tempa.</p>
             </div>
             <WriteDispatchButton />
@@ -146,7 +140,6 @@ export default async function BoardPage({
                 <DispatchCard
                   key={dispatch.id}
                   dispatch={dispatch}
-                  thumbnailUrl={thumbnailByDispatchId.get(dispatch.id)}
                   keepSlot={
                     dispatch.authorId !== user.id ? (
                       <KeepButton
@@ -166,7 +159,6 @@ export default async function BoardPage({
               sessionStartedAt={s!}
               seed={seed!}
               initialDispatches={boardFeedResult!.items}
-              initialThumbnails={Object.fromEntries(thumbnailByDispatchId)}
               initialCursor={boardFeedResult!.nextCursor}
               initialKeptUserIds={[...keptUserIds]}
               pageSize={BOARD_FEED_PAGE_SIZE}

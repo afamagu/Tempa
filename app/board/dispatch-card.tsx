@@ -37,15 +37,10 @@ import TopicChips from './topic-chips'
 export default function DispatchCard({
   dispatch,
   keepSlot,
-  thumbnailUrl,
   trailQuery,
 }: {
   dispatch: DispatchListItem
   keepSlot?: React.ReactNode
-  /** This Dispatch's first Moment, if any — same batched
-   * getFirstMomentThumbnails lookup Home's BoardShelfCard already uses,
-   * threaded through by the caller (app/board/page.tsx). */
-  thumbnailUrl?: string
   /** Home Phase 1 (Reading Trail) — the reading-trail query string
    * (readingTrailSearchParams(...).toString(), lib/dispatches.ts) for
    * THIS card's own position in an already-ranked board_feed_page
@@ -72,8 +67,8 @@ export default function DispatchCard({
       </div>
 
       <Link href={href} className="mt-2 block transition-colors hover:opacity-80">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
+        <div>
+          <div className="min-w-0">
             <p className="text-[16px] font-medium text-foreground">{dispatch.title}</p>
             <div className="mt-2 rounded-md bg-surface-shell p-3 sm:p-4">
               <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/80">
@@ -81,7 +76,6 @@ export default function DispatchCard({
               </p>
             </div>
           </div>
-          {thumbnailUrl && <img src={thumbnailUrl} alt="" className="h-14 w-14 shrink-0 rounded object-cover" />}
         </div>
         {dispatch.topics.length > 0 && (
           <div className="mt-2">

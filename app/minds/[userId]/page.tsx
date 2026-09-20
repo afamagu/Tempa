@@ -20,7 +20,7 @@ import {
   quietLinkClass,
 } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import ProfileIdentityMark from '@/app/profile-identity-mark'
+import ProfileMarkViewer from './profile-mark-viewer'
 import BlockButton from '@/app/block-button'
 import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
@@ -128,11 +128,10 @@ export default async function PublicProfilePage({
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}
 
           <div className="flex items-start gap-4">
-            <ProfileIdentityMark
+            <ProfileMarkViewer
               identifier={profile.id}
               markUrl={markUrl}
-              label={markUrl ? `${profile.pseudonym}'s Mark` : undefined}
-              size="lg"
+              pseudonym={profile.pseudonym}
             />
             <div className="min-w-0">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
