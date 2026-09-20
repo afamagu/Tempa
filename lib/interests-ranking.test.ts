@@ -282,8 +282,8 @@ describe('Home partitions remain valid with topical matching active', () => {
       profileInterests: [{ viewer_user_id: VIEWER, interest_key: 'spirituality-faith' }],
     })
     const { items } = await getBoardFeedPage(client(fake), { sessionStartedAt: SESSION_STARTED_AT, seed: SEED_A, cursor: null, limit: 20 })
-    const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
-    const allIds = [...featured, ...shelf, ...fromMindsYouKeep, ...serendipity, ...remainder].map((i) => i.id)
+    const { featured, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(items)
+    const allIds = [...featured, ...fromMindsYouKeep, ...serendipity, ...remainder].map((i) => i.id)
     expect(new Set(allIds).size).toBe(allIds.length)
     expect(allIds.length).toBe(items.length)
   })

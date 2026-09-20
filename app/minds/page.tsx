@@ -5,7 +5,7 @@ import { getEligibleQuestions, getMyAnswers, getFlagshipQuestion, needsParticipa
 import { getWaitingLetterCount, getActiveCorrespondencePartnerIds, getContactedAnswerIds } from '@/lib/letters'
 import { hasCompletedGuide } from '@/lib/guide'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
-import { sectionTitleClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
+import { pageTitleClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from './filter-disclosure'
@@ -169,7 +169,7 @@ export default async function MindsPage({
     <AppShell active="minds" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
         <div className="w-full max-w-2xl space-y-8 py-10">
-          <h1 className={sectionTitleClass}>People</h1>
+          <h1 className={pageTitleClass}>People</h1>
           {!introSeen && (
             <FeatureIntroduction guideKey="people" title="People worth writing to" ctaLabel="Start exploring">
               <p>Tempa isn&rsquo;t about collecting followers. Take your time. Read a little of what someone has shared, and write when somebody genuinely catches your attention.</p>

@@ -7,16 +7,14 @@ import DispatchAuthorLink from '@/app/board/dispatch-author-link'
 
 /**
  * One Home Dispatch preview card — a WIDE horizontal card, used across
- * every section of Home's editorial Board reading surface (Featured,
- * Your Reading Shelf, From Minds You Keep, A Little Serendipity; see
+ * every card-based section of Home's editorial Board reading surface
+ * (Featured and A Little Serendipity; see
  * app/home/page.tsx). Writing stays the hero: title and a clamped
- * excerpt occupy the majority of the card; the optional Moment
- * thumbnail is small and fixed-size so it can never dominate. Plain
+ * excerpt occupy the card without competing imagery. A member's Mark
+ * is the sole visual identity signal on summary surfaces; Moments stay
+ * inside the Dispatch where they retain their narrative placement. Plain
  * `<Link>`, no drag/swipe handlers, no carousel machinery of its own —
- * any horizontal scrolling (the mobile Reading Shelf) is the CALLER's
- * own overflow/scroll-snap wrapper, not something this component knows
- * about (see `size="shelf"` below for the one visual accommodation it
- * makes for that context).
+ * any horizontal scrolling is the CALLER's responsibility.
  *
  * Structural fix (author-identity live-test regression): the entire
  * card used to be ONE Link to `/board/[id]`, which meant the author's
@@ -24,7 +22,7 @@ import DispatchAuthorLink from '@/app/board/dispatch-author-link'
  * nesting a second anchor inside the card's own Link would be invalid
  * HTML. The identity row is now its OWN link (DispatchAuthorLink,
  * shared with app/board/dispatch-card.tsx), a sibling of a second Link
- * wrapping the title/excerpt/thumbnail — exactly the pattern
+ * wrapping the title/excerpt — exactly the pattern
  * DispatchCard already used correctly. The outer container is a plain,
  * non-interactive bordered div; only the two inner Links navigate.
  */
@@ -32,15 +30,14 @@ import DispatchAuthorLink from '@/app/board/dispatch-author-link'
  * Home Phase 1 (Editorial Reading Surface) — restrained size variants
  * of the SAME card, never separate components: 'lead' (Featured's one
  * visually stronger card — larger title, a taller excerpt, a bigger
- * thumbnail), 'default' (Featured's supporting cards, From Minds You
- * Keep, A Little Serendipity), 'shelf' (Your Reading Shelf's more
- * compact, fixed-width card for the mobile horizontal scroll-snap row),
+ * excerpt), 'default' (Featured's supporting cards and A Little
+ * Serendipity), 'shelf' (a compact reusable card),
  * and 'continue' (Home Phase 1C — the Dispatch detail page's Continue
  * Reading shelf: a 2-per-row desktop card with real breathing room, so
  * it reads as a deliberate "what to read next" moment rather than a
  * compressed rail — see its own EXCERPT_WRAPPER_CLASS entry below for
  * why its excerpt drops the bg-surface-shell inset entirely). Only type
- * scale/clamp/thumbnail size (and, for 'continue', the excerpt's own
+ * scale/clamp (and, for 'continue', the excerpt's own
  * surface treatment) change between variants — never a different
  * layout grammar, so the whole editorial surface still reads as one
  * consistent card language.
@@ -75,21 +72,12 @@ const EXCERPT_WRAPPER_CLASS: Record<BoardShelfCardSize, string> = {
   continue: 'mt-1.5',
 }
 
-const THUMBNAIL_SIZE_CLASS: Record<BoardShelfCardSize, string> = {
-  lead: 'h-20 w-20 sm:h-24 sm:w-24',
-  default: 'h-14 w-14',
-  shelf: 'h-12 w-12',
-  continue: 'h-16 w-16 sm:h-24 sm:w-24',
-}
-
 export default function BoardShelfCard({
   dispatch,
-  thumbnailUrl,
   trailQuery,
   size = 'default',
 }: {
   dispatch: DispatchListItem
-  thumbnailUrl?: string
   /** Home Phase 1 (Reading Trail) — see dispatch-card.tsx's matching
    * prop; identical purpose, identical query-string shape. */
   trailQuery?: string
@@ -108,8 +96,8 @@ export default function BoardShelfCard({
         <p className={`shrink-0 ${metadataTextClass}`}>· {formatDatePlain(dispatch.publishedAt)}</p>
       </div>
 
-      <Link href={href} className="mt-2 flex items-start gap-4 transition-colors hover:opacity-80">
-        <div className="min-w-0 flex-1">
+      <Link href={href} className="mt-2 block transition-colors hover:opacity-80">
+        <div className="min-w-0">
           <p className={TITLE_CLASS[size]}>{dispatch.title}</p>
           <div className={EXCERPT_WRAPPER_CLASS[size]}>
             <p
@@ -119,9 +107,6 @@ export default function BoardShelfCard({
             </p>
           </div>
         </div>
-        {thumbnailUrl && (
-          <img src={thumbnailUrl} alt="" className={`shrink-0 rounded object-cover ${THUMBNAIL_SIZE_CLASS[size]}`} />
-        )}
       </Link>
     </div>
   )

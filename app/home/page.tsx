@@ -19,13 +19,12 @@ import {
 import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
 import {
   getHomeBoardCandidates,
-  getFirstMomentThumbnails,
   partitionHomeSections,
   readingTrailSearchParams,
 } from '@/lib/dispatches'
 import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
-import { sectionLabelClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
+import { sectionLabelClass, pageTitleClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MailInTransitIcon from '@/app/mail-in-transit-icon'
 import SystemMessage from '@/app/system-message'
@@ -34,11 +33,9 @@ import QuestionIncompleteNotice from '@/app/minds/question-incomplete-notice'
 import RecommendedMindCard, { type RecommendedMind } from './recommended-mind-card'
 import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
-import BoardTitleStrip from './board-title-strip'
 import AnnouncementTeaser from './announcement-teaser'
+import KeptDispatchShelf from './kept-dispatch-shelf'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
-
-const STRIP_ITEM_COUNT = 6
 
 const RECOMMENDED_COUNT = 6
 
@@ -115,12 +112,7 @@ export default async function HomePage() {
   // Keep/Serendipity — never a second ranking pass, never a Dispatch
   // repeated across sections (see partitionHomeSections's own comment).
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
-  const { featured, shelf, fromMindsYouKeep, serendipity, remainder } = partitionHomeSections(boardItems)
-
-  const boardThumbnails = await getFirstMomentThumbnails(
-    supabase,
-    boardItems.map((d) => d.id)
-  )
+  const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
 
   // Reading Trail — every Home Dispatch link (cards AND the ON THE
   // BOARD strip) carries this SAME session plus its own item's cursor,
@@ -131,19 +123,6 @@ export default async function HomePage() {
   }
 
   const [featuredLead, ...featuredSupporting] = featured
-
-  // Home Phase 1C — ON THE BOARD may only ever show a candidate that
-  // ISN'T already rendered in another Home Dispatch section above it.
-  // No fallback to boardItems: on a small/sparse dataset where
-  // partitionHomeSections has used up every candidate, remainder is
-  // empty and the strip simply omits itself (stripItems.length === 0
-  // below) rather than repeating a Dispatch a reader already saw in
-  // Featured/Shelf/etc.
-  const stripItems = remainder.slice(0, STRIP_ITEM_COUNT).map((item) => ({
-    id: item.id,
-    title: item.title,
-    href: `/board/${item.id}?${trailQueryFor(item)}`,
-  }))
 
   // "Remove from my Letterbox" means a correspondence no longer
   // surfaces in this viewer's ordinary personal mail surfaces at all —
@@ -244,7 +223,7 @@ export default async function HomePage() {
               how wide the editorial Board surface below gets to be. */}
           <div className="mx-auto w-full max-w-md">
             <div className="space-y-6">
-              <p className={sectionLabelClass}>Arrivals</p>
+              <h1 className={pageTitleClass}>Arrivals</h1>
 
               {awaitingReply.length > 0 ? (
                 <div className="space-y-2">
@@ -356,7 +335,6 @@ export default async function HomePage() {
                   <div className="sm:col-span-2">
                     <BoardShelfCard
                       dispatch={featuredLead}
-                      thumbnailUrl={boardThumbnails.get(featuredLead.id)}
                       trailQuery={trailQueryFor(featuredLead)}
                       size="lead"
                     />
@@ -366,63 +344,19 @@ export default async function HomePage() {
                   <BoardShelfCard
                     key={dispatch.id}
                     dispatch={dispatch}
-                    thumbnailUrl={boardThumbnails.get(dispatch.id)}
                     trailQuery={trailQueryFor(dispatch)}
                   />
                 ))}
               </div>
 
-              {/* ON THE BOARD — a restrained ambient strip, NOT primary
-                  navigation; see board-title-strip.tsx for the full
-                  cross-fade/pause/reduced-motion/accessibility contract. */}
-              {stripItems.length > 0 && (
-                <div className="mt-8">
-                  <p className={sectionLabelClass}>On the Board</p>
-                  <div className="mt-2">
-                    <BoardTitleStrip items={stripItems} />
-                  </div>
-                </div>
-              )}
-
-              {/* Your Reading Shelf — mobile: native horizontal overflow
-                  + CSS scroll-snap, no carousel library, no dots/arrows,
-                  scrollbar hidden via the existing .no-scrollbar
-                  convention, each card sized so the next one peeks in.
-                  Desktop: a calm 2-column editorial grid instead of the
-                  mobile carousel shape. */}
-              {shelf.length > 0 && (
-                <div className="mt-14">
-                  <p className={sectionLabelClass}>Your Reading Shelf</p>
-                  <div className="no-scrollbar mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:pb-0">
-                    {shelf.map((dispatch) => (
-                      <div key={dispatch.id} className="w-[85%] shrink-0 snap-start sm:w-auto sm:shrink">
-                        <BoardShelfCard
-                          dispatch={dispatch}
-                          thumbnailUrl={boardThumbnails.get(dispatch.id)}
-                          trailQuery={trailQueryFor(dispatch)}
-                          size="shelf"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* From Minds You Keep — omitted entirely (never an empty
-                  heading) when the candidate pool has no unused Kept-
-                  author rows left. */}
+              {/* A genuine shelf: compact identity/title rows from minds
+                  the member deliberately kept, not another arbitrary
+                  slice of Board cards under a personalized label. */}
               {fromMindsYouKeep.length > 0 && (
                 <div className="mt-14">
                   <p className={sectionLabelClass}>From Minds You Keep</p>
-                  <div className="mt-3 grid gap-4 sm:grid-cols-3">
-                    {fromMindsYouKeep.map((dispatch) => (
-                      <BoardShelfCard
-                        key={dispatch.id}
-                        dispatch={dispatch}
-                        thumbnailUrl={boardThumbnails.get(dispatch.id)}
-                        trailQuery={trailQueryFor(dispatch)}
-                      />
-                    ))}
+                  <div className="mt-3">
+                    <KeptDispatchShelf dispatches={fromMindsYouKeep} trailQueryFor={trailQueryFor} />
                   </div>
                 </div>
               )}
@@ -464,7 +398,6 @@ export default async function HomePage() {
                       <BoardShelfCard
                         key={dispatch.id}
                         dispatch={dispatch}
-                        thumbnailUrl={boardThumbnails.get(dispatch.id)}
                         trailQuery={trailQueryFor(dispatch)}
                       />
                     ))}

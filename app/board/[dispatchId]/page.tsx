@@ -19,7 +19,6 @@ import {
   parseReadingTrailParams,
   getNextTrailItems,
   readingTrailSearchParams,
-  getFirstMomentThumbnails,
   getDispatchPostcard,
   dispatchPostcardToBaseContent,
   isWithinDispatchEditWindow,
@@ -36,7 +35,6 @@ import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
-import CountryFlag from '@/app/country-flag'
 import ReportButton from '@/app/report-button'
 import MomentHint from '../moment-hint'
 import TopicChips from '../topic-chips'
@@ -219,14 +217,6 @@ export default async function DispatchPage({
     hasCompletedGuide(supabase, user.id, 'dispatch_reading'),
   ])
 
-  // Same batched first-Moment lookup every other Dispatch listing
-  // surface already uses — safe to call with an empty array (Home
-  // Phase 1's own getFirstMomentThumbnails already short-circuits then).
-  const nextTrailThumbnails = await getFirstMomentThumbnails(
-    supabase,
-    nextTrailItems.map((item) => item.id)
-  )
-
   // Each card's OWN trailQuery carries the SAME session plus ITS OWN
   // cursor (BoardShelfCard builds the actual href from dispatch.id +
   // this query string), so a reader who picks the 2nd/3rd/4th
@@ -312,7 +302,7 @@ export default async function DispatchPage({
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="truncate text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
-                    <CountryFlag country={dispatch.authorCountry} />
+                    {dispatch.authorCountry && <span className="truncate text-[13px] text-muted">· {dispatch.authorCountry}</span>}
                   </div>
                   <p className={metadataTextClass}>{formatDateTimeFull(dispatch.publishedAt)}</p>
                 </div>
@@ -463,9 +453,8 @@ export default async function DispatchPage({
                 restrained editorial navigation rather than a single
                 title-only link: up to CONTINUE_READING_COUNT subsequent
                 rows from the SAME deterministic session/ordering, using
-                the SAME BoardShelfCard language/thumbnail machinery
-                Home already uses (identity, country, title, excerpt,
-                first-Moment thumbnail — no counts, no Worth Reading
+                the SAME BoardShelfCard language Home already uses
+                (identity, country, title, excerpt — no counts, no Worth Reading
                 metric, no popularity label). Renders ONLY when this
                 exact page load carried valid trail params AND
                 board_feed_page actually has at least one next row for
@@ -490,7 +479,6 @@ export default async function DispatchPage({
                     <div key={item.id} className="w-[85%] shrink-0 snap-start sm:w-auto sm:shrink">
                       <BoardShelfCard
                         dispatch={item}
-                        thumbnailUrl={nextTrailThumbnails.get(item.id)}
                         trailQuery={trailQuery}
                         size="continue"
                       />

@@ -17,11 +17,13 @@ describe('DispatchAuthorLink — the shared identity link every Dispatch card re
     expect(html).toContain('Evening Quill')
   })
 
-  it('renders a country flag inside the link when a country is recorded', () => {
+  it('renders the country name instead of a flag asset when a country is recorded', () => {
     const html = renderToStaticMarkup(
       <DispatchAuthorLink authorId="author-1" authorPseudonym="Evening Quill" authorCountry="France" />
     )
-    expect(html).toContain('src="/flags/FR.svg"')
+    expect(html).toContain('France')
+    expect(html).toContain('aria-label="Country: France"')
+    expect(html).not.toContain('/flags/')
   })
 
   it('renders a saved Mark without an avatar crop and otherwise keeps the Mindform fallback', () => {

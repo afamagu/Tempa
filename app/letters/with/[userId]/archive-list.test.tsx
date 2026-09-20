@@ -30,8 +30,8 @@ function letter(overrides: Partial<ArchiveLetter> = {}): ArchiveLetter {
 // excerpt sits on the same bg-surface-shell authored-paper surface used
 // everywhere else a member's writing is previewed — one of the genuine
 // gaps this sweep found and closed.
-describe('ArchiveList — excerpt sits on the shared authored-paper surface', () => {
-  it('wraps the excerpt in bg-surface-shell', () => {
+describe('ArchiveList — chronological row archive', () => {
+  it('renders each letter as a compact row with a selectable control', () => {
     const html = renderToStaticMarkup(
       <ArchiveList
         letters={[letter()]}
@@ -41,7 +41,10 @@ describe('ArchiveList — excerpt sits on the shared authored-paper surface', ()
         viewerPseudonym="You"
       />
     )
-    expect(html).toMatch(/class="[^"]*bg-surface-shell[^"]*"[^>]*>[\s\S]*A short letter excerpt/)
+    expect(html).toContain('Select all letters')
+    expect(html).toContain('Select letter from Evening Quill')
+    expect(html).toContain('A short letter excerpt')
+    expect(html).not.toContain('aspect-[3/4]')
   })
 
   it('still shows the sender label and date outside the paper surface', () => {

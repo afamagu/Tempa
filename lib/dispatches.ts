@@ -312,7 +312,6 @@ export async function getHomeBoardCandidates(
 
 export type HomeSections = {
   featured: BoardFeedItem[]
-  shelf: BoardFeedItem[]
   fromMindsYouKeep: BoardFeedItem[]
   serendipity: BoardFeedItem[]
   /** Left over after every section above has claimed its rows — not a
@@ -325,7 +324,6 @@ export type HomeSections = {
 }
 
 const HOME_FEATURED_COUNT = 3
-const HOME_SHELF_COUNT = 5
 const HOME_KEEP_SECTION_MAX = 3
 const HOME_SERENDIPITY_MAX = 3
 
@@ -343,8 +341,8 @@ const HOME_SERENDIPITY_MAX = 3
  * is expected to often be empty and must vanish cleanly, not render a
  * heading over nothing).
  *
- * Section order matches the product contract exactly: Featured claims
- * first, then the Shelf, then From Minds You Keep (isKept only — a
+ * Section order matches the simplified premium Home contract:
+ * Featured claims first, then From Minds You Keep (isKept only — a
  * correspondent-only author never qualifies), then Serendipity
  * (isFamiliar === false only — never backfilled with a familiar author
  * just to reach the target count; a proxy for broader discovery only,
@@ -356,14 +354,6 @@ export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
 
   const featured = items.slice(0, HOME_FEATURED_COUNT)
   for (const item of featured) used.add(item.id)
-
-  const shelf: BoardFeedItem[] = []
-  for (const item of items) {
-    if (shelf.length >= HOME_SHELF_COUNT) break
-    if (used.has(item.id)) continue
-    shelf.push(item)
-    used.add(item.id)
-  }
 
   // Keep-only, per the approved architecture — an author who is merely
   // an established correspondent (isFamiliar true, isKept false) never
@@ -392,7 +382,7 @@ export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
 
   const remainder = items.filter((item) => !used.has(item.id))
 
-  return { featured, shelf, fromMindsYouKeep, serendipity, remainder }
+  return { featured, fromMindsYouKeep, serendipity, remainder }
 }
 
 // ============================================================

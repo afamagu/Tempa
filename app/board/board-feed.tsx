@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getBoardFeedPage,
-  getFirstMomentThumbnails,
   readingTrailSearchParams,
   type BoardFeedCursor,
   type BoardFeedItem,
@@ -19,7 +18,7 @@ const RETURN_TO_TOP_SCROLL_THRESHOLD = 800
  * Board Feed Foundation checkpoint (Phase 2A) — The Board's incremental
  * "Load more" list, one client island around otherwise-ordinary server-
  * rendered cards. Receives the FIRST page already rendered server-side
- * (initialDispatches/initialThumbnails/initialCursor) and only ever
+ * (initialDispatches/initialCursor) and only ever
  * APPENDS further pages on an explicit "More from the Board" click —
  * never autoplay/auto-loading infinite scroll, matching The Board's
  * deliberate, writing-first character rather than a social-feed one.
@@ -39,7 +38,7 @@ const RETURN_TO_TOP_SCROLL_THRESHOLD = 800
  * narrow interaction, not a silent gap.
  *
  * Board Load More resilience checkpoint — before this pass, a failed
- * "Load more" request (getBoardFeedPage or getFirstMomentThumbnails
+ * "Load more" request (getBoardFeedPage
  * throwing) simply reset the button back to idle with no explanation at
  * all; a cohort tester had no way to tell the Board hadn't just silently
  * finished. `loadMoreFailed` is the one new piece of state: set only
@@ -51,9 +50,9 @@ const RETURN_TO_TOP_SCROLL_THRESHOLD = 800
  * simply relabels to "Try again" — since cursor is only ever advanced on
  * success, a retry click necessarily requests the exact same next page
  * that just failed, never a different one. This intentionally does NOT
- * change what counts as a failure: neither getBoardFeedPage nor
- * getFirstMomentThumbnails currently inspects the Supabase `error` field
- * on their own calls (a pre-existing, codebase-wide lib/dispatches.ts
+ * change what counts as a failure: getBoardFeedPage does not currently
+ * inspect the Supabase `error` field on its own call (a pre-existing,
+ * codebase-wide lib/dispatches.ts
  * convention, unrelated to and out of scope for this checkpoint) — only
  * a genuine thrown exception (e.g. the underlying fetch failing outright)
  * reaches this catch today.
@@ -63,7 +62,6 @@ export default function BoardFeed({
   sessionStartedAt,
   seed,
   initialDispatches,
-  initialThumbnails,
   initialCursor,
   initialKeptUserIds,
   pageSize,
@@ -72,13 +70,11 @@ export default function BoardFeed({
   sessionStartedAt: string
   seed: string
   initialDispatches: BoardFeedItem[]
-  initialThumbnails: Record<string, string>
   initialCursor: BoardFeedCursor | null
   initialKeptUserIds: string[]
   pageSize: number
 }) {
   const [dispatches, setDispatches] = useState(initialDispatches)
-  const [thumbnails, setThumbnails] = useState(new Map(Object.entries(initialThumbnails)))
   const [cursor, setCursor] = useState(initialCursor)
   const [loading, setLoading] = useState(false)
   const [loadMoreFailed, setLoadMoreFailed] = useState(false)
@@ -112,12 +108,7 @@ export default function BoardFeed({
         cursor,
         limit: pageSize,
       })
-      const newThumbnails = await getFirstMomentThumbnails(
-        supabase,
-        items.map((d) => d.id)
-      )
       setDispatches((prev) => [...prev, ...items])
-      setThumbnails((prev) => new Map([...prev, ...newThumbnails]))
       setCursor(nextCursor)
     } catch {
       // Board Load More resilience checkpoint — a failed page fetch must
@@ -140,7 +131,6 @@ export default function BoardFeed({
         <DispatchCard
           key={dispatch.id}
           dispatch={dispatch}
-          thumbnailUrl={thumbnails.get(dispatch.id)}
           trailQuery={readingTrailSearchParams({ sessionStartedAt, seed }, dispatch).toString()}
           keepSlot={
             dispatch.authorId !== viewerId ? (

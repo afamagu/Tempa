@@ -134,6 +134,14 @@ export const systemMarkerClass =
 export const systemHeadingClass =
   'text-[22px] sm:text-2xl font-semibold leading-snug tracking-tight text-foreground'
 
+// Primary member-surface title. Home, Letterbox, People, The Board and
+// You all use this exact token — navigation should never feel as though
+// each destination came from a different product. Kept in the system
+// (Geist) voice rather than the serif writing voice: these are places in
+// Tempa, not authored prose.
+export const pageTitleClass =
+  'text-[24px] sm:text-[28px] font-semibold leading-tight tracking-tight text-foreground'
+
 // System body copy beneath a system heading — explanation/instruction
 // text, tighter line-height and smaller than correspondence prose.
 export const systemBodyClass = 'text-[15px] leading-relaxed text-foreground/85'

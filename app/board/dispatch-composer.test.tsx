@@ -116,6 +116,14 @@ describe('DispatchComposer — initial render (editor not yet mounted)', () => {
   })
 })
 
+describe('DispatchComposer — publish failure guidance', () => {
+  it('turns the server placement guard into an actionable, draft-safe message', () => {
+    expect(dispatchComposerSource).toContain("const momentPlacementMessage = 'Moment position is out of range for this Dispatch.'")
+    expect(dispatchComposerSource).toContain('One of your Moments could not be placed. Your draft is safe.')
+    expect(dispatchComposerSource).toContain('Return to editing and try placing that Moment again.')
+  })
+})
+
 // Board usability checkpoint (2026-09-09): the SAME composer also
 // serves editing (mode="edit" + existingDispatch), reusing this
 // architecture rather than a parallel edit form. Title/topics are

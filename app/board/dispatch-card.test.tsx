@@ -62,24 +62,20 @@ describe('DispatchCard', () => {
     expect(html).not.toContain('divide-y')
   })
 
-  it('renders a country flag beside the pseudonym when the author has a country recorded', () => {
+  it('renders a country name beside the pseudonym when the author has a country recorded', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={item({ authorCountry: 'France' })} />)
-    expect(html).toContain('src="/flags/FR.svg"')
+    expect(html).toContain('France')
+    expect(html).not.toContain('/flags/')
   })
 
-  it('renders no flag, with no broken spacing, when the author has no country recorded', () => {
+  it('renders no country label, with no broken spacing, when none is recorded', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={item({ authorCountry: null })} />)
     expect(html).not.toMatch(/aria-label="Country:/)
   })
 
-  // Board live-test corrections (2026-09-10): Board's own card was
-  // missing the Moment thumbnail Home's shelf already had.
-  it('renders an optional Moment thumbnail only when supplied, as a small fixed-size image', () => {
-    const withThumb = renderToStaticMarkup(<DispatchCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" />)
-    const without = renderToStaticMarkup(<DispatchCard dispatch={item()} />)
-    expect(withThumb).toContain('<img')
-    expect(without).not.toContain('<img')
-    expect(withThumb).toMatch(/<img[^>]*class="[^"]*h-14 w-14[^"]*"/)
+  it('keeps Moment imagery inside the Dispatch instead of competing with the author Mark', () => {
+    const html = renderToStaticMarkup(<DispatchCard dispatch={item()} />)
+    expect(html).not.toContain('object-cover')
   })
 
   // Board live-test corrections (2026-09-10): Keep must sit only in the
@@ -92,7 +88,7 @@ describe('DispatchCard', () => {
   // opened-Dispatch education treatment (see app/board/moment-hint.tsx)
   // — it must never appear on a listing card.
   it('never renders the Moment discovery hint on a listing card', () => {
-    const html = renderToStaticMarkup(<DispatchCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" />)
+    const html = renderToStaticMarkup(<DispatchCard dispatch={item()} />)
     expect(html).not.toContain('Little glimpses from the writer')
   })
 

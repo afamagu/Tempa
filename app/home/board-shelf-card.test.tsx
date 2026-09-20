@@ -31,23 +31,16 @@ describe('BoardShelfCard', () => {
     expect(html).toContain('A short Dispatch preview line')
   })
 
-  it('renders an optional Moment thumbnail only when supplied, as a small fixed-size image', () => {
-    const withThumb = renderToStaticMarkup(
-      <BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" />
-    )
-    const without = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
-    expect(withThumb).toContain('<img')
-    expect(without).not.toContain('<img')
-    // Board usability checkpoint: the image must never dominate the
-    // card — a small, fixed h-14 w-14 tile, not a large/hero image.
-    expect(withThumb).toMatch(/<img[^>]*class="[^"]*h-14 w-14[^"]*"/)
+  it('keeps Moment imagery inside the Dispatch instead of competing with the author Mark', () => {
+    const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
+    expect(html).not.toContain('object-cover')
   })
 
   // Visual-fidelity pass (2026-09-10): the Moment discovery hint is an
   // opened-Dispatch education treatment (see app/board/moment-hint.tsx)
   // — it must never appear on a listing card.
   it('never renders the Moment discovery hint on a listing card', () => {
-    const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" />)
+    const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
     expect(html).not.toContain('Little glimpses from the writer')
   })
 
@@ -65,12 +58,13 @@ describe('BoardShelfCard', () => {
     expect(html).toMatch(/class="[^"]*bg-surface-shell[^"]*"[^>]*>[\s\S]*A short Dispatch preview line/)
   })
 
-  it('renders a country flag beside the pseudonym when the author has a country recorded', () => {
+  it('renders a country name beside the pseudonym when the author has a country recorded', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item({ authorCountry: 'Japan' })} />)
-    expect(html).toContain('src="/flags/JP.svg"')
+    expect(html).toContain('Japan')
+    expect(html).not.toContain('/flags/')
   })
 
-  it('renders no flag when the author has no country recorded', () => {
+  it('renders no country label when the author has no country recorded', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item({ authorCountry: null })} />)
     expect(html).not.toMatch(/aria-label="Country:/)
   })
@@ -158,15 +152,11 @@ describe('BoardShelfCard', () => {
         expect(html).not.toContain('bg-surface-shell')
       })
 
-      it('renders a visibly larger thumbnail than the "shelf" size', () => {
-        const continueSize = renderToStaticMarkup(
-          <BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" size="continue" />
-        )
-        const shelf = renderToStaticMarkup(
-          <BoardShelfCard dispatch={item()} thumbnailUrl="https://example.com/a.jpg" size="shelf" />
-        )
-        expect(continueSize).toMatch(/<img[^>]*class="[^"]*h-16 w-16[^"]*"/)
-        expect(shelf).toMatch(/<img[^>]*class="[^"]*h-12 w-12[^"]*"/)
+      it('keeps Moment imagery inside the Dispatch at every size', () => {
+        const continueSize = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="continue" />)
+        const shelf = renderToStaticMarkup(<BoardShelfCard dispatch={item()} size="shelf" />)
+        expect(continueSize).not.toContain('object-cover')
+        expect(shelf).not.toContain('object-cover')
       })
     })
   })
