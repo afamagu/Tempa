@@ -14,7 +14,7 @@ describe('Tempa Places import manifest', () => {
     expect(result.images.size).toBe(36)
     expect(result.motions.size).toBe(35)
     expect(POSTCARD_IMPORT_MANIFEST.filter((entry) => entry.motionFilename === null).map((entry) => entry.key)).toEqual(
-      ['lahore-walled-city'],
+      ['lahore_walled_city'],
     )
   })
 
@@ -25,9 +25,9 @@ describe('Tempa Places import manifest', () => {
 
   it('locks the visually reviewed non-obvious motion pairings', () => {
     const byKey = new Map(POSTCARD_IMPORT_MANIFEST.map((entry) => [entry.key, entry]))
-    expect(byKey.get('yogyakarta-old-quarter')?.motionFilename).toBe('Yogyakarta 2.mp4')
-    expect(byKey.get('yogyakarta-borobudur-sunrise')?.motionFilename).toBe('Yogyakarta 1.mp4')
-    expect(byKey.get('lahore-badshahi-gardens')?.motionFilename).toBe('Lahoe 1.mp4')
+    expect(byKey.get('yogyakarta_old_quarter')?.motionFilename).toBe('Yogyakarta 2.mp4')
+    expect(byKey.get('yogyakarta_borobudur_sunrise')?.motionFilename).toBe('Yogyakarta 1.mp4')
+    expect(byKey.get('lahore_badshahi_gardens')?.motionFilename).toBe('Lahoe 1.mp4')
   })
 
   it('records the byte-identical Dhaka duplicate as intentionally ignored', () => {
@@ -39,17 +39,24 @@ describe('Tempa Places import manifest', () => {
       [entry.imageFilename, entry.motionFilename].filter((name): name is string => Boolean(name)),
     )
     files.push(POSTCARD_IMPORT_IGNORED_FILES[0], 'notes.txt')
-    const result = inspectPostcardImportSelection(files, new Set(['bangkok-2']))
+    const result = inspectPostcardImportSelection(files, new Set(['bangkok_2']))
     expect(result.ready).toHaveLength(35)
-    expect(result.skipped.map((entry) => entry.key)).toEqual(['bangkok-2'])
+    expect(result.skipped.map((entry) => entry.key)).toEqual(['bangkok_2'])
     expect(result.missing).toEqual([])
     expect(result.ignored).toEqual(['Dhaka 2 Buriganga, Bangladesh.png'])
     expect(result.unrecognized).toEqual(['notes.txt'])
   })
 
   it('does not require files for designs that are already installed', () => {
-    const result = inspectPostcardImportSelection([], new Set(['amsterdam-canal-ring']))
+    const result = inspectPostcardImportSelection([], new Set(['amsterdam_canal_ring']))
     expect(result.missing).not.toContain('AmsterdamCanal Ring, Netherlands.png')
     expect(result.missing).toContain('Bangkok Thailand image 2.png')
+  })
+
+  it('matches the live Admin RPC key contract exactly', () => {
+    expect(POSTCARD_IMPORT_MANIFEST.every((entry) => /^[a-z][a-z0-9_]*$/.test(entry.key))).toBe(true)
+    expect(validatePostcardImportManifest([{ ...POSTCARD_IMPORT_MANIFEST[0], key: 'invalid-key' }]).errors).toEqual([
+      'Invalid key: invalid-key',
+    ])
   })
 })
