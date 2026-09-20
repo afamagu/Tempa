@@ -74,6 +74,131 @@ begin
 end
 $prerequisite$;
 
+-- Align ordinary first contact with the live one-open-episode invariant. The
+-- previous implementation inferred/recovered only active rows, so a crossed
+-- first contact could conflict with an existing pending episode without then
+-- finding that episode. Preserve every other public first-contact contract.
+create or replace function public.send_first_letter(
+  p_recipient_id uuid,
+  p_question_answer_id uuid,
+  p_body text
+)
+returns public.letters_for_participant
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  v_new_id uuid;
+  v_correspondence_id uuid;
+  v_participant_low uuid;
+  v_participant_high uuid;
+  v_correspondence_status text;
+  v_established_at timestamptz;
+  v_deliver_at timestamptz;
+  v_expires_at timestamptz;
+  result public.letters_for_participant;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  if auth.uid() = p_recipient_id then
+    raise exception 'You cannot write a first-contact letter to yourself.';
+  end if;
+
+  if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+    raise exception 'Recipient does not exist.';
+  end if;
+
+  if tempa_private.is_correspondence_blocked_pair(auth.uid(), p_recipient_id) then
+    raise exception 'Recipient does not exist.';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles where id = p_recipient_id
+  ) then
+    raise exception 'Recipient does not exist.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.question_answers qa
+    join public.questions q on q.id = qa.question_id
+    where qa.id = p_question_answer_id
+      and qa.user_id = p_recipient_id
+      and qa.is_current = true
+      and q.is_active = true
+  ) then
+    raise exception
+      'That Question answer is not currently a live Discovery entry for the intended recipient.';
+  end if;
+
+  v_participant_low := least(auth.uid(), p_recipient_id);
+  v_participant_high := greatest(auth.uid(), p_recipient_id);
+
+  insert into public.correspondences(participant_low, participant_high)
+  values (v_participant_low, v_participant_high)
+  on conflict (participant_low, participant_high)
+    where status = any (array['pending'::text, 'active'::text])
+  do nothing
+  returning id into v_correspondence_id;
+
+  if v_correspondence_id is null then
+    select c.id, c.status, c.established_at
+    into v_correspondence_id, v_correspondence_status, v_established_at
+    from public.correspondences c
+    where c.participant_low = v_participant_low
+      and c.participant_high = v_participant_high
+      and c.status in ('pending', 'active')
+    for update;
+  else
+    select c.status, c.established_at
+    into v_correspondence_status, v_established_at
+    from public.correspondences c
+    where c.id = v_correspondence_id
+    for update;
+  end if;
+
+  if v_correspondence_status = 'active' or v_established_at is not null then
+    raise exception
+      'This correspondence is already established. Use write_letter instead.';
+  end if;
+
+  if exists (
+    select 1 from public.letters l
+    where l.correspondence_id = v_correspondence_id
+      and l.reply_to_id is null
+      and l.sender_id = auth.uid()
+  ) then
+    raise exception
+      'You have already sent a first-contact letter to this recipient.'
+      using errcode = '23505';
+  end if;
+
+  v_new_id := pg_catalog.gen_random_uuid();
+  v_deliver_at := now();
+  v_expires_at := v_deliver_at + interval '72 hours';
+
+  insert into public.letters(
+    id, sender_id, recipient_id, question_answer_id, correspondence_id,
+    body, deliver_at, expires_at
+  ) values (
+    v_new_id, auth.uid(), p_recipient_id, p_question_answer_id,
+    v_correspondence_id, p_body, v_deliver_at, v_expires_at
+  );
+
+  select * into result
+  from public.letters_for_participant
+  where id = v_new_id;
+
+  return result;
+end;
+$function$;
+
+revoke all on function public.send_first_letter(uuid,uuid,text) from public, anon;
+grant execute on function public.send_first_letter(uuid,uuid,text) to authenticated;
+
 -- Owner-only management state. mark_id is already public through the
 -- block-aware public_profiles view; next_change_at remains owner-private.
 create or replace function public.get_profile_mark_management_status()

@@ -48,6 +48,8 @@ select
     = 'boolean' as upload_predicate_shape,
   pg_catalog.pg_get_function_result('public.profile_mark_delete_allowed(text)'::regprocedure)
     = 'boolean' as delete_predicate_shape,
+  pg_catalog.pg_get_function_result('public.send_first_letter(uuid,uuid,text)'::regprocedure)
+    = 'letters_for_participant' as first_contact_shape,
   pg_catalog.pg_get_function_result('public.get_blocked_profiles()'::regprocedure)
     = 'TABLE(id uuid, pseudonym text, country text, scope text, created_at timestamp with time zone, mark_id uuid)'
     as blocked_profiles_shape,
@@ -70,6 +72,7 @@ with expected(signature) as (values
   ('public.finalize_profile_mark(uuid)'),
   ('public.profile_mark_upload_allowed(text)'),
   ('public.profile_mark_delete_allowed(text)'),
+  ('public.send_first_letter(uuid,uuid,text)'),
   ('public.get_blocked_profiles()'),
   ('public.admin_list_members(text,text,text,timestamp with time zone,timestamp with time zone,integer,integer)'),
   ('public.admin_get_member(uuid)'),
@@ -81,7 +84,7 @@ with expected(signature) as (values
   join pg_catalog.pg_roles r on r.oid = p.proowner
 )
 select
-  count(*) = 10 as all_expected_functions_exist,
+  count(*) = 11 as all_expected_functions_exist,
   bool_and(owner_name = 'postgres') as all_owned_by_postgres,
   bool_and(prosecdef) as all_security_definer,
   bool_and(proconfig @> array['search_path=pg_catalog']) as all_restrict_search_path,
@@ -93,6 +96,33 @@ select
     where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
   )) as public_cannot_execute
 from functions;
+
+-- Ordinary first contact must use the same pending/active open-episode model
+-- as the unique index and Admin contact. It still requires a live Discovery
+-- answer, rejects a duplicate root from the same sender, and preserves the
+-- existing block, delivery and expiry contracts.
+with ordinary_def as (
+  select pg_catalog.pg_get_functiondef(
+    'public.send_first_letter(uuid,uuid,text)'::regprocedure
+  ) as def
+)
+select
+  def ilike '%tempa_private.is_correspondence_blocked_pair(auth.uid(), p_recipient_id)%'
+    as ordinary_contact_block_gate,
+  def ilike '%public.question_answers qa%qa.id = p_question_answer_id%qa.user_id = p_recipient_id%qa.is_current = true%q.is_active = true%'
+    as ordinary_contact_requires_live_discovery_answer,
+  def ilike '%on conflict (participant_low, participant_high)%where status = any (array[''pending''::text, ''active''::text])%do nothing%'
+    as ordinary_contact_conflict_safe_open_episode_resolution,
+  def ilike '%c.status in (''pending'', ''active'')%'
+    and def ilike '%v_correspondence_status = ''active'' or v_established_at is not null%'
+    as ordinary_contact_pending_reused_active_rejected,
+  def ilike '%l.reply_to_id is null%l.sender_id = auth.uid()%using errcode = ''23505''%'
+    as ordinary_contact_duplicate_same_sender_rejected,
+  def ilike '%v_deliver_at := now()%v_expires_at := v_deliver_at + interval ''72 hours''%'
+    as ordinary_contact_delivery_window_preserved,
+  def not ilike '%where status = ''active''%do nothing%'
+    as ordinary_contact_has_no_active_only_conflict_path
+from ordinary_def;
 
 -- Mark replacement behavior: first creation is exempt; replacement is
 -- cooled down at reservation and finalization; an already-finalized retry
@@ -237,6 +267,34 @@ join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace and cn.nspname = 'pub
 join pg_catalog.pg_class l on l.relname = 'letters'
 join pg_catalog.pg_namespace ln on ln.oid = l.relnamespace and ln.nspname = 'public'
 where c.relname = 'correspondences';
+
+-- Participant privacy is structural, not merely the absence of an is_staff
+-- substring: require the exact sole SELECT policies and no direct client
+-- writes to either private table.
+select
+  count(*) filter (
+    where p.tablename = 'correspondences'
+      and p.policyname = 'correspondences_select_participant'
+      and p.cmd = 'SELECT'
+      and p.qual = '((auth.uid() = participant_low) OR (auth.uid() = participant_high))'
+  ) = 1
+    and count(*) filter (where p.tablename = 'correspondences') = 1
+    as correspondence_policy_is_participant_only,
+  count(*) filter (
+    where p.tablename = 'letters'
+      and p.policyname = 'letters_select_participant'
+      and p.cmd = 'SELECT'
+      and p.qual = '((auth.uid() = sender_id) OR ((auth.uid() = recipient_id) AND (deliver_at <= now())))'
+  ) = 1
+    and count(*) filter (where p.tablename = 'letters') = 1
+    as letter_policy_is_participant_and_delivery_scoped,
+  not pg_catalog.has_table_privilege('authenticated', 'public.correspondences', 'INSERT,UPDATE,DELETE')
+    as no_direct_correspondence_writes,
+  not pg_catalog.has_table_privilege('authenticated', 'public.letters', 'INSERT,UPDATE,DELETE')
+    as no_direct_letter_writes
+from pg_catalog.pg_policies p
+where p.schemaname = 'public'
+  and p.tablename in ('correspondences', 'letters');
 
 -- Direct table mutation remains unavailable; owner/staff changes stay behind
 -- the reviewed RPC boundaries.

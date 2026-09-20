@@ -55,6 +55,27 @@ describe('Mark management migration contract', () => {
 })
 
 describe('Admin member workspace migration contract', () => {
+  it('repairs ordinary first contact to reuse pending episodes without changing its public eligibility contract', () => {
+    const body = functionBody('send_first_letter(', 'revoke all on function public.send_first_letter')
+    expect(body).toContain('returns public.letters_for_participant')
+    expect(body).toContain('public.current_account_status()')
+    expect(body).toContain('tempa_private.is_correspondence_blocked_pair')
+    expect(body).toContain('public.question_answers qa')
+    expect(body).toContain('qa.id = p_question_answer_id')
+    expect(body).toContain('qa.user_id = p_recipient_id')
+    expect(body).toContain('qa.is_current = true')
+    expect(body).toContain('q.is_active = true')
+    expect(body).toContain('on conflict (participant_low, participant_high)')
+    expect(body).toContain("where status = any (array['pending'::text, 'active'::text])")
+    expect(body).toContain("c.status in ('pending', 'active')")
+    expect(body).toContain("v_correspondence_status = 'active' or v_established_at is not null")
+    expect(body).toContain('l.sender_id = auth.uid()')
+    expect(body).toContain("using errcode = '23505'")
+    expect(body).toContain('v_deliver_at := now()')
+    expect(body).toContain("v_expires_at := v_deliver_at + interval '72 hours'")
+    expect(body).not.toMatch(/where\s+status\s*=\s*'active'\s*\)?\s*do nothing/)
+  })
+
   it('requires staff and normal account/block eligibility before creating participant-owned correspondence', () => {
     const body = functionBody('admin_send_first_letter(p_member_id uuid, p_body text)', 'revoke all on function public.admin_send_first_letter')
     expect(body).toContain('if not public.is_staff()')
@@ -127,6 +148,9 @@ describe('read-only verifier', () => {
       'all_security_definer',
       'all_restrict_search_path',
       'public_cannot_execute',
+      'ordinary_contact_conflict_safe_open_episode_resolution',
+      'ordinary_contact_pending_reused_active_rejected',
+      'ordinary_contact_has_no_active_only_conflict_path',
       'first_mark_exempt_at_reservation',
       'first_mark_exempt_at_finalization',
       'idempotent_retry_precedes_cooldown',
@@ -143,6 +167,10 @@ describe('read-only verifier', () => {
       'first_reply_requires_unexpired_root',
       'first_reply_establishes_correspondence',
       'no_staff_private_row_bypass',
+      'correspondence_policy_is_participant_only',
+      'letter_policy_is_participant_and_delivery_scoped',
+      'no_direct_correspondence_writes',
+      'no_direct_letter_writes',
     ]) expect(verify).toContain(marker)
   })
 
@@ -156,5 +184,12 @@ describe('read-only verifier', () => {
     expect(verify).toContain("'CHECK (status = ANY (ARRAY[''pending''::text, ''active''::text, ''closed''::text]))'")
     expect(verify).not.toMatch(/pg_get_expr\([^\n]+\)\s+(?:i?like|~)/i)
     expect(verify).not.toContain('correspondences_one_active_per_pair')
+  })
+
+  it('cannot accept an active-only ordinary first-contact implementation', () => {
+    expect(verify).toContain("'public.send_first_letter(uuid,uuid,text)'::regprocedure")
+    expect(verify).toContain("where status = any (array[''pending''::text, ''active''::text])")
+    expect(verify).toContain("c.status in (''pending'', ''active'')")
+    expect(verify).toContain("def not ilike '%where status = ''active''%do nothing%'")
   })
 })
