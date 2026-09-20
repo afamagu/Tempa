@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Moment, MomentType, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
+import type {
+  Moment,
+  MomentType,
+  PostcardBaseContent,
+  PostcardRevealLineAlignment,
+} from './moments'
 import { splitParagraphs } from './moments'
 import { stripRichBodyMarker } from './letter-editor-doc'
 import { publicProfileMarkUrl } from './profile-marks'
@@ -303,10 +308,7 @@ export async function getWaitingLetterCount(
  * scheduled expiry job hasn't processed yet, rather than that letter
  * disappearing from both lists until the job runs.
  */
-export async function getMyLetters(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<Letter[]> {
+export async function getMyLetters(supabase: SupabaseClient, userId: string): Promise<Letter[]> {
   const { data } = await supabase
     .from(LETTERS_VIEW)
     .select(LETTER_COLUMNS)
@@ -325,7 +327,10 @@ export async function getMyLetters(
  * set Letterbox already fetches (getHiddenCorrespondenceIds) rather
  * than a second hiding mechanism or a duplicated query.
  */
-export function excludeHiddenLetters(letters: Letter[], hiddenCorrespondenceIds: Set<string>): Letter[] {
+export function excludeHiddenLetters(
+  letters: Letter[],
+  hiddenCorrespondenceIds: Set<string>
+): Letter[] {
   return letters.filter((l) => !hiddenCorrespondenceIds.has(l.correspondenceId))
 }
 
@@ -379,7 +384,11 @@ export type PhotoConsentStatus = 'no_request' | 'pending' | 'deferred' | 'enable
  *   - 'no_request' / 'enabled' — never outstanding; nothing to decide.
  */
 export function isPhotoDecisionOutstandingForUser(
-  consent: { status: PhotoConsentStatus; requestedBy: string | null; resolvedBy: string | null },
+  consent: {
+    status: PhotoConsentStatus
+    requestedBy: string | null
+    resolvedBy: string | null
+  },
   userId: string
 ): boolean {
   if (consent.status === 'pending') return consent.requestedBy !== userId
@@ -628,7 +637,10 @@ export async function getIncomingMailInTransit(
   const { data, error } = await supabase.rpc('incoming_mail_in_transit')
 
   if (error) {
-    console.error('[letters] incoming_mail_in_transit failed', { message: error.message, code: error.code })
+    console.error('[letters] incoming_mail_in_transit failed', {
+      message: error.message,
+      code: error.code,
+    })
     return []
   }
 
@@ -777,7 +789,10 @@ export function resolveLetterActionState(
 ): LetterActionState {
   return {
     showFirstContactResponse:
-      !established && isFirstContactLetter && isRecipientOfTarget && targetEffectiveStatus === 'sent',
+      !established &&
+      isFirstContactLetter &&
+      isRecipientOfTarget &&
+      targetEffectiveStatus === 'sent',
     showWriteQuill: established,
   }
 }
@@ -886,7 +901,16 @@ export async function getCorrespondenceStatuses(
 export async function getCorrespondencePhotoConsent(
   supabase: SupabaseClient,
   correspondenceIds: string[]
-): Promise<Map<string, { status: PhotoConsentStatus; requestedBy: string | null; resolvedBy: string | null }>> {
+): Promise<
+  Map<
+    string,
+    {
+      status: PhotoConsentStatus
+      requestedBy: string | null
+      resolvedBy: string | null
+    }
+  >
+> {
   if (correspondenceIds.length === 0) return new Map()
 
   const { data } = await supabase
@@ -944,16 +968,17 @@ export async function getMomentsForLetters(
     .order('position', { ascending: true })
 
   if (error) {
-    console.error('[moments] read failed', { message: error.message, code: error.code })
+    console.error('[moments] read failed', {
+      message: error.message,
+      code: error.code,
+    })
   }
 
   const rows = (data ?? []) as (MomentRow & { letter_id: string })[]
 
   const photoPaths = [
     ...new Set(
-      rows
-        .filter((r) => r.type === 'photo' && r.image_path)
-        .map((r) => r.image_path as string)
+      rows.filter((r) => r.type === 'photo' && r.image_path).map((r) => r.image_path as string)
     ),
   ]
 
@@ -968,12 +993,17 @@ export async function getMomentsForLetters(
     // with imageUrl: null, indistinguishable from "not yet consented,"
     // for the sender's own photos included.
     if (signError) {
-      console.error('[moments] createSignedUrls failed', { message: signError.message })
+      console.error('[moments] createSignedUrls failed', {
+        message: signError.message,
+      })
     }
 
     for (const s of signed ?? []) {
       if (s.error) {
-        console.error('[moments] signing failed for path', { path: s.path, error: s.error })
+        console.error('[moments] signing failed for path', {
+          path: s.path,
+          error: s.error,
+        })
       }
       if (s.signedUrl && s.path) signedUrlByPath.set(s.path, s.signedUrl)
     }
@@ -987,7 +1017,7 @@ export async function getMomentsForLetters(
       type: row.type,
       imageUrl:
         row.type === 'photo' && row.image_path
-          ? signedUrlByPath.get(row.image_path) ?? null
+          ? (signedUrlByPath.get(row.image_path) ?? null)
           : null,
       postcardKey: row.postcard_key,
     }
@@ -1106,8 +1136,9 @@ export function mapLetterPostcardRows(rows: LetterPostcardRow[]): Map<string, Le
       .filter(
         (
           row
-        ): row is LetterPostcardRow & { postcard_versions: NonNullable<LetterPostcardRow['postcard_versions']> } =>
-          row.postcard_versions !== null
+        ): row is LetterPostcardRow & {
+          postcard_versions: NonNullable<LetterPostcardRow['postcard_versions']>
+        } => row.postcard_versions !== null
       )
       .map((row) => [
         row.letter_id,
@@ -1150,7 +1181,8 @@ export function letterPostcardToBaseContent(version: LetterPostcardVersion): Pos
       ? {
           motionSrc: version.motionSrc,
           durationSeconds: version.durationSeconds ?? undefined,
-          revealLineAlignment: (version.revealLineAlignment as PostcardRevealLineAlignment | null) ?? undefined,
+          revealLineAlignment:
+            (version.revealLineAlignment as PostcardRevealLineAlignment | null) ?? undefined,
         }
       : undefined,
   }
@@ -1179,7 +1211,10 @@ export async function getLetterPostcardsForLetters(
     .in('letter_id', letterIds)
 
   if (error) {
-    console.error('[letter_postcards] read failed', { message: error.message, code: error.code })
+    console.error('[letter_postcards] read failed', {
+      message: error.message,
+      code: error.code,
+    })
   }
 
   return mapLetterPostcardRows((data ?? []) as unknown as LetterPostcardRow[])
@@ -1225,7 +1260,10 @@ export async function hideCorrespondenceForViewer(
 
   const { error } = await supabase
     .from('correspondence_hidden_for_user')
-    .upsert({ user_id: user.id, correspondence_id: correspondenceId }, { onConflict: 'user_id,correspondence_id' })
+    .upsert(
+      { user_id: user.id, correspondence_id: correspondenceId },
+      { onConflict: 'user_id,correspondence_id' }
+    )
 
   return !error
 }
@@ -1284,12 +1322,24 @@ export type LetterboxPerson = {
  */
 export function buildLetterboxPeople(
   userId: string,
-  correspondences: { id: string; participant_low: string; participant_high: string }[],
+  correspondences: {
+    id: string
+    participant_low: string
+    participant_high: string
+  }[],
   hiddenCorrespondenceIds: Set<string>,
   latestLetterByCorrespondence: Map<string, { createdAt: string; body: string; senderId?: string }>,
   unreadCountByCorrespondence: Map<string, number>,
   sentCorrespondenceIds: Set<string>,
-  profilesById: Map<string, { pseudonym: string; country: string; age_range: string; mark_id?: string | null }>,
+  profilesById: Map<
+    string,
+    {
+      pseudonym: string
+      country: string
+      age_range: string
+      mark_id?: string | null
+    }
+  >,
   markUrlForId: (markId: string) => string = () => ''
 ): LetterboxPerson[] {
   const activityByPerson = new Map<string, number>()
@@ -1381,7 +1431,10 @@ export type LetterboxFilter = 'all' | 'new' | 'sent'
  * can never be true for an undelivered row). "Sent" = the viewer has
  * sent at least one visible letter to that person, in any episode.
  */
-export function filterLetterboxPeople(people: LetterboxPerson[], filter: LetterboxFilter): LetterboxPerson[] {
+export function filterLetterboxPeople(
+  people: LetterboxPerson[],
+  filter: LetterboxFilter
+): LetterboxPerson[] {
   if (filter === 'new') return people.filter((p) => p.unreadCount > 0)
   if (filter === 'sent') return people.filter((p) => p.hasSentAny)
   return people
@@ -1419,7 +1472,10 @@ export async function getLetterboxPeople(
     .in('correspondence_id', visibleIds)
     .order('created_at', { ascending: false })
 
-  const latestLetterByCorrespondence = new Map<string, { createdAt: string; body: string; senderId?: string }>()
+  const latestLetterByCorrespondence = new Map<
+    string,
+    { createdAt: string; body: string; senderId?: string }
+  >()
   const unreadCountByCorrespondence = new Map<string, number>()
   const sentCorrespondenceIds = new Set<string>()
   for (const row of letterRows ?? []) {
@@ -1584,14 +1640,16 @@ export async function getLetterArchiveWithUser(
   const participantLow = userId < otherUserId ? userId : otherUserId
   const participantHigh = userId < otherUserId ? otherUserId : userId
 
-  const [{ data: correspondences }, hiddenCorrespondenceIds] = await Promise.all([
-    supabase
-      .from('correspondences')
-      .select('id')
-      .eq('participant_low', participantLow)
-      .eq('participant_high', participantHigh),
-    getHiddenCorrespondenceIds(supabase, userId),
-  ])
+  const [{ data: correspondences }, hiddenCorrespondenceIds, { data: removedLetters }] =
+    await Promise.all([
+      supabase
+        .from('correspondences')
+        .select('id')
+        .eq('participant_low', participantLow)
+        .eq('participant_high', participantHigh),
+      getHiddenCorrespondenceIds(supabase, userId),
+      supabase.from('letter_archive_removals').select('letter_id').eq('user_id', userId),
+    ])
 
   const visibleIds = visibleCorrespondenceIdsForPair(correspondences ?? [], hiddenCorrespondenceIds)
   if (visibleIds.length === 0) return []
@@ -1602,7 +1660,10 @@ export async function getLetterArchiveWithUser(
     .in('correspondence_id', visibleIds)
     .order('created_at', { ascending: false })
 
-  const letters = (data ?? []).map((row) => toLetter(row as LetterRow))
+  const removedLetterIds = new Set((removedLetters ?? []).map((row) => row.letter_id))
+  const letters = (data ?? [])
+    .map((row) => toLetter(row as LetterRow))
+    .filter((letter) => !removedLetterIds.has(letter.id))
   const letterIds = letters.map((l) => l.id)
   const [momentCounts, letterPostcards] = await Promise.all([
     getMomentCountsForLetters(supabase, letterIds),
@@ -1614,7 +1675,24 @@ export async function getLetterArchiveWithUser(
     getLetterPostcardsForLetters(supabase, letterIds),
   ])
 
-  return attachLetterPostcardFlags(attachMomentCounts(letters, momentCounts), new Set(letterPostcards.keys()))
+  return attachLetterPostcardFlags(
+    attachMomentCounts(letters, momentCounts),
+    new Set(letterPostcards.keys())
+  )
+}
+
+/** Removes only the selected letters from the current member's archive.
+ * The letters and correspondence remain intact for safety/history and for
+ * the other participant. Server-side validation prevents hiding a letter
+ * the caller did not participate in. */
+export async function removeLettersFromMyArchive(
+  supabase: SupabaseClient,
+  letterIds: string[]
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('remove_my_archive_letters', {
+    p_letter_ids: letterIds,
+  })
+  return { error: error?.message ?? null }
 }
 
 export type MomentCounts = { photo: number; postcard: number }

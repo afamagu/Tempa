@@ -21,10 +21,13 @@ import { processImageForUpload } from './image-processing'
  */
 
 const ARTWORK_BUCKET = 'postcard-artwork'
-const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024
-const MAX_VIDEO_BYTES = 20 * 1024 * 1024
+export const MAX_POSTCARD_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024
+export const MAX_POSTCARD_VIDEO_BYTES = 20 * 1024 * 1024
 
-export type UploadedPostcardAsset = { path: string | null; error: string | null }
+export type UploadedPostcardAsset = {
+  path: string | null
+  error: string | null
+}
 
 /** Re-encodes/resizes via the shared processImageForUpload (same
  * pipeline every other photo-upload surface in this app uses), then
@@ -34,8 +37,11 @@ export async function uploadPostcardArtworkImage(
   postcardKey: string,
   file: File
 ): Promise<UploadedPostcardAsset> {
-  if (file.size > MAX_SOURCE_IMAGE_BYTES) {
-    return { path: null, error: 'That image is too large. Please choose a smaller file.' }
+  if (file.size > MAX_POSTCARD_SOURCE_IMAGE_BYTES) {
+    return {
+      path: null,
+      error: 'That image is too large. Please choose a smaller file.',
+    }
   }
 
   try {
@@ -50,7 +56,10 @@ export async function uploadPostcardArtworkImage(
     const { data } = supabase.storage.from(ARTWORK_BUCKET).getPublicUrl(objectPath)
     return { path: data.publicUrl, error: null }
   } catch (err) {
-    return { path: null, error: err instanceof Error ? err.message : 'Could not process that image.' }
+    return {
+      path: null,
+      error: err instanceof Error ? err.message : 'Could not process that image.',
+    }
   }
 }
 
@@ -63,11 +72,17 @@ export async function uploadPostcardArtworkVideo(
   postcardKey: string,
   file: File
 ): Promise<UploadedPostcardAsset> {
-  if (file.size > MAX_VIDEO_BYTES) {
-    return { path: null, error: 'That video is too large. Please choose a smaller file.' }
+  if (file.size > MAX_POSTCARD_VIDEO_BYTES) {
+    return {
+      path: null,
+      error: 'That video is too large. Please choose a smaller file.',
+    }
   }
   if (file.type !== 'video/mp4') {
-    return { path: null, error: 'Living Reveal motion assets must be .mp4 files.' }
+    return {
+      path: null,
+      error: 'Living Reveal motion assets must be .mp4 files.',
+    }
   }
 
   try {
@@ -81,6 +96,9 @@ export async function uploadPostcardArtworkVideo(
     const { data } = supabase.storage.from(ARTWORK_BUCKET).getPublicUrl(objectPath)
     return { path: data.publicUrl, error: null }
   } catch (err) {
-    return { path: null, error: err instanceof Error ? err.message : 'Could not upload that video.' }
+    return {
+      path: null,
+      error: err instanceof Error ? err.message : 'Could not upload that video.',
+    }
   }
 }

@@ -4,6 +4,7 @@ import { sectionTitleClass } from '@/app/profile/ui'
 import { adminMetadataClass } from '@/app/admin/admin-ui'
 import PostcardsCatalogue from './postcards-catalogue'
 import AddPostcardForm from './add-postcard-form'
+import BulkPostcardImport from './bulk-postcard-import'
 
 /**
  * Admin Phase 2A-2 — Admin → Content → Postcards. Active and inactive
@@ -28,14 +29,16 @@ export default async function AdminPostcardsPage() {
         <div className="space-y-1">
           <h1 className={sectionTitleClass}>Postcards</h1>
           <p className={adminMetadataClass}>
-            Editing a Postcard always creates a new version — every Postcard already sent keeps its own frozen
-            wording and artwork forever, no matter what changes here later.
+            Editing a Postcard always creates a new version — every Postcard already sent keeps its own frozen wording
+            and artwork forever, no matter what changes here later.
           </p>
         </div>
         <AddPostcardForm />
       </div>
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
+
+      <BulkPostcardImport existingKeys={postcards.map((postcard) => postcard.key)} />
 
       <PostcardsCatalogue postcards={postcards} />
     </div>

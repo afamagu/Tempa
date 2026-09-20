@@ -77,7 +77,7 @@ export default function Tooltip({ label, children }: { label: string; children: 
       {visible && (
         <span
           role="tooltip"
-          className="pointer-events-none absolute -top-8 left-1/2 z-50 w-max max-w-[240px] -translate-x-1/2 text-left leading-snug rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background shadow-sm"
+          className="pointer-events-none fixed inset-x-3 bottom-3 z-50 mx-auto w-fit max-w-[calc(100vw-1.5rem)] rounded-md bg-foreground px-3 py-2 text-left text-[11px] font-medium leading-snug text-background shadow-md sm:absolute sm:inset-x-auto sm:bottom-auto sm:-top-8 sm:left-1/2 sm:w-max sm:max-w-[240px] sm:-translate-x-1/2 sm:px-2 sm:py-1 sm:shadow-sm"
         >
           {label}
         </span>
