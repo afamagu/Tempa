@@ -12,7 +12,7 @@ select
     and pg_catalog.pg_get_indexdef(x.indexrelid, 1, true) = 'participant_low'
     and pg_catalog.pg_get_indexdef(x.indexrelid, 2, true) = 'participant_high'
     as open_index_pair_columns,
-  pg_catalog.pg_get_expr(x.indpred, x.indrelid, true)
+  pg_catalog.pg_get_expr(x.indpred, x.indrelid, false)
     = '(status = ANY (ARRAY[''pending''::text, ''active''::text]))'
     as open_index_pending_and_active
 from pg_catalog.pg_class i
@@ -126,12 +126,12 @@ select
   count(*) filter (
     where i.relname = 'profile_marks_one_pending_per_owner'
       and x.indisunique and x.indisvalid and x.indisready and x.indislive
-      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, true) = '(status = ''pending''::text)'
+      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, false) = '(status = ''pending''::text)'
   ) = 1 as one_pending_mark_per_owner,
   count(*) filter (
     where i.relname = 'profile_marks_one_active_per_owner'
       and x.indisunique and x.indisvalid and x.indisready and x.indislive
-      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, true) = '(status = ''active''::text)'
+      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, false) = '(status = ''active''::text)'
   ) = 1 as one_active_mark_per_owner
 from pg_catalog.pg_class i
 join pg_catalog.pg_namespace n on n.oid = i.relnamespace

@@ -31,6 +31,7 @@ describe('Mark management migration contract', () => {
     expect(lower).toContain("to_regprocedure('public.reply_to_letter(uuid,text,jsonb,jsonb)')")
     expect(lower).toContain("i.relname = 'correspondences_one_open_per_pair'")
     expect(lower).toContain("x.indisunique and x.indisvalid and x.indisready and x.indislive")
+    expect(lower).toContain('pg_catalog.pg_get_expr(x.indpred, x.indrelid, false)')
     expect(lower).toContain("= '(status = any (array[''pending''::text, ''active''::text]))'")
     expect(lower).not.toContain('correspondences_one_active_per_pair')
   })
@@ -147,7 +148,13 @@ describe('read-only verifier', () => {
 
   it('cannot silently regress back to the obsolete active-only correspondence index', () => {
     expect(verify).toContain("i.relname = 'correspondences_one_open_per_pair'")
+    expect(verify.match(/pg_catalog\.pg_get_expr\(x\.indpred, x\.indrelid, false\)/g)).toHaveLength(3)
+    expect(verify).not.toContain('pg_catalog.pg_get_expr(x.indpred, x.indrelid, true)')
     expect(verify).toContain("'(status = ANY (ARRAY[''pending''::text, ''active''::text]))'")
+    expect(verify).toContain("'(status = ''pending''::text)'")
+    expect(verify).toContain("'(status = ''active''::text)'")
+    expect(verify).toContain("'CHECK (status = ANY (ARRAY[''pending''::text, ''active''::text, ''closed''::text]))'")
+    expect(verify).not.toMatch(/pg_get_expr\([^\n]+\)\s+(?:i?like|~)/i)
     expect(verify).not.toContain('correspondences_one_active_per_pair')
   })
 })

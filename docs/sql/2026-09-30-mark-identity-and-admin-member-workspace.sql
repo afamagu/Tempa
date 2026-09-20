@@ -48,7 +48,10 @@ begin
       and x.indnkeyatts = 2
       and pg_catalog.pg_get_indexdef(x.indexrelid, 1, true) = 'participant_low'
       and pg_catalog.pg_get_indexdef(x.indexrelid, 2, true) = 'participant_high'
-      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, true)
+      -- Use the canonical (non-pretty) deparse form. Unlike pretty output,
+      -- this retains the predicate's structural parentheses, so the exact
+      -- semantic comparison is not affected by cosmetic rendering.
+      and pg_catalog.pg_get_expr(x.indpred, x.indrelid, false)
         = '(status = ANY (ARRAY[''pending''::text, ''active''::text]))'
   ) then
     raise exception 'PREREQUISITE FAILED: public.correspondences_one_open_per_pair must uniquely cover pending and active episodes.';
