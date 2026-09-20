@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { sectionTitleClass, sectionLabelClass, helperTextClass } from '@/app/profile/ui'
 import DiscoveryResults, { type DiscoveryEntry } from '@/app/minds/discovery-results'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 // No client-side count parameter — the database function fixes this at
 // 3 internally (a product ceiling, not a UI preference) and can't be
@@ -81,18 +82,24 @@ export default async function ClosureRecommendations({
   }
 
   const rows = data as RecommendationRow[]
+  const { data: profiles } = await supabase
+    .from('public_profiles')
+    .select('id, mark_id')
+    .in('id', [...new Set(rows.map((row) => row.user_id))])
+  const markIdByUserId = new Map((profiles ?? []).map((profile) => [profile.id, profile.mark_id]))
 
-  // Post-onboarding corrections checkpoint — DiscoveryEntry.response
-  // became optional so People can show a person with no Flagship
-  // answer, but this recommendation surface is unaffected in behavior:
-  // get_post_closure_recommendations only ever returns rows that ARE an
-  // answer, so every entry here still carries one, unconditionally.
+  // The recommendation RPC remains response-first and unchanged. Resolve only
+  // its already-authorized candidates' public mark_id values in one batched,
+  // block-aware public_profiles lookup.
   const entries: DiscoveryEntry[] = rows.map((row) => ({
     userId: row.user_id,
     pseudonym: row.pseudonym,
     country: row.country,
     genderDisplay: genderDisplay(row.gender, row.gender_custom),
     ageRange: row.age_range,
+    markUrl: markIdByUserId.get(row.user_id)
+      ? publicProfileMarkUrl(supabase, `${markIdByUserId.get(row.user_id)}.png`)
+      : null,
     response: { id: row.answer_id, body: row.body, prompt: row.prompt },
   }))
 

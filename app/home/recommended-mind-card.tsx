@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { helperTextClass } from '@/app/profile/ui'
 
 export type RecommendedMind = {
@@ -8,6 +8,7 @@ export type RecommendedMind = {
   country: string
   genderDisplay: string | null
   ageRange: string
+  markUrl?: string | null
 }
 
 /**
@@ -23,7 +24,12 @@ export default function RecommendedMindCard({ mind }: { mind: RecommendedMind })
       href={`/minds/${mind.userId}`}
       className="flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-md p-2 text-center transition-colors hover:bg-foreground/[.03]"
     >
-      <Mindform identifier={mind.userId} size="lg" />
+      <ProfileIdentityMark
+        identifier={mind.userId}
+        markUrl={mind.markUrl ?? null}
+        label={mind.markUrl ? `${mind.pseudonym}'s Mark` : undefined}
+        size="lg"
+      />
       <span className="w-full truncate text-[13px] font-medium text-foreground">{mind.pseudonym}</span>
       <span className={`w-full truncate ${helperTextClass}`}>
         {[mind.country, mind.genderDisplay].filter(Boolean).join(' · ')}

@@ -22,7 +22,8 @@ import { hasAcknowledgedCorrespondenceFeature } from '@/lib/acknowledgements'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { metadataTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import MarkLetterOpened from './mark-opened'
 import PhotoConsent from './photo-consent'
 import MomentsWalkthroughGate from './moments-walkthrough-gate'
@@ -109,7 +110,7 @@ export default async function LetterPage({
     lockedElsewhere,
     otherPartyBlockScope,
   ] = await Promise.all([
-    supabase.from('public_profiles').select('id, pseudonym').in('id', [user.id, otherPartyId]),
+    supabase.from('public_profiles').select('id, pseudonym, mark_id').in('id', [user.id, otherPartyId]),
     getCorrespondence(supabase, target.correspondenceId),
     isEstablishedForViewer(supabase, target.correspondenceId),
     isMomentsQualifiedForViewer(supabase, target.correspondenceId),
@@ -124,6 +125,12 @@ export default async function LetterPage({
   const letterPostcard = letterPostcardsByLetterId.get(target.id) ?? null
 
   const pseudonymById = new Map((profiles ?? []).map((p) => [p.id, p.pseudonym]))
+  const markUrlById = new Map(
+    (profiles ?? []).map((p) => [
+      p.id,
+      p.mark_id ? publicProfileMarkUrl(supabase, `${p.mark_id}.png`) : null,
+    ])
+  )
   const otherPseudonym = pseudonymById.get(otherPartyId) ?? 'A member'
 
   // Correspondence-level context (the originating Question) — only
@@ -285,7 +292,12 @@ export default async function LetterPage({
             <div className="flex items-start justify-between gap-3">
               {senderProfileHref ? (
                 <Link href={senderProfileHref} className="flex min-w-0 items-center gap-3 hover:opacity-80">
-                  <Mindform identifier={target.senderId} size="md" />
+                  <ProfileIdentityMark
+                    identifier={target.senderId}
+                    markUrl={markUrlById.get(target.senderId) ?? null}
+                    label={markUrlById.get(target.senderId) ? `${senderName}'s Mark` : undefined}
+                    size="md"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-[15px] font-semibold text-foreground">{senderName}</p>
                     <p className={`truncate ${metadataTextClass}`}>to {recipientName}</p>
@@ -293,7 +305,12 @@ export default async function LetterPage({
                 </Link>
               ) : (
                 <div className="flex min-w-0 items-center gap-3">
-                  <Mindform identifier={target.senderId} size="md" />
+                  <ProfileIdentityMark
+                    identifier={target.senderId}
+                    markUrl={markUrlById.get(target.senderId) ?? null}
+                    label={markUrlById.get(target.senderId) ? `${senderName}'s Mark` : undefined}
+                    size="md"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-[15px] font-semibold text-foreground">{senderName}</p>
                     <p className={`truncate ${metadataTextClass}`}>to {recipientName}</p>

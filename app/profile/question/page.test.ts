@@ -30,11 +30,11 @@ describe('Onboarding required-Question page — reuses the existing Question inf
     expect(source).toContain('nextEligibleQuestion(eligibleQuestions, flagship.id)')
   })
 
-  it('gracefully completes onboarding (redirects to /minds) rather than deadlocking when no Flagship Question is currently configured', () => {
+  it('gracefully completes onboarding through the recovery RPC rather than deadlocking when no Flagship is configured', () => {
     expect(source).toContain('if (!flagship) {')
     const flagshipGuardStart = source.indexOf('if (!flagship) {')
-    const flagshipGuardEnd = source.indexOf('}', flagshipGuardStart)
-    expect(source.slice(flagshipGuardStart, flagshipGuardEnd)).toContain("redirect('/minds')")
+    const flagshipGuardEnd = source.indexOf("redirect('/minds')", flagshipGuardStart)
+    expect(source.slice(flagshipGuardStart, flagshipGuardEnd)).toContain("rpc('complete_flagship_onboarding')")
   })
 
   it('redirects to /profile (never straight into the Question, and never onward) when no profiles row exists yet — this step assumes the profile step already completed', () => {
@@ -44,15 +44,16 @@ describe('Onboarding required-Question page — reuses the existing Question inf
     expect(source.slice(profileGuardStart, profileGuardEnd)).toContain("redirect('/profile')")
   })
 
-  it('never introduces a second, competing save RPC — the existing publish_question_answer stays the only one', () => {
-    expect(source).not.toContain('.rpc(')
+  it('uses only the narrow completion recovery RPC; answer publishing remains in QuestionAnswer', () => {
+    expect(source.match(/rpc\('complete_flagship_onboarding'\)/g)).toHaveLength(2)
+    expect(source).not.toContain("rpc('publish_question_answer'")
   })
 })
 
-describe('Onboarding required-Question page — existing-member safety (Section R)', () => {
-  it('is documented as reachable ONLY from the profile-form.tsx post-insert redirect, never linked to elsewhere or gated globally', () => {
-    expect(source.toLowerCase()).toContain('existing-member safety')
-    expect(source).toContain('profile-form.tsx')
+describe('Onboarding required-Question page — durable resume safety', () => {
+  it('documents central resumption plus route-local defense-in-depth checks', () => {
+    expect(source).toContain('shared central guard')
+    expect(source).toContain('defense in depth')
   })
 })
 
@@ -66,7 +67,7 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
   // → render the required Question.
   it('1. new member: renders the required Question', () => {
     expect(
-      resolveOnboardingQuestionDestination({ hasProfile: true, hasFlagshipQuestion: true, hasFlagshipAnswer: false })
+      resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: true, hasFlagshipAnswer: false })
     ).toBe('render')
   })
 
@@ -76,7 +77,7 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
   // re-evaluate the SAME durable state and get the SAME answer: render
   // again. Nothing here is keyed on client-side/session state at all.
   it('2/3. refresh or direct revisit before completion: same state in, same result out — still renders the required Question', () => {
-    const state = { hasProfile: true, hasFlagshipQuestion: true, hasFlagshipAnswer: false }
+    const state = { hasProfile: true, onboardingStage: 'question' as const, hasFlagshipQuestion: true, hasFlagshipAnswer: false }
     expect(resolveOnboardingQuestionDestination(state)).toBe('render')
     expect(resolveOnboardingQuestionDestination({ ...state })).toBe('render')
   })
@@ -89,8 +90,8 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
   // right destination for a URL whose entire purpose is "do this once").
   it('5. already-completed member revisiting directly: redirects to /minds, never re-renders onboarding', () => {
     expect(
-      resolveOnboardingQuestionDestination({ hasProfile: true, hasFlagshipQuestion: true, hasFlagshipAnswer: true })
-    ).toBe('/minds')
+      resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: true, hasFlagshipAnswer: true })
+    ).toBe('recover')
   })
 
   // 8. Having a profiles row alone is NEVER sufficient proof the
@@ -99,25 +100,32 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
   // hasProfile.
   it('8. profile existence alone never counts as onboarding completion', () => {
     expect(
-      resolveOnboardingQuestionDestination({ hasProfile: true, hasFlagshipQuestion: true, hasFlagshipAnswer: false })
+      resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: true, hasFlagshipAnswer: false })
     ).not.toBe('/minds')
     // Only genuinely no profile, or a genuinely completed answer, ever
     // redirect away from rendering the Question.
     expect(
-      resolveOnboardingQuestionDestination({ hasProfile: false, hasFlagshipQuestion: true, hasFlagshipAnswer: false })
+      resolveOnboardingQuestionDestination({ hasProfile: false, onboardingStage: null, hasFlagshipQuestion: true, hasFlagshipAnswer: false })
     ).toBe('/profile')
   })
 
   it('no Flagship Question currently configured: completes onboarding gracefully (redirects to /minds), never deadlocks', () => {
     expect(
-      resolveOnboardingQuestionDestination({ hasProfile: true, hasFlagshipQuestion: false, hasFlagshipAnswer: false })
-    ).toBe('/minds')
+      resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: false, hasFlagshipAnswer: false })
+    ).toBe('recover')
   })
 
   it('the profile guard takes precedence over every other check', () => {
     expect(
-      resolveOnboardingQuestionDestination({ hasProfile: false, hasFlagshipQuestion: false, hasFlagshipAnswer: true })
+      resolveOnboardingQuestionDestination({ hasProfile: false, onboardingStage: null, hasFlagshipQuestion: false, hasFlagshipAnswer: true })
     ).toBe('/profile')
+  })
+})
+
+describe('Mark → Question stage enforcement', () => {
+  it('sends a mark-stage member back to Your Mark and a complete member onward', () => {
+    expect(resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'mark', hasFlagshipQuestion: true, hasFlagshipAnswer: false })).toBe('/profile/mark')
+    expect(resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'complete', hasFlagshipQuestion: true, hasFlagshipAnswer: false })).toBe('/minds')
   })
 })
 
@@ -128,10 +136,10 @@ describe('Checkpoint 2B, Section B — the actual page mirrors the tested pure d
     expect(source.slice(guardStart, guardEnd)).toContain("redirect('/profile')")
   })
 
-  it('already-answered guard redirects to /minds, matching resolveOnboardingQuestionDestination', () => {
+  it('already-answered guard completes durable onboarding before redirecting to /minds', () => {
     expect(source).toContain('if (answer) {')
     const guardStart = source.indexOf('if (answer) {')
-    const guardEnd = source.indexOf('}', guardStart)
-    expect(source.slice(guardStart, guardEnd)).toContain("redirect('/minds')")
+    const guardEnd = source.indexOf("redirect('/minds')", guardStart)
+    expect(source.slice(guardStart, guardEnd)).toContain("rpc('complete_flagship_onboarding')")
   })
 })

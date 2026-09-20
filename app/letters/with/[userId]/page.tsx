@@ -10,7 +10,8 @@ import {
 } from '@/lib/letters'
 import { sectionTitleClass, iconButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import SystemMessage from '@/app/system-message'
 import MailInTransitIcon from '@/app/mail-in-transit-icon'
 import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
@@ -69,7 +70,7 @@ export default async function LetterArchiveWithUserPage({
     await Promise.all([
       supabase
         .from('public_profiles')
-        .select('id, pseudonym')
+        .select('id, pseudonym, mark_id')
         .in('id', [user.id, otherUserId]),
       getLetterArchiveWithUser(supabase, user.id, otherUserId),
       getWaitingLetterCount(supabase, user.id),
@@ -82,6 +83,9 @@ export default async function LetterArchiveWithUserPage({
     notFound()
   }
   const viewerPseudonym = (profiles ?? []).find((p) => p.id === user.id)?.pseudonym ?? 'You'
+  const otherMarkUrl = otherProfile.mark_id
+    ? publicProfileMarkUrl(supabase, `${otherProfile.mark_id}.png`)
+    : null
   // Same existence-only signal Letterbox Level 1 already shows for
   // this person (incomingMailInTransitPersonIds) — scoped to THIS
   // specific correspondent, never "some mail is on the way somewhere."
@@ -110,7 +114,12 @@ export default async function LetterArchiveWithUserPage({
                 href={`/minds/${otherProfile.id}`}
                 className="flex min-w-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80"
               >
-                <Mindform identifier={otherProfile.id} size="md" />
+                <ProfileIdentityMark
+                  identifier={otherProfile.id}
+                  markUrl={otherMarkUrl}
+                  label={otherMarkUrl ? `${otherProfile.pseudonym}'s Mark` : undefined}
+                  size="md"
+                />
                 <h1 className={sectionTitleClass}>{otherProfile.pseudonym}</h1>
               </Link>
 

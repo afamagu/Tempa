@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { helperTextClass, metadataTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import { formatDateTimeCompact } from '@/lib/format-date'
 import { parseExcerptMarkers, type SearchPersonResult, type SearchLetterResult } from '@/lib/search'
@@ -71,7 +71,12 @@ export default function SearchResultsPanel({
                 href={`/letters/with/${r.personId}`}
                 className="flex items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-foreground/[.04]"
               >
-                <Mindform identifier={r.personId} size="sm" />
+                <ProfileIdentityMark
+                  identifier={r.personId}
+                  markUrl={r.markUrl ?? null}
+                  label={r.markUrl ? `${r.pseudonym}'s Mark` : undefined}
+                  size="sm"
+                />
                 <span className="text-[14px] font-medium text-foreground">{r.pseudonym}</span>
               </Link>
             ))}

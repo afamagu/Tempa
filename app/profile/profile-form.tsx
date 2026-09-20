@@ -285,6 +285,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
     const { error: insertError } = await supabase.from('profiles').insert({
       id: userId,
+      onboarding_stage: 'mark',
       pseudonym: value,
       country,
       country_code: countryCode,
@@ -336,16 +337,10 @@ export default function ProfileForm({ userId }: { userId: string }) {
       await setProfileInterests(supabase, readingInterests)
     }
 
-    // Onboarding & First-Use checkpoint — the required Flagship Question
-    // is now the final onboarding step, not a later soft nudge on Home
-    // (Section A/B). This is the ONLY place that changes: a brand-new
-    // member has just inserted their first profiles row, so this is the
-    // one moment "new onboarding" can be distinguished from "an existing
-    // member returning" without any schema/heuristic at all — an
-    // existing member never reaches this handler again (app/profile/
-    // page.tsx already redirects them straight to /home once a profiles
-    // row exists, unchanged).
-    router.push('/profile/question')
+    // A new profile explicitly enters the durable Mark stage. The
+    // database trigger enforces the same invariant; this value keeps the
+    // application contract visible here at the cohort-creation boundary.
+    router.push('/profile/mark')
     router.refresh()
   }
 

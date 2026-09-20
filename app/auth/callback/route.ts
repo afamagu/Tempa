@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
+import { resolveOnboardingDestination, type OnboardingStage } from '@/lib/onboarding'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -29,14 +30,20 @@ export async function GET(request: Request) {
     if (!error && data.user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, onboarding_stage')
         .eq('id', data.user.id)
         .maybeSingle()
 
-      // A new member still without a profile must always continue
-      // through onboarding — `next` is only ever honored for a
-      // returning, already-onboarded member, never used to bypass this.
-      const destination = profile ? (next ?? '/home') : '/profile'
+      // `next` is honored only after the complete durable onboarding
+      // sequence. A profile row alone no longer proves completion.
+      const destination = resolveOnboardingDestination(
+        {
+          authenticated: true,
+          hasProfile: Boolean(profile),
+          onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
+        },
+        next ?? '/home'
+      )
       return NextResponse.redirect(`${origin}${destination}`)
     }
 

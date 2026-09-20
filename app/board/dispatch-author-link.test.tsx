@@ -23,4 +23,23 @@ describe('DispatchAuthorLink — the shared identity link every Dispatch card re
     )
     expect(html).toContain('src="/flags/FR.svg"')
   })
+
+  it('renders a saved Mark without an avatar crop and otherwise keeps the Mindform fallback', () => {
+    const markHtml = renderToStaticMarkup(
+      <DispatchAuthorLink
+        authorId="author-1"
+        authorPseudonym="Evening Quill"
+        authorCountry={null}
+        authorMarkUrl="https://example.test/mark.png"
+      />
+    )
+    expect(markHtml).toContain('src="https://example.test/mark.png"')
+    expect(markHtml).toContain('object-contain')
+    expect(markHtml).not.toContain('object-cover')
+
+    const legacyHtml = renderToStaticMarkup(
+      <DispatchAuthorLink authorId="author-1" authorPseudonym="Evening Quill" authorCountry={null} />
+    )
+    expect(legacyHtml).toContain('rounded-full')
+  })
 })

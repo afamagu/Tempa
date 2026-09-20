@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { resolveOnboardingDestination, type OnboardingStage } from '@/lib/onboarding'
 
 /**
  * Return-to-requested-page after sign-in (pre-beta UX polish batch 1) —
@@ -47,9 +48,41 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signInUrl)
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, onboarding_stage')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const requestedDestination = `${request.nextUrl.pathname}${request.nextUrl.search}`
+  const destination = resolveOnboardingDestination(
+    {
+      authenticated: true,
+      hasProfile: Boolean(profile),
+      onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
+    },
+    requestedDestination
+  )
+
+  if (destination !== requestedDestination) {
+    return NextResponse.redirect(new URL(destination, request.url))
+  }
+
   return response
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: [
+    '/',
+    '/admin/:path*',
+    '/announcement/:path*',
+    '/board/:path*',
+    '/home/:path*',
+    '/letters/:path*',
+    '/minds/:path*',
+    '/profile/:path*',
+    '/question/:path*',
+    '/write/:path*',
+    '/you/:path*',
+  ],
 }

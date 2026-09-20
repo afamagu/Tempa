@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import MailInTransitIcon from '@/app/mail-in-transit-icon'
 import SystemMessage from '@/app/system-message'
 import FormattedText from '@/app/letters/formatted-text'
@@ -118,7 +118,12 @@ export default function PeopleGrid({
           <UnreadBadge count={person.unreadCount} />
 
           <div className="flex items-center gap-3">
-            <Mindform identifier={person.userId} size="lg" />
+            <ProfileIdentityMark
+              identifier={person.userId}
+              markUrl={person.markUrl ?? null}
+              label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined}
+              size="lg"
+            />
             <div className="min-w-0">
               <p className="truncate text-[17px] font-semibold text-foreground">{person.pseudonym}</p>
               <p className={`truncate ${metadataTextClass}`}>

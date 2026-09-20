@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { publicProfileMarkUrl } from './profile-marks'
 
 /**
  * Board Experience Phase 2B — Replies. "Let someone respond thoughtfully
@@ -17,6 +18,7 @@ export type Reply = {
   authorId: string
   authorPseudonym: string
   authorCountry: string | null
+  authorMarkUrl?: string | null
   body: string
   parentReplyId: string | null
   /** Null for a top-level Reply. For a Reply-to-Reply, the top-level
@@ -165,11 +167,11 @@ export async function getDispatchReplies(supabase: SupabaseClient, dispatchId: s
 
   const { data: profiles } = await supabase
     .from('public_profiles')
-    .select('id, pseudonym, country')
+    .select('id, pseudonym, country, mark_id')
     .in('id', allProfileIds)
 
   const profileById = new Map(
-    (profiles ?? []).map((p) => [p.id, p as { id: string; pseudonym: string; country: string | null }])
+    (profiles ?? []).map((p) => [p.id, p as { id: string; pseudonym: string; country: string | null; mark_id: string | null }])
   )
 
   const replies = typedRows.map(
@@ -179,6 +181,9 @@ export async function getDispatchReplies(supabase: SupabaseClient, dispatchId: s
       authorId: row.author_id,
       authorPseudonym: profileById.get(row.author_id)?.pseudonym ?? 'A member',
       authorCountry: profileById.get(row.author_id)?.country ?? null,
+      authorMarkUrl: profileById.get(row.author_id)?.mark_id
+        ? publicProfileMarkUrl(supabase, `${profileById.get(row.author_id)!.mark_id}.png`)
+        : null,
       body: row.body,
       parentReplyId: row.parent_reply_id,
       rootReplyId: row.root_reply_id,

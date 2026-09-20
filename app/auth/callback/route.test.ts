@@ -42,7 +42,7 @@ function locationOf(response: Response): string | null {
 describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style, identical downstream) exchanges the session', () => {
   it('calls exchangeCodeForSession with the exact code from the query string', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1' } })
+    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     await GET(new Request('https://jointempa.com/auth/callback?code=real-auth-code-123'))
 
@@ -51,7 +51,7 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('an existing member (has a profile) is redirected to /home by default', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1' } })
+    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
 
@@ -60,7 +60,7 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('honors a sanitized `next` destination for an existing member', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1' } })
+    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=%2Fletters'))
 
@@ -78,11 +78,22 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('an unsanitized/external `next` is never honored — falls back to /home', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1' } })
+    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=https%3A%2F%2Fevil.example.com'))
 
     expect(locationOf(res)).toBe('https://jointempa.com/home')
+  })
+
+  it.each([
+    ['mark', '/profile/mark'],
+    ['question', '/profile/question'],
+  ])('does not let a %s-stage member use `next` to bypass onboarding', async (stage, expected) => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: stage } })
+
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=%2Fletters'))
+    expect(locationOf(res)).toBe(`https://jointempa.com${expected}`)
   })
 })
 

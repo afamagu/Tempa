@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 
 /**
  * The single-sender Arrivals identity — Mindform + pseudonym as ONE
@@ -13,16 +13,23 @@ import Mindform from '@/app/mindform'
 export default function ArrivalSenderLink({
   senderId,
   pseudonym,
+  markUrl = null,
 }: {
   senderId: string
   pseudonym: string
+  markUrl?: string | null
 }) {
   return (
     <Link
       href={`/minds/${senderId}`}
       className="flex w-fit items-center gap-2 rounded-md py-1 transition-opacity hover:opacity-80"
     >
-      <Mindform identifier={senderId} size="sm" />
+      <ProfileIdentityMark
+        identifier={senderId}
+        markUrl={markUrl}
+        label={markUrl ? `${pseudonym}'s Mark` : undefined}
+        size="sm"
+      />
       <span className="text-[14px] font-medium text-foreground">{pseudonym}</span>
     </Link>
   )

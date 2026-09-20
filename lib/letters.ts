@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Moment, MomentType, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 import { splitParagraphs } from './moments'
 import { stripRichBodyMarker } from './letter-editor-doc'
+import { publicProfileMarkUrl } from './profile-marks'
 
 export type LetterStatus = 'sent' | 'replied' | 'closed'
 export type ClosedBy = 'recipient' | 'system'
@@ -191,20 +192,16 @@ export function isEffectivelyExpired(letter: Letter, established: boolean): bool
 }
 
 /**
- * Pure: Home's "has anything arrived for me" list — every letter this
- * viewer is the recipient of that's still awaiting their reply and
- * hasn't effectively expired. `established` is passed as false
- * unconditionally, same as before this was extracted — Home's
- * relationship with established/Write-Anytime letters is a separate,
- * not-yet-scoped concern. `letters` is always sourced from getMyLetters
- * (letters_for_participant), which already enforces the one delivery
- * boundary that matters here (an incoming letter is invisible to its
- * recipient until deliver_at) — an undelivered letter never appears in
- * this function's input in the first place, so it structurally cannot
- * appear in Arrivals either.
+ * Pure: Home's unread-arrival list — every delivered, visible letter
+ * this viewer received and has not opened yet. `letters` is always
+ * sourced from getMyLetters (letters_for_participant), so isUnread is
+ * the participant-safe projection of opened_at and an undelivered
+ * incoming letter never appears in this function's input. Letter
+ * lifecycle status is deliberately irrelevant: Home's "letter waiting"
+ * language describes unread mail, not whether a letter awaits a reply.
  */
 export function deriveArrivals(letters: Letter[], userId: string): Letter[] {
-  return letters.filter((l) => l.recipientId === userId && l.status === 'sent' && !isEffectivelyExpired(l, false))
+  return letters.filter((l) => l.recipientId === userId && l.isUnread)
 }
 
 /**
@@ -1247,6 +1244,7 @@ export type LetterboxPerson = {
   pseudonym: string
   country: string
   ageRange: string
+  markUrl?: string | null
   /** Epoch ms of the most recent letter across every VISIBLE
    * correspondence episode with this person — the sole sort key for
    * Level 1's grid ("newest person upper-left"). */
@@ -1291,7 +1289,8 @@ export function buildLetterboxPeople(
   latestLetterByCorrespondence: Map<string, { createdAt: string; body: string; senderId?: string }>,
   unreadCountByCorrespondence: Map<string, number>,
   sentCorrespondenceIds: Set<string>,
-  profilesById: Map<string, { pseudonym: string; country: string; age_range: string }>
+  profilesById: Map<string, { pseudonym: string; country: string; age_range: string; mark_id?: string | null }>,
+  markUrlForId: (markId: string) => string = () => ''
 ): LetterboxPerson[] {
   const activityByPerson = new Map<string, number>()
   const excerptByPerson = new Map<string, string>()
@@ -1331,6 +1330,7 @@ export function buildLetterboxPeople(
       pseudonym: profile.pseudonym,
       country: profile.country,
       ageRange: profile.age_range,
+      markUrl: profile.mark_id ? markUrlForId(profile.mark_id) : null,
       activityAt,
       unreadCount: unreadByPerson.get(otherId) ?? 0,
       latestExcerpt: excerptByPerson.get(otherId) ?? null,
@@ -1455,7 +1455,7 @@ export async function getLetterboxPeople(
 
   const { data: profiles } = await supabase
     .from('public_profiles')
-    .select('id, pseudonym, country, age_range')
+    .select('id, pseudonym, country, age_range, mark_id')
     .in('id', otherIds)
 
   const profilesById = new Map((profiles ?? []).map((p) => [p.id, p]))
@@ -1467,7 +1467,8 @@ export async function getLetterboxPeople(
     latestLetterByCorrespondence,
     unreadCountByCorrespondence,
     sentCorrespondenceIds,
-    profilesById
+    profilesById,
+    (markId) => publicProfileMarkUrl(supabase, `${markId}.png`)
   )
 }
 

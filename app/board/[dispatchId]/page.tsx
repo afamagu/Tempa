@@ -35,7 +35,7 @@ import { iconButtonClass } from '@/app/profile/ui'
 import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import CountryFlag from '@/app/country-flag'
 import ReportButton from '@/app/report-button'
 import MomentHint from '../moment-hint'
@@ -303,7 +303,12 @@ export default async function DispatchPage({
                 href={`/minds/${dispatch.authorId}`}
                 className="flex min-w-0 items-center gap-3 hover:opacity-80"
               >
-                <Mindform identifier={dispatch.authorId} size="md" />
+                <ProfileIdentityMark
+                  identifier={dispatch.authorId}
+                  markUrl={dispatch.authorMarkUrl ?? null}
+                  label={dispatch.authorMarkUrl ? `${dispatch.authorPseudonym}'s Mark` : undefined}
+                  size="md"
+                />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="truncate text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
@@ -401,30 +406,53 @@ export default async function DispatchPage({
               />
             </div>
 
-            {!isAuthor && <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />}
+            {/* Dispatch/author actions row (Small Dispatch Reader Layout
+                Correction) — Worth Reading and the correspondence entry
+                point are siblings of the SAME row, not stacked with the
+                latter reading like a Replies affordance. Worth Reading
+                stays at its existing left position; "Write to this
+                mind"/"Open your correspondence" moves to the row's right
+                edge. The row deliberately does not wrap: at very narrow
+                widths the restrained text link may wrap within its own
+                right-aligned flex item, but it remains paired with Worth
+                Reading instead of becoming a separate stacked action.
+                The divider that used to sit directly
+                above the correspondence link now sits below the whole
+                row, so Replies only ever begins after BOTH actions have
+                been presented as a single "Dispatch/author actions"
+                concept — see this page's own test for the exact DOM
+                relationship this establishes. */}
+            {!isAuthor && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />
 
-            {/* Dispatch → Correspondence Entry Point checkpoint — a
-                quiet, editorial invitation into the EXISTING private
-                correspondence flow, never a social engagement bar. Same
-                three-state contract as app/minds/[userId]/page.tsx
-                (write / already-corresponding / nothing), reusing its
-                exact destinations — no new writing flow, no relationship
-                label ("Correspondent" etc.) ever shown. quietLinkClass
-                (a restrained underlined text link, not a button) keeps
-                this visually subordinate to the Dispatch itself, and
-                deliberately NOT sticky/floating — an ordinary in-flow
-                element, safe on mobile alongside AppShell's bottom nav. */}
-            {!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (
-              <div className="border-t border-foreground/10 pt-4">
-                {showWriteToAuthor && authorPrimaryAnswer ? (
-                  <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
-                    Write to this mind
-                  </Link>
-                ) : (
-                  <Link href="/letters" className={quietLinkClass}>
-                    Open your correspondence
-                  </Link>
-                )}
+                  {/* Dispatch → Correspondence Entry Point checkpoint — a
+                      quiet, editorial invitation into the EXISTING private
+                      correspondence flow, never a social engagement bar. Same
+                      three-state contract as app/minds/[userId]/page.tsx
+                      (write / already-corresponding / nothing), reusing its
+                      exact destinations — no new writing flow, no relationship
+                      label ("Correspondent" etc.) ever shown. quietLinkClass
+                      (a restrained underlined text link, not a button) keeps
+                      this visually subordinate to the Dispatch itself, and
+                      deliberately NOT sticky/floating — an ordinary in-flow
+                      element, safe on mobile alongside AppShell's bottom nav. */}
+                  <div className="min-w-0 text-right leading-snug">
+                    {(showWriteToAuthor || alreadyCorrespondingWithAuthor) &&
+                      (showWriteToAuthor && authorPrimaryAnswer ? (
+                        <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
+                          Write to this mind
+                        </Link>
+                      ) : (
+                        <Link href="/letters" className={quietLinkClass}>
+                          Open your correspondence
+                        </Link>
+                      ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-foreground/10" />
               </div>
             )}
 

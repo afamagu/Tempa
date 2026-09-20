@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { validateRequiredFields } from './profile-form'
 import { MIN_RECOMMENDED_INTERESTS, MAX_INTERESTS } from '@/lib/interests'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
+const source = readFileSync(path.join(__dirname, 'profile-form.tsx'), 'utf8')
 
 // Onboarding & First-Use checkpoint (Section K) — extracted as a pure,
 // independently-testable function (same rationale as canWriteToMind,
@@ -89,5 +93,13 @@ describe('validateRequiredFields — one specific message per section, never a g
     // writingStyle, receiving — regardless of which order the caller
     // happened to set fields invalid in above.
     expect(Object.keys(errors)).toEqual(['country', 'languages', 'writingStyle'])
+  })
+})
+
+describe('new-profile onboarding handoff', () => {
+  it('continues to the dedicated Mark step, never directly to the Flagship Question', () => {
+    expect(source).toContain("onboarding_stage: 'mark'")
+    expect(source).toContain("router.push('/profile/mark')")
+    expect(source).not.toContain("router.push('/profile/question')")
   })
 })

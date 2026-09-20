@@ -2,30 +2,37 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
-import { sectionLabelClass, proseSubheadingClass } from '@/app/profile/ui'
+import { getProfileMarkManagementStatus, publicProfileMarkUrl } from '@/lib/profile-marks'
+import { formatDatePlain } from '@/lib/format-date'
+import { sectionLabelClass, proseSubheadingClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
+
+const controlClass =
+  'flex items-center justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]'
 
 export default async function YouPage() {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/sign-in')
-  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/sign-in')
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('pseudonym')
+    .select('pseudonym, mark_id')
     .eq('id', user.id)
     .maybeSingle()
+  if (!profile) redirect('/profile')
 
-  if (!profile) {
-    redirect('/profile')
-  }
-
-  const waitingCount = await getWaitingLetterCount(supabase, user.id)
+  const [waitingCount, markStatus] = await Promise.all([
+    getWaitingLetterCount(supabase, user.id),
+    getProfileMarkManagementStatus(supabase).catch(() => ({
+      markId: profile.mark_id ?? null,
+      canChange: profile.mark_id == null,
+      nextChangeAt: null,
+    })),
+  ])
+  const markId = markStatus.markId ?? profile.mark_id ?? null
+  const markUrl = markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null
 
   async function signOut() {
     'use server'
@@ -36,70 +43,59 @@ export default async function YouPage() {
 
   return (
     <AppShell active="you" waitingLetterCount={waitingCount}>
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-8 py-10">
-          <div className="space-y-2">
+      <main className="flex min-h-screen justify-center px-5 py-10 sm:px-8">
+        <div className="w-full max-w-2xl space-y-10 py-4 sm:py-8">
+          <header className="space-y-6">
             <p className={sectionLabelClass}>You</p>
-            <h1 className={proseSubheadingClass}>{profile.pseudonym}</h1>
-          </div>
+            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+              <ProfileIdentityMark
+                identifier={user.id}
+                markUrl={markUrl}
+                label={markUrl ? 'Your Mark' : undefined}
+                size="xl"
+              />
+              <div className="min-w-0 space-y-2">
+                <h1 className={proseSubheadingClass}>{profile.pseudonym}</h1>
+                {markUrl ? (
+                  <>
+                    <p className={helperTextClass}>Your Mark</p>
+                    <Link href="/you/mark" className={quietLinkClass}>Manage your Mark</Link>
+                    {!markStatus.canChange && markStatus.nextChangeAt && (
+                      <p className={helperTextClass}>
+                        You can change it again on {formatDatePlain(markStatus.nextChangeAt)}.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className={helperTextClass}>You have not created your Mark yet.</p>
+                    <Link href="/you/mark" className={quietLinkClass}>Create your Mark</Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </header>
 
-          {/* The rich profile view (country, age band, languages,
-              interests, published writing, "Write to this mind" when
-              applicable) already exists at the canonical /minds/[userId]
-              route, which already handles isSelf correctly — reusing it
-              here rather than duplicating that content on this page. */}
-          <Link
-            href={`/minds/${user.id}`}
-            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-          >
-            View your profile
-          </Link>
+          <section className="space-y-3">
+            <p className={sectionLabelClass}>Your presence</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Link href={`/minds/${user.id}`} className={controlClass}><span>View your profile</span><span aria-hidden>→</span></Link>
+              <Link href="/you/responses" className={controlClass}><span>Your responses</span><span aria-hidden>→</span></Link>
+              <Link href="/you/interests" className={controlClass}><span>Reading interests</span><span aria-hidden>→</span></Link>
+              <Link href="/you/keepsakes" className={controlClass}><span>Keepsakes</span><span aria-hidden>→</span></Link>
+            </div>
+          </section>
 
-          {/* Onboarding & First-Use checkpoint — People Information
-              Architecture: response management (formerly "My answers"/
-              "Answer a Question" tabs on /minds) now lives here. */}
-          <Link
-            href="/you/responses"
-            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-          >
-            Your responses
-          </Link>
-
-          <Link
-            href="/you/keepsakes"
-            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-          >
-            Keepsakes
-          </Link>
-
-          <Link
-            href="/you/interests"
-            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-          >
-            Reading interests
-          </Link>
-
-          <Link
-            href="/you/guide"
-            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-          >
-            Tempa Guide
-          </Link>
-
-          <Link
-            href="/you/safety/blocked-minds"
-            className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-          >
-            Blocked minds
-          </Link>
+          <section className="space-y-3">
+            <p className={sectionLabelClass}>Tempa</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Link href="/you/guide" className={controlClass}><span>Tempa Guide</span><span aria-hidden>→</span></Link>
+              <Link href="/you/safety/blocked-minds" className={controlClass}><span>Blocked minds</span><span aria-hidden>→</span></Link>
+            </div>
+          </section>
 
           <form action={signOut}>
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
-            >
-              Sign out
-            </button>
+            <button type="submit" className={quietLinkClass}>Sign out</button>
           </form>
         </div>
       </main>

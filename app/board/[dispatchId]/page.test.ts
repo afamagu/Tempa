@@ -21,6 +21,14 @@ const source = readFileSync(PAGE_PATH, 'utf8')
 const executable = source.replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
 const executableLower = executable.toLowerCase()
 
+function sourceBlock(text: string, startMarker: string, endMarker: string): string {
+  const start = text.indexOf(startMarker)
+  expect(start, `missing start marker: ${startMarker}`).toBeGreaterThanOrEqual(0)
+  const end = text.indexOf(endMarker, start)
+  expect(end, `missing end marker after ${startMarker}: ${endMarker}`).toBeGreaterThan(start)
+  return text.slice(start, end)
+}
+
 describe('Dispatch detail page — Continue Reading shelf (Home Phase 1B)', () => {
   it('is gated on continueReadingCards.length > 0 — no items, no section', () => {
     expect(source).toContain('{continueReadingCards.length > 0 && (')
@@ -91,6 +99,13 @@ describe('Dispatch detail page — Continue Reading shelf (Home Phase 1B)', () =
 })
 
 describe('Dispatch detail page — Correspondence Entry Point checkpoint', () => {
+  const actionRowMarker = '<div className="flex items-center justify-between gap-3">'
+  const actionRowEndMarker = '<div className="border-t border-foreground/10" />'
+
+  function actionRow(text = source) {
+    return sourceBlock(text, actionRowMarker, actionRowEndMarker)
+  }
+
   it('reuses the EXISTING correspondence contract — canWriteToMind imported from the profile page, never redefined here', () => {
     expect(source).toContain("import { canWriteToMind } from '@/app/minds/[userId]/page'")
     // No second/local definition — exactly one function declaration
@@ -117,7 +132,12 @@ describe('Dispatch detail page — Correspondence Entry Point checkpoint', () =>
 
   it('3. never offered to write to yourself: isSelf is bound to isAuthor, and the whole block is gated on !isAuthor', () => {
     expect(source).toContain('isSelf: isAuthor,')
-    expect(source).toContain('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const readerEnd = source.indexOf('initialPosition={initialPosition}')
+    const nonAuthorGate = source.indexOf('{!isAuthor && (', readerEnd)
+    const row = source.indexOf(actionRowMarker, readerEnd)
+    expect(readerEnd).toBeGreaterThanOrEqual(0)
+    expect(nonAuthorGate).toBeGreaterThan(readerEnd)
+    expect(row).toBeGreaterThan(nonAuthorGate)
   })
 
   it('1/2. routes into the EXISTING private-write destination, the exact same href shape the profile page uses — never a new writing flow', () => {
@@ -134,9 +154,7 @@ describe('Dispatch detail page — Correspondence Entry Point checkpoint', () =>
   })
 
   it('uses the restrained quietLinkClass text-link treatment, never primaryButtonClass/secondaryButtonClass — visually subordinate, never a conversion button', () => {
-    const blockStart = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
-    const blockEnd = source.indexOf('<RepliesSection', blockStart)
-    const block = source.slice(blockStart, blockEnd)
+    const block = actionRow(executable)
     expect(block).toContain('quietLinkClass')
     expect(block).not.toContain('primaryButtonClass')
     expect(block).not.toContain('secondaryButtonClass')
@@ -146,13 +164,32 @@ describe('Dispatch detail page — Correspondence Entry Point checkpoint', () =>
     expect(source).toContain('href={`/minds/${dispatch.authorId}`}')
   })
 
-  it('sits after WorthReadingButton and before RepliesSection — a quiet, end-of-reading placement, never inside the identity/action row at the top', () => {
-    const worthReading = source.indexOf('<WorthReadingButton')
-    const entryPoint = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
-    const replies = source.indexOf('<RepliesSection')
-    expect(worthReading).toBeGreaterThan(-1)
+  it('places Worth Reading first/left and Write/Open second/right in one deliberate action row', () => {
+    const block = actionRow()
+    const worthReading = block.indexOf('<WorthReadingButton')
+    const entryPoint = block.indexOf('{(showWriteToAuthor || alreadyCorrespondingWithAuthor) &&')
+    expect(worthReading).toBeGreaterThanOrEqual(0)
     expect(entryPoint).toBeGreaterThan(worthReading)
-    expect(replies).toBeGreaterThan(entryPoint)
+    expect(block).toContain('justify-between')
+    expect(block).toContain('text-right')
+    expect(block).not.toContain('flex-wrap')
+  })
+
+  it('keeps Replies outside and after the complete action row, with a divider creating its own visual space', () => {
+    const rowStart = source.indexOf(actionRowMarker)
+    const rowEnd = source.indexOf(actionRowEndMarker, rowStart)
+    const replies = source.indexOf('<RepliesSection', rowEnd)
+    expect(rowStart).toBeGreaterThanOrEqual(0)
+    expect(rowEnd).toBeGreaterThan(rowStart)
+    expect(replies).toBeGreaterThan(rowEnd)
+    expect(actionRow()).not.toContain('<RepliesSection')
+  })
+
+  it('removes the obsolete standalone correspondence block immediately above Replies', () => {
+    expect(source).not.toContain('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
+    const betweenRowAndReplies = sourceBlock(source, actionRowEndMarker, '<RepliesSection')
+    expect(betweenRowAndReplies).not.toContain('Write to this mind')
+    expect(betweenRowAndReplies).not.toContain('Open your correspondence')
   })
 
   it('5. no engagement toolbar was introduced by this checkpoint — no Like/Comment/Follow/reaction/count word anywhere in the new block itself', () => {
@@ -160,9 +197,7 @@ describe('Dispatch detail page — Correspondence Entry Point checkpoint', () =>
     // already legitimately contains unrelated prose using some of these
     // words elsewhere (e.g. an existing comment reading "like Keep in
     // Mind"), which a whole-file check would wrongly flag.
-    const blockStart = executable.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
-    const blockEnd = executable.indexOf('<RepliesSection', blockStart)
-    const block = executable.slice(blockStart, blockEnd).toLowerCase()
+    const block = actionRow(executable).toLowerCase()
     expect(block).not.toMatch(/\blike\b/)
     expect(block).not.toMatch(/\bfollow(ing|er)?\b/)
     expect(block).not.toContain('reaction')
@@ -171,27 +206,21 @@ describe('Dispatch detail page — Correspondence Entry Point checkpoint', () =>
   })
 
   it('7. no fixed/sticky/floating CTA — an ordinary in-flow block, safe alongside AppShell\'s mobile bottom nav', () => {
-    const blockStart = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
-    const blockEnd = source.indexOf('<RepliesSection', blockStart)
-    const block = source.slice(blockStart, blockEnd)
+    const block = actionRow(executable)
     expect(block).not.toContain('fixed')
     expect(block).not.toContain('sticky')
     expect(block).not.toMatch(/floating/i)
   })
 
   it('8. no relationship classification label ("Correspondent", "Blocked", etc.) leaks into the Dispatch UI', () => {
-    const blockStart = executable.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
-    const blockEnd = executable.indexOf('<RepliesSection', blockStart)
-    const block = executable.slice(blockStart, blockEnd)
+    const block = actionRow(executable)
     expect(block).not.toMatch(/correspondent/i)
     expect(block).not.toMatch(/blocked/i)
     expect(block).not.toMatch(/stop letters/i)
   })
 
   it('does not duplicate blocking/Stop Letters checks locally — delegates entirely to the existing profile/write flow, matching that flow\'s own established defense-in-depth pattern', () => {
-    const blockStart = source.indexOf('{!isAuthor && (showWriteToAuthor || alreadyCorrespondingWithAuthor) && (')
-    const blockEnd = source.indexOf('<RepliesSection', blockStart)
-    const block = source.slice(blockStart, blockEnd)
+    const block = actionRow()
     expect(block).not.toContain('is_blocked_pair')
     expect(block).not.toContain('is_correspondence_blocked_pair')
     expect(block).not.toContain('getBlockScope')

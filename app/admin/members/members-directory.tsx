@@ -8,6 +8,8 @@ import { inputClass, secondaryButtonClass } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { debounce } from '@/lib/debounce'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 const PAGE_SIZE = 25
 const STATUS_OPTIONS: { value: AccountStatus | ''; label: string }[] = [
@@ -36,6 +38,7 @@ export default function MembersDirectory({
   initialMembers: MemberListRow[]
   initialError: string | null
 }) {
+  const supabase = createClient()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<AccountStatus | ''>('')
   const [country, setCountry] = useState('')
@@ -155,12 +158,19 @@ export default function MembersDirectory({
               href={`/admin/members/${m.id}`}
               className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/[.03]"
             >
-              <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-3">
+                <ProfileIdentityMark
+                  identifier={m.id}
+                  markUrl={m.markId ? publicProfileMarkUrl(supabase, `${m.markId}.png`) : null}
+                  size="sm"
+                />
+                <div className="min-w-0">
                 <p className={adminTableTextClass}>{m.pseudonym}</p>
                 <p className={adminMetadataClass}>
                   {m.country ?? 'Unknown location'}
                   {m.createdAt ? ` · joined ${formatDateTimeFull(m.createdAt)}` : ''}
                 </p>
+                </div>
               </div>
               <span className={adminMetadataClass}>{m.status}</span>
             </Link>

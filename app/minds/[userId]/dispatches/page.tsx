@@ -5,8 +5,9 @@ import { getWaitingLetterCount } from '@/lib/letters'
 import { getPublishedDispatchesByAuthor } from '@/lib/dispatches'
 import { sectionTitleClass, helperTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import DispatchCard from '../../../board/dispatch-card'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 function BackArrowIcon() {
   return (
@@ -51,7 +52,7 @@ export default async function AuthorDispatchesPage({
   }
 
   const [{ data: profile }, waitingCount] = await Promise.all([
-    supabase.from('public_profiles').select('id, pseudonym').eq('id', userId).maybeSingle(),
+    supabase.from('public_profiles').select('id, pseudonym, mark_id').eq('id', userId).maybeSingle(),
     getWaitingLetterCount(supabase, viewer.id),
   ])
 
@@ -60,6 +61,7 @@ export default async function AuthorDispatchesPage({
   }
 
   const dispatches = await getPublishedDispatchesByAuthor(supabase, userId)
+  const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
 
   return (
     <AppShell active="minds" waitingLetterCount={waitingCount}>
@@ -74,7 +76,12 @@ export default async function AuthorDispatchesPage({
           </Link>
 
           <div className="flex items-center gap-3">
-            <Mindform identifier={profile.id} size="md" />
+            <ProfileIdentityMark
+              identifier={profile.id}
+              markUrl={markUrl}
+              label={markUrl ? `${profile.pseudonym}'s Mark` : undefined}
+              size="md"
+            />
             <h1 className={sectionTitleClass}>{profile.pseudonym}&rsquo;s Dispatches</h1>
           </div>
 

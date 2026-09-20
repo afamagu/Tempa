@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import CountryFlag from '@/app/country-flag'
 
 /**
@@ -25,11 +25,13 @@ export default function DispatchAuthorLink({
   authorId,
   authorPseudonym,
   authorCountry,
+  authorMarkUrl = null,
   size = 'sm',
 }: {
   authorId: string
   authorPseudonym: string
   authorCountry: string | null
+  authorMarkUrl?: string | null
   size?: 'sm' | 'md'
 }) {
   return (
@@ -37,7 +39,12 @@ export default function DispatchAuthorLink({
       href={`/minds/${authorId}`}
       className="flex min-w-0 items-center gap-1.5 hover:opacity-80"
     >
-      <Mindform identifier={authorId} size={size} />
+      <ProfileIdentityMark
+        identifier={authorId}
+        markUrl={authorMarkUrl}
+        label={authorMarkUrl ? `${authorPseudonym}'s Mark` : undefined}
+        size={size}
+      />
       <p className="truncate text-[14px] text-foreground/70">{authorPseudonym}</p>
       <CountryFlag country={authorCountry} />
     </Link>

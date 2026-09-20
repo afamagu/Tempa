@@ -103,6 +103,7 @@ export default function BoardShelfCard({
           authorId={dispatch.authorId}
           authorPseudonym={dispatch.authorPseudonym}
           authorCountry={dispatch.authorCountry}
+          authorMarkUrl={dispatch.authorMarkUrl ?? null}
         />
         <p className={`shrink-0 ${metadataTextClass}`}>· {formatDatePlain(dispatch.publishedAt)}</p>
       </div>
