@@ -192,4 +192,9 @@ describe('read-only verifier', () => {
     expect(verify).toContain("c.status in (''pending'', ''active'')")
     expect(verify).toContain("def not ilike '%where status = ''active''%do nothing%'")
   })
+
+  it('keeps Mark object deletion limited to retired or explicitly discarded Marks', () => {
+    expect(verify).toContain("pm.status in (''retired'', ''discarded'')")
+    expect(verify).not.toContain("pm.status in (''pending'', ''discarded'')")
+  })
 })

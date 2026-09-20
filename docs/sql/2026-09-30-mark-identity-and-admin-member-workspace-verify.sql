@@ -146,7 +146,7 @@ select
     and finalize_def ilike '%pm.id = p_mark_id and pm.owner_id = auth.uid()%'
     as reservation_and_finalization_owner_scoped,
   upload_def ilike '%pm.owner_id = auth.uid()%pm.status = ''pending''%'
-    and delete_def ilike '%pm.owner_id = auth.uid()%pm.status in (''pending'', ''discarded'')%'
+    and delete_def ilike '%pm.owner_id = auth.uid()%pm.status in (''retired'', ''discarded'')%'
     as storage_predicates_owner_scoped
 from defs;
 
