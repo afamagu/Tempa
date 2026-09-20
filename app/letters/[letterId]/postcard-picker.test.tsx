@@ -71,6 +71,13 @@ describe('PostcardPicker — an honest catalogue, no roadmap placeholders', () =
     expect(html).toContain('Postcards')
   })
 
+  it('does not expose the internal Living Reveal term on catalogue cards', () => {
+    const html = renderToStaticMarkup(
+      <PostcardPicker postcards={[ESSAOUIRA]} onSelect={() => {}} onCancel={() => {}} />
+    )
+    expect(html).not.toContain('Living')
+  })
+
   it('shows an honest empty state when the active catalogue is empty (fetch still pending, or genuinely nothing active)', () => {
     const html = renderToStaticMarkup(<PostcardPicker postcards={[]} onSelect={() => {}} onCancel={() => {}} />)
     expect(html).toContain('No postcards available right now.')

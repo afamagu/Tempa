@@ -38,11 +38,6 @@ function PostcardCard({ postcard, onSelect }: { postcard: PostcardCatalogEntry; 
           alt=""
           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
         />
-        {postcard.motionSrc && (
-          <span className="absolute bottom-2 right-2 rounded-full bg-background/90 px-2 py-1 text-[10px] font-medium shadow-sm">
-            Living
-          </span>
-        )}
       </span>
       <span className="block p-2.5">
         <span className="block truncate text-[13px] font-semibold text-foreground">{postcard.title}</span>
@@ -70,6 +65,17 @@ export default function PostcardPicker({
   const visible = filtered.slice(0, visibleCount)
 
   useEffect(() => setVisibleCount(12), [query])
+
+  // Both composers place this catalogue in a full-viewport scroll
+  // container. Lock the document beneath it so mobile swipes scroll the
+  // postcards rather than the composer or the browser's pull-to-refresh.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 rounded-lg border border-foreground/10 bg-background p-4 sm:p-5">
