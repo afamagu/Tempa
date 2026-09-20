@@ -20,7 +20,7 @@ export const POSTCARD_IMPORT_COLLECTION = 'Tempa Places — First Edition'
 
 export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
   {
-    key: 'amsterdam-canal-ring',
+    key: 'amsterdam_canal_ring',
     title: 'Amsterdam',
     countryCode: 'NL',
     location: 'Canal Ring, Netherlands',
@@ -29,7 +29,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Holland', 'canals'],
   },
   {
-    key: 'bangkok-2',
+    key: 'bangkok_2',
     title: 'Bangkok',
     countryCode: 'TH',
     location: 'Bangkok, Thailand',
@@ -38,7 +38,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Thailand'],
   },
   {
-    key: 'buenos-aires-rio-de-la-plata',
+    key: 'buenos_aires_rio_de_la_plata',
     title: 'Buenos Aires',
     countryCode: 'AR',
     location: 'Río de la Plata, Argentina',
@@ -47,7 +47,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Argentina'],
   },
   {
-    key: 'cape-town-cape-of-good-hope',
+    key: 'cape_town_cape_of_good_hope',
     title: 'Cape Town',
     countryCode: 'ZA',
     location: 'Cape of Good Hope, South Africa',
@@ -56,7 +56,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['South Africa'],
   },
   {
-    key: 'cartagena-caribbean',
+    key: 'cartagena_caribbean',
     title: 'Cartagena',
     countryCode: 'CO',
     location: 'Caribbean Colombia',
@@ -65,7 +65,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Colombia', 'Caribbean'],
   },
   {
-    key: 'dhaka-buriganga',
+    key: 'dhaka_buriganga',
     title: 'Dhaka',
     countryCode: 'BD',
     location: 'Buriganga, Bangladesh',
@@ -83,7 +83,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['UAE', 'Emirates'],
   },
   {
-    key: 'george-town-penang',
+    key: 'george_town_penang',
     title: 'George Town',
     countryCode: 'MY',
     location: 'Penang, Malaysia',
@@ -101,7 +101,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Germany'],
   },
   {
-    key: 'hoi-an',
+    key: 'hoi_an',
     title: 'Hội An',
     countryCode: 'VN',
     location: 'Central Vietnam',
@@ -128,7 +128,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Iran', 'Esfahan'],
   },
   {
-    key: 'istanbul-bosphorus',
+    key: 'istanbul_bosphorus',
     title: 'Istanbul',
     countryCode: 'TR',
     location: 'The Bosphorus, Türkiye',
@@ -155,7 +155,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Poland', 'Krakow'],
   },
   {
-    key: 'kyoto-old-capital',
+    key: 'kyoto_old_capital',
     title: 'Kyoto',
     countryCode: 'JP',
     location: 'Old Capital, Japan',
@@ -173,7 +173,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Nigeria'],
   },
   {
-    key: 'lahore-badshahi-gardens',
+    key: 'lahore_badshahi_gardens',
     title: 'Lahore',
     countryCode: 'PK',
     location: 'Badshahi Gardens, Punjab, Pakistan',
@@ -182,7 +182,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Pakistan', 'Punjab', 'Badshahi Mosque'],
   },
   {
-    key: 'lahore-walled-city',
+    key: 'lahore_walled_city',
     title: 'Lahore',
     countryCode: 'PK',
     location: 'Walled City, Punjab, Pakistan',
@@ -191,7 +191,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Pakistan', 'Punjab', 'Walled City'],
   },
   {
-    key: 'lisbon-tagus-light',
+    key: 'lisbon_tagus_light',
     title: 'Lisbon',
     countryCode: 'PT',
     location: 'Tagus Light, Portugal',
@@ -200,7 +200,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Portugal', 'Tagus'],
   },
   {
-    key: 'london-thames',
+    key: 'london_thames',
     title: 'London',
     countryCode: 'GB',
     location: 'The Thames, United Kingdom',
@@ -209,7 +209,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Britain', 'United Kingdom', 'England', 'UK'],
   },
   {
-    key: 'new-york',
+    key: 'new_york',
     title: 'New York',
     countryCode: 'US',
     location: 'New York, United States',
@@ -227,7 +227,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Mexico'],
   },
   {
-    key: 'paris-montmartre',
+    key: 'paris_montmartre',
     title: 'Paris',
     countryCode: 'FR',
     location: 'Montmartre, France',
@@ -236,7 +236,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['France', 'Montmartre'],
   },
   {
-    key: 'quebec-city',
+    key: 'quebec_city',
     title: 'Québec City',
     countryCode: 'CA',
     location: 'St Lawrence, Canada',
@@ -245,7 +245,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Canada', 'Quebec', 'St Lawrence'],
   },
   {
-    key: 'rio-de-janeiro',
+    key: 'rio_de_janeiro',
     title: 'Rio de Janeiro',
     countryCode: 'BR',
     location: 'Brazil',
@@ -254,7 +254,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Brazil', 'Rio'],
   },
   {
-    key: 'seoul-old-city',
+    key: 'seoul_old_city',
     title: 'Seoul',
     countryCode: 'KR',
     location: 'Old Seoul, South Korea',
@@ -263,7 +263,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['South Korea', 'Korea'],
   },
   {
-    key: 'seville-andalusia',
+    key: 'seville_andalusia',
     title: 'Seville',
     countryCode: 'ES',
     location: 'Andalusia, Spain',
@@ -272,7 +272,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Spain', 'Andalusia', 'Sevilla'],
   },
   {
-    key: 'singapore-island-city',
+    key: 'singapore_island_city',
     title: 'Singapore',
     countryCode: 'SG',
     location: 'Island City, Singapore',
@@ -281,7 +281,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Singapore'],
   },
   {
-    key: 'st-petersburg',
+    key: 'st_petersburg',
     title: 'St Petersburg',
     countryCode: 'RU',
     location: 'Russia',
@@ -290,7 +290,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Russia', 'Saint Petersburg'],
   },
   {
-    key: 'suzhou-jiangnan',
+    key: 'suzhou_jiangnan',
     title: 'Suzhou',
     countryCode: 'CN',
     location: 'Jiangnan, China',
@@ -299,7 +299,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['China', 'Jiangnan'],
   },
   {
-    key: 'sydney-harbour',
+    key: 'sydney_harbour',
     title: 'Sydney',
     countryCode: 'AU',
     location: 'Sydney Harbour, Australia',
@@ -308,7 +308,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Australia', 'Sydney Harbour'],
   },
   {
-    key: 'venice-lagoon',
+    key: 'venice_lagoon',
     title: 'Venice',
     countryCode: 'IT',
     location: 'The Lagoon, Italy',
@@ -317,7 +317,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Italy', 'Venezia', 'Lagoon'],
   },
   {
-    key: 'vigan-ilocos',
+    key: 'vigan_ilocos',
     title: 'Vigan',
     countryCode: 'PH',
     location: 'Ilocos, Philippines',
@@ -326,7 +326,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Philippines', 'Ilocos'],
   },
   {
-    key: 'yogyakarta-old-quarter',
+    key: 'yogyakarta_old_quarter',
     title: 'Yogyakarta',
     countryCode: 'ID',
     location: 'Old Quarter, Java, Indonesia',
@@ -335,7 +335,7 @@ export const POSTCARD_IMPORT_MANIFEST: readonly PostcardImportEntry[] = [
     searchTerms: ['Indonesia', 'Java', 'Jogja', 'Old Quarter'],
   },
   {
-    key: 'yogyakarta-borobudur-sunrise',
+    key: 'yogyakarta_borobudur_sunrise',
     title: 'Yogyakarta',
     countryCode: 'ID',
     location: 'Borobudur at Sunrise, Java, Indonesia',
@@ -397,7 +397,7 @@ export function validatePostcardImportManifest(entries: readonly PostcardImportE
   const errors: string[] = []
 
   for (const entry of entries) {
-    if (!/^[a-z0-9-]+$/.test(entry.key)) errors.push(`Invalid key: ${entry.key}`)
+    if (!/^[a-z][a-z0-9_]*$/.test(entry.key)) errors.push(`Invalid key: ${entry.key}`)
     if (keys.has(entry.key)) errors.push(`Duplicate key: ${entry.key}`)
     if (images.has(entry.imageFilename)) errors.push(`Duplicate image: ${entry.imageFilename}`)
     if (entry.motionFilename && motions.has(entry.motionFilename))
