@@ -38,15 +38,15 @@ export default async function KeepsakesPostcardsPage() {
   return (
     <AppShell active="you" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
-        <div className="w-full max-w-2xl space-y-6 py-10">
+        <div className="w-full max-w-5xl space-y-6 py-10">
           <div className="space-y-3">
             <div className="space-y-1">
               <p className={sectionLabelClass}>Keepsakes</p>
               <h1 className={sectionTitleClass}>Your Postcards</h1>
             </div>
             <TempaNote>
-              Postcards you receive are automatically kept here once they&apos;ve arrived — nothing to save,
-              nothing to set up.
+              Postcards you receive are automatically kept here once they&apos;ve arrived — nothing to save, nothing to
+              set up.
             </TempaNote>
           </div>
 
@@ -55,7 +55,7 @@ export default async function KeepsakesPostcardsPage() {
           {postcards.length === 0 ? (
             <KeepsakesEmptyState />
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {postcards.map((postcard) => (
                 <KeepsakePostcardCard key={postcard.letterId} postcard={postcard} />
               ))}

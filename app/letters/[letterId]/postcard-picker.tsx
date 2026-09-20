@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { helperTextClass, sectionLabelClass, inputClass } from '@/app/profile/ui'
+import { useEffect, useState } from 'react'
+import { helperTextClass, sectionLabelClass, inputClass, secondaryButtonClass } from '@/app/profile/ui'
 import { filterPostcardCatalog, type PostcardCatalogEntry } from '@/lib/postcards'
 
 /**
@@ -24,26 +24,30 @@ import { filterPostcardCatalog, type PostcardCatalogEntry } from '@/lib/postcard
  * search) is added ahead of the catalogue eventually holding scores of
  * Postcards.
  */
-function PostcardCard({
-  postcard,
-  onSelect,
-}: {
-  postcard: PostcardCatalogEntry
-  onSelect: () => void
-}) {
+function PostcardCard({ postcard, onSelect }: { postcard: PostcardCatalogEntry; onSelect: () => void }) {
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="flex flex-col items-start gap-1 rounded-md border border-foreground/15 p-2 text-left transition-colors hover:border-accent"
+      className="group overflow-hidden rounded-lg border border-foreground/12 bg-background text-left transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <img
-        src={postcard.frontImagePath}
-        alt=""
-        className="h-20 w-full rounded object-cover"
-      />
-      <span className="truncate text-[12px] font-medium text-foreground">{postcard.title}</span>
-      <span className="truncate text-[11px] text-muted">{postcard.location}</span>
+      <span className="relative block aspect-[9/16] w-full overflow-hidden bg-foreground/[0.04]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={postcard.frontImagePath}
+          alt=""
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+        />
+        {postcard.motionSrc && (
+          <span className="absolute bottom-2 right-2 rounded-full bg-background/90 px-2 py-1 text-[10px] font-medium shadow-sm">
+            Living
+          </span>
+        )}
+      </span>
+      <span className="block p-2.5">
+        <span className="block truncate text-[13px] font-semibold text-foreground">{postcard.title}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted">{postcard.location}</span>
+      </span>
     </button>
   )
 }
@@ -61,11 +65,21 @@ export default function PostcardPicker({
   onCancel: () => void
 }) {
   const [query, setQuery] = useState('')
+  const [visibleCount, setVisibleCount] = useState(12)
   const filtered = filterPostcardCatalog(postcards, query)
+  const visible = filtered.slice(0, visibleCount)
+
+  useEffect(() => setVisibleCount(12), [query])
 
   return (
-    <div className="mx-auto w-full max-w-sm space-y-4 rounded-md border border-foreground/10 p-4">
-      <p className={sectionLabelClass}>Postcards</p>
+    <div className="mx-auto w-full max-w-2xl space-y-4 rounded-lg border border-foreground/10 bg-background p-4 sm:p-5">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className={sectionLabelClass}>Postcards</p>
+          <p className="mt-1 text-sm text-muted">Choose a place for your letter.</p>
+        </div>
+        {postcards.length > 0 && <span className="text-xs text-muted">{filtered.length} available</span>}
+      </div>
 
       {postcards.length > 0 && (
         <input
@@ -83,11 +97,21 @@ export default function PostcardPicker({
       ) : filtered.length === 0 ? (
         <p className={helperTextClass}>No Postcards match &ldquo;{query.trim()}&rdquo;.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {filtered.map((postcard) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {visible.map((postcard) => (
             <PostcardCard key={postcard.key} postcard={postcard} onSelect={() => onSelect(postcard.key)} />
           ))}
         </div>
+      )}
+
+      {visibleCount < filtered.length && (
+        <button
+          type="button"
+          className={`w-full ${secondaryButtonClass}`}
+          onClick={() => setVisibleCount((count) => count + 12)}
+        >
+          Show 12 more
+        </button>
       )}
 
       <button type="button" onClick={onCancel} className={helperTextClass}>

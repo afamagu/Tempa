@@ -42,16 +42,22 @@ export default function KeepsakePostcardCard({ postcard }: { postcard: MyPostcar
   if (removed) return null
 
   return (
-    <div className="space-y-2 rounded-md border border-foreground/10 p-4">
+    <article className="flex min-h-56 flex-col rounded-lg border border-foreground/10 bg-background p-4 transition hover:border-foreground/20 hover:shadow-sm">
+      <div className="mb-3 min-w-0">
+        <p className="truncate text-sm font-semibold text-foreground">{postcard.base.title}</p>
+        <p className="truncate text-xs text-muted">{postcard.base.location}</p>
+      </div>
       <LetterheadPostcard
         base={postcard.base}
         revealLine={postcard.revealLine}
         backMessage={postcard.backMessage}
         senderPseudonym={postcard.senderPseudonymSnapshot}
       />
-      <p className={helperTextClass}>Received {formatDateTimeFull(postcard.deliveredAt)}</p>
+      <p className={`mt-auto pt-4 ${helperTextClass}`}>
+        From {postcard.senderPseudonymSnapshot} · {formatDateTimeFull(postcard.deliveredAt)}
+      </p>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <Link href={`/letters/${postcard.letterId}`} className={secondaryButtonClass}>
           View original letter
         </Link>
@@ -59,6 +65,6 @@ export default function KeepsakePostcardCard({ postcard }: { postcard: MyPostcar
           {busy ? 'Removing…' : 'Remove from my Postcards'}
         </button>
       </div>
-    </div>
+    </article>
   )
 }
