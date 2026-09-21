@@ -30,7 +30,7 @@ export type PostcardCatalogEntry = {
   collection: string
   postmarkText: string
   footerText: string
-  storyText: string
+  storyText?: string
   frontImagePath: string
   motionSrc: string | null
   durationSeconds: number | null
@@ -47,7 +47,7 @@ type PostcardCatalogRow = {
         collection: string
         postmark_text: string
         footer_text: string
-        story_text: string
+        story_text?: string
         front_image_path: string
         motion_src: string | null
         duration_seconds: number | null
@@ -79,7 +79,7 @@ export function mapPostcardCatalogRows(rows: PostcardCatalogRow[]): PostcardCata
         collection: version.collection,
         postmarkText: version.postmark_text,
         footerText: version.footer_text,
-        storyText: version.story_text,
+        ...(version.story_text ? { storyText: version.story_text } : {}),
         frontImagePath: version.front_image_path,
         motionSrc: version.motion_src,
         durationSeconds: version.duration_seconds,
@@ -141,7 +141,7 @@ export function postcardEntryToBaseContent(entry: PostcardCatalogEntry): Postcar
     frontImagePath: entry.frontImagePath,
     postmarkText: entry.postmarkText,
     footerText: entry.footerText,
-    storyText: entry.storyText,
+    ...(entry.storyText ? { storyText: entry.storyText } : {}),
     living: entry.motionSrc
       ? {
           motionSrc: entry.motionSrc,

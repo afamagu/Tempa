@@ -367,7 +367,7 @@ export function resolveLetterPostcardDisplay(
     frontImagePath: base.frontImagePath,
     postmarkText: base.postmarkText,
     footerText: base.footerText,
-    storyText: base.storyText,
+    ...(base.storyText ? { storyText: base.storyText } : {}),
     senderName: overrides.senderPseudonym,
     backMessage: overrides.backMessage.trim().length > 0 ? overrides.backMessage : '',
     // Never a real recipient identity for a letter-level Postcard — see

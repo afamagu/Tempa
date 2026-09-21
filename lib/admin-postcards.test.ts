@@ -101,6 +101,15 @@ describe('admin_list_postcards — admin floor, active AND inactive both listed'
 })
 
 describe('admin_add_postcard — creates a brand new catalog key AND its Version 1', () => {
+  it('freezes the story on each version while showing the current story in admin', async () => {
+    const fake = seeded(ADMIN, { [ADMIN]: 'admin' })
+    await addPostcard(client(fake), 'kyoto', 'JP', { ...VALID_INPUT, storyText: 'The first telling.' })
+    await createPostcardVersion(client(fake), 'kyoto', { ...VALID_INPUT, storyText: 'The revised telling.' })
+    const versions = fake._versions.filter((v) => v.postcardKey === 'kyoto')
+    expect(versions.map((v) => v.storyText)).toEqual(['The first telling.', 'The revised telling.'])
+    expect((await listPostcards(client(fake))).data.find((p) => p.key === 'kyoto')?.storyText).toBe('The revised telling.')
+  })
+
   it('rejects an unauthenticated caller', async () => {
     const fake = seeded(null)
     const { error } = await addPostcard(client(fake), 'kyoto', 'JP', VALID_INPUT)

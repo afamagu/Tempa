@@ -40,6 +40,7 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [completed, setCompleted] = useState<string[]>([])
+  const [includeReviewed, setIncludeReviewed] = useState(false)
 
   const rows: ImportRow[] = useMemo(() => {
     const known = new Set([...existingKeys, ...completed])
@@ -61,7 +62,7 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
     })
   }, [files, existingKeys, completed])
 
-  const pending = rows.filter((r) => !r.reviewRequired && !r.existing)
+  const pending = rows.filter((r) => (!r.reviewRequired || includeReviewed) && !r.existing)
   const ready = files.length > 0 && pending.every((r) => !r.problem) && pending.length > 0
 
   async function importCards() {
@@ -108,7 +109,7 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
       <p className={`mt-3 ${helperTextClass}`}>
         Select the export folder on this computer. The files stay here until you start the import.
         Cards already imported are skipped, so an interrupted import can resume. Number 35, Lagos Eyo,
-        is held for cultural review.
+        is held until its cultural review is complete.
       </p>
       <label className={`mt-3 inline-flex cursor-pointer items-center ${secondaryButtonClass}`}>
         Select export folder
@@ -119,13 +120,18 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
             setError('')
           }} />
       </label>
+      <label className="mt-3 flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={includeReviewed} disabled={busy}
+          onChange={(event) => setIncludeReviewed(event.target.checked)} />
+        Include number 35 after cultural review is complete
+      </label>
       {files.length > 0 && (
         <div className="mt-4 space-y-3">
-          <p className={helperTextClass}>{files.length} files selected · {pending.filter((r) => !r.problem).length} ready · {rows.filter((r) => r.existing).length} already imported · 1 held</p>
+          <p className={helperTextClass}>{files.length} files selected · {pending.filter((r) => !r.problem).length} ready · {rows.filter((r) => r.existing).length} already imported · {includeReviewed ? 0 : 1} held</p>
           <ol className="max-h-72 space-y-1 overflow-y-auto text-xs">
             {rows.map((row) => (
               <li key={row.key}>
-                {row.sequence}. {row.country} · {row.location} — {row.reviewRequired ? 'Held for review' : row.existing ? 'Imported' : row.problem ?? 'Ready'}
+                {row.sequence}. {row.country} · {row.location} — {row.existing ? 'Imported' : row.reviewRequired && !includeReviewed ? 'Held for review' : row.problem ?? 'Ready'}
               </li>
             ))}
           </ol>

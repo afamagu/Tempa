@@ -22,7 +22,7 @@ export type PostcardVersionInput = {
   collection: string
   postmarkText: string
   footerText: string
-  storyText: string
+  storyText?: string
   frontImagePath: string
   motionSrc?: string | null
   durationSeconds?: number | null
@@ -41,7 +41,7 @@ export type AdminPostcard = {
   collection: string
   postmarkText: string
   footerText: string
-  storyText: string
+  storyText?: string
   frontImagePath: string
   motionSrc: string | null
   durationSeconds: number | null
@@ -114,7 +114,7 @@ export async function listPostcards(
       collection: r.collection,
       postmarkText: r.postmark_text,
       footerText: r.footer_text,
-      storyText: storyByVersion.get(r.current_version_id) ?? '',
+      ...(storyByVersion.get(r.current_version_id) ? { storyText: storyByVersion.get(r.current_version_id) } : {}),
       frontImagePath: r.front_image_path,
       motionSrc: r.motion_src,
       durationSeconds: r.duration_seconds,
@@ -140,7 +140,7 @@ export async function addPostcard(
     p_collection: input.collection.trim(),
     p_postmark_text: input.postmarkText.trim(),
     p_footer_text: input.footerText.trim(),
-    p_story_text: input.storyText.trim(),
+    p_story_text: input.storyText?.trim() ?? '',
     p_front_image_path: input.frontImagePath.trim(),
     p_motion_src: input.motionSrc?.trim() || null,
     p_duration_seconds: input.durationSeconds ?? null,
@@ -166,7 +166,7 @@ export async function createPostcardVersion(
     p_collection: input.collection.trim(),
     p_postmark_text: input.postmarkText.trim(),
     p_footer_text: input.footerText.trim(),
-    p_story_text: input.storyText.trim(),
+    p_story_text: input.storyText?.trim() ?? '',
     p_front_image_path: input.frontImagePath.trim(),
     p_motion_src: input.motionSrc?.trim() || null,
     p_duration_seconds: input.durationSeconds ?? null,

@@ -25,6 +25,7 @@ export type FakePostcardVersion = {
   collection: string
   postmarkText: string
   footerText: string
+  storyText?: string
   frontImagePath: string
   motionSrc?: string | null
   durationSeconds?: number | null
@@ -113,7 +114,24 @@ export function createFakePostcards(options: {
     return versions.find((v) => v.postcardKey === key && v.isCurrent)
   }
 
-  async function rpc(fn: string, params?: Record<string, unknown>) {
+  async function rpc(fn: string, params?: Record<string, unknown>): Promise<{
+    data: unknown
+    error: { message: string; code: string } | null
+  }> {
+    if (fn === 'admin_add_story_postcard' || fn === 'admin_create_story_postcard_version') {
+      const story = String(params?.p_story_text ?? '').trim()
+      if (story.length > 600) {
+        return { data: null, error: { message: 'Story must be 600 characters or fewer.', code: 'P0001' } }
+      }
+      const oldFn = fn === 'admin_add_story_postcard' ? 'admin_add_postcard' : 'admin_create_postcard_version'
+      const result = await rpc(oldFn, params)
+      if (!result.error && result.data) {
+        const version = versions.find((v) => v.id === result.data)
+        if (version) version.storyText = story
+      }
+      return result
+    }
+
     if (fn === 'admin_list_postcards') {
       if (!isStaff(viewerId, 'admin')) return { data: null, error: { message: 'Not authorized.', code: 'P0001' } }
 
@@ -408,6 +426,18 @@ export function createFakePostcards(options: {
 
   return {
     rpc,
+    from(table: string) {
+      if (table !== 'postcard_versions') throw new Error(`Unexpected table ${table}`)
+      return {
+        select() {
+          return {
+            async in(_column: string, ids: string[]) {
+              return { data: versions.filter((v) => ids.includes(v.id)).map((v) => ({ id: v.id, story_text: v.storyText ?? '' })), error: null }
+            },
+          }
+        },
+      }
+    },
     /** Test-only escape hatches. */
     _catalog: catalog,
     _versions: versions,

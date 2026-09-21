@@ -46,7 +46,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
   const [collection, setCollection] = useState(postcard.collection)
   const [postmarkText, setPostmarkText] = useState(postcard.postmarkText)
   const [footerText, setFooterText] = useState(postcard.footerText)
-  const [storyText, setStoryText] = useState(postcard.storyText)
+  const [storyText, setStoryText] = useState(postcard.storyText ?? '')
   const [frontImagePath, setFrontImagePath] = useState(postcard.frontImagePath)
   const [motionSrc, setMotionSrc] = useState(postcard.motionSrc ?? '')
   const [durationSeconds, setDurationSeconds] = useState(
@@ -282,7 +282,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
                 setCollection(postcard.collection)
                 setPostmarkText(postcard.postmarkText)
                 setFooterText(postcard.footerText)
-                setStoryText(postcard.storyText)
+                setStoryText(postcard.storyText ?? '')
                 setFrontImagePath(postcard.frontImagePath)
                 setMotionSrc(postcard.motionSrc ?? '')
                 setDurationSeconds(postcard.durationSeconds !== null ? String(postcard.durationSeconds) : '')
