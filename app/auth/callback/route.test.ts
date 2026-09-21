@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from './route'
+import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION } from '@/lib/legal'
 
 // Checkpoint 1, Phase B — no test file existed for this route at all
 // before this checkpoint, despite it being the exact route the
@@ -8,19 +9,38 @@ import { GET } from './route'
 // next/headers) rather than a real Supabase client/Next.js request
 // context, matching this codebase's own established mocking
 // conventions elsewhere (e.g. app/letters/letterbox-search.test.tsx).
+//
+// Adult Eligibility + Legal Acceptance Gate — the mock is now
+// table-aware (profiles / account_eligibility / legal_acceptances each
+// resolve through their OWN mock function) since the route now reads
+// all three per request, in parallel. Every PRE-EXISTING test below
+// keeps its original intent unchanged; the default eligibility/legal
+// mocks are set to an already-satisfied state in beforeEach precisely
+// so those pre-existing profile-onboarding-stage assertions continue
+// to exercise exactly what they did before this gate existed. New
+// gate-specific tests are added in their own describe block below.
 
 const mockExchangeCodeForSession = vi.fn()
-const mockMaybeSingle = vi.fn()
+const mockProfileMaybeSingle = vi.fn()
+const mockEligibilityMaybeSingle = vi.fn()
+const mockLegalAcceptances = vi.fn()
 const mockCookiesGetAll = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { exchangeCodeForSession: mockExchangeCodeForSession },
-    from: () => ({
-      select: () => ({
-        eq: () => ({ maybeSingle: mockMaybeSingle }),
-      }),
-    }),
+    from: (table: string) => {
+      if (table === 'profiles') {
+        return { select: () => ({ eq: () => ({ maybeSingle: mockProfileMaybeSingle }) }) }
+      }
+      if (table === 'account_eligibility') {
+        return { select: () => ({ eq: () => ({ maybeSingle: mockEligibilityMaybeSingle }) }) }
+      }
+      if (table === 'legal_acceptances') {
+        return { select: () => ({ eq: () => mockLegalAcceptances() }) }
+      }
+      throw new Error(`unexpected table in test mock: ${table}`)
+    },
   }),
 }))
 
@@ -30,9 +50,23 @@ vi.mock('next/headers', () => ({
 
 beforeEach(() => {
   mockExchangeCodeForSession.mockReset()
-  mockMaybeSingle.mockReset()
+  mockProfileMaybeSingle.mockReset()
+  mockEligibilityMaybeSingle.mockReset()
+  mockLegalAcceptances.mockReset()
   mockCookiesGetAll.mockReset()
   mockCookiesGetAll.mockReturnValue([])
+
+  // Default: gate already satisfied — an eligible adult with current
+  // legal acceptance — so every pre-existing test below (written
+  // before this gate existed) continues to exercise ONLY the profile-
+  // onboarding-stage routing it originally targeted.
+  mockEligibilityMaybeSingle.mockResolvedValue({ data: { status: 'eligible' } })
+  mockLegalAcceptances.mockResolvedValue({
+    data: [
+      { document_type: 'terms_of_service', document_version: CURRENT_TERMS_VERSION },
+      { document_type: 'community_guidelines', document_version: CURRENT_COMMUNITY_GUIDELINES_VERSION },
+    ],
+  })
 })
 
 function locationOf(response: Response): string | null {
@@ -42,7 +76,7 @@ function locationOf(response: Response): string | null {
 describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style, identical downstream) exchanges the session', () => {
   it('calls exchangeCodeForSession with the exact code from the query string', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     await GET(new Request('https://jointempa.com/auth/callback?code=real-auth-code-123'))
 
@@ -51,7 +85,7 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('an existing member (has a profile) is redirected to /home by default', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
 
@@ -60,7 +94,7 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('honors a sanitized `next` destination for an existing member', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=%2Fletters'))
 
@@ -69,7 +103,7 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('a brand new member (no profile yet) always goes to /profile onboarding, even if `next` was supplied', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'new-user' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: null })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=%2Fletters'))
 
@@ -78,7 +112,7 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
 
   it('an unsanitized/external `next` is never honored — falls back to /home', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=https%3A%2F%2Fevil.example.com'))
 
@@ -90,10 +124,68 @@ describe('GET /auth/callback — a valid code (Google-style or Magic-Link-style,
     ['question', '/profile/question'],
   ])('does not let a %s-stage member use `next` to bypass onboarding', async (stage, expected) => {
     mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    mockMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: stage } })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: stage } })
 
     const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=%2Fletters'))
     expect(locationOf(res)).toBe(`https://jointempa.com${expected}`)
+  })
+})
+
+describe('GET /auth/callback — Adult Eligibility + Legal Acceptance Gate', () => {
+  it('a brand-new account with no eligibility state yet is sent to /begin, with `next` preserved, even with a complete-looking profile', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: null })
+
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc&next=%2Fletters'))
+
+    expect(locationOf(res)).toBe('https://jointempa.com/begin?next=%2Fletters')
+  })
+
+  it('an ineligible account is sent to /begin regardless of profile completeness', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: { status: 'ineligible' } })
+
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
+
+    expect(locationOf(res)).toBe('https://jointempa.com/begin?next=%2Fhome')
+  })
+
+  it('eligible but missing current legal acceptance is sent to /begin', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: { status: 'eligible' } })
+    mockLegalAcceptances.mockResolvedValue({ data: [] })
+
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
+
+    expect(locationOf(res)).toBe('https://jointempa.com/begin?next=%2Fhome')
+  })
+
+  it('an OLD accepted Terms version does not count as current — still sent to /begin', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: { status: 'eligible' } })
+    mockLegalAcceptances.mockResolvedValue({
+      data: [
+        { document_type: 'terms_of_service', document_version: 'some-old-version' },
+        { document_type: 'community_guidelines', document_version: CURRENT_COMMUNITY_GUIDELINES_VERSION },
+      ],
+    })
+
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
+
+    expect(locationOf(res)).toBe('https://jointempa.com/begin?next=%2Fhome')
+  })
+
+  it('eligible + legally current + no profile still goes to /profile, not /begin', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'new-user' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: null })
+
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
+
+    expect(locationOf(res)).toBe('https://jointempa.com/profile')
   })
 })
 

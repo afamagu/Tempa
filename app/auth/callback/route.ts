@@ -1,7 +1,9 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
-import { resolveOnboardingDestination, type OnboardingStage } from '@/lib/onboarding'
+import { type OnboardingStage } from '@/lib/onboarding'
+import { resolveAccountEntryDestination, type EligibilityStatus } from '@/lib/account-entry'
+import { isLegalCurrent } from '@/lib/legal'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -28,22 +30,41 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, onboarding_stage')
-        .eq('id', data.user.id)
-        .maybeSingle()
+      const [{ data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
+        supabase.from('profiles').select('id, onboarding_stage').eq('id', data.user.id).maybeSingle(),
+        supabase.from('account_eligibility').select('status').eq('user_id', data.user.id).maybeSingle(),
+        supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', data.user.id),
+      ])
 
-      // `next` is honored only after the complete durable onboarding
-      // sequence. A profile row alone no longer proves completion.
-      const destination = resolveOnboardingDestination(
+      // `next` is honored only after the complete durable account-entry
+      // sequence: confirmed adult eligibility, current legal
+      // acceptance, THEN the existing profile-onboarding sequence. A
+      // profile row alone no longer proves completion, and neither does
+      // a profile stage of 'complete' on its own.
+      const requestedDestination = next ?? '/home'
+      const destination = resolveAccountEntryDestination(
         {
           authenticated: true,
+          eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
+          eligibleOn: null,
+          legalCurrent: isLegalCurrent(
+            (legalRows ?? []).map((r) => ({
+              documentType: r.document_type as 'terms_of_service' | 'community_guidelines',
+              documentVersion: r.document_version as string,
+            }))
+          ),
           hasProfile: Boolean(profile),
           onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
         },
-        next ?? '/home'
+        requestedDestination
       )
+
+      if (destination === '/begin') {
+        const beginUrl = new URL('/begin', origin)
+        beginUrl.searchParams.set('next', requestedDestination)
+        return NextResponse.redirect(beginUrl.toString())
+      }
+
       return NextResponse.redirect(`${origin}${destination}`)
     }
 
