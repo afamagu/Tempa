@@ -52,18 +52,41 @@ auth metadata. RLS/grants mirror `account_eligibility`.
 `accept_current_legal_documents` (`SECURITY DEFINER`) is the sole write
 path, and requires `account_eligibility.status = 'eligible'` first.
 
-## Required version constants — `lib/legal.ts`
+## Required version constants — `lib/legal.ts` AND the database (independent audit correction)
 
 ```ts
 export const CURRENT_TERMS_VERSION = '2026-09-launch-v1'
 export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-09-launch-v1'
 ```
 
-**To require reacceptance of a new legal version**: bump the relevant
-constant here. Nothing else changes — `isLegalCurrent()` will then
-treat every existing acceptance of the old version as stale, and
-`resolveAccountEntryDestination` will route the affected members back
-to `/begin`'s legal-acceptance state (never DOB, never profile
+**Legal-version authority correction:** `accept_current_legal_documents`
+previously accepted `p_terms_version`/`p_community_guidelines_version`
+as client-supplied text arguments — a modified authenticated client
+could submit a guessed *future* version string before that document
+existed, and if `lib/legal.ts` later happened to adopt that exact
+string, the stale row would silently satisfy `isLegalCurrent()` without
+genuine acceptance of that version. Fixed: the RPC now takes **no
+version parameters at all**. The accepted version strings are SQL
+`CONSTANT`s inside the function body (`v_terms_version`,
+`v_community_guidelines_version`) — the sole authoritative source,
+which an authenticated caller cannot choose or influence. These SQL
+constants are proven to exactly match `lib/legal.ts`'s exported
+constants by a source-level regression test
+(`lib/__tests__/adultEligibilityMigration.test.ts`) that imports the
+real TypeScript values and compares them against the literal SQL text.
+
+**To require reacceptance of a new legal version, update BOTH:**
+1. `lib/legal.ts`'s two constants.
+2. `accept_current_legal_documents`'s two SQL `CONSTANT` values, via a
+   new migration.
+
+Updating `lib/legal.ts` alone is **not** sufficient — doing so only
+changes what `isLegalCurrent()` treats as current for *reading* already
+-recorded rows; it does not change which version the RPC records on a
+fresh acceptance. Once both are updated and the migration runs,
+`isLegalCurrent()` treats every existing acceptance of the old version
+as stale, and `resolveAccountEntryDestination` routes affected members
+back to `/begin`'s legal-acceptance state (never DOB, never profile
 onboarding — those stay untouched) the next time they hit a protected
 route or auth callback.
 
@@ -106,6 +129,33 @@ A deliberate future DOB-correction mechanism, if Tempa ever needs one,
 must be its own separate, controlled flow — never a side effect of
 resubmitting this RPC. The RPC's return signature (`status,
 eligible_on`) never includes `date_of_birth` in any branch.
+
+## First-submission concurrency (independent audit correction)
+
+The immutability guard above is correct for *sequential* calls, but a
+genuinely first submission has a race the row-level `FOR UPDATE` lock
+cannot close on its own: when no `account_eligibility` row exists yet,
+`FOR UPDATE` has nothing to lock, so two concurrent first calls could
+both observe "no existing row," independently evaluate different
+submitted DOBs, and race into the later `UPSERT` — the later write
+silently replacing the first decision.
+
+Fixed with a **transaction-scoped PostgreSQL advisory lock**,
+`pg_advisory_xact_lock(hashtextextended(auth.uid()::text, 0))`, acquired
+as the very first statement inside `submit_dob_eligibility` after the
+auth check — *before* `account_eligibility` is read at all. Properties:
+
+- Keyed deterministically from `auth.uid()` only — never a
+  client-supplied identifier.
+- Two concurrent calls for the *same* account serialize; two different
+  accounts hash to (with overwhelming probability) different keys and
+  never block each other.
+- `_xact_` (not the session-scoped `pg_advisory_lock`) releases
+  automatically at this function's own transaction end — commit,
+  rollback, or an early `RAISE EXCEPTION` anywhere in the function all
+  release it. No explicit unlock call exists or is needed.
+- The pre-existing row-level `FOR UPDATE` is kept as defense in depth
+  for the case where a row already exists.
 
 ## February 29 convention (independent audit correction)
 
@@ -202,6 +252,32 @@ the matcher, so they stay reachable without any account-entry state.
   `INSERT` policy already guarantees that. `derive_age_range` itself
   keeps its narrow grant — the fix is entirely in the trigger's own
   security context, not a broader `tempa_private` exposure.
+- **First-submission concurrency correction (independent audit
+  correction):** `submit_dob_eligibility` acquires a transaction-scoped
+  advisory lock keyed from `auth.uid()` before reading
+  `account_eligibility` — see "First-submission concurrency," above.
+- **Legal-version authority correction (independent audit
+  correction):** `accept_current_legal_documents` takes no parameters;
+  the accepted version strings are SQL constants inside the function,
+  not client-supplied — see "Required version constants," above.
+
+## Sign-out on terminal states (independent audit correction)
+
+`/begin`'s ineligible/review-required terminal states perform a real
+sign-out — `app/begin/sign-out-action.ts`'s `signOutAndReturnToSignIn`
+— rather than a bare `<Link href="/sign-in">`, which previously left
+the session authenticated and would have sent the member right back to
+the same terminal state on their next visit. The implementation
+**inspects Supabase's *returned* error** (`const { error } = await
+supabase.auth.signOut()`), not only a thrown exception — Supabase
+resolves `signOut()` with `{ error }` for an ordinary failure rather
+than rejecting, so a bare `try/catch` around the call would silently
+miss that. A returned error is logged server-side only (`message` +
+`name`, the same restrained shape `app/auth/callback/route.ts`'s own
+`[auth/callback] code exchange failed` log already uses) — never
+surfaced to the member, who is redirected to `/sign-in` either way.
+Sign-out scope is unchanged from the existing `app/you/page.tsx`
+precedent (no explicit `scope` option passed).
 
 ## What still needs to happen before production
 

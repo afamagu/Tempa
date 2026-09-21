@@ -10,13 +10,18 @@
 // instant "enter a valid date" feedback before a submission ever
 // reaches the server. The AUTHORITATIVE eligibility decision is made
 // server-side, inside submit_dob_eligibility (docs/sql/2026-09-21-
-// adult-eligibility-and-legal-acceptance.sql), using Postgres's own
-// calendar-correct `age()` function against `current_date` — never the
-// browser's clock, and never this module. The SQL migration
-// necessarily duplicates the same age-boundary reasoning in SQL (a
-// Postgres function cannot import a TypeScript module) — that
-// duplication is intentional and documented in both places, not an
-// oversight.
+// adult-eligibility-and-legal-acceptance.sql), using tempa_private.
+// calculate_age against current_date — never the browser's clock, and
+// never this module. calculate_age is DELIBERATELY NOT Postgres's
+// built-in age() (independent audit correction): it transliterates
+// this file's own calculateAge algorithm line-for-line in SQL, so the
+// two are guaranteed to agree by construction — including the March-1-
+// not-February-28 leap-day boundary a February 29 DOB produces (see
+// calculateAge's own comment below) — rather than by assuming
+// Postgres's age() happens to implement the same convention, which was
+// never verified against a live database. That duplication (this
+// module's algorithm, re-expressed in SQL) is intentional and
+// documented in both places, not an oversight.
 
 export type DateOfBirth = { year: number; month: number; day: number }
 

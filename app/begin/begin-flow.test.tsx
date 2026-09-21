@@ -214,13 +214,14 @@ describe('BeginFlow — legal acceptance step (source inspection)', () => {
     expect(body).toContain('disabled={!agreed || submitting}')
   })
 
-  it('calls accept_current_legal_documents with BOTH current versions from the one central lib/legal.ts source, never a hardcoded literal', () => {
-    expect(source).toContain(
-      "import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION } from '@/lib/legal'"
-    )
-    expect(body).toContain("supabase.rpc('accept_current_legal_documents'")
-    expect(body).toContain('p_terms_version: CURRENT_TERMS_VERSION')
-    expect(body).toContain('p_community_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION')
+  it('calls accept_current_legal_documents with NO version arguments — the accepted versions are server-side SQL constants (independent audit correction), never client-supplied', () => {
+    expect(body).toContain("supabase.rpc('accept_current_legal_documents')")
+    // The old client-supplied-version call shape must be fully gone —
+    // an authenticated caller must not be able to choose which
+    // document version gets recorded.
+    expect(body).not.toContain('p_terms_version')
+    expect(body).not.toContain('p_community_guidelines_version')
+    expect(source).not.toContain("from '@/lib/legal'")
   })
 
   it('a successful acceptance calls router.refresh(), never a hardcoded client-side redirect', () => {

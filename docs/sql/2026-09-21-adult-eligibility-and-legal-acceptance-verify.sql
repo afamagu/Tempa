@@ -129,6 +129,20 @@ submit_dob_function_check as (
       pg_get_functiondef(p.oid) ilike '%v_existing.status = ''ineligible''%current_date < v_existing.eligible_on%',
       false
     ) as respects_ineligible_window,
+    -- CONCURRENCY FIX (independent audit correction): a transaction-
+    -- scoped advisory lock, keyed from auth.uid() only, acquired BEFORE
+    -- the account_eligibility read — position()-ordering (both
+    -- positions > 0 before comparing) proves the lock statement
+    -- appears strictly before the existing-row SELECT.
+    coalesce(pg_get_functiondef(p.oid) ilike '%pg_advisory_xact_lock(hashtextextended(auth.uid()::text, 0))%', false)
+      as acquires_account_scoped_advisory_lock,
+    coalesce(
+      position('pg_advisory_xact_lock' in pg_get_functiondef(p.oid)) > 0
+      and position('select * into v_existing' in pg_get_functiondef(p.oid)) > 0
+      and position('pg_advisory_xact_lock' in pg_get_functiondef(p.oid))
+        < position('select * into v_existing' in pg_get_functiondef(p.oid)),
+      false
+    ) as advisory_lock_precedes_existing_row_read,
     -- DOB IMMUTABILITY (independent audit correction): an already-
     -- eligible account's submission is returned unchanged, never
     -- evaluated. Proven via position()-ordering (both positions > 0
@@ -161,7 +175,13 @@ submit_dob_function_check as (
 ),
 accept_legal_function_check as (
   select
-    to_regprocedure('public.accept_current_legal_documents(text, text)') is not null as exact_signature_exists,
+    -- LEGAL VERSION AUTHORITY CORRECTION (independent audit
+    -- correction): the parameterless signature IS the fix — proves an
+    -- authenticated caller can no longer supply/influence which
+    -- version strings get recorded.
+    to_regprocedure('public.accept_current_legal_documents()') is not null as exact_signature_exists,
+    to_regprocedure('public.accept_current_legal_documents(text, text)') is null
+      as old_client_supplied_signature_gone,
     p.oid is not null as exists_at_all,
     coalesce(p.prosecdef, false) as is_security_definer,
     coalesce(exists (select 1 from unnest(p.proconfig) cfg where cfg = 'search_path=pg_catalog'), false)
@@ -171,11 +191,17 @@ accept_legal_function_check as (
       as requires_eligible_first,
     coalesce(pg_get_functiondef(p.oid) ilike '%on conflict (user_id, document_type, document_version) do nothing%', false)
       as inserts_idempotently,
+    -- The two accepted versions are SQL CONSTANTs inside the function
+    -- body — never read from a parameter.
+    coalesce(pg_get_functiondef(p.oid) ilike '%v_terms_version constant text%', false)
+      as terms_version_is_server_constant,
+    coalesce(pg_get_functiondef(p.oid) ilike '%v_community_guidelines_version constant text%', false)
+      as community_guidelines_version_is_server_constant,
     coalesce(has_function_privilege('authenticated', p.oid, 'EXECUTE'), false) as authenticated_exec,
     coalesce(not has_function_privilege('anon', p.oid, 'EXECUTE'), false) as anon_no_exec
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('public.accept_current_legal_documents(text, text)')
+    on p.oid = to_regprocedure('public.accept_current_legal_documents()')
 ),
 calculate_age_check as (
   select
@@ -282,6 +308,8 @@ select
   sd.checks_auth as submit_dob_checks_auth,
   sd.rejects_future_date as submit_dob_rejects_future_date,
   sd.respects_ineligible_window as submit_dob_respects_ineligible_window,
+  sd.acquires_account_scoped_advisory_lock as submit_dob_acquires_account_scoped_advisory_lock,
+  sd.advisory_lock_precedes_existing_row_read as submit_dob_advisory_lock_precedes_existing_row_read,
   sd.eligible_dob_is_immutable as submit_dob_eligible_dob_is_immutable,
   sd.does_not_retain_minor_dob as submit_dob_does_not_retain_minor_dob,
   sd.syncs_derived_age_range as submit_dob_syncs_derived_age_range,
@@ -291,11 +319,14 @@ select
   sd.authenticated_exec as submit_dob_authenticated_exec,
   sd.anon_no_exec as submit_dob_anon_no_exec,
   al.exact_signature_exists as accept_legal_exists,
+  al.old_client_supplied_signature_gone as accept_legal_old_client_supplied_signature_gone,
   al.is_security_definer as accept_legal_is_security_definer,
   al.search_path_fixed as accept_legal_search_path_fixed,
   al.checks_account_status as accept_legal_checks_account_status,
   al.requires_eligible_first as accept_legal_requires_eligible_first,
   al.inserts_idempotently as accept_legal_inserts_idempotently,
+  al.terms_version_is_server_constant as accept_legal_terms_version_is_server_constant,
+  al.community_guidelines_version_is_server_constant as accept_legal_community_guidelines_version_is_server_constant,
   al.authenticated_exec as accept_legal_authenticated_exec,
   al.anon_no_exec as accept_legal_anon_no_exec,
   cage.exact_signature_exists as calculate_age_exists,
@@ -320,13 +351,16 @@ select
     and lg.authenticated_select and lg.authenticated_no_insert and lg.anon_no_select
     and sd.exact_signature_exists and sd.is_security_definer and sd.search_path_fixed
     and sd.checks_auth and sd.rejects_future_date and sd.respects_ineligible_window
+    and sd.acquires_account_scoped_advisory_lock and sd.advisory_lock_precedes_existing_row_read
     and sd.eligible_dob_is_immutable
     and sd.does_not_retain_minor_dob and sd.syncs_derived_age_range
     and sd.uses_canonical_age_function and sd.uses_canonical_eligible_on_function
     and sd.never_uses_builtin_age_function
     and sd.authenticated_exec and sd.anon_no_exec
-    and al.exact_signature_exists and al.is_security_definer and al.search_path_fixed
+    and al.exact_signature_exists and al.old_client_supplied_signature_gone
+    and al.is_security_definer and al.search_path_fixed
     and al.checks_account_status and al.requires_eligible_first and al.inserts_idempotently
+    and al.terms_version_is_server_constant and al.community_guidelines_version_is_server_constant
     and al.authenticated_exec and al.anon_no_exec
     and cage.exact_signature_exists and cage.authenticated_no_exec
     and celig.exact_signature_exists and celig.resolves_feb29_to_march_first and celig.never_resolves_feb29_to_feb28

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION } from '../legal'
 
 const MIGRATION_PATH = path.join(__dirname, '..', '..', 'docs', 'sql', '2026-09-21-adult-eligibility-and-legal-acceptance.sql')
 const VERIFY_PATH = path.join(
@@ -57,25 +58,29 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — identity is al
     expect(lower).toContain('if auth.uid() is null then')
   })
 
-  it('accept_current_legal_documents takes no user-id argument at all — identity comes only from auth.uid()', () => {
-    expect(lower).toContain('create or replace function public.accept_current_legal_documents(')
-    const sigStart = lower.indexOf('create or replace function public.accept_current_legal_documents(')
-    const sigEnd = lower.indexOf(')', sigStart)
-    const signature = lower.slice(sigStart, sigEnd)
-    expect(signature).not.toContain('uuid')
+  it('accept_current_legal_documents takes NO parameters at all — identity comes only from auth.uid(), and the accepted version strings are server-side constants (independent audit correction)', () => {
+    expect(lower).toContain('create or replace function public.accept_current_legal_documents()')
+    // The old client-supplied-version signature must be completely
+    // gone, not merely unused.
+    expect(lower).not.toContain('p_terms_version text')
+    expect(lower).not.toContain('p_community_guidelines_version text')
     expect(lower).toContain(
       "insert into public.legal_acceptances (user_id, document_type, document_version, accepted_at)\n  values\n    (auth.uid()"
     )
   })
 
   it('both RPCs are SECURITY DEFINER with a fixed search_path, matching this repo\'s own established RPC hardening posture', () => {
-    for (const fn of ['public.submit_dob_eligibility', 'public.accept_current_legal_documents']) {
-      const fnStart = lower.indexOf(`create or replace function ${fn}(`)
-      const fnEnd = lower.indexOf('$function$;', fnStart)
-      const body = lower.slice(fnStart, fnEnd)
-      expect(body).toContain('security definer')
-      expect(body).toContain("set search_path to 'pg_catalog'")
-    }
+    const submitDobStart = lower.indexOf('create or replace function public.submit_dob_eligibility(')
+    const submitDobEnd = lower.indexOf('$function$;', submitDobStart)
+    const submitDobBody = lower.slice(submitDobStart, submitDobEnd)
+    expect(submitDobBody).toContain('security definer')
+    expect(submitDobBody).toContain("set search_path to 'pg_catalog'")
+
+    const acceptLegalStart = lower.indexOf('create or replace function public.accept_current_legal_documents()')
+    const acceptLegalEnd = lower.indexOf('$function$;', acceptLegalStart)
+    const acceptLegalBody = lower.slice(acceptLegalStart, acceptLegalEnd)
+    expect(acceptLegalBody).toContain('security definer')
+    expect(acceptLegalBody).toContain("set search_path to 'pg_catalog'")
   })
 
   it('both RPCs are revoked from public/anon/authenticated and re-granted execute to authenticated only, explicitly (not relying on inherited grants)', () => {
@@ -84,9 +89,97 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — identity is al
     )
     expect(lower).toContain('grant execute on function public.submit_dob_eligibility(integer, integer, integer) to authenticated')
     expect(lower).toContain(
-      'revoke all on function public.accept_current_legal_documents(text, text) from public, anon, authenticated'
+      'revoke all on function public.accept_current_legal_documents() from public, anon, authenticated'
     )
-    expect(lower).toContain('grant execute on function public.accept_current_legal_documents(text, text) to authenticated')
+    expect(lower).toContain('grant execute on function public.accept_current_legal_documents() to authenticated')
+  })
+})
+
+describe('Adult Eligibility + Legal Acceptance Gate migration — first-submission concurrency (independent audit correction)', () => {
+  it('acquires an account-scoped transaction advisory lock, keyed from auth.uid() only, never a client-supplied identifier', () => {
+    expect(lower).toContain('perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text, 0));')
+  })
+
+  it('the advisory lock is acquired BEFORE the existing-row read — closing the race a bare FOR UPDATE cannot close on a first submission', () => {
+    const fnStart = lower.indexOf('create or replace function public.submit_dob_eligibility(')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+
+    const lockPos = body.indexOf('pg_advisory_xact_lock')
+    const existingReadPos = body.indexOf('select * into v_existing')
+    expect(lockPos).toBeGreaterThan(-1)
+    expect(existingReadPos).toBeGreaterThan(-1)
+    expect(lockPos).toBeLessThan(existingReadPos)
+  })
+
+  it('the lock is acquired AFTER the auth check but uses ONLY auth.uid() as its key material — never a p_-prefixed client parameter', () => {
+    const fnStart = lower.indexOf('create or replace function public.submit_dob_eligibility(')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+
+    const authCheckPos = body.indexOf('if auth.uid() is null then')
+    const lockPos = body.indexOf('pg_advisory_xact_lock')
+    expect(authCheckPos).toBeGreaterThan(-1)
+    expect(lockPos).toBeGreaterThan(authCheckPos)
+
+    const lockLineStart = body.indexOf('perform pg_advisory_xact_lock(')
+    const lockLineEnd = body.indexOf(';', lockLineStart)
+    const lockLine = body.slice(lockLineStart, lockLineEnd)
+    expect(lockLine).toContain('auth.uid()')
+    expect(lockLine).not.toMatch(/\bp_\w+/)
+  })
+
+  it('uses pg_advisory_xact_lock specifically — TRANSACTION-scoped, releasing automatically, never the session-scoped pg_advisory_lock (which would require an explicit, easy-to-forget unlock)', () => {
+    expect(lower).toContain('pg_advisory_xact_lock')
+    expect(lower).not.toMatch(/[^_]pg_advisory_lock\(/)
+  })
+
+  it('the row-level FOR UPDATE lock is kept as defense in depth, not removed', () => {
+    const fnStart = lower.indexOf('create or replace function public.submit_dob_eligibility(')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('for update')
+  })
+})
+
+describe('Adult Eligibility + Legal Acceptance Gate migration — legal version authority (independent audit correction)', () => {
+  it('the two accepted version strings are SQL CONSTANTs inside the function body, not read from any parameter', () => {
+    const fnStart = lower.indexOf('create or replace function public.accept_current_legal_documents()')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('v_terms_version constant text :=')
+    expect(body).toContain('v_community_guidelines_version constant text :=')
+    expect(body).toContain(
+      "values\n    (auth.uid(), 'terms_of_service', v_terms_version, now()),\n    (auth.uid(), 'community_guidelines', v_community_guidelines_version, now())"
+    )
+  })
+
+  it('an authenticated caller cannot choose, override, or influence which version gets recorded — the function signature has zero parameters', () => {
+    expect(lower).toContain('create or replace function public.accept_current_legal_documents()\nreturns void')
+  })
+
+  it('the SQL-authoritative legal versions exactly match lib/legal.ts\'s exported constants (source-level regression test, not a manual claim)', () => {
+    const termsMatch = sql.match(/v_terms_version constant text := '([^']+)'/)
+    const guidelinesMatch = sql.match(/v_community_guidelines_version constant text := '([^']+)'/)
+    expect(termsMatch).not.toBeNull()
+    expect(guidelinesMatch).not.toBeNull()
+    expect(termsMatch![1]).toBe(CURRENT_TERMS_VERSION)
+    expect(guidelinesMatch![1]).toBe(CURRENT_COMMUNITY_GUIDELINES_VERSION)
+  })
+
+  it('eligibility and account-status checks are preserved from the previous (client-supplied-version) design', () => {
+    const fnStart = lower.indexOf('create or replace function public.accept_current_legal_documents()')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('current_account_status()')
+    expect(body).toContain("v_status is distinct from 'eligible'")
+  })
+
+  it('versioned acceptance rows and idempotency are preserved', () => {
+    const fnStart = lower.indexOf('create or replace function public.accept_current_legal_documents()')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('on conflict (user_id, document_type, document_version) do nothing')
   })
 })
 

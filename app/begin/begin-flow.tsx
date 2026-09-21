@@ -4,7 +4,6 @@ import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION } from '@/lib/legal'
 import { primaryButtonClass, quietLinkClass, helperTextClass } from '@/app/profile/ui'
 
 const MONTHS = [
@@ -205,11 +204,15 @@ function LegalAcceptanceStep() {
     setSubmitting(true)
     setError(null)
 
+    // LEGAL VERSION AUTHORITY CORRECTION (independent audit
+    // correction): this RPC takes NO version arguments — the accepted
+    // version strings are server-side SQL constants, never
+    // client-supplied, so an authenticated caller can no longer choose
+    // or influence which version gets recorded. See docs/sql/2026-09-
+    // 21-adult-eligibility-and-legal-acceptance.sql's own "LEGAL
+    // VERSION AUTHORITY CORRECTION" header note.
     const supabase = createClient()
-    const { error: rpcError } = await supabase.rpc('accept_current_legal_documents', {
-      p_terms_version: CURRENT_TERMS_VERSION,
-      p_community_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
-    })
+    const { error: rpcError } = await supabase.rpc('accept_current_legal_documents')
 
     if (rpcError) {
       setSubmitting(false)

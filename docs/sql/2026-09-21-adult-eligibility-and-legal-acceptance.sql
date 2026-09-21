@@ -30,20 +30,23 @@
 --      Postgres function cannot import — intentionally duplicated,
 --      documented in both places), built on calculate_age above.
 --
---   5. SUBMIT_DOB_ELIGIBILITY — the sole write path for (1). Validates
---      a real, non-future, non-implausible calendar date; computes age
---      via tempa_private.calculate_age; records `eligible` (with the
---      exact DOB retained — see below) or `ineligible` (DOB NOT
---      retained; only the future re-screening date is). Re-
---      synchronizes an existing profile's derived age_range from the
---      newly-confirmed DOB. Once an account is already `eligible` with
---      a confirmed DOB, this RPC never accepts a replacement — see
---      "DOB IMMUTABILITY" below.
+--   5. SUBMIT_DOB_ELIGIBILITY — the sole write path for (1). Serializes
+--      concurrent calls for the SAME account via a transaction-scoped
+--      advisory lock BEFORE reading account_eligibility (see
+--      "CONCURRENCY FIX" below), then validates a real, non-future,
+--      non-implausible calendar date; computes age via tempa_private.
+--      calculate_age; records `eligible` (with the exact DOB retained
+--      — see below) or `ineligible` (DOB NOT retained; only the future
+--      re-screening date is). Re-synchronizes an existing profile's
+--      derived age_range from the newly-confirmed DOB. Once an account
+--      is already `eligible` with a confirmed DOB, this RPC never
+--      accepts a replacement — see "DOB IMMUTABILITY" below.
 --
 --   6. ACCEPT_CURRENT_LEGAL_DOCUMENTS — the sole write path for (2).
 --      Records acceptance of the Terms of Service AND Community
---      Guidelines versions the caller is currently being asked to
---      accept, in one call, only once eligibility is confirmed.
+--      Guidelines versions, in one call, only once eligibility is
+--      confirmed. Takes NO version arguments — see "LEGAL VERSION
+--      AUTHORITY CORRECTION" below.
 --
 --   7. PROFILES_ENFORCE_ADULT_ELIGIBILITY — a BEFORE INSERT trigger,
 --      the same SHAPE as this table's own existing
@@ -88,6 +91,40 @@
 -- future deliberate DOB-correction mechanism, if Tempa ever needs one,
 -- must be its own separate, controlled flow — not a side effect of
 -- resubmitting this RPC.
+--
+-- CONCURRENCY FIX (independent audit correction): the DOB-immutability
+-- guard above is correct for SEQUENTIAL calls, but a genuinely FIRST
+-- submission has a race the row-level FOR UPDATE lock in
+-- submit_dob_eligibility cannot close on its own — when no
+-- account_eligibility row exists yet, FOR UPDATE has nothing to lock,
+-- so two concurrent first calls could both observe "no existing row,"
+-- independently evaluate different DOBs, and race into the later
+-- UPSERT. Fixed by a transaction-scoped PostgreSQL advisory lock
+-- (pg_advisory_xact_lock), keyed deterministically from auth.uid()
+-- alone (never a client-supplied identifier), acquired BEFORE the
+-- account_eligibility read — see submit_dob_eligibility's own comment
+-- for the full reasoning. Different accounts do not unnecessarily
+-- serialize against each other; the lock releases automatically at
+-- this function's own transaction end.
+--
+-- LEGAL VERSION AUTHORITY CORRECTION (independent audit correction):
+-- accept_current_legal_documents previously accepted
+-- p_terms_version/p_community_guidelines_version as CLIENT-SUPPLIED
+-- text arguments — a modified authenticated client could submit a
+-- guessed FUTURE version string before that document version existed,
+-- and if lib/legal.ts later happened to adopt that exact string, the
+-- stale row would silently satisfy isLegalCurrent() without genuine
+-- acceptance of that version. Fixed: the function now takes NO version
+-- parameters — the two accepted version strings are SQL CONSTANTs
+-- inside the function body, the sole authoritative source, which an
+-- authenticated caller cannot choose or influence. They must exactly
+-- match lib/legal.ts's CURRENT_TERMS_VERSION/CURRENT_COMMUNITY_
+-- GUIDELINES_VERSION — proven by a source-level regression test that
+-- imports those TypeScript constants directly (lib/__tests__/
+-- adultEligibilityMigration.test.ts). A future legal-document version
+-- bump now requires updating BOTH lib/legal.ts AND this function (via
+-- a new migration) — updating lib/legal.ts alone is no longer (and was
+-- never actually) sufficient on its own.
 --
 -- ADULT DOB RETENTION — deliberate product decision: an ELIGIBLE
 -- adult's exact date of birth IS retained (account_eligibility.
@@ -351,6 +388,27 @@ begin
     raise exception 'Authentication required.';
   end if;
 
+  -- CONCURRENCY FIX (independent audit correction): a transaction-
+  -- scoped advisory lock, keyed deterministically from auth.uid() only
+  -- (never a client-supplied identifier), serializes concurrent calls
+  -- for the SAME account BEFORE account_eligibility is even read. This
+  -- closes a race the row-level `FOR UPDATE` below cannot close on its
+  -- own: on a genuinely FIRST submission (no row exists yet), `FOR
+  -- UPDATE` has no row to lock, so two concurrent first calls could
+  -- both observe "no existing row," independently evaluate different
+  -- submitted DOBs, and race into the later UPSERT — the later write
+  -- silently replacing the first decision. hashtextextended produces a
+  -- 64-bit hash of the account's own uuid text, giving an (extremely
+  -- low collision probability) per-account lock key — two DIFFERENT
+  -- accounts essentially never serialize against each other, only two
+  -- calls for the SAME account do. pg_advisory_xact_lock is
+  -- TRANSACTION-scoped: it releases automatically at this function's
+  -- own implicit transaction commit OR rollback (including an early
+  -- RAISE EXCEPTION anywhere below) — no explicit unlock call exists or
+  -- is needed. The existing row-level FOR UPDATE below is kept as
+  -- defense in depth for the case where a row already exists.
+  perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text, 0));
+
   select * into v_existing
   from public.account_eligibility
   where user_id = auth.uid()
@@ -456,19 +514,29 @@ grant execute on function public.submit_dob_eligibility(integer, integer, intege
 -- ============================================================
 -- 6. ACCEPT_CURRENT_LEGAL_DOCUMENTS — sole write path for legal_acceptances
 -- ============================================================
--- p_terms_version / p_community_guidelines_version are supplied by the
--- CALLER's own build (always exactly lib/legal.ts's CURRENT_TERMS_
--- VERSION / CURRENT_COMMUNITY_GUIDELINES_VERSION constants, never
--- free-text a member could type) — WHO accepted is the only privilege
--- boundary that matters here, and that is fully server-authoritative
--- via auth.uid(); WHICH version string gets recorded is ordinary
--- application metadata, not a privilege decision, the same trust shape
--- this codebase already extends to other caller-supplied non-identity
--- arguments (p_dispatch_id, p_title, ...).
-create or replace function public.accept_current_legal_documents(
-  p_terms_version text,
-  p_community_guidelines_version text
-)
+-- SERVER-AUTHORITATIVE VERSIONS (independent audit correction): this
+-- RPC previously took p_terms_version/p_community_guidelines_version
+-- as CLIENT-SUPPLIED text arguments. A modified authenticated client
+-- could submit a guessed FUTURE version string before that document
+-- version existed; if lib/legal.ts later adopted that exact string,
+-- the old (never-genuinely-reviewed) row would silently satisfy
+-- isLegalCurrent() without the member ever having accepted that
+-- document version. Fixed: this function now takes NO version
+-- parameters at all. The two CONSTANT values below are the sole
+-- authoritative source of "which version is currently being accepted"
+-- — an authenticated caller cannot choose, override, or influence
+-- them. They MUST exactly match lib/legal.ts's CURRENT_TERMS_VERSION /
+-- CURRENT_COMMUNITY_GUIDELINES_VERSION — proven by a source-level
+-- regression test (lib/__tests__/adultEligibilityMigration.test.ts)
+-- that imports the actual TypeScript constants and compares them
+-- against these literal SQL values. A future legal-document version
+-- bump therefore requires updating BOTH lib/legal.ts AND this
+-- function (via a new migration) — updating lib/legal.ts alone is NOT
+-- sufficient, unlike what this file previously (incorrectly) implied.
+-- WHO accepted remains fully server-authoritative via auth.uid() only
+-- (unchanged); WHICH version gets recorded is now ALSO fully
+-- server-authoritative, closing the gap the previous design left open.
+create or replace function public.accept_current_legal_documents()
 returns void
 language plpgsql
 security definer
@@ -476,13 +544,11 @@ set search_path to 'pg_catalog'
 as $function$
 declare
   v_status text;
+  v_terms_version constant text := '2026-09-launch-v1';
+  v_community_guidelines_version constant text := '2026-09-launch-v1';
 begin
   if auth.uid() is null then
     raise exception 'Authentication required.';
-  end if;
-
-  if p_terms_version is null or p_community_guidelines_version is null then
-    raise exception 'A document version is required.';
   end if;
 
   -- Matches every other write RPC's own account-status gate
@@ -501,14 +567,14 @@ begin
 
   insert into public.legal_acceptances (user_id, document_type, document_version, accepted_at)
   values
-    (auth.uid(), 'terms_of_service', p_terms_version, now()),
-    (auth.uid(), 'community_guidelines', p_community_guidelines_version, now())
+    (auth.uid(), 'terms_of_service', v_terms_version, now()),
+    (auth.uid(), 'community_guidelines', v_community_guidelines_version, now())
   on conflict (user_id, document_type, document_version) do nothing;
 end;
 $function$;
 
-revoke all on function public.accept_current_legal_documents(text, text) from public, anon, authenticated;
-grant execute on function public.accept_current_legal_documents(text, text) to authenticated;
+revoke all on function public.accept_current_legal_documents() from public, anon, authenticated;
+grant execute on function public.accept_current_legal_documents() to authenticated;
 
 
 -- ============================================================

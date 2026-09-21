@@ -37,28 +37,17 @@ describe('/begin server guards', () => {
   })
 })
 
-describe('/begin real sign-out (independent audit correction)', () => {
-  const fnStart = source.indexOf('async function signOutAndReturnToSignIn()')
-  const fnEnd = source.indexOf('\nexport default async function BeginPage')
-  const body = source.slice(fnStart, fnEnd)
-
-  it('is a real Server Action (\'use server\'), matching app/you/page.tsx\'s existing sign-out conventions', () => {
-    expect(body).toContain("'use server'")
-    expect(body).toContain('await supabase.auth.signOut()')
-    expect(body).toContain("redirect('/sign-in')")
-  })
-
-  it('uses restrained error handling — sign-out failure still redirects to /sign-in rather than stranding the member', () => {
-    expect(body).toContain('try {')
-    expect(body).toContain('catch')
-    // redirect() must sit OUTSIDE the try block — Next.js's redirect()
-    // throws internally, so wrapping it in the same try/catch would
-    // risk the catch swallowing the redirect itself.
-    const tryStart = body.indexOf('try {')
-    const catchEnd = body.indexOf('}', body.indexOf('catch'))
-    const redirectPos = body.indexOf("redirect('/sign-in')")
-    expect(redirectPos).toBeGreaterThan(catchEnd)
-    expect(tryStart).toBeGreaterThan(-1)
+describe('/begin real sign-out wiring (independent audit correction)', () => {
+  // The actual sign-out behavior (returned-error inspection, restrained
+  // logging, redirect) now lives in its own testable module,
+  // ./sign-out-action.ts — see sign-out-action.test.ts for the
+  // behavioral coverage (including the returned-error shape, not only
+  // source-text presence). This file only proves the wiring: page.tsx
+  // imports the real action and actually passes it through, rather
+  // than defining its own or leaving it unused.
+  it('imports signOutAndReturnToSignIn from ./sign-out-action, not a local/inline definition', () => {
+    expect(source).toContain("import { signOutAndReturnToSignIn } from './sign-out-action'")
+    expect(source).not.toContain("async function signOutAndReturnToSignIn()")
   })
 
   it('is passed to BeginFlow as signOutAction, not left unused', () => {
