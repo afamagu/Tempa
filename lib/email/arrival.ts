@@ -65,7 +65,9 @@ function letterPath(id: string): string {
 /** The recipient is selected by the delivery worker, never by a template input. */
 export function renderArrivalEmail(input: ArrivalEmailInput): RenderedArrivalEmail {
   const href = `${publicOrigin(input.siteOrigin)}${letterPath(input.letterId)}`
-  const name = input.senderPseudonym?.trim().slice(0, 80)
+  // Subjects are email headers: remove all control characters (including
+  // CR/LF) rather than trusting public pseudonyms to be header-safe.
+  const name = input.senderPseudonym?.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 80)
   const establishedName = !input.firstContact && name ? name : null
   const subject = establishedName ? `A letter from ${establishedName} has arrived` : 'A letter has arrived for you'
   const headline = 'A letter has arrived for you.'
