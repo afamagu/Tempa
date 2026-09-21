@@ -85,7 +85,9 @@ export default async function LetterPage({
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/sign-in')
+    // Arrival emails link to this exact letter. Keep the destination through
+    // sign-in; the existing sign-in flow validates `next` before using it.
+    redirect(`/sign-in?next=${encodeURIComponent(`/letters/${letterId}`)}`)
   }
 
   const target = await getLetterById(supabase, letterId)
