@@ -31,6 +31,13 @@ describe('letter-arrival email', () => {
     expect(() => renderArrivalEmail({ ...base, firstContact: true, senderCountryCode: 'ZA', artOrigin: 'https://evil.test/?tracking=1' })).toThrow()
   })
 
+  it('does not permit a pseudonym to add mail headers', () => {
+    const message = renderArrivalEmail({ ...base, firstContact: false, senderPseudonym: 'Maya\r\nBcc: outsider@example.com' })
+    expect(message.subject).toBe('A letter from Maya Bcc: outsider@example.com has arrived')
+    expect(message.subject).not.toContain('\r')
+    expect(message.subject).not.toContain('\n')
+  })
+
   it('maps each of the 35 country codes to one unique named asset', () => {
     expect(Object.keys(ORIGIN_ARRIVAL_ART)).toHaveLength(35)
     expect(new Set(Object.values(ORIGIN_ARRIVAL_ART)).size).toBe(35)
