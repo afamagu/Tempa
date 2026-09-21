@@ -130,7 +130,8 @@ export async function addPostcard(
   supabase: SupabaseClient,
   key: string,
   countryCode: string,
-  input: PostcardVersionInput
+  input: PostcardVersionInput,
+  stageInactive = false
 ): Promise<{ data: string | null; error: AdminError }> {
   const { data, error } = await supabase.rpc('admin_add_story_postcard', {
     p_key: key.trim(),
@@ -141,6 +142,7 @@ export async function addPostcard(
     p_postmark_text: input.postmarkText.trim(),
     p_footer_text: input.footerText.trim(),
     p_story_text: input.storyText?.trim() ?? '',
+    p_stage_inactive: stageInactive,
     p_front_image_path: input.frontImagePath.trim(),
     p_motion_src: input.motionSrc?.trim() || null,
     p_duration_seconds: input.durationSeconds ?? null,

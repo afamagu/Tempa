@@ -32,7 +32,7 @@ create or replace function public.admin_add_story_postcard(
   p_collection text, p_postmark_text text, p_footer_text text,
   p_front_image_path text, p_motion_src text default null,
   p_duration_seconds numeric default null, p_reveal_line_alignment text default null,
-  p_story_text text default ''
+  p_story_text text default '', p_stage_inactive boolean default false
 )
 returns uuid language plpgsql security definer set search_path = 'pg_catalog' as $function$
 declare v_id uuid; v_story text;
@@ -45,12 +45,18 @@ begin
     p_duration_seconds, p_reveal_line_alignment
   );
   update public.postcard_versions set story_text = v_story where id = v_id;
+  if p_stage_inactive then
+    -- Creation and deactivation occur in one transaction: no public reader
+    -- can see this card between the two calls. The existing audited RPC
+    -- records the deactivation as an ordinary admin action.
+    perform public.admin_set_postcard_active(lower(trim(both from p_key)), false);
+  end if;
   return v_id;
 end;
 $function$;
 
-revoke all on function public.admin_add_story_postcard(text,text,text,text,text,text,text,text,text,numeric,text,text) from public;
-grant execute on function public.admin_add_story_postcard(text,text,text,text,text,text,text,text,text,numeric,text,text) to authenticated;
+revoke all on function public.admin_add_story_postcard(text,text,text,text,text,text,text,text,text,numeric,text,text,boolean) from public;
+grant execute on function public.admin_add_story_postcard(text,text,text,text,text,text,text,text,text,numeric,text,text,boolean) to authenticated;
 
 create or replace function public.admin_create_story_postcard_version(
   p_key text, p_title text, p_location text, p_collection text,

@@ -110,6 +110,14 @@ describe('admin_add_postcard — creates a brand new catalog key AND its Version
     expect((await listPostcards(client(fake))).data.find((p) => p.key === 'kyoto')?.storyText).toBe('The revised telling.')
   })
 
+  it('stages an imported card inactive, while ordinary manual additions stay active', async () => {
+    const fake = seeded(ADMIN, { [ADMIN]: 'admin' })
+    await addPostcard(client(fake), 'story_01', 'MA', VALID_INPUT, true)
+    await addPostcard(client(fake), 'manual_01', 'MA', VALID_INPUT)
+    expect(fake._catalog.find((c) => c.key === 'story_01')?.isActive).toBe(false)
+    expect(fake._catalog.find((c) => c.key === 'manual_01')?.isActive).toBe(true)
+  })
+
   it('rejects an unauthenticated caller', async () => {
     const fake = seeded(null)
     const { error } = await addPostcard(client(fake), 'kyoto', 'JP', VALID_INPUT)

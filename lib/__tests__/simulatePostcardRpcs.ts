@@ -128,6 +128,9 @@ export function createFakePostcards(options: {
       if (!result.error && result.data) {
         const version = versions.find((v) => v.id === result.data)
         if (version) version.storyText = story
+        if (fn === 'admin_add_story_postcard' && params?.p_stage_inactive === true) {
+          await rpc('admin_set_postcard_active', { p_key: String(params?.p_key ?? '').trim().toLowerCase(), p_active: false })
+        }
       }
       return result
     }

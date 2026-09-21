@@ -38,7 +38,7 @@ export default async function AdminPostcardsPage() {
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
 
-      {!error && <StoriesWeCarryImport existingKeys={postcards.map((p) => p.key)} />}
+      {!error && <StoriesWeCarryImport existingPostcards={postcards.map((p) => ({ key: p.key, isActive: p.isActive }))} />}
       <PostcardsCatalogue postcards={postcards} />
     </div>
   )

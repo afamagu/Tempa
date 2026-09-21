@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { addPostcard } from '@/lib/admin-postcards'
+import { addPostcard, setPostcardActive, type AdminPostcard } from '@/lib/admin-postcards'
 import { uploadPostcardArtworkStill, uploadPostcardArtworkVideo } from '@/lib/postcard-images'
 import stories from '@/lib/stories-we-carry-first-edition.json'
 import { primaryButtonClass, secondaryButtonClass, helperTextClass } from '@/app/profile/ui'
@@ -33,7 +33,9 @@ function matchVideo(country: string, files: File[]): File[] {
   )
 }
 
-export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: string[] }) {
+export default function StoriesWeCarryImport({ existingPostcards }: {
+  existingPostcards: Pick<AdminPostcard, 'key' | 'isActive'>[]
+}) {
   const router = useRouter()
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
@@ -41,9 +43,11 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
   const [error, setError] = useState('')
   const [completed, setCompleted] = useState<string[]>([])
   const [includeReviewed, setIncludeReviewed] = useState(false)
+  const [reviewConfirmed, setReviewConfirmed] = useState(false)
+  const [activated, setActivated] = useState<string[]>([])
 
   const rows: ImportRow[] = useMemo(() => {
-    const known = new Set([...existingKeys, ...completed])
+    const known = new Set([...existingPostcards.map((p) => p.key), ...completed])
     return stories.map((story) => {
       const key = `stories_we_carry_01_${story.sequence}`
       const stills = files.filter((f) => f.name === story.stillFilename)
@@ -60,10 +64,12 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
         : undefined
       return { ...story, key, still, video, problem, existing: known.has(key) }
     })
-  }, [files, existingKeys, completed])
+  }, [files, existingPostcards, completed])
 
   const pending = rows.filter((r) => (!r.reviewRequired || includeReviewed) && !r.existing)
   const ready = files.length > 0 && pending.every((r) => !r.problem) && pending.length > 0
+  const staged = rows.filter((r) => r.existing && !activated.includes(r.key) &&
+    (completed.includes(r.key) || existingPostcards.some((p) => p.key === r.key && !p.isActive)))
 
   async function importCards() {
     if (!ready) return
@@ -91,7 +97,7 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
         storyText: row.storyText,
         frontImagePath: image.path,
         motionSrc: motion.path,
-      })
+      }, true)
       if (result.error) {
         setError(`${row.sequence} ${row.country}: ${result.error.message}`)
         break
@@ -103,12 +109,31 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
     router.refresh()
   }
 
+  async function activateReviewed() {
+    if (!reviewConfirmed || staged.length === 0) return
+    setBusy(true)
+    setError('')
+    const supabase = createClient()
+    for (const [index, row] of staged.entries()) {
+      setProgress(`Activating ${index + 1} of ${staged.length}: ${row.country}`)
+      const result = await setPostcardActive(supabase, row.key, true)
+      if (result.error) {
+        setError(`${row.sequence} ${row.country}: ${result.error.message}`)
+        break
+      }
+      setActivated((current) => [...current, row.key])
+    }
+    setProgress('')
+    setBusy(false)
+    router.refresh()
+  }
+
   return (
     <details className="rounded-md border border-foreground/10 p-4">
       <summary className="cursor-pointer font-serif text-lg">Import Stories We Carry · First Edition</summary>
       <p className={`mt-3 ${helperTextClass}`}>
         Select the export folder on this computer. The files stay here until you start the import.
-        Cards already imported are skipped, so an interrupted import can resume. Number 35, Lagos Eyo,
+        Cards are imported inactive for preview, and interrupted imports can resume. Number 35, Lagos Eyo,
         is held until its cultural review is complete.
       </p>
       <label className={`mt-3 inline-flex cursor-pointer items-center ${secondaryButtonClass}`}>
@@ -138,7 +163,24 @@ export default function StoriesWeCarryImport({ existingKeys }: { existingKeys: s
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           {progress && <p role="status" className="text-sm">Uploading {progress}</p>}
           <button type="button" className={primaryButtonClass} onClick={importCards} disabled={!ready || busy}>
-            {busy ? 'Importing…' : `Import ${pending.length} postcards`}
+            {busy ? 'Working…' : `Import ${pending.length} inactive postcards`}
+          </button>
+        </div>
+      )}
+      {staged.length > 0 && (
+        <div className="mt-4 space-y-3 border-t border-foreground/10 pt-4">
+          <p className={helperTextClass}>
+            {staged.length} cards are staged. Use each card’s Preview control below to inspect its
+            front, motion and back before making it available to members.
+          </p>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={reviewConfirmed} disabled={busy}
+              onChange={(event) => setReviewConfirmed(event.target.checked)} />
+            I have reviewed the staged postcards and their story backs
+          </label>
+          <button type="button" className={primaryButtonClass} onClick={activateReviewed}
+            disabled={!reviewConfirmed || busy}>
+            Activate {staged.length} reviewed postcards
           </button>
         </div>
       )}

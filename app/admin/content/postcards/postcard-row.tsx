@@ -14,6 +14,7 @@ import {
   helperTextClass,
 } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
+import PostcardObject from '@/app/letters/postcard-object'
 
 const ALIGNMENTS: PostcardRevealLineAlignment[] = [
   'top-left',
@@ -38,6 +39,7 @@ const ALIGNMENTS: PostcardRevealLineAlignment[] = [
 export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -301,12 +303,30 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setPreviewing((current) => !current)} className={secondaryButtonClass}>
+            {previewing ? 'Close preview' : 'Preview front and back'}
+          </button>
           <button type="button" onClick={toggleActive} disabled={busy} className={secondaryButtonClass}>
             {busy ? 'Working…' : postcard.isActive ? 'Deactivate' : 'Activate'}
           </button>
           <button type="button" onClick={() => setEditing(true)} className={secondaryButtonClass}>
             Edit Postcard
           </button>
+        </div>
+      )}
+      {previewing && (
+        <div className="mx-auto w-full max-w-sm">
+          <PostcardObject hasRevealedBefore postcard={{
+            title: postcard.title,
+            location: postcard.location,
+            collection: postcard.collection,
+            frontImagePath: postcard.frontImagePath,
+            backMessage: '',
+            postmarkText: postcard.postmarkText,
+            footerText: postcard.footerText,
+            storyText: postcard.storyText,
+            living: postcard.motionSrc ? { motionSrc: postcard.motionSrc } : undefined,
+          }} />
         </div>
       )}
     </div>
