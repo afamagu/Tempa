@@ -62,6 +62,15 @@ export function compareDates(a: DateOfBirth, b: DateOfBirth): -1 | 0 | 1 {
  * which drifts across leap years. A birthday "counts" the moment the
  * month/day reaches or passes the birth month/day, regardless of leap
  * years in between.
+ *
+ * TEMPA-WIDE FEBRUARY 29 CONVENTION: needs no special-casing here — a
+ * February 29 DOB compared against a non-leap year's February 28
+ * (`today.day >= dob.day` is `28 >= 29`, false) has NOT yet had its
+ * birthday that year; March 1 (`today.month > dob.month`) is the first
+ * date the comparison succeeds. This function is the SOURCE of that
+ * convention — `eligibleOnDate` below, and SQL's `tempa_private.
+ * calculate_age`/`calculate_eligible_on`, are all built to agree with
+ * it, not the other way around.
  */
 export function calculateAge(dob: DateOfBirth, today: DateOfBirth): number {
   let age = today.year - dob.year
@@ -85,18 +94,30 @@ export function isPlausibleDob(dob: DateOfBirth, today: DateOfBirth): boolean {
 
 /**
  * The calendar date on which a minor's account becomes eligible for a
- * fresh, neutral DOB screening again — exactly `dob + 18 years`. A
- * February 29 birth landing on a non-leap target year resolves to
- * February 28 (the same convention most calendar-arithmetic libraries
- * use for "add N years" across a leap day) — a one-day-earlier
- * re-screening date is a harmless, conservative rounding direction for
- * this purpose (it can only let someone try a day earlier than exactly
- * 18 years later, never later).
+ * fresh, neutral DOB screening again — exactly `dob + 18 years`.
+ *
+ * TEMPA-WIDE CONVENTION (independent audit correction — this MUST
+ * agree with `calculateAge` above, with SQL's `tempa_private.
+ * calculate_age`/`calculate_eligible_on`, and with SQL's age-range
+ * derivation): a February 29 birth landing on a non-leap target year
+ * resolves to MARCH 1, never February 28. This is not an arbitrary
+ * choice — `calculateAge`'s own field comparison (`today.day >=
+ * dob.day`) never treats February 28 as having reached a February 29
+ * birthday (28 is never >= 29), so February 28 is provably still age
+ * 17. March 1 is the first date for which `calculateAge` reports 18,
+ * which is what makes `eligibleOnDate(dob)` and
+ * `calculateAge(dob, eligibleOnDate(dob))` self-consistent: calling
+ * the latter on the former's result is guaranteed to equal
+ * MINIMUM_ADULT_AGE. A previous version of this function resolved to
+ * February 28, disagreeing with `calculateAge`'s own boundary — fixed
+ * here.
  */
 export function eligibleOnDate(dob: DateOfBirth): DateOfBirth {
   const year = dob.year + MINIMUM_ADULT_AGE
-  const day = dob.month === 2 && dob.day === 29 && !isLeapYear(year) ? 28 : dob.day
-  return { year, month: dob.month, day }
+  if (dob.month === 2 && dob.day === 29 && !isLeapYear(year)) {
+    return { year, month: 3, day: 1 }
+  }
+  return { year, month: dob.month, day: dob.day }
 }
 
 export type AgeRangeBucket = '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+'

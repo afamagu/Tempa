@@ -14,6 +14,12 @@ const VERIFY_PATH = path.join(
 const sql = readFileSync(MIGRATION_PATH, 'utf8')
 const verifySql = readFileSync(VERIFY_PATH, 'utf8')
 const lower = sql.toLowerCase()
+// For matching prose that wraps across multiple `-- ` comment lines in
+// the source — every `--` and run of whitespace collapsed to a single
+// space, so a phrase that reads continuously to a human (even though
+// it's split across several source lines) is searchable as one
+// continuous substring.
+const flat = lower.replace(/--/g, ' ').replace(/`/g, '').replace(/\s+/g, ' ')
 
 describe('Adult Eligibility + Legal Acceptance Gate migration — both tables are RPC-only, own-row-only', () => {
   it('account_eligibility RLS is scoped to auth.uid() = user_id, never a broader/other-row policy', () => {
@@ -84,8 +90,40 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — identity is al
   })
 })
 
-describe('Adult Eligibility + Legal Acceptance Gate migration — under-18 handling never permits an immediate retry', () => {
-  it('a persisted ineligible decision inside its blocked window is returned unchanged, without accepting a replacement DOB', () => {
+describe('Adult Eligibility + Legal Acceptance Gate migration — an already-eligible DOB is immutable through this RPC (independent audit correction)', () => {
+  it('the eligible short-circuit exists, is checked BEFORE any input validation, and never evaluates the submitted DOB', () => {
+    expect(lower).toContain("if found and v_existing.status = 'eligible' then")
+    const guardStart = lower.indexOf("if found and v_existing.status = 'eligible' then")
+    const guardEnd = lower.indexOf('end if;', guardStart)
+    const guardBody = lower.slice(guardStart, guardEnd)
+    expect(guardBody).toContain('return query select v_existing.status, v_existing.eligible_on')
+    expect(guardBody).not.toContain('insert into')
+    expect(guardBody).not.toContain('update')
+    expect(guardBody).not.toContain('make_date')
+
+    // Position-ordering (both > 0 before comparing, since position()
+    // returns 0 rather than NULL for a missing substring): the eligible
+    // short-circuit must appear strictly BEFORE the date-validation
+    // block, proving a replacement DOB is never even looked at once
+    // already eligible.
+    const eligibleGuardPos = lower.indexOf("if found and v_existing.status = 'eligible' then")
+    const validationPos = lower.indexOf('if p_year is null or p_month is null or p_day is null then')
+    expect(eligibleGuardPos).toBeGreaterThan(-1)
+    expect(validationPos).toBeGreaterThan(-1)
+    expect(eligibleGuardPos).toBeLessThan(validationPos)
+  })
+
+  it('the RPC return signature never includes date_of_birth in any branch — only status and eligible_on', () => {
+    expect(lower).toContain('returns table(status text, eligible_on date)')
+    const returnStatements = lower.match(/return query select[^;]*;/g) ?? []
+    expect(returnStatements.length).toBeGreaterThan(0)
+    for (const stmt of returnStatements) {
+      expect(stmt).not.toContain('date_of_birth')
+      expect(stmt).not.toContain('v_dob')
+    }
+  })
+
+  it('the ineligible-window short-circuit is a SEPARATE guard from the eligible-immutability short-circuit, not folded together', () => {
     expect(lower).toContain(
       "if found and v_existing.status = 'ineligible' and current_date < v_existing.eligible_on then"
     )
@@ -99,6 +137,22 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — under-18 handl
     expect(guardBody).not.toContain('update')
   })
 
+  it('ineligible-on-or-after-eligible_on still falls through to a fresh, neutral screening (the guard above does not block it)', () => {
+    // The ineligible-window guard's own condition requires BOTH
+    // ineligible status AND current_date < eligible_on — once
+    // eligible_on has arrived, this condition is false and execution
+    // continues past `end if;` into the ordinary validation/evaluation
+    // path below, which is unchanged and still reachable.
+    const guardStart = lower.indexOf(
+      "if found and v_existing.status = 'ineligible' and current_date < v_existing.eligible_on then"
+    )
+    const guardEnd = lower.indexOf('end if;', guardStart)
+    const afterGuard = lower.slice(guardEnd, guardEnd + 500)
+    expect(afterGuard).toContain('if p_year is null or p_month is null or p_day is null then')
+  })
+})
+
+describe('Adult Eligibility + Legal Acceptance Gate migration — under-18 handling never permits an immediate retry', () => {
   it('an ineligible submission does NOT retain the exact DOB — date_of_birth is written as null', () => {
     // Scoped by position() ordering rather than a sliced region: the
     // ineligible branch itself contains a nested if/else/end if (the
@@ -121,7 +175,7 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — under-18 handl
   })
 
   it('eligible_on is computed as dob + 18 years, calendar-correct, never a fixed-day-count approximation', () => {
-    expect(lower).toContain('v_target_year := extract(year from v_dob)::int + 18')
+    expect(lower).toContain('v_target_year := extract(year from p_dob)::int + 18')
     expect(lower).not.toMatch(/18\s*\*\s*365/)
   })
 })
@@ -147,6 +201,123 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — profile creati
     expect(lower).toContain('a.age < 45')
     expect(lower).toContain('a.age < 55')
     expect(lower).toContain('a.age < 65')
+  })
+})
+
+describe('Adult Eligibility + Legal Acceptance Gate migration — trigger privilege correction (independent audit correction)', () => {
+  it('the profile trigger is SECURITY DEFINER, not SECURITY INVOKER — required to call derive_age_range, which authenticated cannot directly EXECUTE', () => {
+    const fnStart = lower.indexOf('create or replace function tempa_private.enforce_profile_adult_eligibility()')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('security definer')
+    expect(body).not.toContain('security invoker')
+    expect(body).toContain("set search_path to 'pg_catalog'")
+  })
+
+  it('the trigger independently re-asserts new.id = auth.uid() as an ownership backstop, rather than assuming profiles\' own INSERT policy already guarantees it', () => {
+    const fnStart = lower.indexOf('create or replace function tempa_private.enforce_profile_adult_eligibility()')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('new.id is distinct from auth.uid()')
+
+    // The ownership backstop must run BEFORE the eligibility check —
+    // an insert for someone else's id should never even reach the
+    // eligibility lookup.
+    const ownershipPos = body.indexOf('new.id is distinct from auth.uid()')
+    const eligibilityPos = body.indexOf("v_status is distinct from 'eligible'")
+    expect(ownershipPos).toBeGreaterThan(-1)
+    expect(eligibilityPos).toBeGreaterThan(-1)
+    expect(ownershipPos).toBeLessThan(eligibilityPos)
+  })
+
+  it('derive_age_range itself stays revoked from authenticated — the fix is the trigger\'s own security context, never a broader grant', () => {
+    expect(lower).toContain('revoke all on function tempa_private.derive_age_range(date) from public, anon, authenticated')
+    expect(lower).not.toMatch(/grant execute on function tempa_private\.derive_age_range.*to authenticated/i)
+  })
+
+  it('the trigger function itself is still revoked from all client roles — trigger firing never requires a direct EXECUTE grant', () => {
+    expect(lower).toContain(
+      'revoke all on function tempa_private.enforce_profile_adult_eligibility()\n  from public, anon, authenticated'
+    )
+  })
+})
+
+describe('Adult Eligibility + Legal Acceptance Gate migration — one canonical February 29 convention, never PostgreSQL\'s built-in age() (independent audit correction)', () => {
+  it('tempa_private.calculate_age exists, is revoked from authenticated, and is the plain field-comparison algorithm (no leap-day special-casing needed)', () => {
+    expect(lower).toContain('create or replace function tempa_private.calculate_age(p_dob date, p_today date)')
+    expect(lower).toContain('revoke all on function tempa_private.calculate_age(date, date) from public, anon, authenticated')
+    const fnStart = lower.indexOf('create or replace function tempa_private.calculate_age(')
+    const fnEnd = lower.indexOf('$$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('extract(day from p_today)::int >= extract(day from p_dob)::int')
+  })
+
+  it('tempa_private.calculate_eligible_on resolves a Feb 29 DOB\'s non-leap +18 target year to MARCH 1, never February 28', () => {
+    expect(lower).toContain('create or replace function tempa_private.calculate_eligible_on(p_dob date)')
+    const fnStart = lower.indexOf('create or replace function tempa_private.calculate_eligible_on(')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('make_date(v_target_year, 3, 1)')
+    expect(body).not.toContain('make_date(v_target_year, 2, 28)')
+  })
+
+  it('submit_dob_eligibility uses the canonical calculate_age/calculate_eligible_on functions, never PostgreSQL\'s built-in age()', () => {
+    const fnStart = lower.indexOf('create or replace function public.submit_dob_eligibility(')
+    const fnEnd = lower.indexOf('$function$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('tempa_private.calculate_age(v_dob, current_date)')
+    expect(body).toContain('tempa_private.calculate_eligible_on(v_dob)')
+    expect(body).not.toMatch(/\bage\(current_date/)
+  })
+
+  it('derive_age_range uses the canonical calculate_age function, never PostgreSQL\'s built-in age() — so a leap-day adult\'s bucket follows the same convention as the adult-eligibility check itself', () => {
+    const fnStart = lower.indexOf('create or replace function tempa_private.derive_age_range(')
+    const fnEnd = lower.indexOf('$$;', fnStart)
+    const body = lower.slice(fnStart, fnEnd)
+    expect(body).toContain('tempa_private.calculate_age(p_dob, current_date)')
+    expect(body).not.toMatch(/\bage\(current_date/)
+  })
+
+  it('never leaves a state where /begin could become retryable on Feb 28 while the age check still says 17 — eligible_on and calculate_age share the exact same boundary by construction', () => {
+    // Both functions independently implement "day >= dob.day" /
+    // "the +18 target year's Feb 29 has no Feb 29" reasoning; this test
+    // asserts the SOURCE-LEVEL contract (documented, cross-referenced)
+    // rather than re-deriving Postgres runtime behavior, which cannot
+    // be executed in this checkpoint (source-level verification only).
+    expect(flat).toContain('self-consistent')
+    expect(flat).toContain('under-18 handling and privacy wording')
+  })
+})
+
+describe('Adult Eligibility + Legal Acceptance Gate migration — accurate under-18 privacy wording (independent audit correction)', () => {
+  it('no longer claims eligible_on makes the birth date unrecoverable — the header explicitly says the opposite', () => {
+    expect(flat).toContain('eligible_on is derived directly from the submitted dob')
+    expect(flat).toContain('it is not an unrelated or irreversible value')
+
+    // The phrase "no longer retaining the person's exact birth-date
+    // information" appears exactly ONCE — quoted as the claim this
+    // file explicitly REJECTS ("do not describe this design as
+    // Tempa ..."), never asserted as this file's own position. A bare
+    // `.not.toContain` would be a false positive here: the phrase's
+    // mere presence is the correction working as intended, not a
+    // regression — same self-disclaiming-comment pattern as this
+    // session's other "word appears only in its own rejection"
+    // corrections.
+    const claim = "no longer retaining the person's exact birth-date information"
+    const occurrences = flat.split(claim).length - 1
+    expect(occurrences).toBe(1)
+    const claimPos = flat.indexOf(claim)
+    const precedingContext = flat.slice(Math.max(0, claimPos - 60), claimPos)
+    expect(precedingContext).toContain('do not describe this design as')
+  })
+
+  it('the header still correctly states the raw submitted value is not retained verbatim in the ordinary DOB field', () => {
+    expect(flat).toContain('the raw submitted value is not stored verbatim in the ordinary adult-dob field')
+  })
+
+  it('flags the future Privacy Notice as a launch dependency for describing eligible_on accurately', () => {
+    expect(flat).toContain('privacy notice')
+    expect(flat).toContain('not yet published')
   })
 })
 

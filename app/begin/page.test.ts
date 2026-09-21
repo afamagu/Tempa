@@ -36,3 +36,32 @@ describe('/begin server guards', () => {
     expect(source).toContain('eligibility!.eligible_on! > today')
   })
 })
+
+describe('/begin real sign-out (independent audit correction)', () => {
+  const fnStart = source.indexOf('async function signOutAndReturnToSignIn()')
+  const fnEnd = source.indexOf('\nexport default async function BeginPage')
+  const body = source.slice(fnStart, fnEnd)
+
+  it('is a real Server Action (\'use server\'), matching app/you/page.tsx\'s existing sign-out conventions', () => {
+    expect(body).toContain("'use server'")
+    expect(body).toContain('await supabase.auth.signOut()')
+    expect(body).toContain("redirect('/sign-in')")
+  })
+
+  it('uses restrained error handling — sign-out failure still redirects to /sign-in rather than stranding the member', () => {
+    expect(body).toContain('try {')
+    expect(body).toContain('catch')
+    // redirect() must sit OUTSIDE the try block — Next.js's redirect()
+    // throws internally, so wrapping it in the same try/catch would
+    // risk the catch swallowing the redirect itself.
+    const tryStart = body.indexOf('try {')
+    const catchEnd = body.indexOf('}', body.indexOf('catch'))
+    const redirectPos = body.indexOf("redirect('/sign-in')")
+    expect(redirectPos).toBeGreaterThan(catchEnd)
+    expect(tryStart).toBeGreaterThan(-1)
+  })
+
+  it('is passed to BeginFlow as signOutAction, not left unused', () => {
+    expect(source).toContain('signOutAction={signOutAndReturnToSignIn}')
+  })
+})

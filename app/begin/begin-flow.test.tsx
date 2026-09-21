@@ -28,7 +28,7 @@ describe('BeginFlow — top-level state dispatch (source inspection: which child
     const dispatchEnd = source.indexOf('\nfunction Shell')
     const body = source.slice(dispatchStart, dispatchEnd)
     expect(body).toContain("eligibilityStatus === 'ineligible' && stillBlocked")
-    expect(body).toContain('<IneligibleTerminal />')
+    expect(body).toContain('<IneligibleTerminal signOutAction={signOutAction} />')
   })
 
   it('renders ReviewTerminal only when review_required', () => {
@@ -36,7 +36,7 @@ describe('BeginFlow — top-level state dispatch (source inspection: which child
     const dispatchEnd = source.indexOf('\nfunction Shell')
     const body = source.slice(dispatchStart, dispatchEnd)
     expect(body).toContain("eligibilityStatus === 'review_required'")
-    expect(body).toContain('<ReviewTerminal />')
+    expect(body).toContain('<ReviewTerminal signOutAction={signOutAction} />')
   })
 
   it('renders LegalAcceptanceStep only when eligible AND showLegalStep', () => {
@@ -57,9 +57,20 @@ describe('BeginFlow — top-level state dispatch (source inspection: which child
 })
 
 describe('BeginFlow — terminal states (real render: neither uses useRouter)', () => {
-  it('ineligible terminal state renders the exact approved copy, no retry affordance', () => {
+  // A plain async function stands in for the real Server Action
+  // (created in app/begin/page.tsx) — renderToStaticMarkup only needs
+  // a function reference to serialize the form's action binding; it is
+  // never actually invoked during a render-only test.
+  const noopSignOutAction = async () => {}
+
+  it('ineligible terminal state renders the exact approved copy, no retry affordance, and a real sign-out form (not a bare link)', () => {
     const html = renderToStaticMarkup(
-      <BeginFlow eligibilityStatus="ineligible" stillBlocked={true} showLegalStep={false} />
+      <BeginFlow
+        eligibilityStatus="ineligible"
+        stillBlocked={true}
+        showLegalStep={false}
+        signOutAction={noopSignOutAction}
+      />
     )
     expect(html).toContain('Tempa is for adults')
     expect(html).toContain('You need to be at least 18 years old to create a Tempa profile.')
@@ -69,15 +80,55 @@ describe('BeginFlow — terminal states (real render: neither uses useRouter)', 
     expect(html).not.toMatch(/change (your )?birthday/i)
     expect(html).not.toMatch(/try again/i)
     expect(html).not.toContain('When were you born?')
+    // A real sign-out form, not a plain <a href="/sign-in"> link —
+    // independent audit correction: a bare link left the session
+    // authenticated, so the next visit just landed back on this same
+    // terminal state.
+    expect(html).toContain('<form')
+    expect(html).not.toContain('<a href="/sign-in"')
   })
 
-  it('review-required terminal state renders distinct copy from the ineligible state', () => {
+  it('review-required terminal state renders distinct copy from the ineligible state, also with a real sign-out form', () => {
     const html = renderToStaticMarkup(
-      <BeginFlow eligibilityStatus="review_required" stillBlocked={false} showLegalStep={false} />
+      <BeginFlow
+        eligibilityStatus="review_required"
+        stillBlocked={false}
+        showLegalStep={false}
+        signOutAction={noopSignOutAction}
+      />
     )
     expect(html).toContain('being reviewed')
     expect(html).not.toContain('Tempa is for adults')
     expect(html).toContain('Return to sign in')
+    expect(html).toContain('<form')
+    expect(html).not.toContain('<a href="/sign-in"')
+  })
+})
+
+describe('BeginFlow — sign-out contract (source inspection)', () => {
+  const fnStart = source.indexOf('function SignOutLink')
+  const fnEnd = source.indexOf('\nfunction IneligibleTerminal')
+  const body = source.slice(fnStart, fnEnd)
+
+  it('SignOutLink renders a <form action={signOutAction}> around a submit button — a real Server Action, never a client-side link', () => {
+    expect(body).toContain('<form action={signOutAction}>')
+    expect(body).toContain('type="submit"')
+    expect(body).not.toContain('href="/sign-in"')
+  })
+
+  it('both terminal states use SignOutLink, passing through the signOutAction prop they each receive', () => {
+    const ineligibleStart = source.indexOf('function IneligibleTerminal')
+    const ineligibleEnd = source.indexOf('\nfunction ReviewTerminal')
+    const ineligibleBody = source.slice(ineligibleStart, ineligibleEnd)
+    expect(ineligibleBody).toContain('<SignOutLink signOutAction={signOutAction} />')
+
+    const reviewStart = source.indexOf('function ReviewTerminal')
+    const reviewBody = source.slice(reviewStart)
+    expect(reviewBody).toContain('<SignOutLink signOutAction={signOutAction} />')
+  })
+
+  it('the copy stays exactly "Return to sign in" — only the underlying action changed, not the approved terminal-state text', () => {
+    expect(body).toContain('Return to sign in')
   })
 })
 

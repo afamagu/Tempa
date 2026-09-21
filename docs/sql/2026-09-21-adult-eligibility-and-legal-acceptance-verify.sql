@@ -129,10 +129,30 @@ submit_dob_function_check as (
       pg_get_functiondef(p.oid) ilike '%v_existing.status = ''ineligible''%current_date < v_existing.eligible_on%',
       false
     ) as respects_ineligible_window,
+    -- DOB IMMUTABILITY (independent audit correction): an already-
+    -- eligible account's submission is returned unchanged, never
+    -- evaluated. Proven via position()-ordering (both positions > 0
+    -- before comparing — position() returns 0, not NULL, for a missing
+    -- substring, so an unguarded comparison could otherwise read a
+    -- false premise as "correctly ordered"): the eligible short-circuit
+    -- must appear BEFORE the date-validation block.
+    coalesce(
+      position('v_existing.status = ''eligible''' in pg_get_functiondef(p.oid)) > 0
+      and position('p_year is null or p_month is null or p_day is null' in pg_get_functiondef(p.oid)) > 0
+      and position('v_existing.status = ''eligible''' in pg_get_functiondef(p.oid))
+        < position('p_year is null or p_month is null or p_day is null' in pg_get_functiondef(p.oid)),
+      false
+    ) as eligible_dob_is_immutable,
     coalesce(pg_get_functiondef(p.oid) ilike '%date_of_birth = null%status = ''ineligible''%', false)
       as does_not_retain_minor_dob,
     coalesce(pg_get_functiondef(p.oid) ilike '%tempa_private.derive_age_range%', false)
       as syncs_derived_age_range,
+    coalesce(pg_get_functiondef(p.oid) ilike '%tempa_private.calculate_age%', false)
+      as uses_canonical_age_function,
+    coalesce(pg_get_functiondef(p.oid) ilike '%tempa_private.calculate_eligible_on%', false)
+      as uses_canonical_eligible_on_function,
+    coalesce(not (pg_get_functiondef(p.oid) ilike '%age(current_date%'), false)
+      as never_uses_builtin_age_function,
     coalesce(has_function_privilege('authenticated', p.oid, 'EXECUTE'), false) as authenticated_exec,
     coalesce(not has_function_privilege('anon', p.oid, 'EXECUTE'), false) as anon_no_exec
   from (select 1 as anchor) _anchor
@@ -157,10 +177,36 @@ accept_legal_function_check as (
   left join pg_proc p
     on p.oid = to_regprocedure('public.accept_current_legal_documents(text, text)')
 ),
+calculate_age_check as (
+  select
+    to_regprocedure('tempa_private.calculate_age(date, date)') is not null as exact_signature_exists,
+    p.oid is not null as exists_at_all,
+    coalesce(not has_function_privilege('authenticated', p.oid, 'EXECUTE'), false) as authenticated_no_exec
+  from (select 1 as anchor) _anchor
+  left join pg_proc p
+    on p.oid = to_regprocedure('tempa_private.calculate_age(date, date)')
+),
+calculate_eligible_on_check as (
+  select
+    to_regprocedure('tempa_private.calculate_eligible_on(date)') is not null as exact_signature_exists,
+    p.oid is not null as exists_at_all,
+    -- Feb 29 -> March 1 (never February 28) in a non-leap target year.
+    coalesce(pg_get_functiondef(p.oid) ilike '%make_date(v_target_year, 3, 1)%', false)
+      as resolves_feb29_to_march_first,
+    coalesce(not (pg_get_functiondef(p.oid) ilike '%make_date(v_target_year, 2, 28)%'), false)
+      as never_resolves_feb29_to_feb28
+  from (select 1 as anchor) _anchor
+  left join pg_proc p
+    on p.oid = to_regprocedure('tempa_private.calculate_eligible_on(date)')
+),
 derive_age_range_check as (
   select
     to_regprocedure('tempa_private.derive_age_range(date)') is not null as exact_signature_exists,
-    p.oid is not null as exists_at_all
+    p.oid is not null as exists_at_all,
+    coalesce(pg_get_functiondef(p.oid) ilike '%tempa_private.calculate_age%', false)
+      as uses_canonical_age_function,
+    coalesce(not (pg_get_functiondef(p.oid) ilike '%age(current_date%'), false)
+      as never_uses_builtin_age_function
   from (select 1 as anchor) _anchor
   left join pg_proc p
     on p.oid = to_regprocedure('tempa_private.derive_age_range(date)')
@@ -175,6 +221,26 @@ profiles_trigger_check as (
         and t.tgname = 'profiles_enforce_adult_eligibility'
         and not t.tgisinternal
     ) as trigger_exists,
+    coalesce(
+      (
+        select p.prosecdef
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'tempa_private' and p.proname = 'enforce_profile_adult_eligibility'
+      ),
+      false
+    ) as trigger_function_is_security_definer,
+    -- TRIGGER PRIVILEGE CORRECTION (independent audit correction): must
+    -- be SECURITY DEFINER, not SECURITY INVOKER, so its nested call to
+    -- derive_age_range (which authenticated cannot directly EXECUTE)
+    -- succeeds during an ordinary authenticated profile INSERT.
+    coalesce(
+      (
+        select pg_get_functiondef(p.oid) ilike '%new.id is distinct from auth.uid()%'
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'tempa_private' and p.proname = 'enforce_profile_adult_eligibility'
+      ),
+      false
+    ) as trigger_function_has_ownership_backstop,
     coalesce(
       (
         select pg_get_functiondef(p.oid) ilike '%v_status is distinct from ''eligible''%'
@@ -216,8 +282,12 @@ select
   sd.checks_auth as submit_dob_checks_auth,
   sd.rejects_future_date as submit_dob_rejects_future_date,
   sd.respects_ineligible_window as submit_dob_respects_ineligible_window,
+  sd.eligible_dob_is_immutable as submit_dob_eligible_dob_is_immutable,
   sd.does_not_retain_minor_dob as submit_dob_does_not_retain_minor_dob,
   sd.syncs_derived_age_range as submit_dob_syncs_derived_age_range,
+  sd.uses_canonical_age_function as submit_dob_uses_canonical_age_function,
+  sd.uses_canonical_eligible_on_function as submit_dob_uses_canonical_eligible_on_function,
+  sd.never_uses_builtin_age_function as submit_dob_never_uses_builtin_age_function,
   sd.authenticated_exec as submit_dob_authenticated_exec,
   sd.anon_no_exec as submit_dob_anon_no_exec,
   al.exact_signature_exists as accept_legal_exists,
@@ -228,8 +298,17 @@ select
   al.inserts_idempotently as accept_legal_inserts_idempotently,
   al.authenticated_exec as accept_legal_authenticated_exec,
   al.anon_no_exec as accept_legal_anon_no_exec,
+  cage.exact_signature_exists as calculate_age_exists,
+  cage.authenticated_no_exec as calculate_age_authenticated_no_exec,
+  celig.exact_signature_exists as calculate_eligible_on_exists,
+  celig.resolves_feb29_to_march_first,
+  celig.never_resolves_feb29_to_feb28,
   dar.exact_signature_exists as derive_age_range_exists,
+  dar.uses_canonical_age_function as derive_age_range_uses_canonical_age_function,
+  dar.never_uses_builtin_age_function as derive_age_range_never_uses_builtin_age_function,
   pt.trigger_exists as profiles_trigger_exists,
+  pt.trigger_function_is_security_definer,
+  pt.trigger_function_has_ownership_backstop,
   pt.trigger_function_checks_eligibility,
   pt.trigger_function_overwrites_age_range,
   (
@@ -241,17 +320,25 @@ select
     and lg.authenticated_select and lg.authenticated_no_insert and lg.anon_no_select
     and sd.exact_signature_exists and sd.is_security_definer and sd.search_path_fixed
     and sd.checks_auth and sd.rejects_future_date and sd.respects_ineligible_window
+    and sd.eligible_dob_is_immutable
     and sd.does_not_retain_minor_dob and sd.syncs_derived_age_range
+    and sd.uses_canonical_age_function and sd.uses_canonical_eligible_on_function
+    and sd.never_uses_builtin_age_function
     and sd.authenticated_exec and sd.anon_no_exec
     and al.exact_signature_exists and al.is_security_definer and al.search_path_fixed
     and al.checks_account_status and al.requires_eligible_first and al.inserts_idempotently
     and al.authenticated_exec and al.anon_no_exec
-    and dar.exact_signature_exists
-    and pt.trigger_exists and pt.trigger_function_checks_eligibility and pt.trigger_function_overwrites_age_range
+    and cage.exact_signature_exists and cage.authenticated_no_exec
+    and celig.exact_signature_exists and celig.resolves_feb29_to_march_first and celig.never_resolves_feb29_to_feb28
+    and dar.exact_signature_exists and dar.uses_canonical_age_function and dar.never_uses_builtin_age_function
+    and pt.trigger_exists and pt.trigger_function_is_security_definer
+    and pt.trigger_function_has_ownership_backstop
+    and pt.trigger_function_checks_eligibility and pt.trigger_function_overwrites_age_range
   ) as overall_pass
 from eligibility_table_check et, eligibility_column_check ec, eligibility_policy_check ep, eligibility_grant_check eg,
      legal_table_check lt, legal_unique_check lu, legal_policy_check lp, legal_grant_check lg,
-     submit_dob_function_check sd, accept_legal_function_check al, derive_age_range_check dar,
+     submit_dob_function_check sd, accept_legal_function_check al,
+     calculate_age_check cage, calculate_eligible_on_check celig, derive_age_range_check dar,
      profiles_trigger_check pt;
 
 
@@ -270,6 +357,14 @@ where n.nspname = 'public' and p.proname = 'accept_current_legal_documents';
 select pg_get_functiondef(p.oid)
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'tempa_private' and p.proname = 'enforce_profile_adult_eligibility';
+
+select pg_get_functiondef(p.oid)
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'tempa_private' and p.proname = 'calculate_age';
+
+select pg_get_functiondef(p.oid)
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'tempa_private' and p.proname = 'calculate_eligible_on';
 
 -- Live data spot-check (safe to run even with zero rows): no account
 -- should ever have an 'ineligible' status with a NON-NULL date_of_birth

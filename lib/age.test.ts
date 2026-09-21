@@ -126,15 +126,62 @@ describe('eligibleOnDate — exactly dob + 18 years, leap-day-aware', () => {
     expect(eligibleOnDate({ year: 2010, month: 5, day: 4 })).toEqual({ year: 2028, month: 5, day: 4 })
   })
 
-  it('a Feb 29 birth resolves its +18-year date to Feb 28', () => {
+  it('a Feb 29 birth resolves its +18-year date to MARCH 1 (independent audit correction — previously wrongly Feb 28)', () => {
     // A Feb 29 birth requires a leap dob year; since 18 is not a
     // multiple of 4, dob.year + 18 can never ALSO be a leap year (both
     // being divisible by 4 would require their difference, 18, to be
     // divisible by 4 too) — so this branch is the only reachable one
     // for +18 years specifically, and is exercised with two different
     // leap dob years to confirm it is not a one-off coincidence.
-    expect(eligibleOnDate({ year: 2008, month: 2, day: 29 })).toEqual({ year: 2026, month: 2, day: 28 })
-    expect(eligibleOnDate({ year: 2012, month: 2, day: 29 })).toEqual({ year: 2030, month: 2, day: 28 })
+    expect(eligibleOnDate({ year: 2008, month: 2, day: 29 })).toEqual({ year: 2026, month: 3, day: 1 })
+    expect(eligibleOnDate({ year: 2012, month: 2, day: 29 })).toEqual({ year: 2030, month: 3, day: 1 })
+  })
+
+  it('is self-consistent with calculateAge: calling calculateAge on eligibleOnDate\'s own result always yields exactly MINIMUM_ADULT_AGE — the property the previous Feb-28 answer violated', () => {
+    const leapDobs = [
+      { year: 2008, month: 2, day: 29 },
+      { year: 2012, month: 2, day: 29 },
+      { year: 2000, month: 2, day: 29 },
+    ]
+    for (const dob of leapDobs) {
+      expect(calculateAge(dob, eligibleOnDate(dob))).toBe(MINIMUM_ADULT_AGE)
+    }
+    // And the day before (February 28 of that same year, since
+    // eligibleOnDate always resolves a Feb-29 dob to March 1) must
+    // still be 17 — the boundary is exact, not merely "eventually
+    // true."
+    for (const dob of leapDobs) {
+      const eligible = eligibleOnDate(dob)
+      const dayBefore = { year: eligible.year, month: 2, day: 28 }
+      expect(calculateAge(dob, dayBefore)).toBe(MINIMUM_ADULT_AGE - 1)
+    }
+  })
+
+  it('ordinary (non-Feb-29) birthdays are completely unaffected by this convention', () => {
+    expect(eligibleOnDate({ year: 2010, month: 12, day: 25 })).toEqual({ year: 2028, month: 12, day: 25 })
+    expect(eligibleOnDate({ year: 2010, month: 1, day: 1 })).toEqual({ year: 2028, month: 1, day: 1 })
+  })
+})
+
+describe('February 29 boundary — explicit cross-cutting proof (independent audit correction)', () => {
+  const feb29Dob = { year: 2008, month: 2, day: 29 }
+
+  it('Feb 29 birth, Feb 28 of the non-leap +18 target year → NOT yet 18', () => {
+    expect(calculateAge(feb29Dob, { year: 2026, month: 2, day: 28 })).toBe(17)
+    expect(isAdultOn(feb29Dob, { year: 2026, month: 2, day: 28 })).toBe(false)
+  })
+
+  it('March 1 of that same non-leap target year → 18', () => {
+    expect(calculateAge(feb29Dob, { year: 2026, month: 3, day: 1 })).toBe(18)
+    expect(isAdultOn(feb29Dob, { year: 2026, month: 3, day: 1 })).toBe(true)
+  })
+
+  it('the age-range bucket boundary for a leap-day adult follows the exact same convention: still 17-equivalent (unbucketed) on Feb 28, bucketed as an adult from March 1', () => {
+    const ageOnFeb28 = calculateAge(feb29Dob, { year: 2026, month: 2, day: 28 })
+    const ageOnMarch1 = calculateAge(feb29Dob, { year: 2026, month: 3, day: 1 })
+    expect(ageOnFeb28).toBe(17)
+    expect(ageOnMarch1).toBe(18)
+    expect(deriveAgeRangeBucket(ageOnMarch1)).toBe('18-24')
   })
 })
 

@@ -43,17 +43,19 @@ export default function BeginFlow({
   eligibilityStatus,
   stillBlocked,
   showLegalStep,
+  signOutAction,
 }: {
   eligibilityStatus: 'eligible' | 'ineligible' | 'review_required' | null
   stillBlocked: boolean
   showLegalStep: boolean
+  signOutAction: () => Promise<void>
 }) {
   if (eligibilityStatus === 'ineligible' && stillBlocked) {
-    return <IneligibleTerminal />
+    return <IneligibleTerminal signOutAction={signOutAction} />
   }
 
   if (eligibilityStatus === 'review_required') {
-    return <ReviewTerminal />
+    return <ReviewTerminal signOutAction={signOutAction} />
   }
 
   if (eligibilityStatus === 'eligible' && showLegalStep) {
@@ -286,7 +288,23 @@ function LegalAcceptanceStep() {
   )
 }
 
-function IneligibleTerminal() {
+/** Real sign-out (independent audit correction), not just a link to
+ * /sign-in — a link alone left the session authenticated, so the very
+ * next visit would just land back on this same terminal state. The
+ * Server Action is created in app/begin/page.tsx and passed down;
+ * copy stays exactly "Return to sign in" (the approved terminal-state
+ * text), only the underlying action changed. */
+function SignOutLink({ signOutAction }: { signOutAction: () => Promise<void> }) {
+  return (
+    <form action={signOutAction}>
+      <button type="submit" className={quietLinkClass}>
+        Return to sign in
+      </button>
+    </form>
+  )
+}
+
+function IneligibleTerminal({ signOutAction }: { signOutAction: () => Promise<void> }) {
   return (
     <Shell>
       <div className="space-y-2">
@@ -295,14 +313,12 @@ function IneligibleTerminal() {
         <p className={bodyClass}>You need to be at least 18 years old to create a Tempa profile.</p>
       </div>
 
-      <Link href="/sign-in" className={quietLinkClass}>
-        Return to sign in
-      </Link>
+      <SignOutLink signOutAction={signOutAction} />
     </Shell>
   )
 }
 
-function ReviewTerminal() {
+function ReviewTerminal({ signOutAction }: { signOutAction: () => Promise<void> }) {
   return (
     <Shell>
       <div className="space-y-2">
@@ -313,9 +329,7 @@ function ReviewTerminal() {
         </p>
       </div>
 
-      <Link href="/sign-in" className={quietLinkClass}>
-        Return to sign in
-      </Link>
+      <SignOutLink signOutAction={signOutAction} />
     </Shell>
   )
 }

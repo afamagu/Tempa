@@ -17,6 +17,30 @@ import BeginFlow from './begin-flow'
  * and avoids any possibility of a matcher-driven redirect loop since
  * `/begin` is never itself one of proxy.ts's matched paths.
  */
+/**
+ * Real sign-out (independent audit correction) — the ineligible and
+ * review-required terminal states' "Return to sign in" previously
+ * linked to /sign-in without ending the authenticated session at all,
+ * so proxy.ts/this page's own gate would just send the member right
+ * back to this same terminal state on their next visit. Same
+ * conventions as the existing sign-out action in app/you/page.tsx
+ * (Server Action defined inline, `createClient` from
+ * '@/lib/supabase/server', `supabase.auth.signOut()`, then redirect).
+ * Restrained error handling: sign-out is best-effort — even if it
+ * itself errors, the member still lands on /sign-in rather than being
+ * stuck with no way forward.
+ */
+async function signOutAndReturnToSignIn() {
+  'use server'
+  const supabase = await createClient()
+  try {
+    await supabase.auth.signOut()
+  } catch {
+    // Best-effort — still redirect below regardless.
+  }
+  redirect('/sign-in')
+}
+
 export default async function BeginPage({
   searchParams,
 }: {
@@ -80,6 +104,7 @@ export default async function BeginPage({
       eligibilityStatus={eligibilityStatus}
       stillBlocked={stillBlocked}
       showLegalStep={eligibilityStatus === 'eligible' && !legalCurrent}
+      signOutAction={signOutAndReturnToSignIn}
     />
   )
 }

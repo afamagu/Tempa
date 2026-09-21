@@ -69,14 +69,67 @@ route or auth callback.
 
 ## Under-18 handling
 
-`submit_dob_eligibility` computes age server-side via Postgres's
-`age()` (calendar-correct, never `18 * 365`). Under 18 → `status =
-'ineligible'`, DOB not retained, `eligible_on` computed. A resubmission
-while `current_date < eligible_on` is a no-op: the function returns the
-existing persisted decision without evaluating the new DOB at all —
-this is what prevents an immediate "wrong answer, try again" retry.
-`/begin`'s ineligible terminal state has no retry/change-birthday
-affordance; the only action is "Return to sign in."
+Age is computed server-side via `tempa_private.calculate_age` —
+**deliberately not Postgres's built-in `age()`** (independent audit
+correction; see "February 29 convention" below) — calendar-correct,
+never `18 * 365`. Under 18 → `status = 'ineligible'`, DOB not retained,
+`eligible_on` computed. A resubmission while `current_date <
+eligible_on` is a no-op: the function returns the existing persisted
+decision without evaluating the new DOB at all — this is what prevents
+an immediate "wrong answer, try again" retry. `/begin`'s ineligible
+terminal state has no retry/change-birthday affordance; the only action
+performs a real sign-out (not just a link) before landing on sign-in.
+
+**Privacy wording correction (independent audit finding):** do not
+describe this design as Tempa "no longer retaining the person's exact
+birth-date information." `eligible_on` is retained, and it is derived
+directly from the submitted DOB — not an unrelated or irreversible
+value; it could generally be used to infer the underlying birth date
+(within the ambiguity the February 29 special case introduces). What
+this design actually achieves: the raw *submitted* value is not stored
+verbatim in the ordinary `date_of_birth` field once ineligible, and
+only the minimum derived value needed to enforce the gate is kept. The
+future Privacy Notice must describe `eligible_on` as retained, derived,
+private account data — not as evidence Tempa discards a minor's
+birth-date information (see "What still needs to happen," below).
+
+## Eligible DOB immutability (independent audit correction)
+
+Once an account is `status = 'eligible'` with a confirmed DOB,
+`submit_dob_eligibility` never evaluates a further submission at all —
+checked *before* any input validation, so an already-eligible account
+gets no signal about whether an ignored resubmission would otherwise
+have been valid. Previously, calling the RPC again with a different
+adult DOB silently overwrote `date_of_birth` and the derived
+`age_range` — client-spoofable authoritative age data after onboarding.
+A deliberate future DOB-correction mechanism, if Tempa ever needs one,
+must be its own separate, controlled flow — never a side effect of
+resubmitting this RPC. The RPC's return signature (`status,
+eligible_on`) never includes `date_of_birth` in any branch.
+
+## February 29 convention (independent audit correction)
+
+One Tempa-wide rule, enforced identically everywhere: **for a February
+29 DOB, when the relevant anniversary year is not a leap year, March 1
+is the birthday boundary — never February 28.**
+
+This falls out of `calculateAge`/`tempa_private.calculate_age`'s own
+plain field comparison (`today.day >= dob.day`) without any special
+case: February 28 never satisfies `28 >= 29`, so the birthday has not
+yet occurred; March 1 is the first date the comparison succeeds
+(`today.month > dob.month`). `eligibleOnDate`/`tempa_private.
+calculate_eligible_on` (the one place that DOES need an explicit
+special case, since it computes a *future* date via addition rather
+than comparison) resolve a Feb-29 DOB's +18 target year to March 1 for
+exactly this reason — self-consistency: calling the age check on the
+eligible-on date it produced is guaranteed to return exactly 18. A
+previous version of `eligibleOnDate` resolved to February 28, which
+disagreed with the age check on that same date (`calculateAge` still
+returned 17) — fixed. SQL deliberately does not rely on Postgres's
+built-in `age()` for this: `tempa_private.calculate_age` transliterates
+the same TypeScript algorithm so SQL and TypeScript agree by
+construction, not by assumption about `age()`'s own leap-day semantics
+(which this migration has not been executed to verify empirically).
 
 ## DOB / age-range behavior
 
@@ -136,11 +189,27 @@ the matcher, so they stay reachable without any account-entry state.
 - Defense in depth: `profiles_enforce_adult_eligibility` blocks profile
   creation at the database level even if a client bypassed `/begin`'s
   UI entirely.
+- **Trigger privilege correction (independent audit correction):**
+  `profiles_enforce_adult_eligibility` is `SECURITY DEFINER`, not
+  `SECURITY INVOKER` — it must call `tempa_private.derive_age_range`,
+  which is deliberately not directly `EXECUTE`-able by `authenticated`,
+  and a new-profile `INSERT` is an ordinary authenticated statement
+  (unlike the profile `UPDATE`s inside `submit_dob_eligibility`, which
+  already ran `SECURITY DEFINER`). Because the trigger now runs with
+  elevated privileges, it independently re-asserts `new.id =
+  auth.uid()` as its own ownership backstop, rather than assuming
+  `profiles`' own (not tracked by this repo's migration history)
+  `INSERT` policy already guarantees that. `derive_age_range` itself
+  keeps its narrow grant — the fix is entirely in the trigger's own
+  security context, not a broader `tempa_private` exposure.
 
 ## What still needs to happen before production
 
 - **SQL has NOT been executed.** `docs/sql/2026-09-21-adult-eligibility-and-legal-acceptance.sql`
-  and its `-verify.sql` companion are prepared-only.
+  and its `-verify.sql` companion are prepared-only, and the verifier
+  itself has not been run live (its text-matching checks may need the
+  same whitespace-normalization follow-up this repo's other verifiers
+  needed the first time they actually ran).
 - `/terms`, `/privacy`, `/community-guidelines`, `/safety` do not yet
   exist as routes/content in this repository — `/begin` links to them
   by href, but they are dead links until published. **Do not launch
@@ -149,3 +218,8 @@ the matcher, so they stay reachable without any account-entry state.
   `CURRENT_TERMS_VERSION` / `CURRENT_COMMUNITY_GUIDELINES_VERSION` in
   `lib/legal.ts` match the frozen text before real member acceptance is
   collected.
+- **The future Privacy Notice must describe `eligible_on` accurately**
+  (independent audit finding — see "Under-18 handling," above): as
+  retained, derived, private account data that could generally be used
+  to infer a minor's birth date — not as evidence that Tempa discards
+  that information.
