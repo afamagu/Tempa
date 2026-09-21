@@ -181,6 +181,36 @@ describe('Adult Eligibility + Legal Acceptance Gate migration — legal version 
     const body = lower.slice(fnStart, fnEnd)
     expect(body).toContain('on conflict (user_id, document_type, document_version) do nothing')
   })
+
+  it('LEGACY OVERLOAD CLEANUP: the migration itself drops the old (text, text) overload — never relies only on the verifier noticing it was absent', () => {
+    // PostgreSQL functions are overloaded by signature — CREATE OR
+    // REPLACE FUNCTION public.accept_current_legal_documents() alone
+    // would NOT remove a previously-applied (text, text) draft still
+    // sitting in some database. The migration must actively drop it.
+    expect(lower).toContain('drop function if exists public.accept_current_legal_documents(text, text);')
+  })
+
+  it('the DROP targets the exact legacy (text, text) signature only — never a bare, ambiguous DROP FUNCTION across all overloads', () => {
+    expect(lower).not.toMatch(/drop function (if exists )?public\.accept_current_legal_documents;/)
+    expect(lower).not.toMatch(/drop function (if exists )?public\.accept_current_legal_documents\(\);/)
+  })
+
+  it('the DROP is placed inside this migration\'s own transaction, BEFORE the new zero-argument function is created', () => {
+    const transactionStart = lower.indexOf('\nbegin;')
+    const dropPos = lower.indexOf('drop function if exists public.accept_current_legal_documents(text, text);')
+    const createPos = lower.indexOf('create or replace function public.accept_current_legal_documents()')
+    const transactionEnd = lower.lastIndexOf('\ncommit;')
+
+    expect(transactionStart).toBeGreaterThan(-1)
+    expect(dropPos).toBeGreaterThan(transactionStart)
+    expect(dropPos).toBeLessThan(createPos)
+    expect(createPos).toBeLessThan(transactionEnd)
+  })
+
+  it('uses IF EXISTS — harmless on the intended fresh production state where no prior draft was ever applied', () => {
+    expect(lower).toContain('drop function if exists public.accept_current_legal_documents(text, text);')
+    expect(lower).not.toContain('drop function public.accept_current_legal_documents(text, text);')
+  })
 })
 
 describe('Adult Eligibility + Legal Acceptance Gate migration — an already-eligible DOB is immutable through this RPC (independent audit correction)', () => {

@@ -124,7 +124,13 @@
 -- adultEligibilityMigration.test.ts). A future legal-document version
 -- bump now requires updating BOTH lib/legal.ts AND this function (via
 -- a new migration) — updating lib/legal.ts alone is no longer (and was
--- never actually) sufficient on its own.
+-- never actually) sufficient on its own. This migration also explicitly
+-- DROPs the legacy public.accept_current_legal_documents(text, text)
+-- overload before creating the new zero-argument version (see "LEGACY
+-- OVERLOAD CLEANUP" beside the function definition below) — CREATE OR
+-- REPLACE alone only affects the exact signature it names and would
+-- silently leave a client-supplied-version overload reachable if an
+-- earlier draft had ever been applied anywhere.
 --
 -- ADULT DOB RETENTION — deliberate product decision: an ELIGIBLE
 -- adult's exact date of birth IS retained (account_eligibility.
@@ -536,6 +542,25 @@ grant execute on function public.submit_dob_eligibility(integer, integer, intege
 -- WHO accepted remains fully server-authoritative via auth.uid() only
 -- (unchanged); WHICH version gets recorded is now ALSO fully
 -- server-authoritative, closing the gap the previous design left open.
+--
+-- LEGACY OVERLOAD CLEANUP (independent audit correction): PostgreSQL
+-- functions are overloaded by signature — CREATE OR REPLACE FUNCTION
+-- public.accept_current_legal_documents() creates/replaces ONLY the
+-- zero-argument overload; it does NOT remove a previously existing
+-- public.accept_current_legal_documents(text, text) if an earlier
+-- draft of this migration (with the client-supplied-version
+-- signature) was ever applied to a database, e.g. a staging/dev
+-- environment. Left in place, that legacy overload would still be
+-- directly callable with attacker-chosen version strings — silently
+-- reopening the exact hole "SERVER-AUTHORITATIVE VERSIONS" above just
+-- fixed. Dropped explicitly, by its own exact signature only (never a
+-- bare DROP FUNCTION public.accept_current_legal_documents, which
+-- would be ambiguous across overloads and could error or drop the
+-- wrong one) — harmless on the intended fresh production state (no
+-- prior draft ever applied there, so nothing to drop) and protective
+-- everywhere else.
+drop function if exists public.accept_current_legal_documents(text, text);
+
 create or replace function public.accept_current_legal_documents()
 returns void
 language plpgsql
