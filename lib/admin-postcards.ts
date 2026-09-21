@@ -22,6 +22,7 @@ export type PostcardVersionInput = {
   collection: string
   postmarkText: string
   footerText: string
+  storyText: string
   frontImagePath: string
   motionSrc?: string | null
   durationSeconds?: number | null
@@ -40,6 +41,7 @@ export type AdminPostcard = {
   collection: string
   postmarkText: string
   footerText: string
+  storyText: string
   frontImagePath: string
   motionSrc: string | null
   durationSeconds: number | null
@@ -93,6 +95,12 @@ export async function listPostcards(
     reveal_line_alignment: string | null
     times_sent: number
   }[]
+  const versionIds = rows.map((r) => r.current_version_id)
+  const { data: stories, error: storyError } = versionIds.length
+    ? await supabase.from('postcard_versions').select('id, story_text').in('id', versionIds)
+    : { data: [], error: null }
+  if (storyError) return { data: [], error: { message: storyError.message, code: storyError.code } }
+  const storyByVersion = new Map((stories ?? []).map((v) => [v.id as string, v.story_text as string]))
   return {
     data: rows.map((r) => ({
       key: r.key,
@@ -106,6 +114,7 @@ export async function listPostcards(
       collection: r.collection,
       postmarkText: r.postmark_text,
       footerText: r.footer_text,
+      storyText: storyByVersion.get(r.current_version_id) ?? '',
       frontImagePath: r.front_image_path,
       motionSrc: r.motion_src,
       durationSeconds: r.duration_seconds,
@@ -123,7 +132,7 @@ export async function addPostcard(
   countryCode: string,
   input: PostcardVersionInput
 ): Promise<{ data: string | null; error: AdminError }> {
-  const { data, error } = await supabase.rpc('admin_add_postcard', {
+  const { data, error } = await supabase.rpc('admin_add_story_postcard', {
     p_key: key.trim(),
     p_title: input.title.trim(),
     p_country_code: countryCode.trim(),
@@ -131,6 +140,7 @@ export async function addPostcard(
     p_collection: input.collection.trim(),
     p_postmark_text: input.postmarkText.trim(),
     p_footer_text: input.footerText.trim(),
+    p_story_text: input.storyText.trim(),
     p_front_image_path: input.frontImagePath.trim(),
     p_motion_src: input.motionSrc?.trim() || null,
     p_duration_seconds: input.durationSeconds ?? null,
@@ -149,13 +159,14 @@ export async function createPostcardVersion(
   key: string,
   input: PostcardVersionInput
 ): Promise<{ data: string | null; error: AdminError }> {
-  const { data, error } = await supabase.rpc('admin_create_postcard_version', {
+  const { data, error } = await supabase.rpc('admin_create_story_postcard_version', {
     p_key: key,
     p_title: input.title.trim(),
     p_location: input.location.trim(),
     p_collection: input.collection.trim(),
     p_postmark_text: input.postmarkText.trim(),
     p_footer_text: input.footerText.trim(),
+    p_story_text: input.storyText.trim(),
     p_front_image_path: input.frontImagePath.trim(),
     p_motion_src: input.motionSrc?.trim() || null,
     p_duration_seconds: input.durationSeconds ?? null,

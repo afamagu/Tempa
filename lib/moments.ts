@@ -134,6 +134,8 @@ export type PostcardData = {
   postmarkText: string
   date?: string
   footerText?: string
+  /** Catalogue-authored story printed on the address side, separate from the sender's note. */
+  storyText?: string
   /** Absent for every historical/catalog Postcard today — see
    * PostcardLivingReveal's own doc comment. */
   living?: PostcardLivingReveal
@@ -300,6 +302,7 @@ export type PostcardBaseContent = {
   frontImagePath: string
   postmarkText: string
   footerText: string
+  storyText?: string
   living?: PostcardLivingReveal
 }
 
@@ -364,6 +367,7 @@ export function resolveLetterPostcardDisplay(
     frontImagePath: base.frontImagePath,
     postmarkText: base.postmarkText,
     footerText: base.footerText,
+    storyText: base.storyText,
     senderName: overrides.senderPseudonym,
     backMessage: overrides.backMessage.trim().length > 0 ? overrides.backMessage : '',
     // Never a real recipient identity for a letter-level Postcard — see

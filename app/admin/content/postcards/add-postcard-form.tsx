@@ -33,6 +33,7 @@ export default function AddPostcardForm() {
   const [collection, setCollection] = useState('')
   const [postmarkText, setPostmarkText] = useState('')
   const [footerText, setFooterText] = useState('')
+  const [storyText, setStoryText] = useState('')
   const [frontImagePath, setFrontImagePath] = useState('')
   const [motionSrc, setMotionSrc] = useState('')
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -46,6 +47,7 @@ export default function AddPostcardForm() {
     setCollection('')
     setPostmarkText('')
     setFooterText('')
+    setStoryText('')
     setFrontImagePath('')
     setMotionSrc('')
     setError(null)
@@ -117,6 +119,7 @@ export default function AddPostcardForm() {
       collection,
       postmarkText,
       footerText,
+      storyText,
       frontImagePath,
       motionSrc: motionSrc || null,
     })
@@ -174,6 +177,10 @@ export default function AddPostcardForm() {
       <div>
         <label className={fieldLabelClass}>Footer text</label>
         <input value={footerText} onChange={(e) => setFooterText(e.target.value)} className={`mt-1 ${inputClass}`} />
+      </div>
+      <div>
+        <label className={fieldLabelClass}>Story on the right side of the back (optional)</label>
+        <textarea value={storyText} onChange={(e) => setStoryText(e.target.value)} maxLength={600} rows={5} className={`mt-1 ${inputClass}`} />
       </div>
 
       <div>

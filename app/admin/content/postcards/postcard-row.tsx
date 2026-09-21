@@ -46,6 +46,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
   const [collection, setCollection] = useState(postcard.collection)
   const [postmarkText, setPostmarkText] = useState(postcard.postmarkText)
   const [footerText, setFooterText] = useState(postcard.footerText)
+  const [storyText, setStoryText] = useState(postcard.storyText)
   const [frontImagePath, setFrontImagePath] = useState(postcard.frontImagePath)
   const [motionSrc, setMotionSrc] = useState(postcard.motionSrc ?? '')
   const [durationSeconds, setDurationSeconds] = useState(
@@ -119,6 +120,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
       collection,
       postmarkText,
       footerText,
+      storyText,
       frontImagePath,
       motionSrc: motionSrc.trim() || null,
       durationSeconds: durationSeconds.trim() ? Number(durationSeconds) : null,
@@ -205,6 +207,10 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
               className={`mt-1 ${inputClass}`}
             />
           </div>
+          <div>
+            <label className={fieldLabelClass}>Story on the right side of the back</label>
+            <textarea value={storyText} onChange={(e) => setStoryText(e.target.value)} maxLength={600} rows={5} className={`mt-1 ${inputClass}`} />
+          </div>
 
           <div>
             <label className={fieldLabelClass}>Front artwork</label>
@@ -276,6 +282,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
                 setCollection(postcard.collection)
                 setPostmarkText(postcard.postmarkText)
                 setFooterText(postcard.footerText)
+                setStoryText(postcard.storyText)
                 setFrontImagePath(postcard.frontImagePath)
                 setMotionSrc(postcard.motionSrc ?? '')
                 setDurationSeconds(postcard.durationSeconds !== null ? String(postcard.durationSeconds) : '')

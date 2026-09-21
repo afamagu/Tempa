@@ -235,7 +235,7 @@ export function PostcardBack({
       {/* Divider, slightly right of center via the grid's own column split */}
       <div className="w-px bg-foreground/15" />
 
-      {/* Stamp, postmark, address */}
+      {/* Stamp and permanent story; the sender's message remains on the left. */}
       <div className="flex min-w-0 flex-col pl-3">
         <div className="relative flex h-12 justify-end">
           <div className="h-9 w-7 rounded-[2px] border border-foreground/30" />
@@ -250,6 +250,18 @@ export function PostcardBack({
             ))}
           </div>
         </div>
+
+        {postcard.storyText && (
+          <div className="mt-4 min-h-0 min-w-0 overflow-y-auto pr-1 text-foreground">
+            <p className="font-serif text-[14px] leading-snug sm:text-[15px]">{postcard.title}</p>
+            <p className="mt-1 text-[10px] tracking-wide text-foreground/65 sm:text-[11px]">
+              {postcard.location}
+            </p>
+            <p className="mt-3 font-serif text-[12px] leading-[1.45] sm:text-[13px]">
+              {postcard.storyText}
+            </p>
+          </div>
+        )}
 
         {(postcard.recipientLabel || postcard.recipientDetail) && (
           <div className="mt-5 space-y-1 text-[11px] sm:text-[12px]">
