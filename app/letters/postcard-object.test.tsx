@@ -68,6 +68,21 @@ describe('PostcardObject — A. existing static Postcard rendering unchanged', (
 
 // K. Existing front/back/flip content remains represented and protected.
 describe('PostcardObject — K. back content (message, sender, postmark) still renders', () => {
+  it('prints catalogue story and place on the right without replacing the sender note', () => {
+    const html = renderToStaticMarkup(<PostcardBack postcard={{
+      ...STATIC_ESSAOUIRA,
+      title: 'The Saint Who Named the Harbour',
+      location: 'Essaouira, Morocco',
+      storyText: 'The wind still crosses the rocks by Sidi Mogdoul’s lighthouse.',
+      backMessage: 'A note from the sender.',
+    }} />)
+    expect(html).toContain('The Saint Who Named the Harbour')
+    expect(html).toContain('Essaouira, Morocco')
+    expect(html).toContain('Sidi Mogdoul')
+    expect(html).toContain('A note from the sender.')
+    expect(html.indexOf('A note from the sender.')).toBeLessThan(html.indexOf('Sidi Mogdoul'))
+  })
+
   it('renders the exact backMessage paragraphs, sender name, and postmark text', () => {
     const html = renderToStaticMarkup(<PostcardObject postcard={STATIC_ESSAOUIRA} />)
     expect(html).toContain('I took the long way to get bread this morning.')

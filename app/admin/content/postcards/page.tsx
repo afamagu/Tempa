@@ -4,6 +4,7 @@ import { sectionTitleClass } from '@/app/profile/ui'
 import { adminMetadataClass } from '@/app/admin/admin-ui'
 import PostcardsCatalogue from './postcards-catalogue'
 import AddPostcardForm from './add-postcard-form'
+import StoriesWeCarryImport from './stories-we-carry-import'
 
 /**
  * Admin Phase 2A-2 — Admin → Content → Postcards. Active and inactive
@@ -37,6 +38,7 @@ export default async function AdminPostcardsPage() {
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
 
+      {!error && <StoriesWeCarryImport existingPostcards={postcards.map((p) => ({ key: p.key, isActive: p.isActive }))} />}
       <PostcardsCatalogue postcards={postcards} />
     </div>
   )

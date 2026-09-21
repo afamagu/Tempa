@@ -14,6 +14,7 @@ import {
   helperTextClass,
 } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
+import PostcardObject from '@/app/letters/postcard-object'
 
 const ALIGNMENTS: PostcardRevealLineAlignment[] = [
   'top-left',
@@ -38,6 +39,7 @@ const ALIGNMENTS: PostcardRevealLineAlignment[] = [
 export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,6 +48,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
   const [collection, setCollection] = useState(postcard.collection)
   const [postmarkText, setPostmarkText] = useState(postcard.postmarkText)
   const [footerText, setFooterText] = useState(postcard.footerText)
+  const [storyText, setStoryText] = useState(postcard.storyText ?? '')
   const [frontImagePath, setFrontImagePath] = useState(postcard.frontImagePath)
   const [motionSrc, setMotionSrc] = useState(postcard.motionSrc ?? '')
   const [durationSeconds, setDurationSeconds] = useState(
@@ -119,6 +122,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
       collection,
       postmarkText,
       footerText,
+      storyText,
       frontImagePath,
       motionSrc: motionSrc.trim() || null,
       durationSeconds: durationSeconds.trim() ? Number(durationSeconds) : null,
@@ -205,6 +209,10 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
               className={`mt-1 ${inputClass}`}
             />
           </div>
+          <div>
+            <label className={fieldLabelClass}>Story on the right side of the back</label>
+            <textarea value={storyText} onChange={(e) => setStoryText(e.target.value)} maxLength={600} rows={5} className={`mt-1 ${inputClass}`} />
+          </div>
 
           <div>
             <label className={fieldLabelClass}>Front artwork</label>
@@ -276,6 +284,7 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
                 setCollection(postcard.collection)
                 setPostmarkText(postcard.postmarkText)
                 setFooterText(postcard.footerText)
+                setStoryText(postcard.storyText ?? '')
                 setFrontImagePath(postcard.frontImagePath)
                 setMotionSrc(postcard.motionSrc ?? '')
                 setDurationSeconds(postcard.durationSeconds !== null ? String(postcard.durationSeconds) : '')
@@ -294,12 +303,30 @@ export default function PostcardRow({ postcard }: { postcard: AdminPostcard }) {
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setPreviewing((current) => !current)} className={secondaryButtonClass}>
+            {previewing ? 'Close preview' : 'Preview front and back'}
+          </button>
           <button type="button" onClick={toggleActive} disabled={busy} className={secondaryButtonClass}>
             {busy ? 'Working…' : postcard.isActive ? 'Deactivate' : 'Activate'}
           </button>
           <button type="button" onClick={() => setEditing(true)} className={secondaryButtonClass}>
             Edit Postcard
           </button>
+        </div>
+      )}
+      {previewing && (
+        <div className="mx-auto w-full max-w-sm">
+          <PostcardObject hasRevealedBefore postcard={{
+            title: postcard.title,
+            location: postcard.location,
+            collection: postcard.collection,
+            frontImagePath: postcard.frontImagePath,
+            backMessage: '',
+            postmarkText: postcard.postmarkText,
+            footerText: postcard.footerText,
+            storyText: postcard.storyText,
+            living: postcard.motionSrc ? { motionSrc: postcard.motionSrc } : undefined,
+          }} />
         </div>
       )}
     </div>

@@ -22,9 +22,35 @@ import { processImageForUpload } from './image-processing'
 
 const ARTWORK_BUCKET = 'postcard-artwork'
 const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024
-const MAX_VIDEO_BYTES = 20 * 1024 * 1024
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024
 
 export type UploadedPostcardAsset = { path: string | null; error: string | null }
+
+/** Production postcard art contains printed lettering and fine illustration.
+ * Keep the artist's PNG unchanged for batch imports; the shared photo upload
+ * re-encoder below would resize it and introduce JPEG artefacts. */
+export async function uploadPostcardArtworkStill(
+  supabase: SupabaseClient,
+  postcardKey: string,
+  file: File
+): Promise<UploadedPostcardAsset> {
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+    return { path: null, error: 'That postcard still exceeds 20 MiB.' }
+  }
+  if (file.type !== 'image/png') {
+    return { path: null, error: 'Batch artwork must be a PNG file.' }
+  }
+  try {
+    const objectPath = `${postcardKey}/${crypto.randomUUID()}.png`
+    const { error } = await supabase.storage.from(ARTWORK_BUCKET)
+      .upload(objectPath, file, { contentType: 'image/png' })
+    if (error) return { path: null, error: error.message }
+    const { data } = supabase.storage.from(ARTWORK_BUCKET).getPublicUrl(objectPath)
+    return { path: data.publicUrl, error: null }
+  } catch (err) {
+    return { path: null, error: err instanceof Error ? err.message : 'Could not upload this artwork.' }
+  }
+}
 
 /** Re-encodes/resizes via the shared processImageForUpload (same
  * pipeline every other photo-upload surface in this app uses), then

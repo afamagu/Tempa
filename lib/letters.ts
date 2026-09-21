@@ -1027,6 +1027,7 @@ export type LetterPostcardVersion = {
   collection: string
   postmarkText: string
   footerText: string
+  storyText?: string
   frontImagePath: string
   motionSrc: string | null
   durationSeconds: number | null
@@ -1075,6 +1076,7 @@ export type LetterPostcardRow = {
     collection: string
     postmark_text: string
     footer_text: string
+    story_text?: string
     front_image_path: string
     motion_src: string | null
     duration_seconds: number | null
@@ -1121,6 +1123,7 @@ export function mapLetterPostcardRows(rows: LetterPostcardRow[]): Map<string, Le
             collection: row.postcard_versions.collection,
             postmarkText: row.postcard_versions.postmark_text,
             footerText: row.postcard_versions.footer_text,
+            ...(row.postcard_versions.story_text ? { storyText: row.postcard_versions.story_text } : {}),
             frontImagePath: row.postcard_versions.front_image_path,
             motionSrc: row.postcard_versions.motion_src,
             durationSeconds: row.postcard_versions.duration_seconds,
@@ -1145,6 +1148,7 @@ export function letterPostcardToBaseContent(version: LetterPostcardVersion): Pos
     frontImagePath: version.frontImagePath,
     postmarkText: version.postmarkText,
     footerText: version.footerText,
+    ...(version.storyText ? { storyText: version.storyText } : {}),
     living: version.motionSrc
       ? {
           motionSrc: version.motionSrc,
@@ -1173,7 +1177,7 @@ export async function getLetterPostcardsForLetters(
   const { data, error } = await supabase
     .from('letter_postcards')
     .select(
-      'letter_id, reveal_line, back_message, sender_pseudonym_snapshot, postcard_versions(postcard_key, title, location, collection, postmark_text, footer_text, front_image_path, motion_src, duration_seconds, reveal_line_alignment)'
+      'letter_id, reveal_line, back_message, sender_pseudonym_snapshot, postcard_versions(postcard_key, title, location, collection, postmark_text, footer_text, story_text, front_image_path, motion_src, duration_seconds, reveal_line_alignment)'
     )
     .in('letter_id', letterIds)
 
