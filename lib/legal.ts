@@ -43,3 +43,31 @@ export function isLegalCurrent(acceptances: LegalAcceptanceRecord[]): boolean {
   )
   return hasCurrentTerms && hasCurrentCommunityGuidelines
 }
+
+// Public launch legal/safety pages (/terms, /privacy,
+// /community-guidelines, /safety) — Staggar Ltd is the confirmed legal
+// operator of Tempa. These are the exact confirmed launch facts, kept
+// in this one file so the four pages (and their tests) share a single
+// source rather than each hardcoding its own copy of the same strings.
+//
+// Deliberately limited to what was actually confirmed for launch: no
+// jurisdiction, registration-classification, or data-protection-officer
+// / representative conclusions (e.g. Nigerian DCPMI, EU/UK DPO, EU
+// Article 27 or UK representative status) are stated, implied, or
+// derived anywhere in this file or the pages that use it — those
+// remain deliberately out of scope for this checkpoint.
+export const OPERATOR_NAME = 'Staggar Ltd'
+
+export const OPERATOR_ADDRESS_LINES = [
+  'No. 14, Favour Davis Street',
+  'Banky Peace Heights Estate',
+  'Magboro, Ogun State',
+  'Nigeria',
+] as const
+
+export const LEGAL_EFFECTIVE_DATE = 'September 28, 2026'
+
+export const SUPPORT_EMAIL = 'support@jointempa.com'
+export const SAFETY_EMAIL = 'safety@jointempa.com'
+export const PRIVACY_EMAIL = 'privacy@jointempa.com'
+export const LEGAL_EMAIL = 'legal@jointempa.com'
