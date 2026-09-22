@@ -15,7 +15,6 @@ const source = readFileSync(path.join(__dirname, 'profile-form.tsx'), 'utf8')
 function validState() {
   return {
     country: 'United States',
-    ageRange: '25-34',
     languages: ['English'],
     intentSelections: ['Making a pen pal'],
     readingInterestsCount: MIN_RECOMMENDED_INTERESTS,
@@ -33,11 +32,6 @@ describe('validateRequiredFields — one specific message per section, never a g
     const errors = validateRequiredFields({ ...validState(), country: '' })
     expect(errors.country).toBe('Choose your country.')
     expect(Object.values(errors)).not.toContain('Please fill in the required fields.')
-  })
-
-  it('age: specific message', () => {
-    const errors = validateRequiredFields({ ...validState(), ageRange: '' })
-    expect(errors.age).toBe('Choose your age range.')
   })
 
   it('languages: specific message ("Add at least one language.")', () => {

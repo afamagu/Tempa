@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { resolveOnboardingDestination, type OnboardingStage } from '@/lib/onboarding'
+import { type OnboardingStage } from '@/lib/onboarding'
+import { resolveAccountEntryDestination, type EligibilityStatus } from '@/lib/account-entry'
+import { isLegalCurrent } from '@/lib/legal'
 
 /**
  * Return-to-requested-page after sign-in (pre-beta UX polish batch 1) —
@@ -48,21 +50,42 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signInUrl)
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, onboarding_stage')
-    .eq('id', user.id)
-    .maybeSingle()
+  // Adult Eligibility + Legal Acceptance Gate — an authenticated
+  // account without confirmed eligibility or current legal acceptance
+  // must not reach any protected route by direct navigation, exactly
+  // like an incomplete profile already cannot. Three small independent
+  // reads (own-row RLS on each), same shape as the existing profiles
+  // read below — matches this file's own established "query inline,
+  // share only the pure resolver" pattern (see lib/account-entry.ts).
+  const [{ data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
+    supabase.from('profiles').select('id, onboarding_stage').eq('id', user.id).maybeSingle(),
+    supabase.from('account_eligibility').select('status').eq('user_id', user.id).maybeSingle(),
+    supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id),
+  ])
 
   const requestedDestination = `${request.nextUrl.pathname}${request.nextUrl.search}`
-  const destination = resolveOnboardingDestination(
+  const destination = resolveAccountEntryDestination(
     {
       authenticated: true,
+      eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
+      eligibleOn: null,
+      legalCurrent: isLegalCurrent(
+        (legalRows ?? []).map((r) => ({
+          documentType: r.document_type as 'terms_of_service' | 'community_guidelines',
+          documentVersion: r.document_version as string,
+        }))
+      ),
       hasProfile: Boolean(profile),
       onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
     },
     requestedDestination
   )
+
+  if (destination === '/begin') {
+    const beginUrl = new URL('/begin', request.url)
+    beginUrl.searchParams.set('next', requestedDestination)
+    return NextResponse.redirect(beginUrl)
+  }
 
   if (destination !== requestedDestination) {
     return NextResponse.redirect(new URL(destination, request.url))

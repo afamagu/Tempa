@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  AGE_RANGE_OPTIONS,
   COUNTRY_OPTIONS,
   GENDER_OPTIONS,
   INTENT_OPTIONS,
@@ -59,7 +58,6 @@ function validatePseudonym(raw: string) {
 // checked separately and first in handleSubmit.
 export type RequiredFieldKey =
   | 'country'
-  | 'age'
   | 'languages'
   | 'intent'
   | 'interests'
@@ -68,7 +66,6 @@ export type RequiredFieldKey =
 
 export function validateRequiredFields(state: {
   country: string
-  ageRange: string
   languages: string[]
   intentSelections: string[]
   readingInterestsCount: number
@@ -77,7 +74,6 @@ export function validateRequiredFields(state: {
 }): Partial<Record<RequiredFieldKey, string>> {
   const errors: Partial<Record<RequiredFieldKey, string>> = {}
   if (!state.country) errors.country = 'Choose your country.'
-  if (!state.ageRange) errors.age = 'Choose your age range.'
   if (state.languages.length === 0) errors.languages = 'Add at least one language.'
   if (state.intentSelections.length === 0) errors.intent = 'Choose what brings you to Tempa.'
   if (!isReadingInterestsCountValidForNewProfile(state.readingInterestsCount)) {
@@ -97,7 +93,6 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
   const [country, setCountry] = useState('')
   const [region, setRegion] = useState('')
-  const [ageRange, setAgeRange] = useState('')
   const [languages, setLanguages] = useState<string[]>([])
   const [gender, setGender] = useState('')
   const [genderCustom, setGenderCustom] = useState('')
@@ -232,7 +227,6 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
     const errors = validateRequiredFields({
       country,
-      ageRange,
       languages,
       intentSelections,
       readingInterestsCount: readingInterests.length,
@@ -290,7 +284,12 @@ export default function ProfileForm({ userId }: { userId: string }) {
       country,
       country_code: countryCode,
       region: region.trim() || null,
-      age_range: ageRange,
+      // age_range is no longer supplied by the client — Adult
+      // Eligibility + Legal Acceptance Gate: the profiles_enforce_
+      // adult_eligibility trigger (docs/sql/2026-09-21-adult-
+      // eligibility-and-legal-acceptance.sql) forcibly derives it
+      // server-side from the account's own confirmed date of birth,
+      // ignoring whatever (if anything) is sent here.
       languages,
       gender: gender || null,
       gender_custom:
@@ -460,22 +459,6 @@ export default function ProfileForm({ userId }: { userId: string }) {
                   onChange={(e) => setRegion(e.target.value)}
                   className={inputClass}
                 />
-              )}
-            </div>
-
-            <div className="space-y-1.5" ref={registerFieldRef('age')}>
-              <p className={fieldLabelClass}>Age range</p>
-              <ChoiceGroup
-                ariaLabel="Age range"
-                options={AGE_RANGE_OPTIONS}
-                selected={ageRange ? [ageRange] : []}
-                onToggle={setAgeRange}
-                layout="pill"
-              />
-              {fieldErrors.age && (
-                <p className="text-xs text-red-600" role="alert">
-                  {fieldErrors.age}
-                </p>
               )}
             </div>
 
