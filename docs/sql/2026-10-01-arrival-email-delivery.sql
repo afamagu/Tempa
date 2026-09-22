@@ -19,6 +19,16 @@
 -- plus a deep link. Nothing added here changes that: the queue table
 -- stores ids/status/error text only, never letter content.
 --
+-- arrival_email_provider_requests (added by an independent audit
+-- correction, see Part 10 below) is a stricter case of the same rule:
+-- it holds the exact frozen From/To/subject/HTML/text Resend request
+-- for a queue event, which does include the recipient's email address
+-- and the rendered arrival-email markup (still never letter/Moment/
+-- Postcard content — the renderer never receives any of that). It has
+-- no RLS policy, no grant to any role, and — unlike arrival_email_
+-- queue — is never read by any admin_* RPC either: nothing in this
+-- migration ever exposes it to a member or to staff.
+--
 -- Convention followed throughout (same as every prior checkpoint):
 -- SECURITY DEFINER functions use `set search_path to 'pg_catalog'`,
 -- every object is fully `public.`-qualified, every new table gets an
@@ -120,8 +130,16 @@ create table public.arrival_email_queue (
   letter_id uuid not null unique references public.letters(id) on delete cascade,
   recipient_id uuid not null references auth.users(id) on delete cascade,
 
+  -- 'manual_review' (independent audit correction) is a distinct
+  -- terminal outcome from 'failed': it means Resend's own 24-hour
+  -- idempotency protection window has elapsed since this event's first
+  -- provider attempt without a confirmed outcome, so the worker
+  -- refuses to guess and auto-resend — a human needs to check Resend's
+  -- own dashboard for this idempotency key before deciding anything.
+  -- See record_or_fetch_arrival_email_snapshot and
+  -- complete_arrival_email_job below.
   status text not null default 'pending'
-    check (status in ('pending', 'processing', 'sent', 'skipped', 'failed')),
+    check (status in ('pending', 'processing', 'sent', 'skipped', 'failed', 'manual_review')),
 
   attempts int not null default 0,
   max_attempts int not null default 5,
@@ -206,7 +224,19 @@ revoke all on public.arrival_email_system_config from public, anon, authenticate
 -- Deliberately no policy for any role — read via
 -- admin_get_arrival_email_status(), written via
 -- set_arrival_email_sending_enabled(), both staff-gated below.
--- service_role reads the row directly (bypasses RLS) before sending.
+--
+-- The worker (lib/email/arrival-worker.ts) reads this row directly —
+-- a plain `.from('arrival_email_system_config').select(...)`, not an
+-- RPC — under the service_role key. service_role bypasses RLS, but
+-- RLS bypass is not the same thing as holding the SELECT privilege
+-- this migration actually intends it to have; without an explicit
+-- grant that privilege would only exist by accident, via whatever
+-- broad default privileges this Supabase project happens to have
+-- bootstrapped onto every new table (see the Checkpoint 1B note
+-- referenced in this file's own header) — exactly the kind of implicit
+-- dependency this codebase's convention says never to rely on
+-- (independent audit correction).
+grant select on public.arrival_email_system_config to service_role;
 
 
 -- ============================================================
@@ -495,20 +525,25 @@ grant execute on function public.resolve_arrival_email_context(uuid) to service_
 -- a second email; this fence stops the stale worker from corrupting
 -- this table's bookkeeping about what happened.
 --
--- 'sent' and 'skipped' are terminal. 'failed' is terminal once EITHER
--- attempts has reached max_attempts (claim_arrival_email_jobs already
--- incremented attempts at claim time) OR the caller reports the
--- failure as non-retryable (p_retryable = false — e.g. the provider
--- rejected the request with a 4xx that will never succeed by retrying,
--- such as an invalid recipient address). Otherwise it goes back to
--- 'pending' with an exponential backoff. Backoff formula uses
--- `attempts - 1` (independent audit correction — the previous formula
--- used `attempts` directly, which produced 10m/20m/40m/80m instead of
--- the documented 5m/10m/20m/40m, because attempts is already
--- incremented to 1 by the time the FIRST failure is recorded here):
--- attempts=1 → 5m, attempts=2 → 10m, attempts=3 → 20m, attempts=4 →
--- 40m, before the 5th and final attempt — matching the doc comment,
--- now actually verified by lib/__tests__/simulateArrivalEmailRpcs.ts.
+-- 'sent', 'skipped', and 'manual_review' (independent audit
+-- correction — see arrival_email_provider_requests and record_or_
+-- fetch_arrival_email_snapshot above) are all terminal. 'failed' is
+-- terminal once EITHER attempts has reached max_attempts (claim_
+-- arrival_email_jobs already incremented attempts at claim time) OR
+-- the caller reports the failure as non-retryable (p_retryable = false
+-- — e.g. the provider rejected the request with a 4xx that will never
+-- succeed by retrying, such as an invalid recipient address, OR the
+-- worker detected the recipient's email changed since the first
+-- provider attempt and refused to send under the frozen payload's
+-- idempotency key). Otherwise it goes back to 'pending' with an
+-- exponential backoff. Backoff formula uses `attempts - 1`
+-- (independent audit correction — the previous formula used `attempts`
+-- directly, which produced 10m/20m/40m/80m instead of the documented
+-- 5m/10m/20m/40m, because attempts is already incremented to 1 by the
+-- time the FIRST failure is recorded here): attempts=1 → 5m,
+-- attempts=2 → 10m, attempts=3 → 20m, attempts=4 → 40m, before the 5th
+-- and final attempt — matching the doc comment, now actually verified
+-- by lib/__tests__/simulateArrivalEmailRpcs.ts.
 
 create or replace function public.complete_arrival_email_job(
   p_queue_id uuid,
@@ -527,7 +562,7 @@ declare
   v_job public.arrival_email_queue;
   v_backoff interval;
 begin
-  if p_result not in ('sent', 'skipped', 'failed') then
+  if p_result not in ('sent', 'skipped', 'failed', 'manual_review') then
     raise exception 'Invalid result: %', p_result using errcode = '22023';
   end if;
 
@@ -550,6 +585,13 @@ begin
   elsif p_result = 'skipped' then
     update public.arrival_email_queue
     set status = 'skipped', skipped_reason = p_error, updated_at = now()
+    where id = p_queue_id;
+  elsif p_result = 'manual_review' then
+    -- Terminal, deliberately never retried automatically — the whole
+    -- point is that we no longer trust our own idempotency protection
+    -- for this exact request and refuse to guess.
+    update public.arrival_email_queue
+    set status = 'manual_review', last_error = p_error, updated_at = now()
     where id = p_queue_id;
   else
     if not p_retryable or v_job.attempts >= v_job.max_attempts then
@@ -675,5 +717,145 @@ $$;
 
 revoke all on function public.set_arrival_email_sending_enabled(boolean) from public;
 grant execute on function public.set_arrival_email_sending_enabled(boolean) to authenticated;
+
+
+-- ============================================================
+-- 10. ARRIVAL_EMAIL_PROVIDER_REQUESTS — the frozen provider payload
+--     (independent audit correction)
+-- ============================================================
+-- Resend requires the SAME idempotency key AND the SAME request body
+-- on every retry — a changed payload under a reused key is exactly
+-- what its own 409 invalid_idempotent_request response means. But
+-- resolve_arrival_email_context is (deliberately, per Part 6's own
+-- comment) re-resolved fresh on every claim, so a retry days apart
+-- could see a different sender_pseudonym, a first_contact flip, or a
+-- changed recipient email — any of which would change the rendered
+-- subject/HTML/text or the To address. This table freezes the exact
+-- From/To/subject/HTML/text the FIRST provider attempt used, so every
+-- later retry of the same queue event sends byte-for-byte the same
+-- request under the same key, no matter what resolve_arrival_email_
+-- context returns on that later attempt.
+--
+-- One row per queue event (queue_id is the primary key — there is
+-- structurally no way to freeze two different payloads for the same
+-- letter/recipient event). No RLS policy, no grant to any role,
+-- content is written and read ONLY through record_or_fetch_arrival_
+-- email_snapshot below (service_role only) — never selected directly,
+-- never returned by any admin_* or member-facing RPC. It holds the
+-- rendered arrival-email HTML and the recipient's email address, which
+-- is more sensitive than anything else in this migration's tables even
+-- though it is still never letter/Moment/Postcard content.
+
+create table public.arrival_email_provider_requests (
+  queue_id uuid primary key references public.arrival_email_queue(id) on delete cascade,
+  idempotency_key text not null,
+  from_address text not null,
+  to_address text not null,
+  subject text not null,
+  html text not null,
+  text_body text not null,
+  -- Set once, at INSERT time, by the column default — this IS the
+  -- durable "first provider attempt" instant Part 11 below measures
+  -- Resend's 24-hour idempotency retention window against. Never
+  -- updated after insert.
+  first_provider_attempt_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+alter table public.arrival_email_provider_requests enable row level security;
+
+revoke all on public.arrival_email_provider_requests from public, anon, authenticated;
+-- Deliberately no policy for any role, and no SELECT grant to
+-- service_role either — every access, including the worker's own,
+-- goes through record_or_fetch_arrival_email_snapshot (SECURITY
+-- DEFINER, runs as owner, needs no grant of its own).
+
+
+-- ============================================================
+-- 11. RECORD_OR_FETCH_ARRIVAL_EMAIL_SNAPSHOT — worker-only, freezes
+--     the payload on first use, returns the frozen copy on every retry
+-- ============================================================
+-- Atomically "insert if this queue event has never been attempted
+-- before, otherwise leave the existing row untouched" (ON CONFLICT
+-- (queue_id) DO NOTHING), then always returns whatever row now exists
+-- — which is either the row this exact call just inserted, or the
+-- earlier attempt's frozen row. `is_new` tells the worker which case
+-- it got: on `is_new = true` the candidate p_to/p_subject/p_html/
+-- p_text the worker just rendered from a fresh resolve_arrival_email_
+-- context call IS what gets frozen and sent; on `is_new = false` the
+-- worker's fresh render is silently discarded and it must send exactly
+-- the returned columns instead — see lib/email/arrival-worker.ts.
+--
+-- `window_expired` is computed server-side, against this table's own
+-- durable first_provider_attempt_at, rather than trusting the worker's
+-- own clock (same server-authoritative-over-client/worker principle as
+-- enqueue_after in Part 3) — true once more than 24 hours have passed
+-- since the first attempt, matching Resend's own idempotency retention
+-- window. The worker must treat `is_new = false and window_expired =
+-- true` as "we no longer have any provider-side idempotency protection
+-- for this exact request, and we do not know whether the earlier
+-- attempt actually reached Resend" and refuse to send — see
+-- complete_arrival_email_job's new 'manual_review' outcome.
+--
+-- Does NOT itself decide whether to send — the worker still does its
+-- own fresh eligibility check first (unchanged, Part 6) and its own
+-- recipient-email-changed check comparing this call's returned
+-- to_address against the just-resolved current recipient email; both
+-- of those can still veto sending even after a snapshot is
+-- successfully fetched here.
+
+create or replace function public.record_or_fetch_arrival_email_snapshot(
+  p_queue_id uuid,
+  p_idempotency_key text,
+  p_from text,
+  p_to text,
+  p_subject text,
+  p_html text,
+  p_text text
+)
+returns table (
+  idempotency_key text,
+  from_address text,
+  to_address text,
+  subject text,
+  html text,
+  text_body text,
+  first_provider_attempt_at timestamptz,
+  is_new boolean,
+  window_expired boolean
+)
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $$
+declare
+  v_row_count integer;
+begin
+  insert into public.arrival_email_provider_requests
+    (queue_id, idempotency_key, from_address, to_address, subject, html, text_body)
+  values
+    (p_queue_id, p_idempotency_key, p_from, p_to, p_subject, p_html, p_text)
+  on conflict (queue_id) do nothing;
+
+  get diagnostics v_row_count = row_count;
+
+  return query
+  select
+    r.idempotency_key,
+    r.from_address,
+    r.to_address,
+    r.subject,
+    r.html,
+    r.text_body,
+    r.first_provider_attempt_at,
+    (v_row_count > 0) as is_new,
+    (now() - r.first_provider_attempt_at > interval '24 hours') as window_expired
+  from public.arrival_email_provider_requests r
+  where r.queue_id = p_queue_id;
+end;
+$$;
+
+revoke all on function public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text) from public;
+grant execute on function public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text) to service_role;
 
 commit;

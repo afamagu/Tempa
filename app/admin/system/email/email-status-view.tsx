@@ -12,6 +12,7 @@ const STATUS_ORDER: ArrivalEmailStatus['recent'][number]['status'][] = [
   'sent',
   'skipped',
   'failed',
+  'manual_review',
 ]
 
 export default function EmailStatusView({
@@ -48,7 +49,7 @@ export default function EmailStatusView({
 
       <SendingToggle enabled={sendingEnabled} />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {STATUS_ORDER.map((status) => (
           <div key={status} className="rounded-md border border-foreground/10 px-3 py-2">
             <p className={adminTableSecondaryClass}>{status}</p>

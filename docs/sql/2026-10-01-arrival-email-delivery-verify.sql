@@ -35,7 +35,8 @@ tables_check as (
     from (values
       ('arrival_email_preferences'),
       ('arrival_email_queue'),
-      ('arrival_email_system_config')
+      ('arrival_email_system_config'),
+      ('arrival_email_provider_requests')
     ) as t(relname)
   ) as checked
 ),
@@ -108,7 +109,31 @@ queue_fencing_columns_check as (
       select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'arrival_email_queue'
         and column_name = 'provider_message_id' and data_type = 'text'
-    ) as provider_message_id_column_present
+    ) as provider_message_id_column_present,
+    exists (
+      select 1 from pg_constraint
+      where conrelid = 'public.arrival_email_queue'::regclass
+        and contype = 'c'
+        and pg_get_constraintdef(oid) ilike '%manual_review%'
+    ) as manual_review_status_present
+),
+provider_requests_grant_check as (
+  select
+    case when to_regclass('public.arrival_email_provider_requests') is null then false
+      else not has_table_privilege('anon', 'public.arrival_email_provider_requests', 'SELECT') end as anon_no_select,
+    case when to_regclass('public.arrival_email_provider_requests') is null then false
+      else not has_table_privilege('authenticated', 'public.arrival_email_provider_requests', 'SELECT') end as authenticated_no_select,
+    case when to_regclass('public.arrival_email_provider_requests') is null then false
+      else exists (
+        select 1 from pg_constraint
+        where conrelid = 'public.arrival_email_provider_requests'::regclass and contype = 'p'
+      ) end as queue_id_primary_key_present
+),
+snapshot_function_check as (
+  select
+    has_function_privilege('service_role', 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)', 'EXECUTE') as service_role_can,
+    not has_function_privilege('authenticated', 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)', 'EXECUTE') as anon_cannot
 ),
 worker_function_check as (
   select
@@ -165,6 +190,13 @@ select
   cs.enqueue_after_column_present as config_enqueue_after_column_present,
   qf.claim_token_column_present as queue_claim_token_column_present,
   qf.provider_message_id_column_present as queue_provider_message_id_column_present,
+  qf.manual_review_status_present as queue_manual_review_status_present,
+  pr.anon_no_select as provider_requests_anon_no_select,
+  pr.authenticated_no_select as provider_requests_authenticated_no_select,
+  pr.queue_id_primary_key_present as provider_requests_queue_id_primary_key_present,
+  sn.service_role_can as snapshot_function_service_role_can,
+  sn.authenticated_cannot as snapshot_function_authenticated_cannot,
+  sn.anon_cannot as snapshot_function_anon_cannot,
   wf.worker_only_functions_locked_down,
   sf.staff_functions_reachable,
   pw.authenticated_can as pref_write_authenticated_can,
@@ -176,12 +208,14 @@ select
     and q.anon_no_select and q.authenticated_no_select and q.authenticated_no_insert and q.letter_id_unique
     and c.anon_no_select and c.authenticated_no_select and c.service_role_can_select
     and cs.exactly_one_row and cs.sending_starts_disabled and cs.enqueue_after_column_present
-    and qf.claim_token_column_present and qf.provider_message_id_column_present
+    and qf.claim_token_column_present and qf.provider_message_id_column_present and qf.manual_review_status_present
+    and pr.anon_no_select and pr.authenticated_no_select and pr.queue_id_primary_key_present
+    and sn.service_role_can and sn.authenticated_cannot and sn.anon_cannot
     and wf.worker_only_functions_locked_down
     and sf.staff_functions_reachable
     and pw.authenticated_can and pw.anon_cannot
   ) as overall_pass
 from tables_check t, preferences_grant_check p, preferences_policy_check pp,
      queue_grant_check q, config_grant_check c, config_state_check cs,
-     queue_fencing_columns_check qf,
+     queue_fencing_columns_check qf, provider_requests_grant_check pr, snapshot_function_check sn,
      worker_function_check wf, staff_function_check sf, preference_write_function_check pw;

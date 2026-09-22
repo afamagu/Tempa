@@ -408,7 +408,7 @@ export type ArrivalEmailQueueRow = {
   id: string
   letterId: string
   recipientId: string
-  status: 'pending' | 'processing' | 'sent' | 'skipped' | 'failed'
+  status: 'pending' | 'processing' | 'sent' | 'skipped' | 'failed' | 'manual_review'
   attempts: number
   maxAttempts: number
   lastError: string | null

@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { sendEmail } from './provider'
 
 const ORIGINAL_ENV = { ...process.env }
-const INPUT = { to: 'recipient@example.com', subject: 'A letter has arrived for you', html: '<p>hi</p>', text: 'hi' }
+const INPUT = {
+  from: 'Tempa <letters@jointempa.com>',
+  to: 'recipient@example.com',
+  subject: 'A letter has arrived for you',
+  html: '<p>hi</p>',
+  text: 'hi',
+}
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -10,7 +16,7 @@ function jsonResponse(status: number, body: unknown) {
 
 describe('sendEmail — Resend adapter', () => {
   beforeEach(() => {
-    process.env = { ...ORIGINAL_ENV, RESEND_API_KEY: 'sk_test_super_secret_value', ARRIVAL_EMAIL_FROM: 'Tempa <letters@jointempa.com>' }
+    process.env = { ...ORIGINAL_ENV, RESEND_API_KEY: 'sk_test_super_secret_value' }
   })
 
   afterEach(() => {
@@ -133,6 +139,73 @@ describe('sendEmail — Resend adapter', () => {
     if (!result.ok) expect(result.retryable).toBe(false)
   })
 
+  it('a 409 concurrent_idempotent_requests is reported as retryable — another request with this key is already in flight', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(409, { name: 'concurrent_idempotent_requests', message: 'a request with this key is in flight' }))
+    )
+
+    const result = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.retryable).toBe(true)
+      expect(result.error).toContain('concurrent_idempotent_requests')
+    }
+  })
+
+  it('a 409 invalid_idempotent_request is reported as NOT retryable and operationally visible in the error text', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(409, { name: 'invalid_idempotent_request', message: 'payload does not match the original request' }))
+    )
+
+    const result = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.retryable).toBe(false)
+      expect(result.error).toContain('invalid_idempotent_request')
+      expect(result.error.toLowerCase()).toContain('payload mismatch')
+    }
+  })
+
+  it('the two 409 cases classify differently from each other — concurrent retries, invalid does not', async () => {
+    const concurrentFetch = vi.fn(async () => jsonResponse(409, { name: 'concurrent_idempotent_requests' }))
+    vi.stubGlobal('fetch', concurrentFetch)
+    const concurrentResult = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
+
+    const invalidFetch = vi.fn(async () => jsonResponse(409, { name: 'invalid_idempotent_request' }))
+    vi.stubGlobal('fetch', invalidFetch)
+    const invalidResult = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
+
+    expect(concurrentResult.ok).toBe(false)
+    expect(invalidResult.ok).toBe(false)
+    if (!concurrentResult.ok && !invalidResult.ok) {
+      expect(concurrentResult.retryable).toBe(true)
+      expect(invalidResult.retryable).toBe(false)
+    }
+  })
+
+  it('an unrecognized/unparseable 409 body defaults to NOT retryable — conservative rather than looping on an ambiguous conflict', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not json at all', { status: 409 })))
+
+    const result = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.retryable).toBe(false)
+  })
+
+  it('never exposes the raw, unbounded provider response body — every error string is truncated', async () => {
+    const hugeBody = JSON.stringify({ name: 'invalid_idempotent_request', message: 'x'.repeat(5000) })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(hugeBody, { status: 409 })))
+
+    const result = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.length).toBeLessThan(400)
+  })
+
   it('never leaks the API key value in any returned error string, on a failure response', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('server error', { status: 500 })))
 
@@ -167,7 +240,17 @@ describe('sendEmail — Resend adapter', () => {
 
     const result = await sendEmail({ ...INPUT, idempotencyKey: 'letter-arrived/letter-1' })
 
-    expect(result).toEqual({ ok: false, error: 'RESEND_API_KEY and ARRIVAL_EMAIL_FROM are required.', retryable: false })
+    expect(result).toEqual({ ok: false, error: 'RESEND_API_KEY and a From address are required.', retryable: false })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to send with no From address, without ever calling the provider', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendEmail({ ...INPUT, from: '', idempotencyKey: 'letter-arrived/letter-1' })
+
+    expect(result).toEqual({ ok: false, error: 'RESEND_API_KEY and a From address are required.', retryable: false })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

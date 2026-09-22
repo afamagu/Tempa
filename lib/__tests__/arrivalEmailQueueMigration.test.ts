@@ -100,8 +100,8 @@ describe('arrival_email_queue — no client access at all, letter_id is the idem
     expect(codeOnly).toMatch(/letter_id uuid not null unique references public\.letters\(id\)/)
   })
 
-  it('status is constrained to the five known states', () => {
-    expect(codeOnly).toContain("check (status in ('pending', 'processing', 'sent', 'skipped', 'failed'))")
+  it('status is constrained to the six known states, including the terminal manual_review outcome', () => {
+    expect(codeOnly).toContain("check (status in ('pending', 'processing', 'sent', 'skipped', 'failed', 'manual_review'))")
   })
 
   it('has a claim_token uuid column for lease fencing and a provider_message_id text column for Resend correlation', () => {
@@ -127,6 +127,10 @@ describe('arrival_email_system_config — singleton kill switch, starts disabled
     // Nothing in this migration accepts a caller-supplied cutover value —
     // the column default is the only place a value is ever assigned.
     expect(codeOnly).not.toMatch(/p_enqueue_after/)
+  })
+
+  it('explicitly grants SELECT to service_role — the exact privilege the worker\'s direct table read relies on, not left to project default privileges', () => {
+    expect(codeOnly).toContain('grant select on public.arrival_email_system_config to service_role')
   })
 })
 
@@ -224,8 +228,14 @@ describe('resolve_arrival_email_context — send-time revalidation, checked fres
 describe('complete_arrival_email_job — fenced to the exact claim, bounded retries with exponential backoff', () => {
   const body = () => extractFunctionBody('complete_arrival_email_job')
 
-  it('only accepts the three known outcomes', () => {
-    expect(body()).toContain("if p_result not in ('sent', 'skipped', 'failed') then")
+  it('only accepts the four known outcomes, including the terminal manual_review outcome', () => {
+    expect(body()).toContain("if p_result not in ('sent', 'skipped', 'failed', 'manual_review') then")
+  })
+
+  it('manual_review is terminal — never re-enters the pending/backoff path', () => {
+    const b = body()
+    expect(b).toContain("elsif p_result = 'manual_review' then")
+    expect(b).toContain("set status = 'manual_review', last_error = p_error, updated_at = now()")
   })
 
   it('requires BOTH status = processing AND a matching claim_token before touching the row — a stale/late completion is fenced out as a no-op', () => {
@@ -263,6 +273,69 @@ describe('complete_arrival_email_job — fenced to the exact claim, bounded retr
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.complete_arrival_email_job\(uuid, uuid, text, text, text, boolean\) to (anon|authenticated)/
     )
+  })
+})
+
+describe('arrival_email_provider_requests — the frozen Resend payload, never exposed to any client role', () => {
+  it('is keyed one-row-per-queue-event (queue_id primary key), so a payload can never be frozen twice for the same event', () => {
+    expect(codeOnly).toMatch(/queue_id uuid primary key references public\.arrival_email_queue\(id\)/)
+  })
+
+  it('RLS is enabled and no grant of any kind reaches anon/authenticated', () => {
+    expect(codeOnly).toContain('alter table public.arrival_email_provider_requests enable row level security')
+    expect(codeOnly).toContain('revoke all on public.arrival_email_provider_requests from public, anon, authenticated')
+    expect(codeOnly).not.toMatch(/create policy \w+\s+on public\.arrival_email_provider_requests/)
+  })
+
+  it('holds exactly the frozen payload fields — From/To/subject/HTML/text — plus the durable first-attempt instant', () => {
+    expect(codeOnly).toMatch(/idempotency_key text not null/)
+    expect(codeOnly).toMatch(/from_address text not null/)
+    expect(codeOnly).toMatch(/to_address text not null/)
+    expect(codeOnly).toMatch(/subject text not null/)
+    expect(codeOnly).toMatch(/html text not null/)
+    expect(codeOnly).toMatch(/text_body text not null/)
+    expect(codeOnly).toMatch(/first_provider_attempt_at timestamptz not null default now\(\)/)
+  })
+
+  it('is never selected by admin_get_arrival_email_status or any other RPC in this file — the only reader is record_or_fetch_arrival_email_snapshot itself', () => {
+    // The only "from public.arrival_email_provider_requests" in the
+    // whole file must be inside record_or_fetch_arrival_email_
+    // snapshot's own body — assert there is exactly one such reference,
+    // and that it's the one inside that function.
+    const matches = codeOnly.match(/from public\.arrival_email_provider_requests/g) ?? []
+    expect(matches.length).toBe(1)
+    const body = extractFunctionBody('record_or_fetch_arrival_email_snapshot')
+    expect(body).toContain('from public.arrival_email_provider_requests')
+  })
+})
+
+describe('record_or_fetch_arrival_email_snapshot — freeze-on-first-use, worker-only', () => {
+  const body = () => extractFunctionBody('record_or_fetch_arrival_email_snapshot')
+
+  it('inserts the candidate payload only if this queue event has never been attempted before (ON CONFLICT DO NOTHING keyed on queue_id)', () => {
+    expect(body()).toContain('on conflict (queue_id) do nothing')
+  })
+
+  it('reports is_new via row_count from the insert — true only when THIS call is the one that created the row', () => {
+    const b = body()
+    expect(b).toContain('get diagnostics v_row_count = row_count')
+    expect(b).toContain('(v_row_count > 0) as is_new')
+  })
+
+  it('computes window_expired server-side against its own durable first_provider_attempt_at, against Resend\'s 24-hour idempotency retention window — never trusting the caller\'s clock', () => {
+    const b = body()
+    expect(b).toContain("(now() - r.first_provider_attempt_at > interval '24 hours') as window_expired")
+  })
+
+  it('always returns the row that now exists (the frozen copy), regardless of whether this call created it', () => {
+    const b = body()
+    expect(b).toContain('where r.queue_id = p_queue_id')
+  })
+
+  it('is granted to service_role only — never anon or authenticated', () => {
+    const sig = 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)'
+    expect(codeOnly).toContain(`grant execute on function ${sig} to service_role`)
+    expect(codeOnly).not.toMatch(new RegExp(`grant execute on function ${sig.replace(/[()]/g, '\\$&')} to (anon|authenticated)`))
   })
 })
 
@@ -309,5 +382,11 @@ describe('verify file exists and targets this migration', () => {
 
   it('explicitly confirms service_role can read arrival_email_system_config — the exact path the worker uses (a direct table read, not an RPC)', () => {
     expect(verifySql).toContain("has_table_privilege('service_role', 'public.arrival_email_system_config', 'SELECT')")
+  })
+
+  it('checks the new provider-requests table, its lockdown, and the new snapshot RPC signature', () => {
+    expect(verifySql).toContain('arrival_email_provider_requests')
+    expect(verifySql).toContain('record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)')
+    expect(verifySql).toContain('manual_review')
   })
 })

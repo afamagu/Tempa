@@ -12,7 +12,20 @@ type ArrivalEmailContext = {
   sender_country_code: string | null
 }
 
+type ProviderSnapshot = {
+  idempotency_key: string
+  from_address: string
+  to_address: string
+  subject: string
+  html: string
+  text_body: string
+  first_provider_attempt_at: string
+  is_new: boolean
+  window_expired: boolean
+}
+
 type ClaimedJob = { id: string; letter_id: string; claim_token: string }
+type CompleteResult = 'sent' | 'skipped' | 'failed' | 'manual_review'
 
 export type ArrivalWorkerDeps = {
   /** Must be a service-role client (lib/supabase/service.ts) — the
@@ -31,24 +44,40 @@ export type ArrivalWorkerSummary = {
   sent: number
   skipped: number
   failed: number
+  manualReview: number
   sendingEnabled: boolean
 }
 
 /**
  * One scheduler tick: enqueue newly-arrived letters, then — only if the
  * global kill switch is on — claim a batch and resolve/send/complete
- * each one. Every claimed job is always completed (sent, skipped, or
- * failed) exactly once; nothing is left dangling in 'processing' by
- * this function itself (a crashed process is instead recovered by
- * claim_arrival_email_jobs' own stale-claim reclaim, see the
- * migration).
+ * each one. Every claimed job is always completed (sent, skipped,
+ * failed, or manual_review) exactly once; nothing is left dangling in
+ * 'processing' by this function itself (a crashed process is instead
+ * recovered by claim_arrival_email_jobs' own stale-claim reclaim, see
+ * the migration).
  *
  * Every completion call is fenced to the exact claim it came from —
  * see `complete()` below — so a worker invocation that ran past the
  * 15-minute reclaim window can never clobber a newer invocation's
- * outcome for the same job, and the provider's own Idempotency-Key
- * (lib/email/provider.ts) stops that late invocation's own redundant
- * send from actually reaching the recipient twice.
+ * outcome for the same job.
+ *
+ * Payload stability (independent audit correction): Resend requires
+ * the SAME request body under a reused Idempotency-Key. Since
+ * resolve_arrival_email_context is deliberately re-resolved fresh on
+ * every retry (pseudonym, first_contact, even the recipient's email
+ * can all change between attempts), this worker freezes the exact
+ * From/To/subject/HTML/text the FIRST provider attempt used — via
+ * record_or_fetch_arrival_email_snapshot — and reuses that literal
+ * payload on every later retry, never re-rendering what's actually
+ * sent. Fresh eligibility revalidation still runs every time and can
+ * still veto sending (skip) even once a snapshot exists; on top of
+ * that, a retry additionally refuses to send if the recipient's email
+ * has changed since the snapshot (terminal failure, not a silent
+ * payload change under the existing key), or if Resend's own 24-hour
+ * idempotency protection window has elapsed since the first attempt
+ * (terminal 'manual_review' — we no longer know whether that first
+ * attempt actually reached Resend, and refuse to guess).
  */
 export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<ArrivalWorkerSummary> {
   const { supabase, sendEmail, siteOrigin, artOrigin, limit = 20, workerId = 'cron' } = deps
@@ -71,6 +100,7 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
     sent: 0,
     skipped: 0,
     failed: 0,
+    manualReview: 0,
     sendingEnabled,
   }
 
@@ -79,6 +109,13 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
   // attempts, ready to send as soon as it's re-enabled (each job is
   // still revalidated fresh at that later send time).
   if (!sendingEnabled) return summary
+
+  // Checked once, up front, rather than per job — a missing From
+  // address is a deployment misconfiguration, not a per-letter
+  // condition, and should stop the run loudly rather than burn
+  // attempts on jobs one at a time.
+  const arrivalEmailFrom = process.env.ARRIVAL_EMAIL_FROM
+  if (!arrivalEmailFrom) throw new Error('ARRIVAL_EMAIL_FROM is not configured.')
 
   const { data: jobs, error: claimError } = await supabase.rpc('claim_arrival_email_jobs', {
     p_limit: limit,
@@ -131,17 +168,74 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
     }
 
     // Stable across every retry of this exact job — never regenerated
-    // per attempt — so Resend's own idempotency guards against a
-    // duplicate send if this same job is retried (see
-    // lib/email/provider.ts's own doc comment).
+    // per attempt.
     const idempotencyKey = `letter-arrived/${job.letter_id}`
 
+    const { data: snapshotRows, error: snapshotError } = await supabase.rpc('record_or_fetch_arrival_email_snapshot', {
+      p_queue_id: job.id,
+      p_idempotency_key: idempotencyKey,
+      p_from: arrivalEmailFrom,
+      p_to: context.recipient_email,
+      p_subject: rendered.subject,
+      p_html: rendered.html,
+      p_text: rendered.text,
+    })
+
+    if (snapshotError) {
+      await complete(job, 'failed', { error: snapshotError.message })
+      summary.failed += 1
+      return
+    }
+
+    const snapshot = (Array.isArray(snapshotRows) ? snapshotRows[0] : snapshotRows) as ProviderSnapshot | undefined
+
+    if (!snapshot) {
+      await complete(job, 'failed', { error: 'record_or_fetch_arrival_email_snapshot returned no row.' })
+      summary.failed += 1
+      return
+    }
+
+    if (!snapshot.is_new) {
+      // A retry, reusing the payload frozen on an earlier attempt. The
+      // freshly-resolved recipient_email above must still match what
+      // was frozen — if it doesn't, the account's email changed since
+      // the first attempt, and sending either address now would be
+      // wrong: the frozen one may no longer be current, and sending
+      // the new one would silently change the payload under an
+      // idempotency key Resend may already have associated with the
+      // old one. Terminal, not retried.
+      if (snapshot.to_address !== context.recipient_email) {
+        await complete(job, 'failed', {
+          error: 'Recipient email changed since the first provider attempt; refusing to send under the existing idempotency key.',
+          retryable: false,
+        })
+        summary.failed += 1
+        return
+      }
+
+      // Resend's own idempotency protection for this exact request is
+      // only guaranteed for 24 hours after the first attempt. Past
+      // that, a resend is no longer provably deduplicated at the
+      // provider — an outage-driven gap (scheduler down, deploy
+      // frozen) could otherwise resurrect an uncertain request outside
+      // that window. Prefer a human-reviewable stop over guessing.
+      if (snapshot.window_expired) {
+        await complete(job, 'manual_review', {
+          error:
+            "Resend's 24-hour idempotency protection window has elapsed since the first provider attempt for this event; refusing to auto-resend an uncertain request.",
+        })
+        summary.manualReview += 1
+        return
+      }
+    }
+
     const result = await sendEmail({
-      to: context.recipient_email,
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
-      idempotencyKey,
+      from: snapshot.from_address,
+      to: snapshot.to_address,
+      subject: snapshot.subject,
+      html: snapshot.html,
+      text: snapshot.text_body,
+      idempotencyKey: snapshot.idempotency_key,
     })
 
     if (result.ok) {
@@ -155,7 +249,7 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
 
   async function complete(
     job: ClaimedJob,
-    result: 'sent' | 'skipped' | 'failed',
+    result: CompleteResult,
     options: { error?: string; providerMessageId?: string | null; retryable?: boolean } = {}
   ): Promise<void> {
     const { data: applied, error: completeError } = await supabase.rpc('complete_arrival_email_job', {
