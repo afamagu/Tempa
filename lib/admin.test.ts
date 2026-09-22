@@ -1,6 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isStaff, setAccountStatus, listReports, getMember, markReportReviewed, listMembers, getReport, sendAdminFirstLetter } from './admin'
+import {
+  isStaff,
+  setAccountStatus,
+  listReports,
+  getMember,
+  markReportReviewed,
+  listMembers,
+  getReport,
+  sendAdminFirstLetter,
+  getArrivalEmailStatus,
+  setArrivalEmailSendingEnabled,
+} from './admin'
 import { reportContent } from './reports'
 import { createFakeReports } from './__tests__/simulateReportRpcs'
 
@@ -408,5 +419,102 @@ describe('Admin member workspace additions', () => {
       p_body: 'A private note from Tempa staff.',
     })
     expect(result).toEqual({ data: 'letter-1', error: null })
+  })
+})
+
+describe('getArrivalEmailStatus / setArrivalEmailSendingEnabled — Admin email-delivery status', () => {
+  it('maps the RPC jsonb payload from snake_case to the camelCase shape the UI uses', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        sendingEnabled: false,
+        counts: { pending: 2, sent: 5 },
+        recent: [
+          {
+            id: 'queue-1',
+            letter_id: 'letter-1',
+            recipient_id: 'recipient-1',
+            status: 'failed',
+            attempts: 3,
+            max_attempts: 5,
+            last_error: 'Resend responded 500',
+            skipped_reason: null,
+            provider_message_id: null,
+            created_at: '2026-10-01T00:00:00Z',
+            sent_at: null,
+            updated_at: '2026-10-01T00:05:00Z',
+          },
+        ],
+      },
+      error: null,
+    })
+
+    const { data, error } = await getArrivalEmailStatus({ rpc } as unknown as SupabaseClient)
+
+    expect(rpc).toHaveBeenCalledWith('admin_get_arrival_email_status')
+    expect(error).toBeNull()
+    expect(data).toEqual({
+      sendingEnabled: false,
+      counts: { pending: 2, sent: 5 },
+      recent: [
+        {
+          id: 'queue-1',
+          letterId: 'letter-1',
+          recipientId: 'recipient-1',
+          status: 'failed',
+          attempts: 3,
+          maxAttempts: 5,
+          lastError: 'Resend responded 500',
+          skippedReason: null,
+          providerMessageId: null,
+          createdAt: '2026-10-01T00:00:00Z',
+          sentAt: null,
+          updatedAt: '2026-10-01T00:05:00Z',
+        },
+      ],
+    })
+  })
+
+  it('maps a persisted providerMessageId through on a sent row', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        sendingEnabled: true,
+        counts: { sent: 1 },
+        recent: [
+          {
+            id: 'queue-2',
+            letter_id: 'letter-2',
+            recipient_id: 'recipient-2',
+            status: 'sent',
+            attempts: 1,
+            max_attempts: 5,
+            last_error: null,
+            skipped_reason: null,
+            provider_message_id: 'resend-abc-123',
+            created_at: '2026-10-01T00:00:00Z',
+            sent_at: '2026-10-01T00:00:05Z',
+            updated_at: '2026-10-01T00:00:05Z',
+          },
+        ],
+      },
+      error: null,
+    })
+
+    const { data } = await getArrivalEmailStatus({ rpc } as unknown as SupabaseClient)
+
+    expect(data?.recent[0].providerMessageId).toBe('resend-abc-123')
+  })
+
+  it('surfaces an error from a non-staff caller rather than throwing', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'Staff access required.', code: '42501' } })
+    const { data, error } = await getArrivalEmailStatus({ rpc } as unknown as SupabaseClient)
+    expect(data).toBeNull()
+    expect(error).toEqual({ message: 'Staff access required.', code: '42501' })
+  })
+
+  it('setArrivalEmailSendingEnabled calls the RPC with the requested value', async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null })
+    const { error } = await setArrivalEmailSendingEnabled({ rpc } as unknown as SupabaseClient, true)
+    expect(rpc).toHaveBeenCalledWith('set_arrival_email_sending_enabled', { p_enabled: true })
+    expect(error).toBeNull()
   })
 })

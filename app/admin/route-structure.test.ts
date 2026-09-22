@@ -12,6 +12,8 @@ const publicContentPageSource = readFileSync(
   'utf8'
 )
 const questionsPageSource = readFileSync(path.join(__dirname, 'content', 'questions', 'page.tsx'), 'utf8')
+const systemPageSource = readFileSync(path.join(__dirname, 'system', 'page.tsx'), 'utf8')
+const emailStatusPageSource = readFileSync(path.join(__dirname, 'system', 'email', 'page.tsx'), 'utf8')
 
 // layout.tsx wraps EVERY route under app/admin/ and is the sole
 // enforcement point (see layout.test.ts for its own full coverage,
@@ -54,11 +56,23 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(contentPageSource).toContain("redirect('/admin/content/questions')")
   })
 
-  it('the nav offers exactly Overview / Moderation / Members / Content — no empty Analytics/System/Commerce destination, no fake Postcards tab yet', () => {
+  it('/admin/system redirects to its one child (Email delivery), same shape as /admin/content before it grew tabs', () => {
+    expect(systemPageSource).toContain("redirect('/admin/system/email')")
+    expect(systemPageSource).not.toContain('isStaff')
+    expect(systemPageSource).not.toContain('redirect(\'/sign-in\'')
+  })
+
+  it('/admin/system/email is a Server Component with no competing auth check of its own — admin_get_arrival_email_status is what actually enforces admin-only', () => {
+    expect(emailStatusPageSource.trimStart().startsWith("'use client'")).toBe(false)
+    expect(emailStatusPageSource).not.toContain('isStaff')
+    expect(emailStatusPageSource).not.toContain('redirect(')
+  })
+
+  it('the nav offers exactly Overview / Moderation / Members / Content / System — no empty Analytics/Commerce destination, no fake Postcards tab yet', () => {
     // Scoped to the actual DESTINATIONS array, not the whole file —
     // this file's own doc comment legitimately mentions "Analytics" as
-    // a FUTURE reference (why there's no "More" tab yet), which a bare
-    // whole-file substring check would wrongly flag as a real tab.
+    // a past placeholder name, which a bare whole-file substring check
+    // would wrongly flag as a real tab.
     const arrayStart = adminNavSource.indexOf('DESTINATIONS: Destination[] = [')
     const end = adminNavSource.indexOf('\n]', arrayStart)
     const destinationsSource = adminNavSource.slice(arrayStart, end)
@@ -67,8 +81,8 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(destinationsSource).toContain("label: 'Moderation'")
     expect(destinationsSource).toContain("label: 'Members'")
     expect(destinationsSource).toContain("label: 'Content'")
+    expect(destinationsSource).toContain("label: 'System'")
     expect(destinationsSource).not.toContain('Analytics')
-    expect(destinationsSource).not.toContain('System')
     expect(destinationsSource).not.toContain('Commerce')
     expect(destinationsSource).not.toContain('More')
     expect(destinationsSource).not.toContain('Postcards')

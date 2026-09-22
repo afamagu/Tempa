@@ -400,3 +400,85 @@ export async function setAccountStatus(
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }
 }
+
+/** One row of docs/sql/2026-10-01-arrival-email-delivery.sql's
+ * arrival_email_queue, as returned by admin_get_arrival_email_status —
+ * ids, status/error text, and timestamps only, never letter content. */
+export type ArrivalEmailQueueRow = {
+  id: string
+  letterId: string
+  recipientId: string
+  status: 'pending' | 'processing' | 'sent' | 'skipped' | 'failed' | 'manual_review'
+  attempts: number
+  maxAttempts: number
+  lastError: string | null
+  skippedReason: string | null
+  /** Resend's own email id on a successful send — lets staff correlate
+   * this row with provider-side delivery logs, without storing any
+   * letter content. */
+  providerMessageId: string | null
+  createdAt: string
+  sentAt: string | null
+  updatedAt: string
+}
+
+export type ArrivalEmailStatus = {
+  sendingEnabled: boolean
+  counts: Partial<Record<ArrivalEmailQueueRow['status'], number>>
+  recent: ArrivalEmailQueueRow[]
+}
+
+export async function getArrivalEmailStatus(
+  supabase: SupabaseClient
+): Promise<{ data: ArrivalEmailStatus | null; error: AdminError }> {
+  const { data, error } = await supabase.rpc('admin_get_arrival_email_status')
+  if (error) return { data: null, error: { message: error.message, code: error.code } }
+  const result = data as {
+    sendingEnabled: boolean
+    counts: Partial<Record<ArrivalEmailQueueRow['status'], number>>
+    recent: {
+      id: string
+      letter_id: string
+      recipient_id: string
+      status: ArrivalEmailQueueRow['status']
+      attempts: number
+      max_attempts: number
+      last_error: string | null
+      skipped_reason: string | null
+      provider_message_id: string | null
+      created_at: string
+      sent_at: string | null
+      updated_at: string
+    }[]
+  }
+  return {
+    data: {
+      sendingEnabled: result.sendingEnabled,
+      counts: result.counts,
+      recent: result.recent.map((r) => ({
+        id: r.id,
+        letterId: r.letter_id,
+        recipientId: r.recipient_id,
+        status: r.status,
+        attempts: r.attempts,
+        maxAttempts: r.max_attempts,
+        lastError: r.last_error,
+        skippedReason: r.skipped_reason,
+        providerMessageId: r.provider_message_id,
+        createdAt: r.created_at,
+        sentAt: r.sent_at,
+        updatedAt: r.updated_at,
+      })),
+    },
+    error: null,
+  }
+}
+
+export async function setArrivalEmailSendingEnabled(
+  supabase: SupabaseClient,
+  enabled: boolean
+): Promise<{ error: AdminError }> {
+  const { error } = await supabase.rpc('set_arrival_email_sending_enabled', { p_enabled: enabled })
+  if (error) return { error: { message: error.message, code: error.code } }
+  return { error: null }
+}

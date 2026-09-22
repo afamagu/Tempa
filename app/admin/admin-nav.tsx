@@ -10,6 +10,7 @@ const DESTINATIONS: Destination[] = [
   { href: '/admin/moderation/reports', label: 'Moderation', matchPrefix: '/admin/moderation' },
   { href: '/admin/members', label: 'Members' },
   { href: '/admin/content', label: 'Content', matchPrefix: '/admin/content' },
+  { href: '/admin/system/email', label: 'System', matchPrefix: '/admin/system' },
 ]
 
 function isActive(pathname: string, dest: Destination): boolean {
@@ -18,16 +19,18 @@ function isActive(pathname: string, dest: Destination): boolean {
 }
 
 /**
- * Admin Command Center Phase 2A-1 — the permanent nav, exactly 4
- * destinations (Overview / Moderation / Members / Content). One
- * component owning BOTH the desktop horizontal nav and the mobile
+ * Admin Command Center Phase 2A-1 — the permanent nav, originally
+ * exactly 4 destinations (Overview / Moderation / Members / Content).
+ * One component owning BOTH the desktop horizontal nav and the mobile
  * bottom tab bar, rather than two parallel implementations that could
  * drift — they share the same DESTINATIONS list and the same
  * usePathname()-driven active-tab logic, just different layout classes
- * per breakpoint. No "More" tab yet (Decision — Phase 2A-1 mobile nav):
- * a 5th tab only gets added once Analytics/System actually exist to
- * put behind it; an empty destination is exactly the clutter the
- * product principle rejects.
+ * per breakpoint. No "More" tab was added speculatively (Decision —
+ * Phase 2A-1 mobile nav): a 5th tab only gets added once real content
+ * exists to put behind it. That happened with the arrival-email
+ * delivery system (docs/sql/2026-10-01-arrival-email-delivery.sql) —
+ * System / Email delivery is real, staff-facing operational content,
+ * not a placeholder, so it earns the 5th slot here (grid-cols-5 below).
  */
 export default function AdminNav() {
   const pathname = usePathname()
@@ -55,7 +58,7 @@ export default function AdminNav() {
           obscuring page content (see the layout's own bottom padding on
           mobile) or causing horizontal scroll (grid-cols-4, no wrapping). */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-foreground/10 bg-background sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-foreground/10 bg-background sm:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {DESTINATIONS.map((dest) => {

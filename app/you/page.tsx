@@ -83,6 +83,7 @@ export default async function YouPage() {
               <Link href="/you/responses" className={controlClass}><span>Your responses</span><span aria-hidden>→</span></Link>
               <Link href="/you/interests" className={controlClass}><span>Reading interests</span><span aria-hidden>→</span></Link>
               <Link href="/you/keepsakes" className={controlClass}><span>Keepsakes</span><span aria-hidden>→</span></Link>
+              <Link href="/you/notifications" className={controlClass}><span>Notifications</span><span aria-hidden>→</span></Link>
             </div>
           </section>
 
