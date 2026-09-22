@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { primaryButtonClass, quietLinkClass, helperTextClass } from '@/app/profile/ui'
+import { isPlausibleDob, type DateOfBirth } from '@/lib/age'
 
 const MONTHS = [
   'January',
@@ -25,6 +26,24 @@ const wordmarkClass = 'font-serif text-xs italic tracking-[0.2em] text-muted'
 const headingClass = 'font-serif text-2xl font-medium text-foreground'
 const bodyClass = 'text-sm leading-relaxed text-muted'
 
+/** "14 March 2010" — day, full month name, year. Deliberately not
+ * `new Date(...)`/`toLocaleDateString` (lib/format-date.ts's
+ * formatters): a DOB (and eligible_on) is a calendar date, never a
+ * moment in time, so there is no timezone to get wrong by routing it
+ * through a Date object — same philosophy as lib/age.ts's own
+ * DateOfBirth type. */
+function formatCalendarDate(dob: DateOfBirth): string {
+  return `${dob.day} ${MONTHS[dob.month - 1]} ${dob.year}`
+}
+
+/** Parses a Postgres `date` column value ("2028-03-14", no time
+ * component) into the same plain calendar-date shape, for display only
+ * — never re-derives or previews eligibility from it. */
+function parseIsoDate(isoDate: string): DateOfBirth {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  return { year, month, day }
+}
+
 /**
  * Adult Eligibility + Legal Acceptance Gate — /begin's own client-side
  * flow. Renders exactly one of four states, decided by the SERVER
@@ -43,14 +62,16 @@ export default function BeginFlow({
   stillBlocked,
   showLegalStep,
   signOutAction,
+  eligibleOn,
 }: {
   eligibilityStatus: 'eligible' | 'ineligible' | 'review_required' | null
   stillBlocked: boolean
   showLegalStep: boolean
   signOutAction: () => Promise<void>
+  eligibleOn: string | null
 }) {
   if (eligibilityStatus === 'ineligible' && stillBlocked) {
-    return <IneligibleTerminal signOutAction={signOutAction} />
+    return <IneligibleTerminal signOutAction={signOutAction} eligibleOn={eligibleOn} />
   }
 
   if (eligibilityStatus === 'review_required') {
@@ -72,15 +93,30 @@ function Shell({ children }: { children: React.ReactNode }) {
   )
 }
 
+/**
+ * DOB entry → explicit confirmation → server submission (independent
+ * product correction — a DOB must never reach submit_dob_eligibility
+ * straight off the entry form; an ordinary typo would otherwise create
+ * the irreversible under-18 lock immediately). `phase` is purely local
+ * UI state — no RPC happens until Confirm, so there's nothing here for
+ * a server round-trip to preempt; the day/month/year fields stay
+ * populated across both phases since going back never clears them.
+ * Client-side validation (isPlausibleDob, from lib/age.ts) is UX only,
+ * exactly like before — the database remains the authoritative age
+ * decision, and neither phase computes or reveals whether the entered
+ * date is adult/minor before the RPC actually runs.
+ */
 function DobStep() {
   const router = useRouter()
   const [day, setDay] = useState('')
   const [month, setMonth] = useState('')
   const [year, setYear] = useState('')
+  const [phase, setPhase] = useState<'entry' | 'confirm'>('entry')
+  const [confirmedDob, setConfirmedDob] = useState<DateOfBirth | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(e: FormEvent) {
+  function handleContinue(e: FormEvent) {
     e.preventDefault()
     setError(null)
 
@@ -93,12 +129,38 @@ function DobStep() {
       return
     }
 
+    const candidate: DateOfBirth = { year: yearNum, month: monthNum, day: dayNum }
+    const now = new Date()
+    const today: DateOfBirth = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() }
+
+    if (!isPlausibleDob(candidate, today)) {
+      // Calendar/plausibility check only (real date, not in the
+      // future, not implausibly old) — never an adult/minor judgment.
+      // This is UX only; submit_dob_eligibility re-validates the same
+      // way server-side regardless.
+      setError('Enter a valid date.')
+      return
+    }
+
+    setConfirmedDob(candidate)
+    setPhase('confirm')
+  }
+
+  function handleEdit() {
+    setPhase('entry')
+    setError(null)
+  }
+
+  async function handleConfirm() {
+    if (submitting || !confirmedDob) return
     setSubmitting(true)
+    setError(null)
+
     const supabase = createClient()
     const { error: rpcError } = await supabase.rpc('submit_dob_eligibility', {
-      p_year: yearNum,
-      p_month: monthNum,
-      p_day: dayNum,
+      p_year: confirmedDob.year,
+      p_month: confirmedDob.month,
+      p_day: confirmedDob.day,
     })
 
     if (rpcError) {
@@ -113,6 +175,47 @@ function DobStep() {
     router.refresh()
   }
 
+  if (phase === 'confirm' && confirmedDob) {
+    return (
+      <Shell>
+        <div className="space-y-2">
+          <p className={wordmarkClass}>Tempa</p>
+          <h1 className={headingClass}>Check your date of birth</h1>
+          <p className={bodyClass}>You entered {formatCalendarDate(confirmedDob)}.</p>
+          <p className={bodyClass}>
+            Please check it carefully. Once you confirm your date of birth, you won&rsquo;t be able
+            to change it through this age check.
+          </p>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={submitting}
+            className={`w-full ${primaryButtonClass}`}
+          >
+            {submitting ? 'Saving…' : 'Confirm date of birth'}
+          </button>
+          <button
+            type="button"
+            onClick={handleEdit}
+            disabled={submitting}
+            className={quietLinkClass}
+          >
+            Go back and edit
+          </button>
+        </div>
+      </Shell>
+    )
+  }
+
   return (
     <Shell>
       <div className="space-y-2">
@@ -124,7 +227,7 @@ function DobStep() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleContinue} className="space-y-5">
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1.5">
             <label htmlFor="dob-day" className="block text-[13px] font-medium text-foreground">
@@ -185,8 +288,8 @@ function DobStep() {
           </p>
         )}
 
-        <button type="submit" disabled={submitting} className={`w-full ${primaryButtonClass}`}>
-          {submitting ? 'Checking…' : 'Continue'}
+        <button type="submit" className={`w-full ${primaryButtonClass}`}>
+          Continue
         </button>
       </form>
     </Shell>
@@ -307,13 +410,31 @@ function SignOutLink({ signOutAction }: { signOutAction: () => Promise<void> }) 
   )
 }
 
-function IneligibleTerminal({ signOutAction }: { signOutAction: () => Promise<void> }) {
+/**
+ * Never adds a retry/change-DOB/appeal affordance of any kind — the
+ * confirmation step (DobStep, above) exists to prevent ordinary typos
+ * BEFORE this durable lock is created; once it exists, the only way
+ * out is time (eligible_on) or contacting support outside this flow
+ * entirely. `eligibleOn` is the server's own persisted date — this
+ * component only ever displays it, never computes or previews it.
+ */
+function IneligibleTerminal({
+  signOutAction,
+  eligibleOn,
+}: {
+  signOutAction: () => Promise<void>
+  eligibleOn: string | null
+}) {
   return (
     <Shell>
       <div className="space-y-2">
         <p className={wordmarkClass}>Tempa</p>
         <h1 className={headingClass}>Tempa is for adults</h1>
-        <p className={bodyClass}>You need to be at least 18 years old to create a Tempa profile.</p>
+        <p className={bodyClass}>Tempa is only available to people who are 18 or older.</p>
+        {eligibleOn && (
+          <p className={bodyClass}>You can return to Tempa on {formatCalendarDate(parseIsoDate(eligibleOn))}.</p>
+        )}
+        <p className={bodyClass}>Until then, this account cannot access Tempa.</p>
       </div>
 
       <SignOutLink signOutAction={signOutAction} />

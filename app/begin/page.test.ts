@@ -35,6 +35,10 @@ describe('/begin server guards', () => {
     expect(source).toContain("eligibilityStatus === 'ineligible'")
     expect(source).toContain('eligibility!.eligible_on! > today')
   })
+
+  it('8. passes the persisted eligible_on through to BeginFlow, so the under-18 terminal can display it', () => {
+    expect(source).toContain('eligibleOn={eligibility?.eligible_on ?? null}')
+  })
 })
 
 describe('/begin real sign-out wiring (independent audit correction)', () => {
