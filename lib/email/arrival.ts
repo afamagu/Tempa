@@ -7,7 +7,11 @@ export type ArrivalEmailInput = {
   senderCountryCode?: string | null
   /** Public HTTPS origin for Tempa, e.g. https://jointempa.com. */
   siteOrigin: string
-  /** Optional public HTTPS origin where the compressed email art is hosted. */
+  /** Optional public HTTPS base URL where the compressed email art is
+   * hosted — a bare origin (https://jointempa.com) or an origin plus
+   * pathname (https://jointempa.com/email/arrival-art), see
+   * artBaseUrl below. Never carries credentials, a query string, or a
+   * fragment. */
   artOrigin?: string | null
 }
 
@@ -55,6 +59,23 @@ function publicOrigin(value: string): string {
   return url.origin
 }
 
+/** Unlike publicOrigin (strict root-only — the deep-link site origin
+ * stays exactly that restrictive), the art origin only needs to be a
+ * secure base URL to concatenate a filename onto: still HTTPS, still
+ * no credentials/query/fragment, but a pathname is expected and
+ * permitted (e.g. https://jointempa.com/email/arrival-art) so the
+ * compressed art can live in a subpath rather than requiring its own
+ * subdomain/root origin. A trailing slash is normalized away so
+ * "…/arrival-art" and "…/arrival-art/" both resolve to the same base. */
+function artBaseUrl(value: string): string {
+  const url = new URL(value)
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+    throw new Error('A secure HTTPS art origin is required.')
+  }
+  const pathname = url.pathname.replace(/\/+$/, '')
+  return `${url.origin}${pathname}`
+}
+
 function letterPath(id: string): string {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     throw new Error('A valid letter ID is required.')
@@ -80,7 +101,7 @@ export function renderArrivalEmail(input: ArrivalEmailInput): RenderedArrivalEma
   const countryCode = input.senderCountryCode?.toUpperCase()
   const asset = countryCode && /^[A-Z]{2}$/.test(countryCode) ? ORIGIN_ARRIVAL_ART[countryCode] : undefined
   const imageUrl = input.artOrigin && asset
-    ? `${publicOrigin(input.artOrigin)}/${encodeURIComponent(asset)}`
+    ? `${artBaseUrl(input.artOrigin)}/${encodeURIComponent(asset)}`
     : null
 
   // Email clients often block external images. Text and the action sit on
