@@ -5,6 +5,7 @@ import type { SendEmailInput, SendEmailResult } from './provider'
 type RpcCall = { fn: string; params: Record<string, unknown> | undefined }
 type ClaimedJob = { id: string; letter_id: string; claim_token: string }
 type SnapshotOverride = {
+  claim_valid?: boolean
   is_new?: boolean
   from_address?: string
   to_address?: string
@@ -58,11 +59,15 @@ function makeFakeSupabase(options: {
       if (fn === 'record_or_fetch_arrival_email_snapshot') {
         const jobId = params?.p_queue_id as string
         const override = options.snapshotByJobId?.[jobId]
+        if (override?.claim_valid === false) {
+          return { data: [{ claim_valid: false }], error: null }
+        }
         // Default: this call is what froze the snapshot (is_new true)
         // — echoes back exactly the candidate values the worker sent,
         // matching real record_or_fetch_arrival_email_snapshot
         // behavior on a genuine first attempt.
         const snapshot = {
+          claim_valid: true,
           idempotency_key: params?.p_idempotency_key,
           from_address: override?.from_address ?? (params?.p_from as string),
           to_address: override?.to_address ?? (params?.p_to as string),
@@ -154,9 +159,36 @@ describe('runArrivalEmailWorker', () => {
 
     expect(summary.sent).toBe(1)
     const snapshotCall = calls.find((c) => c.fn === 'record_or_fetch_arrival_email_snapshot')
-    expect(snapshotCall?.params).toMatchObject({ p_queue_id: 'job-1', p_to: 'recipient@example.com' })
+    expect(snapshotCall?.params).toMatchObject({ p_queue_id: 'job-1', p_claim_token: TOKEN, p_to: 'recipient@example.com' })
     const completeCall = calls.find((c) => c.fn === 'complete_arrival_email_job')
     expect(completeCall?.params).toMatchObject({ p_result: 'sent', p_provider_message_id: 'resend-msg-1' })
+  })
+
+  it('snapshot fencing: claim_valid: false stops processing before ever calling Resend — no sendEmail, no completion call under the stale token', async () => {
+    const { supabase, calls } = makeFakeSupabase({
+      sendingEnabled: true,
+      claimedJobs: [{ id: 'job-fenced', letter_id: LETTER_ID, claim_token: TOKEN }],
+      contextByJobId: { 'job-fenced': eligibleContext() },
+      snapshotByJobId: { 'job-fenced': { claim_valid: false } },
+    })
+    const sendEmail = vi.fn()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const summary = await runArrivalEmailWorker({ supabase: supabase as never, sendEmail, siteOrigin: SITE_ORIGIN })
+
+    // Never contacts the provider at all.
+    expect(sendEmail).not.toHaveBeenCalled()
+    // Never calls completion under the now-invalid token either — the
+    // current owner is left alone to complete the job itself.
+    expect(calls.filter((c) => c.fn === 'complete_arrival_email_job')).toHaveLength(0)
+    // This invocation determined no outcome for the job — it simply
+    // backed off, so none of the terminal counters advance for it.
+    expect(summary.sent).toBe(0)
+    expect(summary.skipped).toBe(0)
+    expect(summary.failed).toBe(0)
+    expect(summary.manualReview).toBe(0)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('claim_valid: false'))
+    warnSpy.mockRestore()
   })
 
   it('retry path — the FROZEN payload is reused even though the current context has changed (different pseudonym/first_contact)', async () => {

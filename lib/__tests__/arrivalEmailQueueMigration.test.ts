@@ -309,8 +309,31 @@ describe('arrival_email_provider_requests — the frozen Resend payload, never e
   })
 })
 
-describe('record_or_fetch_arrival_email_snapshot — freeze-on-first-use, worker-only', () => {
+describe('record_or_fetch_arrival_email_snapshot — freeze-on-first-use, fenced to the exact claim requesting it', () => {
   const body = () => extractFunctionBody('record_or_fetch_arrival_email_snapshot')
+
+  it('takes p_claim_token and verifies/locks ownership (id, processing status, matching token) before touching anything else', () => {
+    const b = body()
+    expect(sql).toMatch(/create or replace function public\.record_or_fetch_arrival_email_snapshot\(\s*p_queue_id uuid,\s*p_claim_token uuid,/)
+    expect(b).toContain('where id = p_queue_id')
+    expect(b).toContain("and status = 'processing'")
+    expect(b).toContain('and claim_token = p_claim_token')
+    expect(b).toContain('for update')
+  })
+
+  it('returns claim_valid = false and no usable payload when ownership fails — no insert, no fetch, nothing exposed', () => {
+    const b = body()
+    expect(b).toContain('if not found then')
+    expect(b).toMatch(/return query select\s*\n\s*false, null::text, null::text, null::text, null::text, null::text, null::text,/)
+  })
+
+  it('the ownership lock is taken BEFORE the insert into arrival_email_provider_requests — never after', () => {
+    const b = body()
+    const lockPos = b.indexOf('for update')
+    const insertPos = b.indexOf('insert into public.arrival_email_provider_requests')
+    expect(lockPos).toBeGreaterThan(-1)
+    expect(insertPos).toBeGreaterThan(lockPos)
+  })
 
   it('inserts the candidate payload only if this queue event has never been attempted before (ON CONFLICT DO NOTHING keyed on queue_id)', () => {
     expect(body()).toContain('on conflict (queue_id) do nothing')
@@ -322,9 +345,19 @@ describe('record_or_fetch_arrival_email_snapshot — freeze-on-first-use, worker
     expect(b).toContain('(v_row_count > 0) as is_new')
   })
 
-  it('computes window_expired server-side against its own durable first_provider_attempt_at, against Resend\'s 24-hour idempotency retention window — never trusting the caller\'s clock', () => {
+  it('refreshes claimed_at (a lease heartbeat) while still holding the locked, owned row, before returning the snapshot', () => {
     const b = body()
-    expect(b).toContain("(now() - r.first_provider_attempt_at > interval '24 hours') as window_expired")
+    const lockPos = b.indexOf('for update')
+    const heartbeatPos = b.indexOf('set claimed_at = now()')
+    const returnPos = b.lastIndexOf('return query')
+    expect(heartbeatPos).toBeGreaterThan(lockPos)
+    expect(returnPos).toBeGreaterThan(heartbeatPos)
+  })
+
+  it("computes window_expired server-side against its own durable first_provider_attempt_at, using Resend's full 24-hour idempotency retention window (>=, not >) — never trusting the caller's clock", () => {
+    const b = body()
+    expect(b).toContain("(now() - r.first_provider_attempt_at >= interval '24 hours') as window_expired")
+    expect(b).not.toContain("> interval '24 hours'")
   })
 
   it('always returns the row that now exists (the frozen copy), regardless of whether this call created it', () => {
@@ -333,7 +366,7 @@ describe('record_or_fetch_arrival_email_snapshot — freeze-on-first-use, worker
   })
 
   it('is granted to service_role only — never anon or authenticated', () => {
-    const sig = 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)'
+    const sig = 'public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text)'
     expect(codeOnly).toContain(`grant execute on function ${sig} to service_role`)
     expect(codeOnly).not.toMatch(new RegExp(`grant execute on function ${sig.replace(/[()]/g, '\\$&')} to (anon|authenticated)`))
   })
@@ -384,9 +417,14 @@ describe('verify file exists and targets this migration', () => {
     expect(verifySql).toContain("has_table_privilege('service_role', 'public.arrival_email_system_config', 'SELECT')")
   })
 
-  it('checks the new provider-requests table, its lockdown, and the new snapshot RPC signature', () => {
+  it('checks the new provider-requests table, its lockdown, and the fenced snapshot RPC signature', () => {
     expect(verifySql).toContain('arrival_email_provider_requests')
-    expect(verifySql).toContain('record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)')
+    expect(verifySql).toContain('record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text)')
     expect(verifySql).toContain('manual_review')
+  })
+
+  it('guards, against the live function body via pg_get_functiondef, that the snapshot RPC actually checks status = processing and claim_token = p_claim_token', () => {
+    expect(verifySql).toContain("ilike '%status = ''processing''%'")
+    expect(verifySql).toContain("ilike '%claim_token = p_claim_token%'")
   })
 })

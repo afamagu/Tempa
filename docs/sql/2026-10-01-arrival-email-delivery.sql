@@ -773,39 +773,55 @@ revoke all on public.arrival_email_provider_requests from public, anon, authenti
 
 -- ============================================================
 -- 11. RECORD_OR_FETCH_ARRIVAL_EMAIL_SNAPSHOT — worker-only, freezes
---     the payload on first use, returns the frozen copy on every retry
+--     the payload on first use, returns the frozen copy on every
+--     retry, fenced to the exact claim requesting it
 -- ============================================================
--- Atomically "insert if this queue event has never been attempted
--- before, otherwise leave the existing row untouched" (ON CONFLICT
--- (queue_id) DO NOTHING), then always returns whatever row now exists
--- — which is either the row this exact call just inserted, or the
--- earlier attempt's frozen row. `is_new` tells the worker which case
--- it got: on `is_new = true` the candidate p_to/p_subject/p_html/
--- p_text the worker just rendered from a fresh resolve_arrival_email_
--- context call IS what gets frozen and sent; on `is_new = false` the
--- worker's fresh render is silently discarded and it must send exactly
--- the returned columns instead — see lib/email/arrival-worker.ts.
+-- Fenced the same way complete_arrival_email_job is (independent audit
+-- correction — this function originally had no ownership check at
+-- all): requires `id = p_queue_id AND status = 'processing' AND
+-- claim_token = p_claim_token`, locked with `for update`, BEFORE any
+-- insert or read of the frozen payload. Without this, a worker whose
+-- claim had already gone stale and been reclaimed by another
+-- invocation (a new claim_token) could still successfully create or
+-- fetch a snapshot and proceed all the way to calling Resend — the
+-- claim_token fence on complete_arrival_email_job alone only stops the
+-- BOOKKEEPING from being corrupted afterward, not the actual duplicate
+-- provider call from happening in the first place. Fencing this
+-- function closes that gap: an out-of-date caller gets `claim_valid =
+-- false` and every other column null, and must stop there — no
+-- payload is ever inserted, fetched, or returned to it. See
+-- lib/email/arrival-worker.ts: on `claim_valid = false` the worker
+-- calls neither sendEmail nor complete_arrival_email_job for that job.
 --
--- `window_expired` is computed server-side, against this table's own
--- durable first_provider_attempt_at, rather than trusting the worker's
--- own clock (same server-authoritative-over-client/worker principle as
--- enqueue_after in Part 3) — true once more than 24 hours have passed
--- since the first attempt, matching Resend's own idempotency retention
--- window. The worker must treat `is_new = false and window_expired =
--- true` as "we no longer have any provider-side idempotency protection
--- for this exact request, and we do not know whether the earlier
--- attempt actually reached Resend" and refuse to send — see
--- complete_arrival_email_job's new 'manual_review' outcome.
+-- While holding that locked, still-owned row, `claimed_at` is
+-- refreshed to now() before the snapshot is returned — a lease
+-- heartbeat taken immediately before the worker's own (bounded, 10s —
+-- see lib/email/provider.ts's REQUEST_TIMEOUT_MS) call to Resend. This
+-- pushes the 15-minute stale-processing reclaim window in claim_
+-- arrival_email_jobs out from THIS instant rather than from whenever
+-- the row was originally claimed, so a normal (non-stalled) send can
+-- never be reclaimed out from under it mid-flight.
+--
+-- Otherwise unchanged from before: atomically "insert if this queue
+-- event has never been attempted before, otherwise leave the existing
+-- row untouched" (ON CONFLICT (queue_id) DO NOTHING), `is_new` reports
+-- which case this call got, and `window_expired` is computed server-
+-- side against this table's own durable first_provider_attempt_at —
+-- now `>=` 24 hours rather than `>` (independent audit correction:
+-- Resend guarantees retention for a full 24 hours, not "up to but not
+-- including" — once that full window has elapsed, do not keep relying
+-- on protection that is no longer guaranteed to still be there).
 --
 -- Does NOT itself decide whether to send — the worker still does its
 -- own fresh eligibility check first (unchanged, Part 6) and its own
 -- recipient-email-changed check comparing this call's returned
 -- to_address against the just-resolved current recipient email; both
--- of those can still veto sending even after a snapshot is
--- successfully fetched here.
+-- of those can still veto sending even after a valid snapshot is
+-- returned here.
 
 create or replace function public.record_or_fetch_arrival_email_snapshot(
   p_queue_id uuid,
+  p_claim_token uuid,
   p_idempotency_key text,
   p_from text,
   p_to text,
@@ -814,6 +830,7 @@ create or replace function public.record_or_fetch_arrival_email_snapshot(
   p_text text
 )
 returns table (
+  claim_valid boolean,
   idempotency_key text,
   from_address text,
   to_address text,
@@ -830,7 +847,22 @@ set search_path to 'pg_catalog'
 as $$
 declare
   v_row_count integer;
+  v_locked_id uuid;
 begin
+  select id into v_locked_id
+  from public.arrival_email_queue
+  where id = p_queue_id
+    and status = 'processing'
+    and claim_token = p_claim_token
+  for update;
+
+  if not found then
+    return query select
+      false, null::text, null::text, null::text, null::text, null::text, null::text,
+      null::timestamptz, null::boolean, null::boolean;
+    return;
+  end if;
+
   insert into public.arrival_email_provider_requests
     (queue_id, idempotency_key, from_address, to_address, subject, html, text_body)
   values
@@ -839,8 +871,13 @@ begin
 
   get diagnostics v_row_count = row_count;
 
+  update public.arrival_email_queue
+  set claimed_at = now(), updated_at = now()
+  where id = p_queue_id;
+
   return query
   select
+    true,
     r.idempotency_key,
     r.from_address,
     r.to_address,
@@ -849,13 +886,13 @@ begin
     r.text_body,
     r.first_provider_attempt_at,
     (v_row_count > 0) as is_new,
-    (now() - r.first_provider_attempt_at > interval '24 hours') as window_expired
+    (now() - r.first_provider_attempt_at >= interval '24 hours') as window_expired
   from public.arrival_email_provider_requests r
   where r.queue_id = p_queue_id;
 end;
 $$;
 
-revoke all on function public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text) from public;
-grant execute on function public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text) to service_role;
+revoke all on function public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text) from public;
+grant execute on function public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text) to service_role;
 
 commit;

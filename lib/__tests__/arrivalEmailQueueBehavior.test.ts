@@ -11,6 +11,7 @@ import {
   enqueueArrivalEmails,
   claimArrivalEmailJobs,
   completeArrivalEmailJob,
+  recordOrFetchArrivalEmailSnapshot,
   type SimLetter,
 } from './simulateArrivalEmailRpcs'
 
@@ -252,5 +253,157 @@ describe('complete_arrival_email_job — corrected exponential backoff (5m, 10m,
     completeArrivalEmailJob(state, job.id, job.claim_token!, 'failed', 'Resend responded 422: invalid recipient', null, false)
     expect(state.queue[0].status).toBe('failed')
     expect(state.queue[0].last_error).toContain('422')
+  })
+})
+
+describe('record_or_fetch_arrival_email_snapshot — fenced to the exact claim, same shape as completion', () => {
+  function claimedState(now = '2026-10-05T00:00:00.000Z') {
+    const state = createSimState({
+      enqueueAfter: CUTOVER,
+      now,
+      letters: [letter('letter-1', '2026-10-03T00:00:00.000Z')],
+    })
+    enqueueArrivalEmails(state)
+    const [job] = claimArrivalEmailJobs(state, 20, 'worker-a')
+    return { state, job }
+  }
+
+  it('1. the current (valid) claim token can create the first snapshot', () => {
+    const { state, job } = claimedState()
+    const result = recordOrFetchArrivalEmailSnapshot(
+      state, job.id, job.claim_token!, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'A letter has arrived for you', '<p>html</p>', 'text'
+    )
+    expect(result.claim_valid).toBe(true)
+    if (result.claim_valid) {
+      expect(result.is_new).toBe(true)
+      expect(result.to_address).toBe('recipient@example.com')
+    }
+    expect(state.providerRequests).toHaveLength(1)
+  })
+
+  it('2. a stale claim token CANNOT create the first snapshot — no row is written at all', () => {
+    const { state, job } = claimedState()
+    const result = recordOrFetchArrivalEmailSnapshot(
+      state, job.id, 'not-the-real-token', 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+    expect(result).toEqual({ claim_valid: false })
+    expect(state.providerRequests).toHaveLength(0)
+  })
+
+  it('3. a stale claim token CANNOT fetch an existing snapshot either, once another invocation has reclaimed the job', () => {
+    const { state, job } = claimedState('2026-10-05T00:00:00.000Z')
+    const staleToken = job.claim_token!
+    // The original worker successfully freezes a snapshot...
+    recordOrFetchArrivalEmailSnapshot(
+      state, job.id, staleToken, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+    expect(state.providerRequests).toHaveLength(1)
+
+    // ...then stalls past the 15-minute reclaim window, and a new
+    // invocation reclaims the job with a fresh token.
+    state.now = '2026-10-05T00:16:00.000Z'
+    claimArrivalEmailJobs(state, 20, 'worker-b')
+
+    // The original (now stale) token can no longer even FETCH the
+    // snapshot it itself created.
+    const staleFetch = recordOrFetchArrivalEmailSnapshot(
+      state, job.id, staleToken, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+    expect(staleFetch).toEqual({ claim_valid: false })
+    // The existing snapshot is untouched — still exactly one row.
+    expect(state.providerRequests).toHaveLength(1)
+  })
+
+  it('5. the reclaimed (current) worker can fetch/create and proceed normally, getting the frozen payload back', () => {
+    const { state, job } = claimedState('2026-10-05T00:00:00.000Z')
+    recordOrFetchArrivalEmailSnapshot(
+      state, job.id, job.claim_token!, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'original subject', '<p>original html</p>', 'original text'
+    )
+
+    state.now = '2026-10-05T00:16:00.000Z'
+    const [reclaimed] = claimArrivalEmailJobs(state, 20, 'worker-b')
+
+    const result = recordOrFetchArrivalEmailSnapshot(
+      state, reclaimed.id, reclaimed.claim_token!, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'a DIFFERENT subject rendered this time', '<p>different html</p>', 'different text'
+    )
+
+    expect(result.claim_valid).toBe(true)
+    if (result.claim_valid) {
+      // Reuses the FROZEN original payload, not the different candidate
+      // this call passed in — same "is_new: false → discard the fresh
+      // render" contract as before, now proven to survive a reclaim too.
+      expect(result.is_new).toBe(false)
+      expect(result.subject).toBe('original subject')
+      expect(result.html).toBe('<p>original html</p>')
+    }
+    expect(state.providerRequests).toHaveLength(1)
+  })
+
+  it('6. a successful snapshot access refreshes the lease (claimed_at) for the current claim', () => {
+    const { state, job } = claimedState('2026-10-05T00:00:00.000Z')
+    const claimedAtAfterClaim = state.queue[0].claimed_at
+
+    state.now = '2026-10-05T00:10:00.000Z'
+    recordOrFetchArrivalEmailSnapshot(
+      state, job.id, job.claim_token!, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+
+    expect(state.queue[0].claimed_at).toBe('2026-10-05T00:10:00.000Z')
+    expect(state.queue[0].claimed_at).not.toBe(claimedAtAfterClaim)
+  })
+
+  it('a stale claim token does NOT refresh claimed_at — ownership is checked before any state changes', () => {
+    const { state, job } = claimedState('2026-10-05T00:00:00.000Z')
+    const claimedAtAfterClaim = state.queue[0].claimed_at
+
+    state.now = '2026-10-05T00:10:00.000Z'
+    recordOrFetchArrivalEmailSnapshot(
+      state, job.id, 'wrong-token', 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+
+    expect(state.queue[0].claimed_at).toBe(claimedAtAfterClaim)
+  })
+
+  it('7. completion fencing still works unchanged, end to end with snapshot fencing: the stale worker is fenced out of BOTH the snapshot and the completion, the reclaiming worker owns both', () => {
+    const { state, job } = claimedState('2026-10-05T00:00:00.000Z')
+    const staleToken = job.claim_token!
+    recordOrFetchArrivalEmailSnapshot(
+      state, job.id, staleToken, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+
+    state.now = '2026-10-05T00:16:00.000Z'
+    const [reclaimed] = claimArrivalEmailJobs(state, 20, 'worker-b')
+
+    // Reclaiming worker fetches the snapshot and completes normally.
+    const snapshot = recordOrFetchArrivalEmailSnapshot(
+      state, reclaimed.id, reclaimed.claim_token!, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+    expect(snapshot.claim_valid).toBe(true)
+    expect(completeArrivalEmailJob(state, reclaimed.id, reclaimed.claim_token!, 'sent', null, 'resend-msg-1')).toBe(true)
+    expect(state.queue[0].status).toBe('sent')
+
+    // The stale worker's late attempts are fenced out of BOTH steps —
+    // it can neither read the snapshot nor complete the job.
+    const staleSnapshot = recordOrFetchArrivalEmailSnapshot(
+      state, job.id, staleToken, 'letter-arrived/letter-1',
+      'Tempa <letters@jointempa.com>', 'recipient@example.com', 'subject', '<p>html</p>', 'text'
+    )
+    expect(staleSnapshot).toEqual({ claim_valid: false })
+    const staleCompletion = completeArrivalEmailJob(state, job.id, staleToken, 'failed', 'stale worker timed out')
+    expect(staleCompletion).toBe(false)
+
+    // The reclaiming worker's outcome is untouched by either stale call.
+    expect(state.queue[0].status).toBe('sent')
+    expect(state.queue[0].provider_message_id).toBe('resend-msg-1')
   })
 })

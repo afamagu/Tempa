@@ -131,9 +131,33 @@ provider_requests_grant_check as (
 ),
 snapshot_function_check as (
   select
-    has_function_privilege('service_role', 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)', 'EXECUTE') as service_role_can,
-    not has_function_privilege('authenticated', 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)', 'EXECUTE') as authenticated_cannot,
-    not has_function_privilege('anon', 'public.record_or_fetch_arrival_email_snapshot(uuid, text, text, text, text, text, text)', 'EXECUTE') as anon_cannot
+    has_function_privilege('service_role', 'public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text)', 'EXECUTE') as service_role_can,
+    not has_function_privilege('authenticated', 'public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text)', 'EXECUTE') as anon_cannot
+),
+-- Fencing guard (independent audit correction) — proves, against the
+-- function's own live pg_get_functiondef, that it actually checks
+-- status = 'processing' and claim_token = p_claim_token before ever
+-- touching arrival_email_provider_requests, the same shape
+-- adult-eligibility-and-legal-acceptance-verify.sql already uses to
+-- prove a function's internal logic, not just its signature/grants.
+snapshot_function_fencing_check as (
+  select
+    coalesce(pg_get_functiondef(p.oid) ilike '%status = ''processing''%', false) as checks_processing_status,
+    coalesce(pg_get_functiondef(p.oid) ilike '%claim_token = p_claim_token%', false) as checks_claim_token,
+    coalesce(pg_get_functiondef(p.oid) ilike '%claimed_at = now()%', false) as refreshes_claimed_at,
+    coalesce(
+      position('for update' in pg_get_functiondef(p.oid)) > 0
+      and position('insert into public.arrival_email_provider_requests' in pg_get_functiondef(p.oid)) > 0
+      and position('for update' in pg_get_functiondef(p.oid))
+        < position('insert into public.arrival_email_provider_requests' in pg_get_functiondef(p.oid)),
+      false
+    ) as ownership_lock_precedes_insert
+  from (select 1 as anchor) _anchor
+  left join pg_proc p
+    on p.oid = to_regprocedure(
+      'public.record_or_fetch_arrival_email_snapshot(uuid, uuid, text, text, text, text, text, text)'
+    )
 ),
 worker_function_check as (
   select
@@ -197,6 +221,10 @@ select
   sn.service_role_can as snapshot_function_service_role_can,
   sn.authenticated_cannot as snapshot_function_authenticated_cannot,
   sn.anon_cannot as snapshot_function_anon_cannot,
+  sf2.checks_processing_status as snapshot_function_checks_processing_status,
+  sf2.checks_claim_token as snapshot_function_checks_claim_token,
+  sf2.refreshes_claimed_at as snapshot_function_refreshes_claimed_at,
+  sf2.ownership_lock_precedes_insert as snapshot_function_ownership_lock_precedes_insert,
   wf.worker_only_functions_locked_down,
   sf.staff_functions_reachable,
   pw.authenticated_can as pref_write_authenticated_can,
@@ -211,6 +239,8 @@ select
     and qf.claim_token_column_present and qf.provider_message_id_column_present and qf.manual_review_status_present
     and pr.anon_no_select and pr.authenticated_no_select and pr.queue_id_primary_key_present
     and sn.service_role_can and sn.authenticated_cannot and sn.anon_cannot
+    and sf2.checks_processing_status and sf2.checks_claim_token and sf2.refreshes_claimed_at
+    and sf2.ownership_lock_precedes_insert
     and wf.worker_only_functions_locked_down
     and sf.staff_functions_reachable
     and pw.authenticated_can and pw.anon_cannot
@@ -218,4 +248,5 @@ select
 from tables_check t, preferences_grant_check p, preferences_policy_check pp,
      queue_grant_check q, config_grant_check c, config_state_check cs,
      queue_fencing_columns_check qf, provider_requests_grant_check pr, snapshot_function_check sn,
+     snapshot_function_fencing_check sf2,
      worker_function_check wf, staff_function_check sf, preference_write_function_check pw;

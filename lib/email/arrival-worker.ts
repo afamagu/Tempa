@@ -12,17 +12,20 @@ type ArrivalEmailContext = {
   sender_country_code: string | null
 }
 
-type ProviderSnapshot = {
-  idempotency_key: string
-  from_address: string
-  to_address: string
-  subject: string
-  html: string
-  text_body: string
-  first_provider_attempt_at: string
-  is_new: boolean
-  window_expired: boolean
-}
+type ProviderSnapshot =
+  | { claim_valid: false }
+  | {
+      claim_valid: true
+      idempotency_key: string
+      from_address: string
+      to_address: string
+      subject: string
+      html: string
+      text_body: string
+      first_provider_attempt_at: string
+      is_new: boolean
+      window_expired: boolean
+    }
 
 type ClaimedJob = { id: string; letter_id: string; claim_token: string }
 type CompleteResult = 'sent' | 'skipped' | 'failed' | 'manual_review'
@@ -78,6 +81,19 @@ export type ArrivalWorkerSummary = {
  * idempotency protection window has elapsed since the first attempt
  * (terminal 'manual_review' — we no longer know whether that first
  * attempt actually reached Resend, and refuse to guess).
+ *
+ * record_or_fetch_arrival_email_snapshot is itself fenced to this
+ * job's claim_token, exactly like completion (independent audit
+ * correction — it previously had no ownership check at all, which
+ * meant a worker whose claim had already gone stale and been reclaimed
+ * could still successfully freeze/fetch a payload and proceed all the
+ * way to calling Resend). When it reports `claim_valid: false`, this
+ * invocation has already lost ownership of the job to a newer claim —
+ * it must stop here: no sendEmail call, and no complete_arrival_email_
+ * job call under the now-invalid token (that call would just be
+ * fenced out too, but skipping it avoids a pointless round trip and
+ * makes the intent explicit). The current owner is left to continue
+ * uninterrupted.
  */
 export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<ArrivalWorkerSummary> {
   const { supabase, sendEmail, siteOrigin, artOrigin, limit = 20, workerId = 'cron' } = deps
@@ -173,6 +189,7 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
 
     const { data: snapshotRows, error: snapshotError } = await supabase.rpc('record_or_fetch_arrival_email_snapshot', {
       p_queue_id: job.id,
+      p_claim_token: job.claim_token,
       p_idempotency_key: idempotencyKey,
       p_from: arrivalEmailFrom,
       p_to: context.recipient_email,
@@ -192,6 +209,17 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
     if (!snapshot) {
       await complete(job, 'failed', { error: 'record_or_fetch_arrival_email_snapshot returned no row.' })
       summary.failed += 1
+      return
+    }
+
+    if (!snapshot.claim_valid) {
+      // Fenced out before ever contacting the provider — a newer
+      // invocation already owns this job. No sendEmail, no completion
+      // call under this stale token; simply stop, exactly as the
+      // function's own doc comment above requires.
+      console.warn(
+        `record_or_fetch_arrival_email_snapshot(${job.id}) reported claim_valid: false — another invocation already owns this job. Skipping.`
+      )
       return
     }
 
