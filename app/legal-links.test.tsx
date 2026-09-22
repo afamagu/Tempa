@@ -3,12 +3,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { LEGAL_PAGES } from './legal-shell'
 
-// Repo-wide link audit for the four new public launch legal/safety
-// pages — confirms /begin (the one existing place that already linked
-// to these routes, frozen per the adult eligibility/legal gate rounds)
-// now points at real pages rather than dead hrefs, and that no
-// placeholder "#" href was ever left behind for any of the four
-// documents.
+// Repo-wide link audit for the four public launch legal/safety pages —
+// confirms /begin (the one existing place that already linked to these
+// routes, frozen per the adult eligibility/legal gate rounds) points at
+// real pages rather than dead hrefs, and that no placeholder "#" href
+// was ever left behind for any of the four documents.
 
 const APP_DIR = __dirname
 const BEGIN_FLOW_SOURCE = readFileSync(path.join(APP_DIR, 'begin', 'begin-flow.tsx'), 'utf8')
@@ -59,10 +58,14 @@ describe('Legal pages — every canonical route is real, nothing is a dead place
 
 describe('Legal pages — no speculative DPO/representative/DCPMI language', () => {
   // These matters were explicitly ruled out of scope for this launch
-  // checkpoint: Nigerian DCPMI classification, Nigerian/EU/UK Data
-  // Protection Officer requirements, and EU Article 27 / UK
-  // representative provisions. None of it should appear anywhere in the
-  // shared shell or the four pages themselves.
+  // checkpoint (both the original round and this hardening pass):
+  // Nigerian DCPMI classification, Nigerian/EU/UK Data Protection
+  // Officer requirements, and EU Article 27 / UK representative
+  // provisions. None of it should appear anywhere in the shared shell
+  // or the four pages themselves — including this hardening pass's
+  // expanded lawful-basis and rights sections, which deliberately use
+  // hedged "where applicable"/"depending on where you live" language
+  // instead of asserting a specific regulatory regime.
   const FORBIDDEN_PATTERNS = [
     /data protection officer/i,
     /\bdpo\b/i,
@@ -90,10 +93,26 @@ describe('Legal pages — no invented legal/compliance facts beyond what was con
     }
   })
 
-  it('never asserts a specific governing-law jurisdiction for disputes', () => {
-    for (const source of Object.values(PAGE_SOURCES)) {
-      expect(source.toLowerCase()).not.toContain('governing law')
-      expect(source.toLowerCase()).not.toContain('governed by the laws of')
-    }
+  it('never invents an exact retention period in days or years', () => {
+    // The retention section deliberately describes categories/criteria,
+    // not fixed durations — this guards against a future edit sneaking
+    // in a number that was never actually confirmed.
+    expect(PAGE_SOURCES['/privacy']).not.toMatch(/\b\d+\s*(day|month|year)s?\b/i)
+  })
+})
+
+describe('Legal pages — Vercel/Supabase infrastructure wording is not reversed', () => {
+  // Independent audit correction: Supabase does not host the Tempa web
+  // application — Vercel does. Supabase provides backend infrastructure
+  // (database, authentication, storage). Getting this backwards would
+  // misdescribe the actual architecture.
+  it('states Vercel hosts the web application', () => {
+    expect(PAGE_SOURCES['/privacy']).toContain('Vercel hosts the Tempa web application')
+  })
+
+  it('states Supabase provides backend infrastructure, and never claims Supabase hosts the application', () => {
+    expect(PAGE_SOURCES['/privacy']).toContain('Supabase provides backend infrastructure')
+    expect(PAGE_SOURCES['/privacy'].toLowerCase()).not.toContain('supabase hosts')
+    expect(PAGE_SOURCES['/privacy'].toLowerCase()).not.toContain('supabase, which hosts our application')
   })
 })

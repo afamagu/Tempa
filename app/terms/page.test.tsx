@@ -24,8 +24,13 @@ describe('TermsPage', () => {
     expect(html).toContain('href="/community-guidelines"')
   })
 
-  it('describes eligibility as an adult (18+) requirement, without revealing the exact cutoff phrasing used on /begin', () => {
+  it('describes eligibility as an adult (18+) requirement', () => {
     expect(html).toContain('at least 18 years old')
+  })
+
+  it('prohibits eligibility-check circumvention and block evasion', () => {
+    expect(html).toContain('adult-eligibility check')
+    expect(html).toContain('get around a block')
   })
 
   it('describes Your Mark accurately: source photo processed on-device and not uploaded, only the generated Mark is', () => {
@@ -49,15 +54,74 @@ describe('TermsPage', () => {
     expect(html.toLowerCase()).toContain('reporting and blocking')
   })
 
-  it('includes limitation of liability and indemnity sections', () => {
-    expect(html.toLowerCase()).toContain('limitation of liability')
-    expect(html.toLowerCase()).toContain('indemnity')
+  describe('the content licence granted by members', () => {
+    it('is properly scoped: worldwide, non-exclusive, royalty-free, limited to operating Tempa', () => {
+      expect(html).toContain('worldwide')
+      expect(html).toContain('non-exclusive')
+      expect(html).toContain('royalty-free')
+      expect(html).toContain('reasonably necessary to operate')
+    })
+
+    it('does not transfer ownership, and never allows private letters to be republished as advertising', () => {
+      expect(html).toContain('does not transfer ownership')
+      expect(html).toContain('does not let us publish your private letters as advertising')
+    })
+
+    it('retains ownership of content with the member', () => {
+      expect(html).toContain('You retain ownership')
+    })
+  })
+
+  describe('prohibited system abuse', () => {
+    it('prohibits scraping, bots, security interference, and malware', () => {
+      expect(html.toLowerCase()).toContain('scrape')
+      expect(html.toLowerCase()).toContain('bots')
+      expect(html.toLowerCase()).toContain('malware')
+    })
+  })
+
+  describe('the liability clause', () => {
+    it('never purports to exclude liability the law does not permit excluding (fraud, wilful misconduct, gross negligence)', () => {
+      expect(html).toContain('fraud')
+      expect(html).toContain('wilful misconduct')
+      expect(html).toContain('gross negligence')
+      expect(html).toContain('does not permit us to exclude')
+    })
+
+    it('uses a non-zero fallback cap, not just "amount paid"', () => {
+      expect(html).toContain('US$100')
+      expect(html).toContain('the greater of')
+    })
+  })
+
+  describe('the indemnity clause', () => {
+    it('is narrowed to unlawful content, fraud/misuse, or material violation — not a blanket indemnity', () => {
+      expect(html).toContain('unlawful or infringes')
+      expect(html).toContain('fraud or intentional misuse')
+      expect(html).toContain('material violation')
+    })
+
+    it('does not purport to cover claims arising from Tempa’s own unlawful conduct', () => {
+      expect(html).toContain('own unlawful conduct')
+    })
+  })
+
+  it('includes an intellectual-property complaint contact pointing to legal@jointempa.com', () => {
+    expect(html).toContain('legal@jointempa.com')
+    expect(html).toContain('infringes your intellectual property')
+  })
+
+  it('includes a governing-law clause for Nigeria that preserves mandatory consumer rights, and does not add arbitration', () => {
+    const lower = html.toLowerCase()
+    expect(lower).toContain('governed by the laws of nigeria')
+    expect(lower).toContain('mandatory consumer-protection rights')
+    expect(lower).not.toContain('arbitration')
   })
 
   it('does not document unreleased functionality as current (no paid plans, ads, or Tempa Kids)', () => {
     const lower = html.toLowerCase()
     expect(lower).not.toContain('subscription')
-    expect(lower).not.toContain('advertis')
+    expect(lower).not.toContain('advertising system')
     expect(lower).not.toContain('tempa kids')
     expect(lower).not.toContain('payment processor')
   })
