@@ -85,6 +85,7 @@ export default async function BeginPage({
       stillBlocked={stillBlocked}
       showLegalStep={eligibilityStatus === 'eligible' && !legalCurrent}
       signOutAction={signOutAndReturnToSignIn}
+      eligibleOn={eligibility?.eligible_on ?? null}
     />
   )
 }

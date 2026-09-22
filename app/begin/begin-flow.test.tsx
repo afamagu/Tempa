@@ -28,7 +28,7 @@ describe('BeginFlow — top-level state dispatch (source inspection: which child
     const dispatchEnd = source.indexOf('\nfunction Shell')
     const body = source.slice(dispatchStart, dispatchEnd)
     expect(body).toContain("eligibilityStatus === 'ineligible' && stillBlocked")
-    expect(body).toContain('<IneligibleTerminal signOutAction={signOutAction} />')
+    expect(body).toContain('<IneligibleTerminal signOutAction={signOutAction} eligibleOn={eligibleOn} />')
   })
 
   it('renders ReviewTerminal only when review_required', () => {
@@ -63,29 +63,54 @@ describe('BeginFlow — terminal states (real render: neither uses useRouter)', 
   // never actually invoked during a render-only test.
   const noopSignOutAction = async () => {}
 
-  it('ineligible terminal state renders the exact approved copy, no retry affordance, and a real sign-out form (not a bare link)', () => {
+  it('ineligible terminal state renders the exact approved copy, the persisted eligible_on, no retry affordance, and a real sign-out form (not a bare link)', () => {
     const html = renderToStaticMarkup(
       <BeginFlow
         eligibilityStatus="ineligible"
         stillBlocked={true}
         showLegalStep={false}
         signOutAction={noopSignOutAction}
+        eligibleOn="2028-03-14"
       />
     )
     expect(html).toContain('Tempa is for adults')
-    expect(html).toContain('You need to be at least 18 years old to create a Tempa profile.')
+    expect(html).toContain('Tempa is only available to people who are 18 or older.')
+    // The server's own persisted eligible_on, displayed verbatim in
+    // human-readable form ("14 March 2028", not "2028-03-14" or a
+    // locale-dependent short form).
+    expect(html).toContain('You can return to Tempa on 14 March 2028.')
+    expect(html).toContain('Until then, this account cannot access Tempa.')
     expect(html).toContain('Return to sign in')
-    // No retry/change-birthday affordance of any kind — an under-18
-    // result must not read as "wrong answer, try again."
+    // No retry/change-DOB/appeal/contact-support affordance of any
+    // kind — an under-18 result must not read as "wrong answer, try
+    // again," and there is no shortcut back around eligible_on.
     expect(html).not.toMatch(/change (your )?birthday/i)
     expect(html).not.toMatch(/try again/i)
+    expect(html).not.toMatch(/appeal/i)
+    expect(html).not.toMatch(/contact support/i)
     expect(html).not.toContain('When were you born?')
+    expect(html).not.toContain('Confirm date of birth')
+    expect(html).not.toContain('Go back and edit')
     // A real sign-out form, not a plain <a href="/sign-in"> link —
     // independent audit correction: a bare link left the session
     // authenticated, so the next visit just landed back on this same
     // terminal state.
     expect(html).toContain('<form')
     expect(html).not.toContain('<a href="/sign-in"')
+  })
+
+  it('ineligible terminal state renders gracefully with no eligible_on line when eligibleOn is null', () => {
+    const html = renderToStaticMarkup(
+      <BeginFlow
+        eligibilityStatus="ineligible"
+        stillBlocked={true}
+        showLegalStep={false}
+        signOutAction={noopSignOutAction}
+        eligibleOn={null}
+      />
+    )
+    expect(html).toContain('Tempa is for adults')
+    expect(html).not.toContain('You can return to Tempa on')
   })
 
   it('review-required terminal state renders distinct copy from the ineligible state, also with a real sign-out form', () => {
@@ -95,6 +120,7 @@ describe('BeginFlow — terminal states (real render: neither uses useRouter)', 
         stillBlocked={false}
         showLegalStep={false}
         signOutAction={noopSignOutAction}
+        eligibleOn={null}
       />
     )
     expect(html).toContain('being reviewed')
@@ -137,6 +163,27 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   const fnEnd = source.indexOf('\nfunction LegalAcceptanceStep')
   const body = source.slice(fnStart, fnEnd)
 
+  // Isolate each named handler's own body so RPC/state-mutation
+  // assertions can be scoped precisely to "what Continue does" vs.
+  // "what Confirm does" vs. "what Go back and edit does" — the whole
+  // point of this checkpoint is that those three are no longer the
+  // same thing.
+  const continueStart = body.indexOf('function handleContinue')
+  const continueEnd = body.indexOf('function handleEdit')
+  const handleContinueBody = body.slice(continueStart, continueEnd)
+
+  const editStart = body.indexOf('function handleEdit')
+  const editEnd = body.indexOf('async function handleConfirm')
+  const handleEditBody = body.slice(editStart, editEnd)
+
+  const confirmFnStart = body.indexOf('async function handleConfirm')
+  const confirmFnEnd = body.indexOf("if (phase === 'confirm'")
+  const handleConfirmBody = body.slice(confirmFnStart, confirmFnEnd)
+
+  const confirmRenderStart = body.indexOf("if (phase === 'confirm'")
+  const confirmRenderEnd = body.indexOf('\n  return (\n    <Shell>\n      <div className="space-y-2">\n        <p className={wordmarkClass}>Tempa</p>\n        <h1 className={headingClass}>When were you born?')
+  const confirmRenderBody = body.slice(confirmRenderStart, confirmRenderEnd)
+
   it('uses the approved heading/body copy, never asks "are you 18?" or reveals the cutoff', () => {
     expect(body).toContain('When were you born?')
     expect(body).toContain(
@@ -153,13 +200,50 @@ describe('BeginFlow — DOB step (source inspection)', () => {
     expect(body).toContain('<option key={name} value={i + 1}>')
   })
 
-  it('calls submit_dob_eligibility with numeric year/month/day, never a boolean eligibility claim from the client', () => {
-    expect(body).toContain("supabase.rpc('submit_dob_eligibility'")
-    expect(body).toContain('p_year: yearNum')
-    expect(body).toContain('p_month: monthNum')
-    expect(body).toContain('p_day: dayNum')
-    expect(body).not.toMatch(/eligible\s*:\s*true/)
-    expect(body).not.toMatch(/isAdult\s*:\s*true/)
+  it('1. pressing Continue (handleContinue, the form onSubmit) never calls submit_dob_eligibility', () => {
+    expect(handleContinueBody).not.toContain("supabase.rpc('submit_dob_eligibility'")
+    expect(handleContinueBody).not.toContain('createClient()')
+  })
+
+  it('2. a valid DOB moves to the confirm phase — never straight to a server call', () => {
+    expect(handleContinueBody).toContain("setConfirmedDob(candidate)")
+    expect(handleContinueBody).toContain("setPhase('confirm')")
+  })
+
+  it('6. invalid/implausible calendar dates never reach the confirm phase — reuses lib/age.ts\'s isPlausibleDob rather than re-deriving validation', () => {
+    expect(source).toContain("import { isPlausibleDob, type DateOfBirth } from '@/lib/age'")
+    expect(handleContinueBody).toContain('isPlausibleDob(candidate, today)')
+    // The setPhase('confirm')/setConfirmedDob calls must be textually
+    // AFTER the isPlausibleDob guard, not before it.
+    const guardPos = handleContinueBody.indexOf('isPlausibleDob(candidate, today)')
+    const advancePos = handleContinueBody.indexOf("setPhase('confirm')")
+    expect(guardPos).toBeGreaterThan(-1)
+    expect(advancePos).toBeGreaterThan(guardPos)
+  })
+
+  it('does not compute or preview adult/minor status before confirmation — no isAdultOn/calculateAge call in the entry handler', () => {
+    expect(handleContinueBody).not.toContain('isAdultOn')
+    expect(handleContinueBody).not.toContain('calculateAge')
+  })
+
+  it('4. Go back and edit only switches phase back to entry — never clears day/month/year, so the entered values are preserved', () => {
+    expect(handleEditBody).toContain("setPhase('entry')")
+    expect(handleEditBody).not.toContain("setDay(")
+    expect(handleEditBody).not.toContain("setMonth(")
+    expect(handleEditBody).not.toContain("setYear(")
+  })
+
+  it('7. handleConfirm guards against double submission — a second call while already submitting, or with no confirmed DOB, is a no-op', () => {
+    expect(handleConfirmBody).toContain('if (submitting || !confirmedDob) return')
+  })
+
+  it('5. only handleConfirm calls submit_dob_eligibility, using the CONFIRMED date fields, never a boolean eligibility claim from the client', () => {
+    expect(handleConfirmBody).toContain("supabase.rpc('submit_dob_eligibility'")
+    expect(handleConfirmBody).toContain('p_year: confirmedDob.year')
+    expect(handleConfirmBody).toContain('p_month: confirmedDob.month')
+    expect(handleConfirmBody).toContain('p_day: confirmedDob.day')
+    expect(handleConfirmBody).not.toMatch(/eligible\s*:\s*true/)
+    expect(handleConfirmBody).not.toMatch(/isAdult\s*:\s*true/)
   })
 
   it('a rejected/invalid DOB shows only "Enter a valid date." — never teaches which date would pass', () => {
@@ -168,9 +252,45 @@ describe('BeginFlow — DOB step (source inspection)', () => {
     expect(body).not.toMatch(/before \d{4}/i)
   })
 
-  it('a successful submission calls router.refresh(), never a hardcoded client-side redirect to a specific next state', () => {
-    expect(body).toContain('router.refresh()')
+  it('a successful confirmation calls router.refresh(), never a hardcoded client-side redirect to a specific next state', () => {
+    expect(handleConfirmBody).toContain('router.refresh()')
     expect(body).not.toContain('router.push(')
+  })
+
+  it('3. the confirm phase displays the exact entered date via formatCalendarDate(confirmedDob), in the approved "You entered ..." copy', () => {
+    expect(confirmRenderBody).toContain('Check your date of birth')
+    expect(confirmRenderBody).toContain('You entered {formatCalendarDate(confirmedDob)}.')
+    expect(confirmRenderBody).toContain('Please check it carefully.')
+    expect(confirmRenderBody).toContain("you won&rsquo;t be able")
+    expect(confirmRenderBody).toContain('to change it through this age check.')
+    // formatCalendarDate itself renders day, full month name, year —
+    // "14 March 2010", not an ISO/locale-ambiguous form.
+    const formatterStart = source.indexOf('function formatCalendarDate')
+    const formatterEnd = source.indexOf('\nfunction parseIsoDate')
+    const formatterBody = source.slice(formatterStart, formatterEnd)
+    expect(formatterBody).toContain('${dob.day} ${MONTHS[dob.month - 1]} ${dob.year}')
+  })
+
+  it('does not calculate or display whether the DOB is adult/minor on the confirm screen — no age/eligibility preview', () => {
+    expect(confirmRenderBody).not.toMatch(/\b1[3-9]\b/) // no bare "16", "17", "18" etc. age callouts
+    expect(confirmRenderBody).not.toMatch(/this makes you/i)
+    expect(confirmRenderBody).not.toContain('isAdultOn')
+    expect(confirmRenderBody).not.toContain('calculateAge')
+  })
+
+  it('the confirm phase has exactly the two specified actions — Confirm date of birth (primary) and Go back and edit (secondary)', () => {
+    expect(confirmRenderBody).toContain('Confirm date of birth')
+    expect(confirmRenderBody).toContain('onClick={handleConfirm}')
+    expect(confirmRenderBody).toContain('Go back and edit')
+    expect(confirmRenderBody).toContain('onClick={handleEdit}')
+    expect(confirmRenderBody).toContain('disabled={submitting}')
+  })
+
+  it('the entry form\'s Continue button is a plain form submit — never itself disabled/labelled as a saving state (only the confirm phase talks to the server)', () => {
+    const entryButtonStart = body.lastIndexOf('<button type="submit"')
+    const entryButtonBody = body.slice(entryButtonStart, body.indexOf('</form>'))
+    expect(entryButtonBody).toContain('>\n          Continue\n        </button>')
+    expect(entryButtonBody).not.toContain('disabled={submitting}')
   })
 })
 
