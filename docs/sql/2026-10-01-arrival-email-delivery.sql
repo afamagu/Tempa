@@ -129,8 +129,20 @@ create table public.arrival_email_queue (
 
   claimed_at timestamptz,
   claimed_by text,
+  -- A fresh lease token issued on every claim (including a reclaim of
+  -- a stuck 'processing' row). complete_arrival_email_job only ever
+  -- applies a completion when BOTH status = 'processing' AND the
+  -- caller's token matches this exact value — see that function's own
+  -- comment for why (independent audit correction: fences a late/
+  -- crashed worker out of completing a job another invocation already
+  -- reclaimed).
+  claim_token uuid,
 
   sent_at timestamptz,
+  -- Resend's own email id on success — lets Admin correlate a Tempa
+  -- queue job with provider acceptance without storing any letter
+  -- content (independent audit correction).
+  provider_message_id text,
   skipped_reason text,
   last_error text,
 
@@ -151,17 +163,35 @@ revoke all on public.arrival_email_queue from public, anon, authenticated;
 
 
 -- ============================================================
--- 3. ARRIVAL_EMAIL_SYSTEM_CONFIG — single-row global kill switch
+-- 3. ARRIVAL_EMAIL_SYSTEM_CONFIG — single-row global kill switch +
+--    rollout cutover boundary
 -- ============================================================
 -- `id boolean primary key default true` with a check(id) constraint is
 -- the standard singleton-table trick: exactly one row can ever exist.
 -- Starts with sending_enabled = false per the launch requirement —
 -- nothing sends until a staff admin explicitly flips it on through
 -- set_arrival_email_sending_enabled below.
+--
+-- `enqueue_after` is the rollout/cutover boundary (independent audit
+-- correction): without it, the very first enqueue_arrival_emails() run
+-- against a live production database would treat every historical
+-- letter with deliver_at <= now() — the app's entire pre-existing
+-- letter history — as newly "arrived," queuing a backlog of arrival
+-- emails for correspondence that in some cases finished long before
+-- this feature existed. `default now()` makes this server-authoritative
+-- and self-setting: whatever instant this migration is actually
+-- applied at becomes the cutover, captured once, in the database,
+-- never supplied by a client or an env var. enqueue_arrival_emails()
+-- below requires deliver_at >= enqueue_after in addition to
+-- deliver_at <= now() — a letter delivered before the system went live
+-- can never later generate an arrival email merely because the queue
+-- was introduced; a letter delivered at/after that instant is treated
+-- normally.
 
 create table public.arrival_email_system_config (
   id boolean primary key default true,
   sending_enabled boolean not null default false,
+  enqueue_after timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users(id) on delete set null,
   constraint arrival_email_system_config_singleton check (id)
@@ -183,15 +213,19 @@ revoke all on public.arrival_email_system_config from public, anon, authenticate
 -- 4. ENQUEUE_ARRIVAL_EMAILS — worker-only, arrival-triggered
 -- ============================================================
 -- Enqueues exactly the letters that have actually arrived
--- (deliver_at <= now()) and have no queue row yet. Never triggered by
--- sender submission — a letter with a future deliver_at (the normal
--- Mail Call case, everything after Letter 1) is invisible to this
--- query until the scheduler runs again after that instant passes.
--- The left join + `q.id is null` is the primary duplicate guard (keeps
--- the query planner from re-scanning already-queued letters every
--- tick); `on conflict (letter_id) do nothing` is the transactional
--- backstop against two overlapping scheduler runs racing this exact
--- statement.
+-- (deliver_at <= now()), arrived AT OR AFTER the rollout cutover
+-- (deliver_at >= arrival_email_system_config.enqueue_after — see that
+-- table's own comment; this is the independent-audit fix that keeps a
+-- first production run from backlog-queuing the app's entire
+-- pre-existing letter history), and have no queue row yet. Never
+-- triggered by sender submission — a letter with a future deliver_at
+-- (the normal Mail Call case, everything after Letter 1) is invisible
+-- to this query until the scheduler runs again after that instant
+-- passes. The left join + `q.id is null` is the primary duplicate
+-- guard (keeps the query planner from re-scanning already-queued
+-- letters every tick); `on conflict (letter_id) do nothing` is the
+-- transactional backstop against two overlapping scheduler runs racing
+-- this exact statement.
 
 create or replace function public.enqueue_arrival_emails()
 returns integer
@@ -201,12 +235,18 @@ set search_path to 'pg_catalog'
 as $$
 declare
   v_count integer;
+  v_cutoff timestamptz;
 begin
+  select enqueue_after into v_cutoff
+  from public.arrival_email_system_config
+  where id = true;
+
   insert into public.arrival_email_queue (letter_id, recipient_id)
   select l.id, l.recipient_id
   from public.letters l
   left join public.arrival_email_queue q on q.letter_id = l.id
   where l.deliver_at <= now()
+    and l.deliver_at >= v_cutoff
     and q.id is null
   on conflict (letter_id) do nothing;
 
@@ -240,6 +280,15 @@ create index if not exists letters_deliver_at_idx on public.letters (deliver_at)
 -- 'processing' for more than 15 minutes — a crashed worker (process
 -- killed mid-send, function timeout, etc.) never leaves a job stranded
 -- forever; it just becomes claimable again like any other retry.
+--
+-- Every claim — a fresh 'pending' row or a reclaimed stale
+-- 'processing' one — gets a brand-new claim_token
+-- (gen_random_uuid()). A reclaim therefore always invalidates whatever
+-- token the earlier (crashed/slow) worker was holding: that worker's
+-- eventual, late complete_arrival_email_job call will present the old
+-- token, which no longer matches, and is fenced out as a no-op rather
+-- than clobbering the newer claim's outcome (independent audit
+-- correction — see complete_arrival_email_job below).
 
 create or replace function public.claim_arrival_email_jobs(
   p_limit integer default 20,
@@ -265,6 +314,7 @@ begin
   set status = 'processing',
       claimed_at = now(),
       claimed_by = p_worker,
+      claim_token = gen_random_uuid(),
       attempts = q.attempts + 1,
       updated_at = now()
   from claimable
@@ -426,22 +476,49 @@ grant execute on function public.resolve_arrival_email_context(uuid) to service_
 
 
 -- ============================================================
--- 7. COMPLETE_ARRIVAL_EMAIL_JOB — worker-only, records the outcome
+-- 7. COMPLETE_ARRIVAL_EMAIL_JOB — worker-only, records the outcome,
+--    fenced to the exact claim that is completing it
 -- ============================================================
--- 'sent' and 'skipped' are terminal. 'failed' is terminal only once
+-- Requires BOTH `status = 'processing'` AND `claim_token = p_claim_token`
+-- before touching the row at all (independent audit correction). This
+-- is what makes claim_arrival_email_jobs' stale-processing reclaim
+-- actually safe end to end: without this fence, a worker that claimed
+-- a job, stalled past the 15-minute reclaim window, and only THEN
+-- finished its (redundant) send could still overwrite whatever the
+-- worker that reclaimed and already completed the job had recorded —
+-- e.g. stomping a genuine 'sent' back to 'failed', or restarting the
+-- backoff clock on a job that already succeeded. With the fence, that
+-- late completion call simply finds no row matching both conditions
+-- (`not found`) and returns false — a no-op, not a correction. This is
+-- defense in depth alongside the provider's own Idempotency-Key (see
+-- lib/email/provider.ts) — that key stops Resend from actually sending
+-- a second email; this fence stops the stale worker from corrupting
+-- this table's bookkeeping about what happened.
+--
+-- 'sent' and 'skipped' are terminal. 'failed' is terminal once EITHER
 -- attempts has reached max_attempts (claim_arrival_email_jobs already
--- incremented attempts at claim time) — otherwise it goes back to
--- 'pending' with an exponential backoff (5m, 10m, 20m, 40m before the
--- 5th and final attempt), so a transient provider outage retries
--- itself without manual intervention, and a permanently-failing job
--- still stops retrying instead of looping forever.
+-- incremented attempts at claim time) OR the caller reports the
+-- failure as non-retryable (p_retryable = false — e.g. the provider
+-- rejected the request with a 4xx that will never succeed by retrying,
+-- such as an invalid recipient address). Otherwise it goes back to
+-- 'pending' with an exponential backoff. Backoff formula uses
+-- `attempts - 1` (independent audit correction — the previous formula
+-- used `attempts` directly, which produced 10m/20m/40m/80m instead of
+-- the documented 5m/10m/20m/40m, because attempts is already
+-- incremented to 1 by the time the FIRST failure is recorded here):
+-- attempts=1 → 5m, attempts=2 → 10m, attempts=3 → 20m, attempts=4 →
+-- 40m, before the 5th and final attempt — matching the doc comment,
+-- now actually verified by lib/__tests__/simulateArrivalEmailRpcs.ts.
 
 create or replace function public.complete_arrival_email_job(
   p_queue_id uuid,
+  p_claim_token uuid,
   p_result text,
-  p_error text default null
+  p_error text default null,
+  p_provider_message_id text default null,
+  p_retryable boolean default true
 )
-returns void
+returns boolean
 language plpgsql
 security definer
 set search_path to 'pg_catalog'
@@ -454,26 +531,33 @@ begin
     raise exception 'Invalid result: %', p_result using errcode = '22023';
   end if;
 
-  select * into v_job from public.arrival_email_queue where id = p_queue_id for update;
+  select * into v_job
+  from public.arrival_email_queue
+  where id = p_queue_id
+    and status = 'processing'
+    and claim_token = p_claim_token
+  for update;
+
   if not found then
-    return;
+    return false;
   end if;
 
   if p_result = 'sent' then
     update public.arrival_email_queue
-    set status = 'sent', sent_at = now(), last_error = null, updated_at = now()
+    set status = 'sent', sent_at = now(), provider_message_id = p_provider_message_id,
+        last_error = null, updated_at = now()
     where id = p_queue_id;
   elsif p_result = 'skipped' then
     update public.arrival_email_queue
     set status = 'skipped', skipped_reason = p_error, updated_at = now()
     where id = p_queue_id;
   else
-    if v_job.attempts >= v_job.max_attempts then
+    if not p_retryable or v_job.attempts >= v_job.max_attempts then
       update public.arrival_email_queue
       set status = 'failed', last_error = p_error, updated_at = now()
       where id = p_queue_id;
     else
-      v_backoff := (interval '5 minutes') * power(2, v_job.attempts);
+      v_backoff := (interval '5 minutes') * power(2, v_job.attempts - 1);
       update public.arrival_email_queue
       set status = 'pending',
           next_attempt_at = now() + v_backoff,
@@ -482,11 +566,13 @@ begin
       where id = p_queue_id;
     end if;
   end if;
+
+  return true;
 end;
 $$;
 
-revoke all on function public.complete_arrival_email_job(uuid, text, text) from public;
-grant execute on function public.complete_arrival_email_job(uuid, text, text) to service_role;
+revoke all on function public.complete_arrival_email_job(uuid, uuid, text, text, text, boolean) from public;
+grant execute on function public.complete_arrival_email_job(uuid, uuid, text, text, text, boolean) to service_role;
 
 
 -- ============================================================
@@ -497,6 +583,8 @@ grant execute on function public.complete_arrival_email_job(uuid, text, text) to
 -- never a letter body, Moment, or Postcard, and never even a recipient
 -- email or sender pseudonym (staff already has admin_get_member for
 -- that if a specific letter_id/recipient_id needs following up).
+-- provider_message_id is Resend's own id — lets staff correlate a
+-- queue row with provider-side delivery logs, still no letter content.
 
 create or replace function public.admin_get_arrival_email_status()
 returns jsonb
@@ -526,7 +614,7 @@ begin
       select coalesce(jsonb_agg(r), '[]'::jsonb)
       from (
         select id, letter_id, recipient_id, status, attempts, max_attempts,
-               last_error, skipped_reason, created_at, sent_at, updated_at
+               last_error, skipped_reason, provider_message_id, created_at, sent_at, updated_at
         from public.arrival_email_queue
         order by updated_at desc
         limit 50

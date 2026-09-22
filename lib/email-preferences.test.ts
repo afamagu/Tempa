@@ -6,6 +6,7 @@ const USER = 'user-1'
 
 function fakeClient(options: {
   row?: { arrival_emails_enabled: boolean } | null
+  selectError?: { message: string; code?: string } | null
   rpcError?: { message: string; code?: string } | null
 }) {
   const rpc = vi.fn(async () => ({ error: options.rpcError ?? null }))
@@ -20,7 +21,7 @@ function fakeClient(options: {
           return this
         },
         async maybeSingle() {
-          return { data: options.row ?? null, error: null }
+          return { data: options.row ?? null, error: options.selectError ?? null }
         },
       }
     },
@@ -29,19 +30,28 @@ function fakeClient(options: {
 }
 
 describe('getArrivalEmailPreference', () => {
-  it('defaults to true (enabled) when no row exists yet', async () => {
+  it('no row yet → ok: true, enabled: true (the product default)', async () => {
     const client = fakeClient({ row: null })
-    expect(await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)).toBe(true)
+    const result = await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)
+    expect(result).toEqual({ ok: true, enabled: true })
   })
 
-  it('reads back an explicit false', async () => {
+  it('persisted false → ok: true, enabled: false', async () => {
     const client = fakeClient({ row: { arrival_emails_enabled: false } })
-    expect(await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)).toBe(false)
+    const result = await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)
+    expect(result).toEqual({ ok: true, enabled: false })
   })
 
-  it('reads back an explicit true', async () => {
+  it('persisted true → ok: true, enabled: true', async () => {
     const client = fakeClient({ row: { arrival_emails_enabled: true } })
-    expect(await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)).toBe(true)
+    const result = await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)
+    expect(result).toEqual({ ok: true, enabled: true })
+  })
+
+  it('a genuine SELECT error surfaces as ok: false with the error — never silently collapsed to enabled: true', async () => {
+    const client = fakeClient({ row: null, selectError: { message: 'connection reset', code: '57P01' } })
+    const result = await getArrivalEmailPreference(client as unknown as SupabaseClient, USER)
+    expect(result).toEqual({ ok: false, error: { message: 'connection reset', code: '57P01' } })
   })
 })
 

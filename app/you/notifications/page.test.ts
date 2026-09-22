@@ -14,8 +14,15 @@ describe('/you/notifications — arrival-email preference', () => {
     expect(source).toContain('getArrivalEmailPreference(supabase, user.id)')
   })
 
-  it('renders the editor with the server-read initial value', () => {
-    expect(source).toContain('<NotificationsEditor initialEnabled={enabled} />')
+  it('renders the editor with the server-read value only on a successful read', () => {
+    expect(source).toContain('preferenceResult.ok')
+    expect(source).toContain('<NotificationsEditor initialEnabled={preferenceResult.enabled} />')
+  })
+
+  it('renders a recoverable error instead of the editor when the read fails — never a guessed on/off state', () => {
+    expect(source).toContain('Could not load your notification setting right now')
+    expect(source).toContain('href="/you/notifications"')
+    expect(source).not.toMatch(/preferenceResult\.ok\s*\?\s*<NotificationsEditor[\s\S]*:\s*<NotificationsEditor/)
   })
 
   it('links back to /you', () => {

@@ -1,3 +1,4 @@
+import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { renderArrivalEmail } from '@/lib/email/arrival'
 import type { SendEmailInput, SendEmailResult } from '@/lib/email/provider'
@@ -11,7 +12,7 @@ type ArrivalEmailContext = {
   sender_country_code: string | null
 }
 
-type ClaimedJob = { id: string; letter_id: string }
+type ClaimedJob = { id: string; letter_id: string; claim_token: string }
 
 export type ArrivalWorkerDeps = {
   /** Must be a service-role client (lib/supabase/service.ts) — the
@@ -41,6 +42,13 @@ export type ArrivalWorkerSummary = {
  * this function itself (a crashed process is instead recovered by
  * claim_arrival_email_jobs' own stale-claim reclaim, see the
  * migration).
+ *
+ * Every completion call is fenced to the exact claim it came from —
+ * see `complete()` below — so a worker invocation that ran past the
+ * 15-minute reclaim window can never clobber a newer invocation's
+ * outcome for the same job, and the provider's own Idempotency-Key
+ * (lib/email/provider.ts) stops that late invocation's own redundant
+ * send from actually reaching the recipient twice.
  */
 export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<ArrivalWorkerSummary> {
   const { supabase, sendEmail, siteOrigin, artOrigin, limit = 20, workerId = 'cron' } = deps
@@ -93,7 +101,7 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
     })
 
     if (contextError) {
-      await complete(job.id, 'failed', contextError.message)
+      await complete(job, 'failed', { error: contextError.message })
       summary.failed += 1
       return
     }
@@ -101,7 +109,7 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
     const context = (Array.isArray(contextRows) ? contextRows[0] : contextRows) as ArrivalEmailContext | undefined
 
     if (!context || !context.eligible || !context.recipient_email) {
-      await complete(job.id, 'skipped', context?.skip_reason ?? 'unknown')
+      await complete(job, 'skipped', { error: context?.skip_reason ?? 'unknown' })
       summary.skipped += 1
       return
     }
@@ -117,38 +125,62 @@ export async function runArrivalEmailWorker(deps: ArrivalWorkerDeps): Promise<Ar
         artOrigin,
       })
     } catch (error) {
-      await complete(job.id, 'failed', error instanceof Error ? error.message : 'render failed')
+      await complete(job, 'failed', { error: error instanceof Error ? error.message : 'render failed' })
       summary.failed += 1
       return
     }
+
+    // Stable across every retry of this exact job — never regenerated
+    // per attempt — so Resend's own idempotency guards against a
+    // duplicate send if this same job is retried (see
+    // lib/email/provider.ts's own doc comment).
+    const idempotencyKey = `letter-arrived/${job.letter_id}`
 
     const result = await sendEmail({
       to: context.recipient_email,
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
+      idempotencyKey,
     })
 
     if (result.ok) {
-      await complete(job.id, 'sent')
+      await complete(job, 'sent', { providerMessageId: result.providerMessageId })
       summary.sent += 1
     } else {
-      await complete(job.id, 'failed', result.error)
+      await complete(job, 'failed', { error: result.error, retryable: result.retryable })
       summary.failed += 1
     }
   }
 
-  async function complete(queueId: string, result: 'sent' | 'skipped' | 'failed', error?: string): Promise<void> {
-    const { error: completeError } = await supabase.rpc('complete_arrival_email_job', {
-      p_queue_id: queueId,
+  async function complete(
+    job: ClaimedJob,
+    result: 'sent' | 'skipped' | 'failed',
+    options: { error?: string; providerMessageId?: string | null; retryable?: boolean } = {}
+  ): Promise<void> {
+    const { data: applied, error: completeError } = await supabase.rpc('complete_arrival_email_job', {
+      p_queue_id: job.id,
+      p_claim_token: job.claim_token,
       p_result: result,
-      p_error: error ? error.slice(0, 500) : null,
+      p_error: options.error ? options.error.slice(0, 500) : null,
+      p_provider_message_id: options.providerMessageId ?? null,
+      p_retryable: options.retryable ?? true,
     })
-    // A failure here means the job stays 'processing' — it will be
-    // reclaimed by the stale-claim path after 15 minutes rather than
-    // silently lost.
+
     if (completeError) {
-      console.error(`complete_arrival_email_job(${queueId}, ${result}) failed: ${completeError.message}`)
+      // A failure here means the job stays 'processing' under this
+      // claim_token — it will be reclaimed (with a fresh token) by the
+      // stale-claim path after 15 minutes rather than silently lost.
+      console.error(`complete_arrival_email_job(${job.id}, ${result}) failed: ${completeError.message}`)
+      return
+    }
+
+    if (applied === false) {
+      // Fenced out: another invocation already reclaimed and completed
+      // this job under a newer claim_token. Not an error — this run's
+      // own (redundant, now-discarded) outcome for this job simply
+      // doesn't count; see this function's own doc comment.
+      console.warn(`complete_arrival_email_job(${job.id}) was fenced out — a newer claim already completed it.`)
     }
   }
 }

@@ -413,6 +413,10 @@ export type ArrivalEmailQueueRow = {
   maxAttempts: number
   lastError: string | null
   skippedReason: string | null
+  /** Resend's own email id on a successful send — lets staff correlate
+   * this row with provider-side delivery logs, without storing any
+   * letter content. */
+  providerMessageId: string | null
   createdAt: string
   sentAt: string | null
   updatedAt: string
@@ -441,6 +445,7 @@ export async function getArrivalEmailStatus(
       max_attempts: number
       last_error: string | null
       skipped_reason: string | null
+      provider_message_id: string | null
       created_at: string
       sent_at: string | null
       updated_at: string
@@ -459,6 +464,7 @@ export async function getArrivalEmailStatus(
         maxAttempts: r.max_attempts,
         lastError: r.last_error,
         skippedReason: r.skipped_reason,
+        providerMessageId: r.provider_message_id,
         createdAt: r.created_at,
         sentAt: r.sent_at,
         updatedAt: r.updated_at,

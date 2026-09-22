@@ -17,7 +17,7 @@ export default async function NotificationsPage() {
     redirect('/sign-in')
   }
 
-  const [waitingCount, enabled] = await Promise.all([
+  const [waitingCount, preferenceResult] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getArrivalEmailPreference(supabase, user.id),
   ])
@@ -36,7 +36,23 @@ export default async function NotificationsPage() {
             </p>
           </div>
 
-          <NotificationsEditor initialEnabled={enabled} />
+          {preferenceResult.ok ? (
+            <NotificationsEditor initialEnabled={preferenceResult.enabled} />
+          ) : (
+            // A read failure must never render as an apparently
+            // authoritative on/off state (independent audit
+            // correction) — a plain full-page reload link, not a
+            // guessed default, since we genuinely don't know the
+            // current preference here.
+            <div className="space-y-3 rounded-md border border-foreground/10 p-4">
+              <p className="text-sm text-red-600">
+                Could not load your notification setting right now. Please try again.
+              </p>
+              <a href="/you/notifications" className={secondaryButtonClass}>
+                Try again
+              </a>
+            </div>
+          )}
         </div>
       </main>
     </AppShell>

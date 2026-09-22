@@ -1,3 +1,4 @@
+import 'server-only'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 /**
@@ -6,7 +7,9 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
  * cron route that drives it), never from a Server/Client Component
  * that renders on a user's behalf. See lib/supabase/server.ts for the
  * ordinary per-request client that carries the signed-in user's own
- * session and respects RLS.
+ * session and respects RLS. The `server-only` import turns an
+ * accidental future Client Component import of this module into a
+ * Next.js BUILD failure, rather than relying solely on this comment.
  */
 export function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

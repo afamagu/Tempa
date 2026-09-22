@@ -56,12 +56,12 @@ describe('privacy — never touches letter body, Moment, or Postcard content', (
     expect(codeOnly.toLowerCase()).not.toMatch(/\bpostcard/)
   })
 
-  it('admin_get_arrival_email_status only ever selects id/status/error/timestamp columns from the queue, never anything else', () => {
+  it('admin_get_arrival_email_status only ever selects id/status/error/provider-id/timestamp columns from the queue, never anything else', () => {
     const start = sql.indexOf('create or replace function public.admin_get_arrival_email_status(')
     const end = sql.indexOf('$$;', start)
     const body = sql.slice(start, end)
     expect(body).toContain('id, letter_id, recipient_id, status, attempts, max_attempts')
-    expect(body).toContain('last_error, skipped_reason, created_at, sent_at, updated_at')
+    expect(body).toContain('last_error, skipped_reason, provider_message_id, created_at, sent_at, updated_at')
   })
 })
 
@@ -103,6 +103,11 @@ describe('arrival_email_queue — no client access at all, letter_id is the idem
   it('status is constrained to the five known states', () => {
     expect(codeOnly).toContain("check (status in ('pending', 'processing', 'sent', 'skipped', 'failed'))")
   })
+
+  it('has a claim_token uuid column for lease fencing and a provider_message_id text column for Resend correlation', () => {
+    expect(codeOnly).toMatch(/claim_token uuid/)
+    expect(codeOnly).toMatch(/provider_message_id text/)
+  })
 })
 
 describe('arrival_email_system_config — singleton kill switch, starts disabled', () => {
@@ -116,6 +121,13 @@ describe('arrival_email_system_config — singleton kill switch, starts disabled
   it('the seeded row starts with sending_enabled = false — nothing sends until staff explicitly enables it', () => {
     expect(codeOnly).toMatch(/insert into public\.arrival_email_system_config \(id, sending_enabled\)\s*\n\s*values \(true, false\)/)
   })
+
+  it('has a server-authoritative enqueue_after cutover column, defaulted to now() — never a client/env-supplied value', () => {
+    expect(codeOnly).toMatch(/enqueue_after timestamptz not null default now\(\)/)
+    // Nothing in this migration accepts a caller-supplied cutover value —
+    // the column default is the only place a value is ever assigned.
+    expect(codeOnly).not.toMatch(/p_enqueue_after/)
+  })
 })
 
 describe('enqueue_arrival_emails — arrival-triggered, never sender-submission-triggered, idempotent', () => {
@@ -123,6 +135,13 @@ describe('enqueue_arrival_emails — arrival-triggered, never sender-submission-
     const body = extractFunctionBody('enqueue_arrival_emails')
     expect(body).toContain('l.deliver_at <= now()')
     expect(body).not.toContain('l.created_at <= now()')
+  })
+
+  it('also requires deliver_at >= the rollout cutover read from arrival_email_system_config.enqueue_after — a historical letter delivered before this system existed can never backlog-generate an arrival email', () => {
+    const body = extractFunctionBody('enqueue_arrival_emails')
+    expect(body).toContain('select enqueue_after into v_cutoff')
+    expect(body).toContain('from public.arrival_email_system_config')
+    expect(body).toContain('and l.deliver_at >= v_cutoff')
   })
 
   it('is idempotent via both an anti-join and ON CONFLICT DO NOTHING keyed on the unique letter_id', () => {
@@ -154,6 +173,11 @@ describe('claim_arrival_email_jobs — safe against overlapping scheduler runs',
     expect(body).toContain('attempts = q.attempts + 1')
     expect(codeOnly).toContain('grant execute on function public.claim_arrival_email_jobs(integer, text) to service_role')
     expect(codeOnly).not.toMatch(/grant execute on function public\.claim_arrival_email_jobs\(integer, text\) to (anon|authenticated)/)
+  })
+
+  it('issues a fresh claim_token on every claim, including a reclaim — a crashed worker\'s old token is always invalidated by the next claim', () => {
+    const body = extractFunctionBody('claim_arrival_email_jobs')
+    expect(body).toContain('claim_token = gen_random_uuid()')
   })
 })
 
@@ -197,22 +221,48 @@ describe('resolve_arrival_email_context — send-time revalidation, checked fres
   })
 })
 
-describe('complete_arrival_email_job — bounded retries with exponential backoff', () => {
+describe('complete_arrival_email_job — fenced to the exact claim, bounded retries with exponential backoff', () => {
   const body = () => extractFunctionBody('complete_arrival_email_job')
 
   it('only accepts the three known outcomes', () => {
     expect(body()).toContain("if p_result not in ('sent', 'skipped', 'failed') then")
   })
 
-  it('backs off exponentially while attempts remain, and stops retrying once max_attempts is reached', () => {
+  it('requires BOTH status = processing AND a matching claim_token before touching the row — a stale/late completion is fenced out as a no-op', () => {
     const b = body()
-    expect(b).toContain('v_job.attempts >= v_job.max_attempts')
-    expect(b).toContain("(interval '5 minutes') * power(2, v_job.attempts)")
+    expect(b).toContain("and status = 'processing'")
+    expect(b).toContain('and claim_token = p_claim_token')
+    expect(b).toContain('if not found then')
+    expect(b).toContain('return false')
+  })
+
+  it('returns boolean (not void) so the caller can distinguish "applied" from "fenced out"', () => {
+    expect(sql).toMatch(/create or replace function public\.complete_arrival_email_job\([\s\S]*?\)\nreturns boolean/)
+  })
+
+  it('backs off with the CORRECTED exponential formula — attempts=1 gives 5 minutes, not 10 (independent audit fix: `attempts - 1`, not bare `attempts`, since attempts is already incremented at claim time before the first failure is ever recorded here)', () => {
+    const b = body()
+    expect(b).toContain("(interval '5 minutes') * power(2, v_job.attempts - 1)")
+    expect(b).not.toContain("power(2, v_job.attempts)")
+  })
+
+  it('stops retrying once max_attempts is reached, OR immediately when the caller reports the failure as non-retryable', () => {
+    const b = body()
+    expect(b).toContain('if not p_retryable or v_job.attempts >= v_job.max_attempts then')
+  })
+
+  it('persists provider_message_id on a successful send, for Admin correlation with Resend — never any letter content', () => {
+    const b = body()
+    expect(b).toContain('provider_message_id = p_provider_message_id')
   })
 
   it('is granted to service_role only — never anon or authenticated', () => {
-    expect(codeOnly).toContain('grant execute on function public.complete_arrival_email_job(uuid, text, text) to service_role')
-    expect(codeOnly).not.toMatch(/grant execute on function public\.complete_arrival_email_job\(uuid, text, text\) to (anon|authenticated)/)
+    expect(codeOnly).toContain(
+      'grant execute on function public.complete_arrival_email_job(uuid, uuid, text, text, text, boolean) to service_role'
+    )
+    expect(codeOnly).not.toMatch(
+      /grant execute on function public\.complete_arrival_email_job\(uuid, uuid, text, text, text, boolean\) to (anon|authenticated)/
+    )
   })
 })
 
@@ -248,5 +298,16 @@ describe('verify file exists and targets this migration', () => {
     expect(verifySql).toContain('arrival_email_preferences')
     expect(verifySql).toContain('arrival_email_system_config')
     expect(verifySql).toContain('overall_pass')
+  })
+
+  it('checks the new cutover column, the new fencing/provider-id columns, and the corrected complete_arrival_email_job signature', () => {
+    expect(verifySql).toContain('enqueue_after')
+    expect(verifySql).toContain('claim_token')
+    expect(verifySql).toContain('provider_message_id')
+    expect(verifySql).toContain('public.complete_arrival_email_job(uuid, uuid, text, text, text, boolean)')
+  })
+
+  it('explicitly confirms service_role can read arrival_email_system_config — the exact path the worker uses (a direct table read, not an RPC)', () => {
+    expect(verifySql).toContain("has_table_privilege('service_role', 'public.arrival_email_system_config', 'SELECT')")
   })
 })

@@ -73,6 +73,7 @@ export default function EmailStatusView({
                     {row.attempts}/{row.maxAttempts} attempts · updated {new Date(row.updatedAt).toLocaleString()}
                     {row.lastError ? ` · ${row.lastError}` : ''}
                     {row.skippedReason ? ` · ${row.skippedReason}` : ''}
+                    {row.providerMessageId ? ` · Resend ${row.providerMessageId}` : ''}
                   </p>
                 </div>
                 <span className={adminBadgeClass}>{row.status}</span>

@@ -438,6 +438,7 @@ describe('getArrivalEmailStatus / setArrivalEmailSendingEnabled — Admin email-
             max_attempts: 5,
             last_error: 'Resend responded 500',
             skipped_reason: null,
+            provider_message_id: null,
             created_at: '2026-10-01T00:00:00Z',
             sent_at: null,
             updated_at: '2026-10-01T00:05:00Z',
@@ -464,12 +465,43 @@ describe('getArrivalEmailStatus / setArrivalEmailSendingEnabled — Admin email-
           maxAttempts: 5,
           lastError: 'Resend responded 500',
           skippedReason: null,
+          providerMessageId: null,
           createdAt: '2026-10-01T00:00:00Z',
           sentAt: null,
           updatedAt: '2026-10-01T00:05:00Z',
         },
       ],
     })
+  })
+
+  it('maps a persisted providerMessageId through on a sent row', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        sendingEnabled: true,
+        counts: { sent: 1 },
+        recent: [
+          {
+            id: 'queue-2',
+            letter_id: 'letter-2',
+            recipient_id: 'recipient-2',
+            status: 'sent',
+            attempts: 1,
+            max_attempts: 5,
+            last_error: null,
+            skipped_reason: null,
+            provider_message_id: 'resend-abc-123',
+            created_at: '2026-10-01T00:00:00Z',
+            sent_at: '2026-10-01T00:00:05Z',
+            updated_at: '2026-10-01T00:00:05Z',
+          },
+        ],
+      },
+      error: null,
+    })
+
+    const { data } = await getArrivalEmailStatus({ rpc } as unknown as SupabaseClient)
+
+    expect(data?.recent[0].providerMessageId).toBe('resend-abc-123')
   })
 
   it('surfaces an error from a non-staff caller rather than throwing', async () => {

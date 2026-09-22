@@ -80,12 +80,35 @@ config_grant_check as (
     case when to_regclass('public.arrival_email_system_config') is null then false
       else not has_table_privilege('anon', 'public.arrival_email_system_config', 'SELECT') end as anon_no_select,
     case when to_regclass('public.arrival_email_system_config') is null then false
-      else not has_table_privilege('authenticated', 'public.arrival_email_system_config', 'SELECT') end as authenticated_no_select
+      else not has_table_privilege('authenticated', 'public.arrival_email_system_config', 'SELECT') end as authenticated_no_select,
+    -- The worker reads this row directly with the service_role key
+    -- (bypassing RLS, not via an RPC) — explicit confirmation that
+    -- path is actually open, not merely "not revoked by omission".
+    case when to_regclass('public.arrival_email_system_config') is null then false
+      else has_table_privilege('service_role', 'public.arrival_email_system_config', 'SELECT') end as service_role_can_select
 ),
 config_state_check as (
   select
     (select count(*) from public.arrival_email_system_config) = 1 as exactly_one_row,
-    coalesce((select sending_enabled from public.arrival_email_system_config where id = true), true) = false as sending_starts_disabled
+    coalesce((select sending_enabled from public.arrival_email_system_config where id = true), true) = false as sending_starts_disabled,
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'arrival_email_system_config'
+        and column_name = 'enqueue_after' and is_nullable = 'NO' and data_type = 'timestamp with time zone'
+    ) as enqueue_after_column_present
+),
+queue_fencing_columns_check as (
+  select
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'arrival_email_queue'
+        and column_name = 'claim_token' and data_type = 'uuid'
+    ) as claim_token_column_present,
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'arrival_email_queue'
+        and column_name = 'provider_message_id' and data_type = 'text'
+    ) as provider_message_id_column_present
 ),
 worker_function_check as (
   select
@@ -99,7 +122,7 @@ worker_function_check as (
       ('public.enqueue_arrival_emails()'),
       ('public.claim_arrival_email_jobs(integer, text)'),
       ('public.resolve_arrival_email_context(uuid)'),
-      ('public.complete_arrival_email_job(uuid, text, text)')
+      ('public.complete_arrival_email_job(uuid, uuid, text, text, text, boolean)')
     ) as f(sig)
   ) as checked
 ),
@@ -136,8 +159,12 @@ select
   q.letter_id_unique as queue_letter_id_unique,
   c.anon_no_select as config_anon_no_select,
   c.authenticated_no_select as config_authenticated_no_select,
+  c.service_role_can_select as config_service_role_can_select,
   cs.exactly_one_row as config_exactly_one_row,
   cs.sending_starts_disabled as config_sending_starts_disabled,
+  cs.enqueue_after_column_present as config_enqueue_after_column_present,
+  qf.claim_token_column_present as queue_claim_token_column_present,
+  qf.provider_message_id_column_present as queue_provider_message_id_column_present,
   wf.worker_only_functions_locked_down,
   sf.staff_functions_reachable,
   pw.authenticated_can as pref_write_authenticated_can,
@@ -147,12 +174,14 @@ select
     and p.authenticated_select and p.authenticated_no_insert and p.authenticated_no_update and p.anon_no_select
     and pp.exists_at_all and pp.scoped_to_own_user_id
     and q.anon_no_select and q.authenticated_no_select and q.authenticated_no_insert and q.letter_id_unique
-    and c.anon_no_select and c.authenticated_no_select
-    and cs.exactly_one_row and cs.sending_starts_disabled
+    and c.anon_no_select and c.authenticated_no_select and c.service_role_can_select
+    and cs.exactly_one_row and cs.sending_starts_disabled and cs.enqueue_after_column_present
+    and qf.claim_token_column_present and qf.provider_message_id_column_present
     and wf.worker_only_functions_locked_down
     and sf.staff_functions_reachable
     and pw.authenticated_can and pw.anon_cannot
   ) as overall_pass
 from tables_check t, preferences_grant_check p, preferences_policy_check pp,
      queue_grant_check q, config_grant_check c, config_state_check cs,
+     queue_fencing_columns_check qf,
      worker_function_check wf, staff_function_check sf, preference_write_function_check pw;
