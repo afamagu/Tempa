@@ -11,6 +11,14 @@ const publicContentPageSource = readFileSync(
   path.join(__dirname, 'moderation', 'public-content', 'page.tsx'),
   'utf8'
 )
+const needsAttentionPageSource = readFileSync(
+  path.join(__dirname, 'moderation', 'needs-attention', 'page.tsx'),
+  'utf8'
+)
+const needsAttentionDetailPageSource = readFileSync(
+  path.join(__dirname, 'moderation', 'needs-attention', '[id]', 'page.tsx'),
+  'utf8'
+)
 const questionsPageSource = readFileSync(path.join(__dirname, 'content', 'questions', 'page.tsx'), 'utf8')
 const systemPageSource = readFileSync(path.join(__dirname, 'system', 'page.tsx'), 'utf8')
 const emailStatusPageSource = readFileSync(path.join(__dirname, 'system', 'email', 'page.tsx'), 'utf8')
@@ -44,6 +52,22 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(publicContentPageSource.trimStart().startsWith("'use client'")).toBe(false)
     expect(publicContentPageSource).not.toContain('isStaff')
     expect(publicContentPageSource).not.toContain('redirect(')
+  })
+
+  it('/admin/moderation/needs-attention is a Server Component with no competing auth check of its own — admin_list_safety_cases is what actually enforces staff-only', () => {
+    expect(needsAttentionPageSource.trimStart().startsWith("'use client'")).toBe(false)
+    expect(needsAttentionPageSource).not.toContain('isStaff')
+    expect(needsAttentionPageSource).not.toContain('redirect(')
+  })
+
+  it('/admin/moderation/needs-attention/[id] is a Server Component with no competing auth check of its own — admin_get_safety_case is what actually enforces staff-only', () => {
+    expect(needsAttentionDetailPageSource.trimStart().startsWith("'use client'")).toBe(false)
+    expect(needsAttentionDetailPageSource).not.toContain('isStaff')
+    expect(needsAttentionDetailPageSource).not.toContain('redirect(')
+  })
+
+  it('the needs-attention case detail page links back to the case queue', () => {
+    expect(needsAttentionDetailPageSource).toContain('href="/admin/moderation/needs-attention"')
   })
 
   it('/admin/content/questions is a Server Component with no competing auth check of its own — the RPC it calls is what actually enforces admin-only', () => {
@@ -105,6 +129,13 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
 
   it('the Admin nav still points Moderation at the working canonical route, not the bare 404ing index', () => {
     expect(adminNavSource).toContain("href: '/admin/moderation/reports'")
+  })
+
+  it('Moderation tabs offer Needs Attention alongside the existing Reports/Public Content — added coherently, not a disconnected admin product', () => {
+    const tabsSource = readFileSync(path.join(__dirname, 'moderation', 'moderation-tabs.tsx'), 'utf8')
+    expect(tabsSource).toContain('/admin/moderation/needs-attention')
+    expect(tabsSource).toContain('/admin/moderation/reports')
+    expect(tabsSource).toContain('/admin/moderation/public-content')
   })
 
   it('old /admin/reports paths redirect permanently to the new Moderation location', () => {
