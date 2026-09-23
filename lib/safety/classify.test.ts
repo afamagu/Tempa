@@ -21,6 +21,13 @@ describe('false-positive corpus — ordinary conversation about money must never
     'My daughter works in finance.',
     'The hospital bill was shocking.',
     'I bought my brother a gift card.',
+    'My hospital bill was $500.',
+    'The surgery cost us $2,000.',
+    'After the accident the repair bill was £800.',
+    'An IBAN is an international bank account identifier.',
+    'IBAN is used for international transfers.',
+    'My Ethereum wallet address is 0x' + 'a'.repeat(40),
+    'This article uses 0x' + 'b'.repeat(40) + ' as an example Ethereum address.',
   ]
 
   for (const text of benignExamples) {
@@ -109,11 +116,138 @@ describe('directed money request requires nearby financial context, not just a t
     expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
     expect(result.mutationDisposition).not.toBe('allow')
   })
+
+  // Locality regression: an unrelated amount describing a DIFFERENT
+  // noun ("the camera") elsewhere in the SAME sentence must not be
+  // read as the object of "send me the photo".
+  it('does not treat an amount describing an unrelated object in the same sentence as the request object', () => {
+    const result = classifyContent('Can you send me the photo of the camera I bought for $300?')
+    expect(result.riskBand).toBe('none')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('DIRECT_MONEY_REQUEST')
+  })
 })
 
 // ============================================================
-// Item 2 — a bare mention of "IBAN" is a topic mention, not a
-// disclosure. Only an actual shared account/IBAN detail counts as
+// Emergency vocabulary requires an actual request, not just an amount.
+// "My hospital bill was $500." is a descriptive statement; only a
+// directed money request or a genuine bill/loan-help ask makes it
+// EMERGENCY_MONEY_REQUEST.
+// ============================================================
+describe('emergency vocabulary requires an actual solicitation, not just an incidental amount', () => {
+  it('describing what an emergency cost is not a request', () => {
+    for (const text of [
+      'My hospital bill was $500.',
+      'The surgery cost us $2,000.',
+      'After the accident the repair bill was £800.',
+    ]) {
+      const result = classifyContent(text)
+      expect(result.reasonCodes).not.toContain('EMERGENCY_MONEY_REQUEST')
+      expect(result.mutationDisposition).toBe('allow')
+    }
+  })
+
+  it('preserves detection of an actual emergency money request', () => {
+    const result = classifyContent('I need emergency money for hospital treatment.')
+    expect(result.reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
+  })
+
+  it('preserves detection of an emergency-framed bill-help request', () => {
+    const result = classifyContent('Please help me pay the hospital bill.')
+    expect(result.reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
+  })
+})
+
+// ============================================================
+// Emergency/hospital vocabulary must not make an ordinary link
+// suspicious — only a directed money request (or a suspicious
+// shortener, or an explicit phishing phrase) does that.
+// ============================================================
+describe('emergency vocabulary does not make a link suspicious', () => {
+  it('a hospital/clinic link with no request stays allowed with no meaningful link signal', () => {
+    for (const text of [
+      'This is the hospital website: https://example.com',
+      'Here is the clinic page I mentioned: https://example.com/clinic',
+    ]) {
+      const result = classifyContent(text)
+      expect(result.mutationDisposition).toBe('allow')
+      expect(result.escalateCase).toBe(false)
+    }
+  })
+})
+
+// ============================================================
+// A crypto address is not automatically a solicitation — only an
+// actual transfer/payment request involving the address is.
+// ============================================================
+describe('a crypto address requires transfer/solicitation context, not just co-occurrence with a crypto keyword', () => {
+  it('stating one\'s own wallet address is not a solicitation', () => {
+    const address = '0x' + 'a'.repeat(40)
+    const result = classifyContent(`My Ethereum wallet address is ${address}`)
+    expect(result.riskBand).not.toBe('severe')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('CRYPTO_SOLICITATION')
+  })
+
+  it('an address used as a documentation example is not a solicitation', () => {
+    const address = '0x' + 'b'.repeat(40)
+    const result = classifyContent(`This article uses ${address} as an example Ethereum address.`)
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('CRYPTO_SOLICITATION')
+  })
+
+  it('preserves severe/deny for an actual crypto transfer solicitation', () => {
+    const address = '0x' + 'c'.repeat(40)
+    const result = classifyContent(`Send USDT to ${address}`)
+    expect(result.riskBand).toBe('severe')
+    expect(result.mutationDisposition).toBe('deny')
+    expect(result.reasonCodes).toContain('CRYPTO_SOLICITATION')
+  })
+})
+
+// ============================================================
+// Investment/off-platform correlation requires explicit pitch/
+// proposition language, not mere co-occurrence — and must not depend
+// on punctuation (a comma vs. a period must not change the outcome).
+// ============================================================
+describe('investment/off-platform escalation requires explicit pitch language, not punctuation-dependent co-occurrence', () => {
+  it('an unrelated crypto aside and an unrelated off-platform aside stay low-risk regardless of whether they are joined by a comma or a period', () => {
+    for (const text of [
+      "I lost money investing in crypto last year, let's chat on WhatsApp sometime.",
+      "I lost money investing in crypto last year. Let's chat on WhatsApp sometime.",
+    ]) {
+      const result = classifyContent(text)
+      expect(result.riskBand).not.toBe('high')
+      expect(result.riskBand).not.toBe('severe')
+      expect(result.mutationDisposition).toBe('allow')
+      expect(result.escalateCase).toBe(false)
+      expect(result.reasonCodes).not.toContain('INVESTMENT_SOLICITATION')
+    }
+  })
+
+  it('preserves the escalation shape for explicit pitch language', () => {
+    const codes = classifyContent("Let's move to Telegram, I have a forex opportunity for you.").reasonCodes
+    expect(codes).toContain('OFF_PLATFORM_ESCALATION')
+    expect(codes).toContain('INVESTMENT_SOLICITATION')
+  })
+
+  it('preserves detection when an off-platform move is paired with an investment promise', () => {
+    const result = classifyContent("Message me on WhatsApp and I'll show you how to double your investment.")
+    expect(result.reasonCodes).toContain('INVESTMENT_SOLICITATION')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+
+  it('preserves the original worked example', () => {
+    const codes = classifyContent("Let's go to Telegram so I can show you the investment.").reasonCodes
+    expect(codes).toContain('OFF_PLATFORM_ESCALATION')
+    expect(codes).toContain('INVESTMENT_SOLICITATION')
+  })
+})
+
+// ============================================================
+// Item 2 (IBAN) — a bare mention of "IBAN" or an explanatory
+// definition is a topic mention, not a disclosure. Only an actual
+// shared account/IBAN detail counts as
 // PAYMENT_DETAILS.
 // ============================================================
 describe('bank-detail sharing requires an actual disclosure, not a bare mention', () => {
@@ -131,9 +265,22 @@ describe('bank-detail sharing requires an actual disclosure, not a bare mention'
     expect(result.reasonCodes).not.toContain('PAYMENT_DETAILS')
   })
 
+  it('an explanatory definition of what an IBAN is stays allowed with no PAYMENT_DETAILS code', () => {
+    for (const text of [
+      'An IBAN is an international bank account identifier.',
+      'IBAN is used for international transfers.',
+    ]) {
+      const result = classifyContent(text)
+      expect(result.riskBand).toBe('none')
+      expect(result.mutationDisposition).toBe('allow')
+      expect(result.reasonCodes).not.toContain('PAYMENT_DETAILS')
+    }
+  })
+
   it('actually sharing an IBAN triggers PAYMENT_DETAILS', () => {
-    const result = classifyContent('Here is my IBAN: DE89370400440532013000')
-    expect(result.reasonCodes).toContain('PAYMENT_DETAILS')
+    for (const text of ['My IBAN is DE89370400440532013000', 'Here is my IBAN: DE89370400440532013000', 'IBAN: DE89370400440532013000']) {
+      expect(classifyContent(text).reasonCodes).toContain('PAYMENT_DETAILS')
+    }
   })
 })
 

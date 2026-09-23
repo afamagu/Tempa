@@ -81,16 +81,25 @@ const RULES: Rule[] = [
     fires: (i) => i.hasLoanOrBillRequestPhrase,
   },
   {
+    // A crypto keyword alone ("my Ethereum wallet address is 0x...")
+    // is a topic/disclosure, not a solicitation — this requires an
+    // actual directed request (hasDirectedMoneyRequest already covers
+    // "send USDT to 0x..." via the transfer-verb+address check in
+    // indicators.ts).
     reasonCode: 'CRYPTO_SOLICITATION',
     band: 'high',
-    fires: (i) => i.hasCryptoKeyword && (i.hasDirectedMoneyRequest || i.cryptoAddresses.length > 0),
+    fires: (i) => i.hasCryptoKeyword && i.hasDirectedMoneyRequest,
   },
   {
-    // An actual wallet address being solicited is about as unambiguous
-    // as text-only detection gets.
+    // An address being SOLICITED (transfer verb + the address, or a
+    // crypto keyword alongside an actual request) is unambiguous. An
+    // address merely being STATED, with no request attached ("my
+    // wallet address is 0x...", "this article uses 0x... as an
+    // example"), is not — a bare address+keyword co-occurrence is not
+    // enough for 'severe' by itself.
     reasonCode: 'CRYPTO_SOLICITATION',
     band: 'severe',
-    fires: (i) => i.cryptoAddresses.length > 0 && (i.hasDirectedMoneyRequest || i.hasCryptoKeyword),
+    fires: (i) => i.cryptoAddresses.length > 0 && i.hasDirectedMoneyRequest,
   },
   {
     reasonCode: 'INVESTMENT_SOLICITATION',
@@ -98,14 +107,11 @@ const RULES: Rule[] = [
     fires: (i) => i.hasInvestmentPromiseLanguage,
   },
   {
-    // A neutral investment topic alone is never solicitation (matches
-    // "I lost money investing in crypto"). It only reads as "let's move
-    // this conversation somewhere I can pitch you" (the spec's own
-    // worked example) when the topic and the off-platform mention are
-    // in the SAME sentence — hasInvestmentPitchContext, not a message-
-    // wide AND, which would also flag two unrelated asides ("I lost
-    // money investing in crypto last year. Let's chat on WhatsApp
-    // sometime.").
+    // Explicit pitch/proposition language ("forex opportunity", "show
+    // you the investment") — see hasInvestmentPitchContext's own doc
+    // comment in indicators.ts for why this replaced a "topic word +
+    // off-platform mention in the same sentence" check (punctuation-
+    // dependent and too easily satisfied by two unrelated asides).
     reasonCode: 'INVESTMENT_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasInvestmentPitchContext,
@@ -142,10 +148,15 @@ const RULES: Rule[] = [
     fires: (i) => i.hasPaymentHandleKeyword && i.hasDirectedMoneyRequest,
   },
   {
+    // Emergency VOCABULARY plus an incidental amount ("My hospital
+    // bill was $500.", "The surgery cost us $2,000.") is a descriptive
+    // statement, not a solicitation — this requires an actual request
+    // for money/payment/value (a directed money request or a genuine
+    // bill/loan-help ask), not merely emergency words co-occurring
+    // with a number.
     reasonCode: 'EMERGENCY_MONEY_REQUEST',
     band: 'high',
-    fires: (i) =>
-      i.hasEmergencyKeyword && (i.hasDirectedMoneyRequest || i.hasLoanOrBillRequestPhrase || i.moneyAmounts.length > 0),
+    fires: (i) => i.hasEmergencyKeyword && (i.hasDirectedMoneyRequest || i.hasLoanOrBillRequestPhrase),
   },
   {
     reasonCode: 'OFF_PLATFORM_ESCALATION',
@@ -153,12 +164,14 @@ const RULES: Rule[] = [
     fires: (i) => i.hasOffPlatformKeyword,
   },
   {
+    // Off-platform correlates with genuine solicitation shapes only:
+    // an actual directed money request, explicit investment pitch
+    // language, or an explicit investment promise — never a bare topic
+    // word co-occurring somewhere in the message (see
+    // hasInvestmentPitchContext's doc comment in indicators.ts).
     reasonCode: 'OFF_PLATFORM_ESCALATION',
     band: 'high',
-    // hasOffPlatformTopicCorrelation is itself already sentence-scoped
-    // (see indicators.ts) — a bare topic word elsewhere in the message
-    // must not correlate with an unrelated off-platform aside.
-    fires: (i) => i.hasOffPlatformKeyword && (i.hasDirectedMoneyRequest || i.hasOffPlatformTopicCorrelation),
+    fires: (i) => i.hasOffPlatformKeyword && (i.hasDirectedMoneyRequest || i.hasInvestmentPitchContext || i.hasInvestmentPromiseLanguage),
   },
   {
     reasonCode: 'SUSPICIOUS_LINK',
@@ -166,9 +179,15 @@ const RULES: Rule[] = [
     fires: (i) => i.urls.length > 0,
   },
   {
+    // A link next to emergency/hospital vocabulary is completely
+    // ordinary ("This is the hospital website: https://...") — only an
+    // actual directed money request (or a suspicious shortener)
+    // upgrades a bare link to 'meaningful'. Genuine phishing concern is
+    // otherwise carried by PHISHING_SIGNAL's own explicit-phrase rule
+    // below.
     reasonCode: 'SUSPICIOUS_LINK',
     band: 'meaningful',
-    fires: (i) => i.hasSuspiciousLinkShortener || (i.urls.length > 0 && (i.hasDirectedMoneyRequest || i.hasEmergencyKeyword)),
+    fires: (i) => i.hasSuspiciousLinkShortener || (i.urls.length > 0 && i.hasDirectedMoneyRequest),
   },
   {
     reasonCode: 'PHISHING_SIGNAL',

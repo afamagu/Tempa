@@ -127,15 +127,32 @@ describe('extractIndicators — keyword/phrase indicators', () => {
     expect(extractIndicators('Could you give me your opinion?').hasDirectedMoneyRequest).toBe(false)
   })
 
-  it('does not correlate a topic keyword and an off-platform mention across different sentences', () => {
-    const result = extractIndicators("I lost money investing in crypto last year. Let's chat on WhatsApp sometime.")
-    expect(result.hasInvestmentPitchContext).toBe(false)
-    expect(result.hasOffPlatformTopicCorrelation).toBe(false)
+  it('does not treat a bare topic word co-occurring with an off-platform mention as a pitch, regardless of punctuation', () => {
+    // A comma, not a period, joins these clauses — punctuation must
+    // not be what decides risk here (see hasInvestmentPitchContext's
+    // doc comment).
+    expect(
+      extractIndicators("I lost money investing in crypto last year, let's chat on WhatsApp sometime.")
+        .hasInvestmentPitchContext
+    ).toBe(false)
+    expect(
+      extractIndicators("I lost money investing in crypto last year. Let's chat on WhatsApp sometime.")
+        .hasInvestmentPitchContext
+    ).toBe(false)
   })
 
-  it('does correlate a topic keyword and an off-platform mention within the same sentence', () => {
-    const result = extractIndicators("Let's move to Telegram, I have a forex opportunity for you.")
-    expect(result.hasInvestmentPitchContext).toBe(true)
-    expect(result.hasOffPlatformTopicCorrelation).toBe(true)
+  it('detects explicit pitch/proposition language', () => {
+    expect(extractIndicators("Let's move to Telegram, I have a forex opportunity for you.").hasInvestmentPitchContext).toBe(
+      true
+    )
+    expect(extractIndicators("Let's go to Telegram so I can show you the investment.").hasInvestmentPitchContext).toBe(
+      true
+    )
+  })
+
+  it('detects a directed crypto transfer to an actual address, distinct from a bare address mention', () => {
+    const address = '0x' + 'a'.repeat(40)
+    expect(extractIndicators(`Send USDT to ${address}`).hasDirectedMoneyRequest).toBe(true)
+    expect(extractIndicators(`My Ethereum wallet address is ${address}`).hasDirectedMoneyRequest).toBe(false)
   })
 })
