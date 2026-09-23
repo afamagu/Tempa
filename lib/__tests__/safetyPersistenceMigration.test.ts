@@ -16,7 +16,10 @@ const sql = readFileSync(MIGRATION_PATH, 'utf8')
 const verifySql = readFileSync(VERIFY_PATH, 'utf8')
 
 function stripLineComments(text: string): string {
-  return text.replace(/^--.*$/gm, '')
+  // Leading whitespace-aware — this migration indents many of its own
+  // comment lines (e.g. inside CREATE TABLE column lists), which a
+  // bare `^--` anchor would leave un-stripped.
+  return text.replace(/^\s*--.*$/gm, '')
 }
 const codeOnly = stripLineComments(sql)
 
@@ -92,14 +95,21 @@ describe('safety_evaluations — RLS with no client policy, RPC-only writes', ()
     expect(codeOnly).toMatch(/expires_at timestamptz not null default \(now\(\) \+ interval '15 minutes'\)/)
   })
 
-  it('never sets consumed_at or warning_acknowledged_at itself — Checkpoint 3 is where those get written', () => {
+  it('never sets consumed_at, warning_issued_at, or warning_acknowledged_at itself — Checkpoint 3 is where those get written', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).not.toMatch(/consumed_at\s*=/)
+    expect(body).not.toMatch(/\bconsumed_at\s*=/)
+    expect(body).not.toMatch(/warning_issued_at\s*=/)
     expect(body).not.toMatch(/warning_acknowledged_at\s*=/)
+  })
+
+  it('has a warning_issued_at column, distinct from warning_required/warning_acknowledged_at, and never calls anything "warning_seen"', () => {
+    expect(codeOnly).toMatch(/warning_issued_at timestamptz/)
+    expect(codeOnly).toMatch(/warning_acknowledged_at timestamptz/)
+    expect(codeOnly.toLowerCase()).not.toContain('warning_seen')
   })
 })
 
-describe('safety_cases — one open case per subject, never a generic staff SELECT path', () => {
+describe('safety_cases — the canonical Safety 2 lifecycle, one active case per subject, never a generic staff SELECT path', () => {
   it('RLS is enabled and every grant is revoked from public/anon/authenticated/service_role, with no compensating policy', () => {
     expect(codeOnly).toContain('alter table public.safety_cases enable row level security')
     expect(codeOnly).toContain('revoke all on public.safety_cases from public, anon, authenticated')
@@ -107,16 +117,29 @@ describe('safety_cases — one open case per subject, never a generic staff SELE
     expect(codeOnly).not.toMatch(/grant select on public\.safety_cases/)
   })
 
-  it('enforces at most one open case per subject via a partial unique index', () => {
+  it('uses the full canonical status lifecycle, not the earlier open/reviewed/dismissed placeholder', () => {
     expect(codeOnly).toMatch(
-      /create unique index safety_cases_one_open_per_subject\s+on public\.safety_cases \(subject_user_id\)\s+where status = 'open'/
+      /status text not null default 'open'\s+check \(status in \('open', 'reviewing', 'no_action', 'warned', 'restricted', 'suspended', 'banned', 'resolved'\)\)/
+    )
+    expect(codeOnly).not.toContain("'reviewed', 'dismissed'")
+  })
+
+  it('enforces at most one ACTIVE (open or reviewing) case per subject via a partial unique index', () => {
+    expect(codeOnly).toMatch(
+      /create unique index safety_cases_one_active_per_subject\s+on public\.safety_cases \(subject_user_id\)\s+where status in \('open', 'reviewing'\)/
     )
   })
 
-  it('record_safety_evaluation upserts into the same open case rather than always inserting a new one', () => {
+  it('record_safety_evaluation upserts into the same active case rather than always inserting a new one', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).toContain("on conflict (subject_user_id) where status = 'open'")
+    expect(body).toContain("on conflict (subject_user_id) where status in ('open', 'reviewing')")
     expect(body).toContain('signal_count = public.safety_cases.signal_count + 1')
+  })
+
+  it('only ever inserts a new case at status \'open\' — this checkpoint never transitions a case itself', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain("values (p_user_id, 'open', p_risk_band, 1)")
+    expect(body).not.toMatch(/status\s*=\s*'(reviewing|no_action|warned|restricted|suspended|banned|resolved)'/)
   })
 })
 
@@ -202,7 +225,84 @@ describe('record_safety_evaluation — service-role only, dedup/idempotent, deri
   })
 })
 
-describe('cleanup_expired_safety_evaluations — prepared, not scheduled', () => {
+describe('record_safety_evaluation — concurrency-safe dedup via a transaction-scoped advisory lock', () => {
+  it('takes an advisory transaction lock derived from the fingerprint before the dedup lookup, not after', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    const lockIndex = body.indexOf('pg_advisory_xact_lock')
+    const lookupIndex = body.indexOf('into v_existing_id')
+    expect(lockIndex, 'expected pg_advisory_xact_lock to appear in the function body').toBeGreaterThan(-1)
+    expect(lookupIndex, 'expected the dedup lookup (into v_existing_id) to appear in the function body').toBeGreaterThan(-1)
+    expect(lockIndex).toBeLessThan(lookupIndex)
+  })
+
+  it('derives the lock key from the fingerprint itself, not a separately-hashed identity', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain("v_lock_key := ('x' || substr(v_fingerprint, 1, 16))::bit(64)::bigint")
+    expect(body).toContain('perform pg_advisory_xact_lock(v_lock_key)')
+  })
+})
+
+describe('record_safety_evaluation — never silently reuses a clearance whose stored decision disagrees with the current classifier', () => {
+  it('compares the existing evaluation\'s full policy tuple against the current call\'s before reusing it', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain('v_existing_risk_band = p_risk_band')
+    expect(body).toContain("v_existing_reason_codes = coalesce(p_reason_codes, '{}')")
+    expect(body).toContain('v_existing_mutation_disposition = p_mutation_disposition')
+    expect(body).toContain('v_existing_escalate_case = p_escalate_case')
+  })
+
+  it('invalidates a stale-policy evaluation (expires it) rather than reusing or leaving it dedup-matchable', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain('update public.safety_evaluations set expires_at = now() where id = v_existing_id')
+  })
+})
+
+describe('can_evaluate_safety_context — proves the mutation context is real and the caller\'s own, before any evaluation is recorded', () => {
+  it('is callable by authenticated, never by anon, and is not a service-role table read', () => {
+    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid) from public')
+    expect(codeOnly).toContain('grant execute on function public.can_evaluate_safety_context(text, uuid) to authenticated')
+    expect(codeOnly).not.toMatch(
+      /grant execute on function public\.can_evaluate_safety_context.*to (anon|service_role)/
+    )
+  })
+
+  it('requires an authenticated session — returns false, never trusts a missing auth.uid()', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('if auth.uid() is null then')
+    expect(body).toContain('return false;')
+  })
+
+  it('first_letter: checks recipient existence, not-self, account status, and blocked-pair — mirrors send_first_letter\'s own gate', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('p_context_id = auth.uid()')
+    expect(body).toContain("public.current_account_status() in ('restricted', 'suspended', 'banned')")
+    expect(body).toContain('tempa_private.is_correspondence_blocked_pair(auth.uid(), p_context_id)')
+    expect(body).toContain('exists (select 1 from public.profiles where id = p_context_id)')
+  })
+
+  it('reply: mirrors reply_to_letter\'s own row lookup exactly (recipient, sent, deliver_at, still awaiting reply)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('l.recipient_id = auth.uid()')
+    expect(body).toContain("l.status = 'sent'")
+    expect(body).toContain('l.deliver_at <= now()')
+    expect(body).toContain('l.reply_to_id is not null or l.expires_at > now()')
+  })
+
+  it('write_anytime: mirrors write_letter\'s own pre-insert checks (participant, blocked-pair, account status, active correspondence)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('auth.uid() <> v_corr.participant_low and auth.uid() <> v_corr.participant_high')
+    expect(body).toContain('tempa_private.is_correspondence_blocked_pair(auth.uid(), v_recipient)')
+    expect(body).toContain("public.current_account_status() in ('suspended', 'banned')")
+    expect(body).toContain("v_corr.status = 'active' and v_corr.established_at is not null")
+  })
+
+  it('never trusts a service-role table read — this function has no relationship to createServiceClient()', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body.toLowerCase()).not.toContain('service_role')
+  })
+})
+
+describe('cleanup_expired_safety_evaluations — prepared, not scheduled, never orphans an active case\'s evidence', () => {
   it('is service-role only', () => {
     expect(codeOnly).toContain(
       'revoke all on function public.cleanup_expired_safety_evaluations(interval) from public'
@@ -214,8 +314,15 @@ describe('cleanup_expired_safety_evaluations — prepared, not scheduled', () =>
 
   it('deletes based on a retention window past expiry, defaulting to 30 days', () => {
     const body = extractFunctionBody('public.cleanup_expired_safety_evaluations')
-    expect(body).toContain('where expires_at < now() - p_retention')
+    expect(body).toContain('where e.expires_at < now() - p_retention')
     expect(sql).toContain("p_retention interval default interval '30 days'")
+  })
+
+  it('excludes any evaluation whose signal is attached to an active (open or reviewing) case from deletion', () => {
+    const body = extractFunctionBody('public.cleanup_expired_safety_evaluations')
+    expect(body).toContain('not exists (')
+    expect(body).toContain('join public.safety_cases c on c.id = s.case_id')
+    expect(body).toContain("c.status in ('open', 'reviewing')")
   })
 })
 
@@ -238,6 +345,7 @@ describe('verification SQL', () => {
     }
     expect(verifySql).toContain('record_safety_evaluation')
     expect(verifySql).toContain('safety_fingerprint')
+    expect(verifySql).toContain('can_evaluate_safety_context')
     expect(verifySql).toContain('cleanup_expired_safety_evaluations')
     expect(verifySql).toContain('overall_pass')
   })

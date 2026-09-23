@@ -36,14 +36,23 @@ export type ParseEvaluateRequestResult =
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Generous abuse/DoS guard, deliberately not the Letter-1-only 2000-
-// char anti-pestering cap (lib/questions.ts's QUESTION_ANSWER_MAX_CHARS)
-// — that is a product rule the Letter RPCs themselves already enforce
-// (and reply/write-anytime are explicitly NOT subject to it, per
-// canSendLetter's own aboveMax handling), not a safety-classification
-// concern. This just keeps an arbitrarily large payload from reaching
-// the classifier at all.
-const MAX_BODY_CHARS = 20_000
+// A technical request-abuse ceiling only — deliberately NOT the
+// Letter-1-only 2000-char anti-pestering cap (lib/questions.ts's
+// QUESTION_ANSWER_MAX_CHARS). That is a PRODUCT rule the Letter RPCs
+// themselves already enforce, and reply/write-anytime are explicitly
+// NOT subject to it (canSendLetter's own `aboveMax: false` hardcoding
+// for those two surfaces — see first-contact-response.tsx/moments-
+// composer.tsx) precisely because an established correspondence has no
+// such limit. This endpoint must support everything those established
+// mutation paths legitimately support: neither the real Letter RPCs
+// (write_letter/reply_to_letter, which store the body in an ordinary
+// unbounded `text` column) nor this app's own client-side composers
+// impose any character cap on reply/write-anytime content. 200,000
+// characters is generous well past any realistic letter (tens of
+// thousands of words) while still bounding a deliberately abusive
+// payload from reaching the classifier at all — it is not, and must
+// never quietly become, a new smaller Tempa Letter limit.
+const MAX_BODY_CHARS = 200_000
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value)

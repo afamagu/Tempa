@@ -12,9 +12,10 @@
 -- architecture, restated here for reviewers):
 --
 --   member session -> authenticated Route Handler (app/api/safety/
---   evaluate) -> canonical TS classifier (lib/safety/classify.ts) ->
---   this file's server-only service-role recording RPC -> a safety
---   evaluation row.
+--   evaluate) -> public.can_evaluate_safety_context (member's own
+--   session, proves the context is real and theirs) -> canonical TS
+--   classifier (lib/safety/classify.ts) -> this file's server-only
+--   service-role recording RPC -> a safety evaluation row.
 --
 -- Ordinary authenticated/anon users have NO path to mint or mutate a
 -- safety evaluation, signal, or case themselves — every table below is
@@ -61,33 +62,53 @@
 -- observation (created at EVALUATION time for meaningful/high/severe
 -- risk, independent of whether the member goes on to actually send —
 -- an abandoned/denied attempt still leaves a signal). safety_cases is
--- the Needs Attention review OBJECT: at most one OPEN case per subject
--- (enforced by a partial unique index), aggregating every escalating
--- signal for that member rather than manufacturing a new independent
--- case per signal. 'none'/'weak' evaluations never create a signal —
--- weak observations are not automatically permanent telemetry merely
--- because they exist.
+-- the Needs Attention review OBJECT, with the full canonical Safety 2
+-- lifecycle: 'open' | 'reviewing' | 'no_action' | 'warned' |
+-- 'restricted' | 'suspended' | 'banned' | 'resolved'. Only 'open' and
+-- 'reviewing' count as ACTIVE for the one-active-case-per-subject
+-- invariant (enforced by a partial unique index over exactly those two
+-- statuses) — every other status has closed the review cycle, so the
+-- next escalation opens a fresh case. This checkpoint never transitions
+-- a case's status itself (record_safety_evaluation only ever inserts at
+-- 'open' or updates an already-active case's own aggregate fields); the
+-- actual Admin workflow that moves a case through this lifecycle is
+-- Checkpoint 7's job.
 --
--- RETENTION POLICY (documented here, NOT scheduled — see Part 6):
+-- CONTEXT AUTHORIZATION: record_safety_evaluation trusts p_context_id
+-- completely — it is the Route Handler's job (via
+-- public.can_evaluate_safety_context, Part 8 below, called with the
+-- member's own authenticated session, never the service-role client)
+-- to prove BEFORE ever calling this RPC that the caller is legitimately
+-- entitled to operate on that context under the same rules the real
+-- Letter RPCs themselves enforce. An authenticated member must not be
+-- able to manufacture a signal or open a case merely by posting
+-- syntactically-valid UUIDs for a recipient/letter/correspondence they
+-- have no real relationship to.
+--
+-- RETENTION POLICY (documented here, NOT scheduled — see Part 9):
 --   - safety_evaluations: cleaned up (deleted) once
 --     `expires_at < now() - retention`, default retention 30 days past
 --     the evaluation's own 15-minute expiry — long enough to support a
 --     dispute/debugging window, short enough not to become indefinite
 --     private-behaviour telemetry by accident. Deleting an evaluation
 --     row cascades to delete its safety_signals row too (ON DELETE
---     CASCADE) — this checkpoint deliberately gives signals no
---     independent retention clock from their own evaluation; a
---     signal's whole reason for existing is "this evaluation happened",
---     so it does not outlive that evaluation's own retention.
+--     CASCADE) — signals have no independent retention clock from their
+--     own evaluation. EXCEPT: an evaluation whose signal is attached to
+--     an ACTIVE case ('open' or 'reviewing') is never selected for
+--     cleanup at all, regardless of age — a Needs Attention case must
+--     never be left saying "N signals occurred" with fewer than N
+--     signals actually still there to inspect. Once that case closes
+--     (moves to any non-active status), its signals' evaluations become
+--     eligible for cleanup again on the next run, same as any other.
 --   - safety_cases: NOT touched by the cleanup function below at all.
---     A case is a review object with its own open/reviewed/dismissed
---     lifecycle; it must not silently disappear just because the
---     evaluations that originally fed it aged out from under it. A
---     proportionate case-retention policy (e.g. delete long-dismissed/
---     reviewed cases after some multi-month window) is deferred to a
---     later checkpoint, once Staff review (Checkpoint 7) exists to
---     actually act on a case before it could ever be cleaned up.
---   - cleanup_expired_safety_evaluations (Part 6) is PREPARED but NOT
+--     A case is a review object with its own multi-state lifecycle; it
+--     must not silently disappear just because the evaluations that
+--     originally fed it eventually age out. A proportionate case-
+--     retention policy (e.g. delete long-closed cases after some multi-
+--     month window) is deferred to a later checkpoint, once Staff
+--     review (Checkpoint 7) exists to actually act on a case before it
+--     could ever be cleaned up.
+--   - cleanup_expired_safety_evaluations (Part 9) is PREPARED but NOT
 --     scheduled — no pg_cron job is created by this migration. An
 --     operator invokes it manually, or a future migration wires it to
 --     a schedule, once this design has been reviewed.
@@ -133,15 +154,19 @@ create extension if not exists pgcrypto with schema extensions;
 -- Checkpoint 3, the mutation RPCs it will be wired into), which run
 -- under their owning role.
 --
--- Length-PREFIXES each field (byte-count-as-text, a colon, then the
--- field's own value) before concatenating, rather than joining fields
--- with a plain delimiter character — a delimiter alone is ambiguous
--- whenever the delimiter itself can appear inside a field's own value
--- (a letter body can contain any character at all). Length-prefixing
--- makes the concatenation unambiguous regardless of what a field
--- contains: knowing exactly how many characters to consume for THIS
--- field is what tells the boundary of the NEXT field's own length
--- prefix, no matter what's inside.
+-- Length-PREFIXES each field (its own `length()` — Postgres character
+-- count, taken BEFORE the final convert_to(..., 'UTF8') — not a byte/
+-- octet count; the two only diverge for non-ASCII content, and nothing
+-- here depends on which one it is, only that the same field always
+-- produces the same prefix) then a colon then the field's own value,
+-- before concatenating — rather than joining fields with a plain
+-- delimiter character, which is ambiguous whenever the delimiter
+-- itself can appear inside a field's own value (a letter body can
+-- contain any character at all). Length-prefixing makes the
+-- concatenation unambiguous regardless of what a field contains:
+-- knowing exactly how many characters to consume for THIS field is
+-- what tells the boundary of the NEXT field's own length prefix, no
+-- matter what's inside.
 --
 -- TypeScript never calculates or submits this value — the Route
 -- Handler passes the validated exact fields (p_user_id, p_surface,
@@ -239,14 +264,32 @@ create table public.safety_evaluations (
   mutation_disposition text not null check (mutation_disposition in ('allow', 'warn', 'deny')),
   escalate_case boolean not null default false,
 
-  -- Warning semantics — records only what the server actually knows.
-  -- `warning_required` is set once, at evaluation time, purely from
-  -- mutation_disposition = 'warn'. `warning_acknowledged_at` is set
-  -- later (Checkpoint 3, once a member-facing warning UI exists) only
-  -- when the member explicitly acknowledges a shown warning — an API
-  -- response having been returned is never sufficient to claim "seen",
-  -- and this migration's own record_safety_evaluation never sets it.
+  -- Warning semantics — records only what the server actually knows, at
+  -- each of four distinct moments, never conflating them (deliberately
+  -- never a field called "warning_seen" — an API response having been
+  -- returned is not evidence anything was ever shown to, let alone
+  -- read by, the member):
+  --   1. warning REQUIRED — set once, at evaluation time, purely from
+  --      mutation_disposition = 'warn'.
+  --   2. warning ISSUED — `warning_issued_at`, set later (Checkpoint 3,
+  --      once a member-facing warning UI exists) at the instant the
+  --      server actually serves that warning copy to the member, e.g.
+  --      when the Letter composer first renders it. Prepared here,
+  --      column-only — this migration's own record_safety_evaluation
+  --      never sets it.
+  --   3. warning ACKNOWLEDGED — `warning_acknowledged_at`, set later
+  --      (Checkpoint 3) only when the member takes an explicit
+  --      "I understand, send anyway" (or equivalent) action — never
+  --      inferred from the warning merely having been issued.
+  --   4. mutation actually PROCEEDED — `consumed_at` below; once
+  --      Checkpoint 3 wires evaluation consumption into the same
+  --      transaction as the real Letter mutation, `consumed_at` being
+  --      set is exactly "the member's send went through", and needs no
+  --      separate column, provided that transactional pairing stays
+  --      exact (consumption and the mutation committing or rolling back
+  --      together, never one without the other).
   warning_required boolean not null default false,
+  warning_issued_at timestamptz,
   warning_acknowledged_at timestamptz,
 
   -- Single-use transactional consumption is designed for here but NOT
@@ -303,13 +346,15 @@ create table public.safety_cases (
 
   subject_user_id uuid not null references auth.users(id) on delete cascade,
 
-  -- Deliberately the smallest possible status field, mirroring
-  -- public.reports's own "not a case-management workflow" precedent
-  -- (docs/sql/2026-09-17-reporting-and-admin-moderation.sql) —
-  -- 'reviewed'/'dismissed' both close a case out of the "at most one
-  -- open per subject" constraint below; which of the two applies is a
-  -- Checkpoint 7 (staff review) concern, not this checkpoint's.
-  status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed')),
+  -- The full canonical Safety 2 case lifecycle (not the earlier
+  -- open/reviewed/dismissed placeholder) — which specific status a case
+  -- moves through is entirely a Checkpoint 7 (staff review/Admin
+  -- workflow) concern; this checkpoint only ever inserts at 'open' and
+  -- otherwise leaves status untouched. 'open' and 'reviewing' are the
+  -- two ACTIVE statuses for the "at most one active case per subject"
+  -- constraint below — every other status has closed the review cycle.
+  status text not null default 'open'
+    check (status in ('open', 'reviewing', 'no_action', 'warned', 'restricted', 'suspended', 'banned', 'resolved')),
 
   -- Matches safety_evaluations.risk_band's own domain (not narrowed to
   -- meaningful/high/severe) — escalate_case is a rule-level POLICY
@@ -327,19 +372,20 @@ create table public.safety_cases (
   reviewed_by uuid references auth.users(id) on delete set null
 );
 
--- At most one OPEN case per subject. record_safety_evaluation's own
--- `on conflict (subject_user_id) where status = 'open' do update`
--- targets exactly this partial unique index, so a second escalating
--- evaluation for a member who already has an open case updates that
--- SAME case (bumping signal_count, raising highest_risk_band if
--- warranted) rather than manufacturing an independent new case per
--- signal. A member can accumulate more than one case over time only
--- across separate review cycles — once a case is 'reviewed'/
--- 'dismissed' (Checkpoint 7), it no longer matches this partial index,
--- and the next escalation opens a fresh one.
-create unique index safety_cases_one_open_per_subject
+-- At most one ACTIVE ('open' or 'reviewing') case per subject.
+-- record_safety_evaluation's own `on conflict (subject_user_id) where
+-- status in ('open', 'reviewing') do update` targets exactly this
+-- partial unique index, so a second escalating evaluation for a member
+-- who already has an active case updates that SAME case (bumping
+-- signal_count, raising highest_risk_band if warranted) rather than
+-- manufacturing an independent new case per signal. A member can
+-- accumulate more than one case over time only across separate review
+-- cycles — once a case moves to any non-active status (Checkpoint 7),
+-- it no longer matches this partial index, and the next escalation
+-- opens a fresh one.
+create unique index safety_cases_one_active_per_subject
   on public.safety_cases (subject_user_id)
-  where status = 'open';
+  where status in ('open', 'reviewing');
 
 create index safety_cases_status_idx on public.safety_cases (status);
 
@@ -408,27 +454,54 @@ revoke all on public.safety_signals from public, anon, authenticated;
 -- boundary, matching this repo's established "worker-only RPC" pattern
 -- (docs/sql/2026-10-01-arrival-email-delivery.sql's own header note).
 --
--- Bounded dedup/idempotency: before inserting anything, looks for an
--- existing UNCONSUMED, UNEXPIRED evaluation for the exact same (user,
--- surface, context, fingerprint) and, if found, returns THAT evaluation
--- unchanged rather than inserting a new row or creating a new signal —
--- repeated evaluation of unchanged content must not generate unlimited
--- rows. Edited content produces a different fingerprint (see
+-- Bounded dedup/idempotency, now CONCURRENCY-SAFE: a plain "SELECT
+-- existing, if none INSERT" is a textbook race under two concurrent
+-- identical requests (both SELECTs can see "nothing yet" before either
+-- INSERT commits). Before the lookup, takes a TRANSACTION-scoped
+-- advisory lock (`pg_advisory_xact_lock`, released automatically at
+-- commit/rollback, never leaked) keyed off the first 64 bits of the
+-- fingerprint itself — the fingerprint already uniquely identifies the
+-- exact (user, surface, context, body) tuple this dedup identity is
+-- about, so hashing it again would only add collision risk, not remove
+-- it. A second concurrent call with the IDENTICAL fingerprint blocks on
+-- this lock until the first call's transaction finishes, then proceeds
+-- and correctly observes whatever the first call committed — two
+-- concurrent identical evaluations can never both insert.
+--
+-- Looks for an existing UNCONSUMED, UNEXPIRED evaluation for the exact
+-- same (user, surface, context, fingerprint). If found AND its stored
+-- classifier/policy tuple (risk_band, reason_codes, mutation_
+-- disposition, escalate_case) EXACTLY matches what THIS call was just
+-- given, returns that evaluation unchanged — repeated evaluation of
+-- unchanged content must not generate unlimited rows. If found but that
+-- tuple DIFFERS (the classifier's current behavior for this exact
+-- content no longer agrees with what was recorded — e.g. a deploy
+-- landed between the two calls), the stale row is immediately expired
+-- (never left sitting around to be matched again) and a FRESH
+-- evaluation is recorded below instead — a clearance is never silently
+-- reused when its stored decision disagrees with what the classifier
+-- just produced. Edited content produces a different fingerprint (see
 -- tempa_private.safety_fingerprint) and is therefore never matched by
--- this lookup, so it always gets a fresh evaluation. A CONSUMED
--- evaluation is never a dedup candidate (the lookup's own `consumed_at
--- is null` filter) — a second mutation attempt over identical content
--- after the first evaluation was consumed always gets a brand-new
--- evaluation (and, if still meaningful/high/severe, a brand-new
--- signal), never a reused, already-spent one.
+-- this lookup at all, so it always gets a fresh evaluation regardless.
+-- A CONSUMED evaluation is never a dedup candidate (the lookup's own
+-- `consumed_at is null` filter) — a second mutation attempt over
+-- identical content after the first evaluation was consumed always gets
+-- a brand-new evaluation (and, if still meaningful/high/severe, a
+-- brand-new signal), never a reused, already-spent one.
 --
 -- Signal/case behavior: a meaningful/high/severe evaluation always
 -- creates its own signal at evaluation time (independent of whether the
 -- member ever actually completes the mutation — Checkpoint 3's
 -- consumption step is a separate concern from signal creation here).
 -- escalate_case = true additionally opens/updates the caller's single
--- open case (see safety_cases_one_open_per_subject above) rather than
--- creating an independent case per signal.
+-- ACTIVE case (see safety_cases_one_active_per_subject above) rather
+-- than creating an independent case per signal.
+--
+-- CONTEXT AUTHORIZATION is NOT this function's job — see this file's
+-- own header and public.can_evaluate_safety_context (Part 8) below;
+-- this function trusts p_user_id/p_context_id completely, exactly like
+-- every other service-role-only worker RPC in this codebase trusts its
+-- own validated parameters.
 
 create or replace function public.record_safety_evaluation(
   p_user_id uuid,
@@ -451,8 +524,13 @@ set search_path to 'pg_catalog'
 as $function$
 declare
   v_fingerprint text;
+  v_lock_key bigint;
   v_existing_id uuid;
   v_existing_expires_at timestamptz;
+  v_existing_risk_band text;
+  v_existing_reason_codes text[];
+  v_existing_mutation_disposition text;
+  v_existing_escalate_case boolean;
   v_new_id uuid;
   v_expires_at timestamptz;
   v_case_id uuid;
@@ -483,8 +561,14 @@ begin
 
   v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_body);
 
-  select e.id, e.expires_at
-  into v_existing_id, v_existing_expires_at
+  -- Concurrency guard — see this section's own header comment. Must run
+  -- BEFORE the dedup lookup below, not after.
+  v_lock_key := ('x' || substr(v_fingerprint, 1, 16))::bit(64)::bigint;
+  perform pg_advisory_xact_lock(v_lock_key);
+
+  select e.id, e.expires_at, e.risk_band, e.reason_codes, e.mutation_disposition, e.escalate_case
+  into v_existing_id, v_existing_expires_at, v_existing_risk_band, v_existing_reason_codes,
+       v_existing_mutation_disposition, v_existing_escalate_case
   from public.safety_evaluations e
   where e.user_id = p_user_id
     and e.surface = p_surface
@@ -496,8 +580,19 @@ begin
   limit 1;
 
   if v_existing_id is not null then
-    return query select v_existing_id, v_existing_expires_at, false;
-    return;
+    if v_existing_risk_band = p_risk_band
+       and v_existing_reason_codes = coalesce(p_reason_codes, '{}')
+       and v_existing_mutation_disposition = p_mutation_disposition
+       and v_existing_escalate_case = p_escalate_case
+    then
+      return query select v_existing_id, v_existing_expires_at, false;
+      return;
+    end if;
+
+    -- Stale policy — see this section's own header comment. Invalidate
+    -- immediately so it can never be dedup-matched again, then fall
+    -- through to record a fresh evaluation below.
+    update public.safety_evaluations set expires_at = now() where id = v_existing_id;
   end if;
 
   v_expires_at := now() + interval '15 minutes';
@@ -516,7 +611,7 @@ begin
   if p_escalate_case then
     insert into public.safety_cases (subject_user_id, status, highest_risk_band, signal_count)
     values (p_user_id, 'open', p_risk_band, 1)
-    on conflict (subject_user_id) where status = 'open'
+    on conflict (subject_user_id) where status in ('open', 'reviewing')
     do update set
       signal_count = public.safety_cases.signal_count + 1,
       highest_risk_band = case
@@ -544,7 +639,132 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, text
 
 
 -- ============================================================
--- 8. CLEANUP_EXPIRED_SAFETY_EVALUATIONS — prepared, NOT scheduled
+-- 8. CAN_EVALUATE_SAFETY_CONTEXT — member-session context authorization,
+--    called BEFORE record_safety_evaluation, never with the
+--    service-role client
+-- ============================================================
+-- Because a meaningful/high/severe evaluation creates a signal (and can
+-- open a case) independent of whether any mutation ever happens, an
+-- authenticated member must not be able to manufacture Safety evidence
+-- merely by posting syntactically-valid UUIDs to /api/safety/evaluate
+-- for a recipient/letter/correspondence they have no real relationship
+-- to. This function is called by the Route Handler using the ordinary
+-- per-request Supabase client that carries the member's OWN session —
+-- `auth.uid()` below resolves to that real, authenticated caller,
+-- exactly like every mutation RPC in this codebase already relies on
+-- (send_first_letter/reply_to_letter/write_letter). It is SECURITY
+-- DEFINER only because it needs to call tempa_private.
+-- is_correspondence_blocked_pair and read public.profiles/letters/
+-- correspondences the same way those RPCs already do, not because it
+-- trusts anything OTHER than the caller's own session — there is no
+-- service-role table read anywhere in this function, and it is granted
+-- to `authenticated`, never `service_role`.
+--
+-- Deliberately reuses EXACTLY the read-only portions of each real
+-- mutation RPC's own gate (re-read directly from their current
+-- definitions — docs/sql/2026-09-28-title-postcard-and-edit-window.sql
+-- — before writing this, not from memory), narrowed to what this
+-- function can actually check given the fields the Safety Route Handler
+-- itself accepts (see lib/safety/route-contract.ts — first_letter's
+-- context is only ever a recipient id, never a question_answer id, so
+-- the "is there a live Discovery entry" half of send_first_letter's own
+-- gate is intentionally out of scope here; the real RPC still enforces
+-- that itself at actual send time):
+--   - first_letter: mirrors send_first_letter's pre-insert checks other
+--     than the question_answer existence check — recipient exists, not
+--     self, caller's account not restricted/suspended/banned, no active
+--     block either direction/scope.
+--   - reply: mirrors reply_to_letter's own row lookup exactly — the
+--     letter exists, is addressed to the caller, is 'sent', has reached
+--     its own deliver_at, and is still awaiting a reply.
+--   - write_anytime: mirrors write_letter's own pre-insert checks —
+--     correspondence exists, caller is a participant, no active block,
+--     caller's account not suspended/banned, correspondence is
+--     'active' with a non-null established_at.
+-- Returns a plain boolean rather than raising, matching this function's
+-- read-only "may I?" nature — the Route Handler decides what HTTP
+-- status a `false` becomes.
+
+create or replace function public.can_evaluate_safety_context(p_surface text, p_context_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+stable
+as $function$
+declare
+  v_corr public.correspondences;
+  v_recipient uuid;
+begin
+  if auth.uid() is null then
+    return false;
+  end if;
+
+  if p_context_id is null then
+    return false;
+  end if;
+
+  if p_surface = 'first_letter' then
+    if p_context_id = auth.uid() then
+      return false;
+    end if;
+
+    if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+      return false;
+    end if;
+
+    if tempa_private.is_correspondence_blocked_pair(auth.uid(), p_context_id) then
+      return false;
+    end if;
+
+    return exists (select 1 from public.profiles where id = p_context_id);
+
+  elsif p_surface = 'reply' then
+    return exists (
+      select 1
+      from public.letters l
+      where l.id = p_context_id
+        and l.recipient_id = auth.uid()
+        and l.status = 'sent'
+        and l.deliver_at <= now()
+        and (l.reply_to_id is not null or l.expires_at > now())
+    );
+
+  elsif p_surface = 'write_anytime' then
+    select * into v_corr from public.correspondences where id = p_context_id;
+
+    if not found then
+      return false;
+    end if;
+
+    if auth.uid() <> v_corr.participant_low and auth.uid() <> v_corr.participant_high then
+      return false;
+    end if;
+
+    v_recipient := case when auth.uid() = v_corr.participant_low then v_corr.participant_high else v_corr.participant_low end;
+
+    if tempa_private.is_correspondence_blocked_pair(auth.uid(), v_recipient) then
+      return false;
+    end if;
+
+    if public.current_account_status() in ('suspended', 'banned') then
+      return false;
+    end if;
+
+    return v_corr.status = 'active' and v_corr.established_at is not null;
+
+  else
+    return false;
+  end if;
+end;
+$function$;
+
+revoke all on function public.can_evaluate_safety_context(text, uuid) from public;
+grant execute on function public.can_evaluate_safety_context(text, uuid) to authenticated;
+
+
+-- ============================================================
+-- 9. CLEANUP_EXPIRED_SAFETY_EVALUATIONS — prepared, NOT scheduled
 -- ============================================================
 -- See this file's own "RETENTION POLICY" header for the full rationale.
 -- No pg_cron job is created by this migration — this function exists so
@@ -554,6 +774,13 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, text
 -- separately-reviewed migration wires it to a schedule (the same
 -- pg_cron + pg_net pattern docs/sql/2026-10-02-arrival-email-
 -- scheduler.sql already established for the arrival-email worker).
+--
+-- Never deletes an evaluation whose signal is attached to a case that
+-- is still ACTIVE ('open' or 'reviewing') — cleanup must not orphan an
+-- active Needs Attention case from the structured evidence it's
+-- actually about, regardless of how old that evaluation has gotten.
+-- Once the case closes (moves to any other status), its signals'
+-- evaluations become ordinary cleanup candidates again like any other.
 
 create or replace function public.cleanup_expired_safety_evaluations(
   p_retention interval default interval '30 days'
@@ -566,8 +793,15 @@ as $function$
 declare
   v_count integer;
 begin
-  delete from public.safety_evaluations
-  where expires_at < now() - p_retention;
+  delete from public.safety_evaluations e
+  where e.expires_at < now() - p_retention
+    and not exists (
+      select 1
+      from public.safety_signals s
+      join public.safety_cases c on c.id = s.case_id
+      where s.evaluation_id = e.id
+        and c.status in ('open', 'reviewing')
+    );
 
   get diagnostics v_count = row_count;
   return v_count;

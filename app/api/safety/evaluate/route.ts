@@ -7,15 +7,28 @@ import { buildEvaluateResponse, parseEvaluateRequest } from '@/lib/safety/route-
 /**
  * Safety 2 — Checkpoint 2's one evaluation entrypoint.
  *
- * Trust boundary: member session -> THIS Route Handler -> the
- * canonical TS classifier (lib/safety/classify.ts) -> the server-only
- * service-role recording RPC (public.record_safety_evaluation) -> a
- * safety evaluation row. The caller's identity is derived ONLY from
- * the authenticated session below (`supabase.auth.getUser()`) — a
- * request-body `userId` is never read or trusted, and this route never
- * accepts one. The service-role client is used only AFTER that
- * session check has already succeeded, and only to call the one
+ * Trust boundary: member session -> THIS Route Handler ->
+ * public.can_evaluate_safety_context (member's OWN authenticated
+ * session, never the service-role client — proves the caller is
+ * legitimately entitled to operate on the context they named, the same
+ * way the real Letter RPCs would) -> the canonical TS classifier
+ * (lib/safety/classify.ts) -> the server-only service-role recording
+ * RPC (public.record_safety_evaluation) -> a safety evaluation row. The
+ * caller's identity is derived ONLY from the authenticated session
+ * below (`supabase.auth.getUser()`) — a request-body `userId` is never
+ * read or trusted, and this route never accepts one. The service-role
+ * client is used only AFTER both the session check AND the context-
+ * authorization check have already succeeded, and only to call the one
  * trusted recording RPC — never to read/write anything else.
+ *
+ * The context-authorization check exists because a meaningful/high/
+ * severe evaluation creates a signal (and can open a case)
+ * independent of whether any mutation ever happens — an authenticated
+ * member must not be able to manufacture Safety evidence merely by
+ * posting syntactically-valid UUIDs for a recipient/letter/
+ * correspondence they have no real relationship to. An unauthorized
+ * context fails here, before classification or any write to
+ * safety_evaluations/safety_signals/safety_cases.
  *
  * Never returns the classifier's own risk band, reason codes, or
  * extracted indicators to the browser — only a coarse member-facing
@@ -47,6 +60,28 @@ export async function POST(request: NextRequest) {
   const parsed = parseEvaluateRequest(payload)
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
+  }
+
+  // Context authorization — via the member's own authenticated
+  // session/RLS path, never the service-role client. Must happen
+  // before classification or any write; see this route's own doc
+  // comment above.
+  const { data: authorized, error: authorizationError } = await supabase.rpc('can_evaluate_safety_context', {
+    p_surface: parsed.request.surface,
+    p_context_id: parsed.request.contextId,
+  })
+
+  if (authorizationError) {
+    console.error('[safety] can_evaluate_safety_context failed', {
+      message: authorizationError.message,
+      code: authorizationError.code,
+      surface: parsed.request.surface,
+    })
+    return NextResponse.json({ error: 'Could not evaluate this content right now. Please try again.' }, { status: 500 })
+  }
+
+  if (!authorized) {
+    return NextResponse.json({ error: 'You are not able to write in this context.' }, { status: 403 })
   }
 
   const classification = classifyContent(parsed.request.body)

@@ -71,8 +71,29 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
   })
 
   it('rejects an absurdly long body as an abuse guard', () => {
-    const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'x'.repeat(20_001) })
+    const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'x'.repeat(200_001) })
     expect(result.ok).toBe(false)
+  })
+
+  it('does not impose a smaller Safety-only ceiling on established reply/write-anytime correspondence, which has no product-level cap', () => {
+    // Well past the Letter-1-only 2000-char first-contact cap
+    // (QUESTION_ANSWER_MAX_CHARS) and well past what any real letter
+    // would ever reach, but still comfortably under this endpoint's own
+    // abuse guard — proves the guard is generous enough not to quietly
+    // become a new, smaller Tempa Letter limit.
+    const longEstablishedLetter = 'This is a very long, otherwise-legitimate letter. '.repeat(1000)
+    expect(longEstablishedLetter.length).toBeGreaterThan(20_000)
+    expect(longEstablishedLetter.length).toBeLessThan(200_000)
+
+    const replyResult = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: longEstablishedLetter })
+    expect(replyResult.ok).toBe(true)
+
+    const writeAnytimeResult = parseEvaluateRequest({
+      surface: 'write_anytime',
+      correspondenceId: CORRESPONDENCE_ID,
+      body: longEstablishedLetter,
+    })
+    expect(writeAnytimeResult.ok).toBe(true)
   })
 
   it('rejects a non-object payload', () => {
