@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import LetterReader from './letter-reader'
+
+const source = readFileSync(path.join(__dirname, 'letter-reader.tsx'), 'utf8')
 
 // Static render only — this codebase's established Vitest convention
 // has no DOM-mounting/simulated-scroll library (see dispatch-
@@ -40,5 +44,16 @@ describe('LetterReader — tags each paragraph for the resume-position tracker',
     )
     expect(html.toLowerCase()).not.toContain('scrolltop')
     expect(html.toLowerCase()).not.toContain('pixel')
+  })
+})
+
+describe('LetterReader — ribbon positioning uses the saved char offset, not paragraph top alone (independent audit correction)', () => {
+  it('computes the ribbon top from both the paragraph\'s offsetTop and the estimated fraction of the saved char offset', () => {
+    expect(source).toContain('savedCharOffset !== null ? estimateScrollFraction(savedCharOffset, text.length) : 0')
+    expect(source).toContain('target.offsetTop + fraction * target.offsetHeight')
+  })
+
+  it('re-runs the ribbon-positioning effect whenever savedCharOffset changes, not only the paragraph index', () => {
+    expect(source).toMatch(/\[savedParagraphIndex, savedCharOffset, ready, body\]/)
   })
 })

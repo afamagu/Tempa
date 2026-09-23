@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getReadingPlaceState, recordReadingProgress, saveReadingPlace, removeSavedReadingPlace } from '@/lib/reading-places'
+import {
+  estimateScrollFraction,
+  getReadingPlaceState,
+  recordReadingProgress,
+  saveReadingPlace,
+  removeSavedReadingPlace,
+} from '@/lib/reading-places'
 import { findScrollRoot, getCurrentReadingAnchor, scrollToAnchor } from '@/app/reading-position'
 import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
@@ -146,15 +152,18 @@ export default function LetterReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Position the ribbon at the saved paragraph whenever it changes (or
-  // once paragraphs first render) — decoupled from the resume-tracking
-  // effect above since it only reacts to savedParagraphIndex, not to
-  // scroll. Uses the paragraph's own offsetTop within this component's
-  // positioned container (not a scroll-root-relative measurement, since
-  // this positions a ribbon in the document's own layout flow, not a
-  // live scroll position — see app/reading-place-controls.tsx's own doc
-  // comment). queueMicrotask defers the setState call out of the effect
-  // body itself, the established pattern here for satisfying
+  // Positions the ribbon at the saved paragraph AND its intra-paragraph
+  // offset — paragraph top plus the saved offset's estimated fraction of
+  // that paragraph's own rendered height, so moving a saved place within
+  // the same paragraph visibly moves the ribbon (independent audit
+  // correction: previously offsetTop alone, paragraph-level only).
+  // estimateScrollFraction's own clamp/zero-length guard is what makes a
+  // null/stale offset fall back safely to the paragraph's own top. Uses
+  // offsetTop/offsetHeight (this component's own positioned-container
+  // layout position), not a scroll-root-relative measurement — this
+  // positions a ribbon in the document's own layout flow, not a live
+  // scroll position. queueMicrotask defers the setState call out of the
+  // effect body itself, the established pattern here for satisfying
   // react-hooks/set-state-in-effect (see letterhead-postcard.tsx) when
   // syncing a DOM measurement — taken only after paint — into state.
   useEffect(() => {
@@ -166,10 +175,12 @@ export default function LetterReader({
     if (!container) return
     const target = container.querySelector(`[data-paragraph-index="${savedParagraphIndex}"]`)
     if (target instanceof HTMLElement) {
-      const top = target.offsetTop
+      const text = target.textContent ?? ''
+      const fraction = savedCharOffset !== null ? estimateScrollFraction(savedCharOffset, text.length) : 0
+      const top = target.offsetTop + fraction * target.offsetHeight
       queueMicrotask(() => setRibbonTop(top))
     }
-  }, [savedParagraphIndex, ready, body])
+  }, [savedParagraphIndex, savedCharOffset, ready, body])
 
   async function handleSave() {
     const container = containerRef.current
