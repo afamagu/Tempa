@@ -28,12 +28,20 @@ import {
   riskBandAtLeast,
   type ContentReasonCode,
   type MutationDisposition,
+  type ReasonCode,
   type RiskBand,
 } from './reason-codes'
 
 export type ClassificationResult = {
   riskBand: RiskBand
-  reasonCodes: ContentReasonCode[]
+  // Checkpoint 6 — widened from ContentReasonCode[] to the full
+  // ReasonCode[] union (backward compatible: ContentReasonCode is
+  // already a subset) so combineClassifications can also accept a
+  // classifyImageText result (lib/safety/image-ocr.ts), whose reason
+  // codes are the reserved IMAGE_TEXT_FINANCIAL_SIGNAL/IMAGE_TEXT_
+  // PAYMENT_DETAILS — never a behavioral code, which this module's own
+  // classifyContent/classifyImageText still never produce.
+  reasonCodes: ReasonCode[]
   mutationDisposition: MutationDisposition
   /** Whether this evaluation should open/update a Needs Attention
    * case, independent of whether the mutation itself is allowed. */
@@ -232,7 +240,7 @@ export function combineClassifications(results: ClassificationResult[]): Classif
   let band: RiskBand = 'none'
   let disposition: MutationDisposition = 'allow'
   let escalateCase = false
-  const reasonCodeSet = new Set<ContentReasonCode>()
+  const reasonCodeSet = new Set<ReasonCode>()
 
   for (const result of results) {
     band = maxRiskBand(band, result.riskBand)

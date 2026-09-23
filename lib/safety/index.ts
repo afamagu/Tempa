@@ -26,3 +26,8 @@ export {
   type RiskBand,
   type MutationDisposition,
 } from './reason-codes'
+// Checkpoint 6 — the one OCR adapter boundary + its classifier
+// integration (see image-ocr.ts's own header for the full scope/
+// privacy/deferral rationale). extractImageSafetyText currently always
+// resolves 'unavailable' — no real extraction runs yet.
+export { extractImageSafetyText, classifyImageText, type ImageOcrResult } from './image-ocr'

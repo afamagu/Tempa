@@ -44,8 +44,13 @@ export const BEHAVIORAL_REASON_CODES = [
   'ACCOUNT_VELOCITY',
 ] as const
 
-/** Codes reserved for the image/OCR pipeline (Checkpoint 6). Defined
- * now for taxonomy completeness; not produced by this checkpoint. */
+/** Codes for the image/OCR pipeline (Checkpoint 6 — lib/safety/
+ * image-ocr.ts's own classifyImageText). Real OCR extraction is
+ * currently DEFERRED (extractImageSafetyText always resolves
+ * 'unavailable' — see that module's own header for the concrete,
+ * reported reason), so these are not produced by any live evaluation
+ * yet, but the classifier-integration wiring that WOULD produce them
+ * from real extracted text is built and tested now. */
 export const IMAGE_REASON_CODES = ['IMAGE_TEXT_FINANCIAL_SIGNAL', 'IMAGE_TEXT_PAYMENT_DETAILS'] as const
 
 export const REASON_CODES = [...CONTENT_REASON_CODES, ...BEHAVIORAL_REASON_CODES, ...IMAGE_REASON_CODES] as const
