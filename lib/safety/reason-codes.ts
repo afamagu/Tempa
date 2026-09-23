@@ -2,9 +2,11 @@
 // taxonomy. A reason code is evidence for review, never a factual
 // declaration about someone's character or intent — this module only
 // defines the vocabulary; lib/safety/classify.ts decides when a code
-// actually fires from content, and a future behavioral engine
-// (Checkpoint 5) decides when the BEHAVIORAL codes fire from account
-// activity. Nothing here stores or implies "SCAMMER = TRUE".
+// actually fires from content, and the deterministic behavioral engine
+// (Checkpoint 5 — tempa_private.evaluate_behavior, docs/sql/2026-10-03-
+// safety-persistence.sql's own Part 6B) decides when the BEHAVIORAL
+// codes fire from account activity. Nothing here stores or implies
+// "SCAMMER = TRUE".
 
 /** Codes classify.ts (Checkpoint 1) can actually produce from a single
  * piece of text. There is deliberately no umbrella "FINANCIAL_

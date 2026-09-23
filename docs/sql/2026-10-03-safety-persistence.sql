@@ -319,10 +319,22 @@ create table public.safety_evaluations (
   id uuid primary key default gen_random_uuid(),
 
   user_id uuid not null references auth.users(id) on delete cascade,
+  -- Checkpoint 5 — the seven 'behavior_*' values are written only by
+  -- tempa_private.record_behavior_signal (Part 11 below), never by
+  -- record_safety_evaluation (whose own p_surface check, unchanged,
+  -- still only ever accepts the seven CONTENT surfaces above it — a
+  -- behavioral evaluation is never something a client request can
+  -- produce). Kept in the SAME table/CHECK/domain as the content
+  -- surfaces rather than a parallel table, per that checkpoint's own
+  -- explicit "do not make a second moderation-case architecture"
+  -- instruction.
   surface text not null check (
     surface in (
       'first_letter', 'reply', 'write_anytime',
-      'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply'
+      'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply',
+      'behavior_mass_first_contact', 'behavior_near_duplicate_outreach',
+      'behavior_high_contact_velocity', 'behavior_repeated_solicitation',
+      'behavior_report_spike', 'behavior_block_spike', 'behavior_account_velocity'
     )
   ),
   context_id uuid not null,
@@ -353,6 +365,26 @@ create table public.safety_evaluations (
 
   -- See tempa_private.safety_fingerprint above.
   fingerprint text not null,
+
+  -- Checkpoint 5 — populated ONLY for surface = 'first_letter' (by
+  -- record_safety_evaluation, from tempa_private.outreach_fingerprint
+  -- below), null for every other surface including the behavioral ones.
+  -- Deliberately NOT the same value as fingerprint above: fingerprint
+  -- hashes context_id (the recipient) IN, by design (so editing OR
+  -- re-addressing invalidates clearance) — that is exactly what makes it
+  -- unusable for detecting "the same pitch sent to different people."
+  -- outreach_fingerprint hashes only (user_id, normalized body text),
+  -- deliberately WITHOUT context_id, so the SAME first-contact pitch
+  -- sent to several different recipients produces the SAME value here,
+  -- letting NEAR_DUPLICATE_OUTREACH (Part 12) count distinct recipients
+  -- sharing one fingerprint without ever storing or re-reading raw
+  -- Letter text itself — only this one-way hash. This is deliberately
+  -- EXACT/normalized-text matching (trim, collapse whitespace, lower-
+  -- case) — a real fuzzy/similarity match (minhash, simhash, edit
+  -- distance) is NOT implemented here; see tempa_private.behavior_policy
+  -- below for why that is an explicit, documented deferral rather than a
+  -- silent gap.
+  outreach_fingerprint text,
 
   -- The classifier's own three independent axes (lib/safety/
   -- classify.ts's ClassificationResult) — recorded exactly as reported
@@ -421,6 +453,15 @@ create index safety_evaluations_dedup_idx
   where consumed_at is null;
 
 create index safety_evaluations_expires_at_idx on public.safety_evaluations (expires_at);
+
+-- Checkpoint 5 — supports NEAR_DUPLICATE_OUTREACH's own "how many
+-- distinct recipients share this exact outreach fingerprint recently"
+-- lookup (Part 12). Partial: only first_letter rows ever populate this
+-- column, so a full index would waste space indexing NULLs for every
+-- other surface.
+create index safety_evaluations_outreach_fingerprint_idx
+  on public.safety_evaluations (user_id, outreach_fingerprint, created_at)
+  where outreach_fingerprint is not null;
 
 alter table public.safety_evaluations enable row level security;
 
@@ -553,6 +594,18 @@ create table public.safety_signals (
   source_content_id uuid,
   proceeded_at timestamptz,
 
+  -- Checkpoint 5 — the structured counts/window a BEHAVIORAL signal
+  -- (surface = 'behavior_*') was actually observed from, e.g.
+  -- {"window_hours": 24, "distinct_recipients": 9}. Null for every
+  -- content signal (first_letter/reply/write_anytime/dispatch_*/
+  -- question_answer), which has nothing analogous — its own evidence is
+  -- already the reason_codes above plus (once proceeded) source_
+  -- content_id. Numbers and labels ONLY, never a raw Letter/Dispatch/
+  -- Reply body or any member-written text — see tempa_private.
+  -- evaluate_behavior's own header for how every value passed here is
+  -- constructed (jsonb_build_object over counts/intervals exclusively).
+  observed_counts jsonb,
+
   created_at timestamptz not null default now()
 );
 
@@ -563,7 +616,564 @@ alter table public.safety_signals enable row level security;
 
 revoke all on public.safety_signals from public, anon, authenticated;
 -- Same reasoning as safety_cases above — no policy, no grant to any
--- client role, written only by record_safety_evaluation.
+-- client role, written only by record_safety_evaluation and (Checkpoint
+-- 5) tempa_private.record_behavior_signal below — both SECURITY
+-- DEFINER, neither reachable by a client role.
+
+
+-- ============================================================
+-- 6B. CHECKPOINT 5 — BEHAVIORAL / CROSS-CORRESPONDENCE SIGNALS
+-- ============================================================
+-- Complements the content classifier (Checkpoints 1-4, which judges one
+-- message's text in isolation) with pattern detection ACROSS a member's
+-- own activity — the things no single benign-looking message can reveal
+-- on its own: unusually high first-contact volume, many distinct
+-- recipients in a short period, the same pitch sent to several people,
+-- repeated financial-solicitation signals across different recipients,
+-- meaningful report/block spikes, and unusual acceleration relative to
+-- account age. No single one of these means "scammer" — this records
+-- STRUCTURED OBSERVATIONS (counts, a window, a reason code), never a
+-- permanent SCAMMER=true label, and never a raw Letter/Dispatch/Reply
+-- body (see tempa_private.evaluate_behavior's own body-construction
+-- below — every p_observed value it builds is numbers/intervals only).
+--
+-- DATA SOURCES (read-only data audit, performed before writing this):
+--   - public.letters — sender_id/recipient_id/created_at, and the FIRST-
+--     CONTACT DEFINITION already locked by docs/sql/2026-09-10-admin-
+--     overview-metrics.sql's own audit: reply_to_id IS NULL AND
+--     question_answer_id IS NOT NULL. A bare `reply_to_id is null` is
+--     NOT sufficient — write_letter's own ordinary correspondence
+--     letters also have a null reply_to_id; only send_first_letter ever
+--     sets question_answer_id, so the AND is what actually isolates a
+--     genuine first-contact letter. Confirmed by direct inspection of
+--     the live table/RPCs, not assumed.
+--   - public.safety_signals — this checkpoint's own prior CONTENT
+--     signals (financial-solicitation-family reason codes, across
+--     DISTINCT context_id) power REPEATED_SOLICITATION; no raw body is
+--     ever read from here, only user_id/surface/context_id/reason_codes,
+--     exactly the columns that table already exposes.
+--   - public.reports — reported_user_id/reporter_user_id/created_at
+--     power REPORT_SPIKE (distinct reporters against the subject in a
+--     window). reports.reports_reporter_target_unique is per-TARGET, not
+--     per-reported-user, so a subject can legitimately accrue several
+--     reports from several reporters against several different pieces of
+--     their own content — exactly what a spike needs to count.
+--   - public.blocked_users — blocked_id/created_at power BLOCK_SPIKE
+--     (count of blocks against the subject in a window); its own primary
+--     key (blocker_id, blocked_id) already guarantees one row per
+--     blocker, so a plain count is already a distinct-blocker count.
+--   - auth.users.created_at — account age for ACCOUNT_VELOCITY, per the
+--     SAME "auth.users.created_at is guaranteed by Supabase itself"
+--     decision docs/sql/2026-09-10-admin-overview-metrics.sql already
+--     made (public.profiles' own created_at is not confirmable from this
+--     repo's tracked migration history — the table predates it).
+--   - Dispatch Replies: deliberately NOT wired into any Checkpoint 5
+--     detection — re-reading create_reply/report_content/block_user
+--     found no first-contact-shaped, cross-recipient-fan-out pattern a
+--     Reply can produce that Letters/reports/blocks don't already cover
+--     for this launch set; nothing here was material enough to add a
+--     fourth data source for no corresponding new signal.
+--
+-- Explicitly NOT built, per this checkpoint's own scope limits: no
+-- device fingerprinting, no browser fingerprinting, no IP-address scam
+-- heuristic (IP data remains appropriate only for legitimate security/
+-- rate-limiting purposes — Checkpoint 9), no country-mismatch-as-fraud
+-- heuristic, no giant analytics/event-tracking subsystem (every count
+-- below is computed on demand from tables that already exist for other
+-- reasons, never a new event-log table), no automatic ban/suspension
+-- (every detection below only ever calls record_behavior_signal, which
+-- can escalate a case for review — Checkpoint 8 alone owns graduated
+-- restriction/suspension), and no duplication of Checkpoint 9's request/
+-- endpoint rate limiting (a behavioral SIGNAL answers "does this
+-- member's pattern deserve Safety review?", never "how many requests
+-- will the system technically permit?").
+
+-- ------------------------------------------------------------
+-- 6B-1. TEMPA_PRIVATE.OUTREACH_FINGERPRINT — see safety_evaluations.
+--       outreach_fingerprint's own column comment above for why this is
+--       a SEPARATE hash from tempa_private.safety_fingerprint (that one
+--       deliberately hashes context_id IN; this one deliberately leaves
+--       it OUT, which is exactly what lets the same pitch sent to
+--       different recipients collide here).
+-- ------------------------------------------------------------
+-- Normalizes only trivially (trim, collapse internal whitespace,
+-- lowercase) before hashing — this is EXACT matching over a normalized
+-- string, not fuzzy/similarity matching. A real near-duplicate detector
+-- (minhash/simhash/edit-distance over shingled text) would need to
+-- retain considerably more private-text-derived structure to compare
+-- documents that are similar but not textually identical after
+-- normalization — exactly the "excessive private-text-derived data"
+-- this checkpoint's own instructions say to avoid. Reliable exact/
+-- normalized duplicate detection is implemented now; true fuzzy
+-- similarity is explicitly and deliberately DEFERRED, not silently
+-- pretended to be solved, to a future checkpoint that can weigh that
+-- retention tradeoff on its own.
+create or replace function tempa_private.outreach_fingerprint(p_user_id uuid, p_body text)
+returns text
+language sql
+immutable
+set search_path to 'pg_catalog'
+as $$
+  select encode(
+    digest(
+      p_user_id::text || ':' || lower(regexp_replace(trim(both from coalesce(p_body, '')), '\s+', ' ', 'g')),
+      'sha256'
+    ),
+    'hex'
+  )
+$$;
+
+revoke all on function tempa_private.outreach_fingerprint(uuid, text) from public, anon, authenticated, service_role;
+
+
+-- ------------------------------------------------------------
+-- 6B-2. TEMPA_PRIVATE.SOLICITATION_REASON_CODES — the one place the
+--       "financial solicitation family" of CONTENT_REASON_CODES (lib/
+--       safety/reason-codes.ts) is enumerated for behavioral purposes,
+--       reused by every solicitation-related check below rather than
+--       repeating the literal array in more than one place. Deliberately
+--       EXCLUDES SUSPICIOUS_LINK/PHISHING_SIGNAL (a different risk
+--       shape — link/phishing patterns, not a money ask) and INCLUDES
+--       OFF_PLATFORM_ESCALATION (the objective's own explicit "off-
+--       platform contact combined with financial solicitation across
+--       activity" example — an off-platform push repeated across
+--       several recipients is exactly the cross-correspondence pattern
+--       REPEATED_SOLICITATION exists to catch, not a new eighth reason
+--       code).
+-- ------------------------------------------------------------
+create or replace function tempa_private.solicitation_reason_codes()
+returns text[]
+language sql
+immutable
+set search_path to 'pg_catalog'
+as $$
+  select array[
+    'DIRECT_MONEY_REQUEST', 'LOAN_OR_BILL_REQUEST', 'PAYMENT_DETAILS',
+    'CRYPTO_SOLICITATION', 'INVESTMENT_SOLICITATION', 'GIFT_CARD_REQUEST',
+    'EMERGENCY_MONEY_REQUEST', 'OFF_PLATFORM_ESCALATION'
+  ]
+$$;
+
+revoke all on function tempa_private.solicitation_reason_codes() from public, anon, authenticated, service_role;
+
+
+-- ------------------------------------------------------------
+-- 6B-3. TEMPA_PRIVATE.BEHAVIOR_POLICY — the one centralized, documented
+--       policy/config module for every Checkpoint 5 window/threshold/
+--       risk-band/escalation default, per this checkpoint's own explicit
+--       "do not pick thresholds arbitrarily and hide them in scattered
+--       code" instruction. A single `language sql` function (not a
+--       mutable table) deliberately: these are launch DEFAULTS meant to
+--       be reviewed and tuned once real beta data exists (Checkpoint 7/8
+--       territory for an actual tunable-from-admin-UI mechanism, out of
+--       this checkpoint's scope) — a function keeps them in ONE place,
+--       reviewable in a single diff, without standing up a new mutable-
+--       config table's own RLS/grants/admin-write-path for a value
+--       nothing outside this migration reads today.
+--
+-- Every threshold below is deliberately CONSERVATIVE — "an enthusiastic
+-- legitimate penpal is not treated as abusive merely for writing several
+-- people" is the guiding rule throughout, not the tightest bound that
+-- could technically be justified. Every window is BOUNDED (rolling, not
+-- a lifetime counter) — old activity ages out of every check below on
+-- its own, simply by no longer falling inside the interval.
+-- ------------------------------------------------------------
+create or replace function tempa_private.behavior_policy()
+returns table (
+  mass_first_contact_window interval,
+  mass_first_contact_threshold integer,
+  mass_first_contact_risk_band text,
+  mass_first_contact_escalate boolean,
+
+  high_velocity_window interval,
+  high_velocity_distinct_recipients_threshold integer,
+  high_velocity_risk_band text,
+  high_velocity_escalate boolean,
+
+  near_duplicate_window interval,
+  near_duplicate_distinct_recipients_threshold integer,
+  near_duplicate_risk_band text,
+  near_duplicate_escalate boolean,
+
+  repeated_solicitation_window interval,
+  repeated_solicitation_distinct_contexts_threshold integer,
+  repeated_solicitation_risk_band text,
+  repeated_solicitation_escalate boolean,
+
+  report_spike_window interval,
+  report_spike_distinct_reporters_threshold integer,
+  report_spike_risk_band text,
+  report_spike_escalate boolean,
+
+  block_spike_window interval,
+  block_spike_threshold integer,
+  block_spike_risk_band text,
+  block_spike_escalate boolean,
+
+  account_velocity_new_account_age interval,
+  account_velocity_window interval,
+  account_velocity_distinct_recipients_threshold integer,
+  account_velocity_risk_band text,
+  account_velocity_escalate boolean
+)
+language sql
+immutable
+set search_path to 'pg_catalog'
+as $$
+  select
+    interval '24 hours', 20, 'meaningful', false,
+    interval '1 hour', 8, 'meaningful', false,
+    interval '24 hours', 4, 'meaningful', false,
+    interval '72 hours', 3, 'high', true,
+    interval '24 hours', 3, 'high', true,
+    interval '24 hours', 5, 'meaningful', false,
+    interval '72 hours', interval '24 hours', 5, 'meaningful', false
+$$;
+
+revoke all on function tempa_private.behavior_policy() from public, anon, authenticated, service_role;
+
+
+-- ------------------------------------------------------------
+-- 6B-4. TEMPA_PRIVATE.RECORD_BEHAVIOR_SIGNAL — the one trusted write
+--       path for a behavioral observation, deliberately SEPARATE from
+--       record_safety_evaluation (Part 7 below) rather than widening
+--       that function's own signature a further time: a behavioral
+--       observation has no Question-answer/secondary-context/title/
+--       topics/Postcard, no member-facing mutation to gate (mutation_
+--       disposition is always 'allow' — there is nothing to warn about
+--       or deny), and — critically — needs an expiry that spans its own
+--       OBSERVATION WINDOW (so identical repeated observations within
+--       that same window dedupe against each other), not the generic
+--       ~15-minute content-evaluation expiry, which exists for a
+--       completely different reason (bounding how long an unconsumed
+--       content clearance stays redeemable). Writes into the EXACT SAME
+--       safety_evaluations/safety_signals/safety_cases tables as
+--       record_safety_evaluation — never a parallel architecture — using
+--       the SAME dedup-by-fingerprint shape, the SAME one-active-case
+--       upsert, and the SAME tempa_private.safety_fingerprint helper
+--       (title/topics/postcard/question_answer_id/secondary_context_id
+--       all passed null — none apply to a behavioral surface).
+--
+-- IDEMPOTENCY / DEDUP (per this checkpoint's own explicit instruction):
+-- p_observed is a deterministic jsonb payload the caller builds from
+-- real counts; its ::text cast is Postgres's own canonical, stable
+-- serialization, so an UNCHANGED observation (same subject, same
+-- reason code, same counts) produces the exact same fingerprint every
+-- time it is recomputed. Because expires_at here is set to p_window
+-- (not 15 minutes), that fingerprint stays a valid dedup match for the
+-- observation's own FULL window, not just a few minutes — a repeated
+-- evaluate_behavior run over unchanged activity within the same window
+-- hits the existing, unconsumed, unexpired row below and returns
+-- without inserting a second signal or bumping a case's signal_count.
+-- Only once the underlying counts genuinely change (a real new
+-- observation) does a fresh evaluation/signal get recorded. Same
+-- advisory-lock concurrency guard as record_safety_evaluation, same
+-- reasoning.
+-- ------------------------------------------------------------
+create or replace function tempa_private.record_behavior_signal(
+  p_subject_user_id uuid,
+  p_reason_code text,
+  p_risk_band text,
+  p_window interval,
+  p_observed jsonb,
+  p_escalate_case boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  v_surface text;
+  v_body text;
+  v_fingerprint text;
+  v_lock_key bigint;
+  v_existing_id uuid;
+  v_new_id uuid;
+  v_case_id uuid;
+begin
+  v_surface := 'behavior_' || lower(p_reason_code);
+
+  if v_surface not in (
+    'behavior_mass_first_contact', 'behavior_near_duplicate_outreach',
+    'behavior_high_contact_velocity', 'behavior_repeated_solicitation',
+    'behavior_report_spike', 'behavior_block_spike', 'behavior_account_velocity'
+  ) then
+    raise exception 'Unknown behavioral reason code: %', p_reason_code using errcode = '22023';
+  end if;
+
+  -- p_observed's own ::text cast — never raw Letter/Dispatch/Reply text.
+  -- Callers (tempa_private.evaluate_behavior below) only ever build this
+  -- from jsonb_build_object over counts/intervals; there is no code path
+  -- here that could accept a member's own written words.
+  v_body := p_observed::text;
+
+  v_fingerprint := tempa_private.safety_fingerprint(
+    p_subject_user_id, v_surface, p_subject_user_id, null, null, null, null, null, v_body
+  );
+
+  v_lock_key := ('x' || substr(v_fingerprint, 1, 16))::bit(64)::bigint;
+  perform pg_advisory_xact_lock(v_lock_key);
+
+  select e.id into v_existing_id
+  from public.safety_evaluations e
+  where e.user_id = p_subject_user_id
+    and e.surface = v_surface
+    and e.context_id = p_subject_user_id
+    and e.fingerprint = v_fingerprint
+    and e.consumed_at is null
+    and e.expires_at > now()
+  order by e.created_at desc
+  limit 1;
+
+  if v_existing_id is not null then
+    -- Same window, same observation — already recorded, nothing new to
+    -- add (see this function's own header for the full reasoning).
+    return;
+  end if;
+
+  insert into public.safety_evaluations (
+    user_id, surface, context_id, fingerprint,
+    risk_band, reason_codes, mutation_disposition, escalate_case,
+    expires_at
+  ) values (
+    p_subject_user_id, v_surface, p_subject_user_id, v_fingerprint,
+    p_risk_band, array[p_reason_code], 'allow', p_escalate_case,
+    now() + p_window
+  )
+  returning id into v_new_id;
+
+  if p_escalate_case then
+    insert into public.safety_cases (subject_user_id, status, highest_risk_band, signal_count)
+    values (p_subject_user_id, 'open', p_risk_band, 1)
+    on conflict (subject_user_id) where status in ('open', 'reviewing')
+    do update set
+      signal_count = public.safety_cases.signal_count + 1,
+      highest_risk_band = case
+        when tempa_private.safety_risk_band_rank(excluded.highest_risk_band)
+           > tempa_private.safety_risk_band_rank(public.safety_cases.highest_risk_band)
+        then excluded.highest_risk_band
+        else public.safety_cases.highest_risk_band
+      end,
+      updated_at = now()
+    returning id into v_case_id;
+  end if;
+
+  insert into public.safety_signals (
+    evaluation_id, user_id, surface, context_id, risk_band, reason_codes, case_id, observed_counts
+  )
+  values (
+    v_new_id, p_subject_user_id, v_surface, p_subject_user_id, p_risk_band, array[p_reason_code], v_case_id, p_observed
+  )
+  on conflict (evaluation_id) do nothing;
+end;
+$function$;
+
+revoke all on function tempa_private.record_behavior_signal(uuid, text, text, interval, jsonb, boolean) from public, anon, authenticated, service_role;
+
+
+-- ------------------------------------------------------------
+-- 6B-5. TEMPA_PRIVATE.EVALUATE_BEHAVIOR — the one deterministic
+--       dispatcher every mutation point (record_safety_evaluation below,
+--       report_content, block_user — docs/sql/2026-10-07-safety-
+--       checkpoint5-behavior-signals.sql) calls. Each parameter controls
+--       which subset of checks actually runs, so a given call site only
+--       pays for the queries it actually needs:
+--         p_first_contact_outreach_fingerprint — non-null only when this
+--           call is for a first_letter evaluation; runs MASS_FIRST_
+--           CONTACT/HIGH_CONTACT_VELOCITY/ACCOUNT_VELOCITY (all read
+--           public.letters directly, independent of any one message's
+--           own content risk) and NEAR_DUPLICATE_OUTREACH (reads this
+--           exact fingerprint against safety_evaluations.
+--           outreach_fingerprint).
+--         p_new_content_reason_codes — this call's own just-created
+--           signal's reason codes, any surface; runs REPEATED_
+--           SOLICITATION only when they overlap the solicitation family.
+--         p_report_check / p_block_check — run REPORT_SPIKE/BLOCK_SPIKE.
+--       Every detection below only ever calls record_behavior_signal
+--       (which can escalate a case for review) — nothing here mutates
+--       account_enforcement_state, suspends, restricts, or bans; that
+--       authority belongs to Checkpoint 8 alone, per this checkpoint's
+--       own explicit policy boundary.
+-- ------------------------------------------------------------
+create or replace function tempa_private.evaluate_behavior(
+  p_subject_user_id uuid,
+  p_first_contact_outreach_fingerprint text default null,
+  p_new_content_reason_codes text[] default null,
+  p_report_check boolean default false,
+  p_block_check boolean default false
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  v_policy record;
+  v_count integer;
+  v_distinct_recipients integer;
+  v_account_created_at timestamptz;
+begin
+  select * into v_policy from tempa_private.behavior_policy();
+
+  if p_first_contact_outreach_fingerprint is not null then
+
+    -- MASS_FIRST_CONTACT — raw first-contact volume, any recipients.
+    select count(*) into v_count
+    from public.letters
+    where sender_id = p_subject_user_id
+      and reply_to_id is null and question_answer_id is not null
+      and created_at > now() - v_policy.mass_first_contact_window;
+
+    if v_count >= v_policy.mass_first_contact_threshold then
+      perform tempa_private.record_behavior_signal(
+        p_subject_user_id, 'MASS_FIRST_CONTACT', v_policy.mass_first_contact_risk_band,
+        v_policy.mass_first_contact_window,
+        jsonb_build_object(
+          'window_hours', extract(epoch from v_policy.mass_first_contact_window) / 3600,
+          'first_contact_count', v_count
+        ),
+        v_policy.mass_first_contact_escalate
+      );
+    end if;
+
+    -- HIGH_CONTACT_VELOCITY — distinct recipients in a short burst.
+    select count(distinct recipient_id) into v_distinct_recipients
+    from public.letters
+    where sender_id = p_subject_user_id
+      and reply_to_id is null and question_answer_id is not null
+      and created_at > now() - v_policy.high_velocity_window;
+
+    if v_distinct_recipients >= v_policy.high_velocity_distinct_recipients_threshold then
+      perform tempa_private.record_behavior_signal(
+        p_subject_user_id, 'HIGH_CONTACT_VELOCITY', v_policy.high_velocity_risk_band,
+        v_policy.high_velocity_window,
+        jsonb_build_object(
+          'window_hours', extract(epoch from v_policy.high_velocity_window) / 3600,
+          'distinct_recipients', v_distinct_recipients
+        ),
+        v_policy.high_velocity_escalate
+      );
+    end if;
+
+    -- NEAR_DUPLICATE_OUTREACH — see outreach_fingerprint's own doc
+    -- comment: exact/normalized-text match only, deliberately not fuzzy.
+    select count(distinct context_id) into v_distinct_recipients
+    from public.safety_evaluations
+    where user_id = p_subject_user_id
+      and surface = 'first_letter'
+      and outreach_fingerprint = p_first_contact_outreach_fingerprint
+      and created_at > now() - v_policy.near_duplicate_window;
+
+    if v_distinct_recipients >= v_policy.near_duplicate_distinct_recipients_threshold then
+      perform tempa_private.record_behavior_signal(
+        p_subject_user_id, 'NEAR_DUPLICATE_OUTREACH', v_policy.near_duplicate_risk_band,
+        v_policy.near_duplicate_window,
+        jsonb_build_object(
+          'window_hours', extract(epoch from v_policy.near_duplicate_window) / 3600,
+          'distinct_recipients_same_pitch', v_distinct_recipients
+        ),
+        v_policy.near_duplicate_escalate
+      );
+    end if;
+
+    -- ACCOUNT_VELOCITY — context, not guilt: only ever fires when BOTH a
+    -- genuinely new account AND a meaningfully elevated velocity co-
+    -- occur, at this check's own (lower) threshold — never on account
+    -- age alone, and never for an established account no matter how
+    -- fast it is writing (that is HIGH_CONTACT_VELOCITY's own job,
+    -- above, entirely independent of account age).
+    select created_at into v_account_created_at from auth.users where id = p_subject_user_id;
+
+    if v_account_created_at is not null
+       and v_account_created_at > now() - v_policy.account_velocity_new_account_age
+    then
+      select count(distinct recipient_id) into v_distinct_recipients
+      from public.letters
+      where sender_id = p_subject_user_id
+        and reply_to_id is null and question_answer_id is not null
+        and created_at > now() - v_policy.account_velocity_window;
+
+      if v_distinct_recipients >= v_policy.account_velocity_distinct_recipients_threshold then
+        perform tempa_private.record_behavior_signal(
+          p_subject_user_id, 'ACCOUNT_VELOCITY', v_policy.account_velocity_risk_band,
+          v_policy.account_velocity_window,
+          jsonb_build_object(
+            'window_hours', extract(epoch from v_policy.account_velocity_window) / 3600,
+            'distinct_recipients', v_distinct_recipients,
+            'account_age_hours', extract(epoch from now() - v_account_created_at) / 3600
+          ),
+          v_policy.account_velocity_escalate
+        );
+      end if;
+    end if;
+
+  end if;
+
+  if p_new_content_reason_codes is not null
+     and p_new_content_reason_codes && tempa_private.solicitation_reason_codes()
+  then
+    select count(distinct context_id) into v_count
+    from public.safety_signals
+    where user_id = p_subject_user_id
+      and reason_codes && tempa_private.solicitation_reason_codes()
+      and created_at > now() - v_policy.repeated_solicitation_window;
+
+    if v_count >= v_policy.repeated_solicitation_distinct_contexts_threshold then
+      perform tempa_private.record_behavior_signal(
+        p_subject_user_id, 'REPEATED_SOLICITATION', v_policy.repeated_solicitation_risk_band,
+        v_policy.repeated_solicitation_window,
+        jsonb_build_object(
+          'window_hours', extract(epoch from v_policy.repeated_solicitation_window) / 3600,
+          'distinct_contexts', v_count
+        ),
+        v_policy.repeated_solicitation_escalate
+      );
+    end if;
+  end if;
+
+  if p_report_check then
+    select count(distinct reporter_user_id) into v_count
+    from public.reports
+    where reported_user_id = p_subject_user_id
+      and created_at > now() - v_policy.report_spike_window;
+
+    if v_count >= v_policy.report_spike_distinct_reporters_threshold then
+      perform tempa_private.record_behavior_signal(
+        p_subject_user_id, 'REPORT_SPIKE', v_policy.report_spike_risk_band,
+        v_policy.report_spike_window,
+        jsonb_build_object(
+          'window_hours', extract(epoch from v_policy.report_spike_window) / 3600,
+          'distinct_reporters', v_count
+        ),
+        v_policy.report_spike_escalate
+      );
+    end if;
+  end if;
+
+  if p_block_check then
+    select count(*) into v_count
+    from public.blocked_users
+    where blocked_id = p_subject_user_id
+      and created_at > now() - v_policy.block_spike_window;
+
+    if v_count >= v_policy.block_spike_threshold then
+      perform tempa_private.record_behavior_signal(
+        p_subject_user_id, 'BLOCK_SPIKE', v_policy.block_spike_risk_band,
+        v_policy.block_spike_window,
+        jsonb_build_object(
+          'window_hours', extract(epoch from v_policy.block_spike_window) / 3600,
+          'distinct_blockers', v_count
+        ),
+        v_policy.block_spike_escalate
+      );
+    end if;
+  end if;
+
+end;
+$function$;
+
+revoke all on function tempa_private.evaluate_behavior(uuid, text, text[], boolean, boolean) from public, anon, authenticated, service_role;
 
 
 -- ============================================================
@@ -658,6 +1268,7 @@ set search_path to 'pg_catalog'
 as $function$
 declare
   v_fingerprint text;
+  v_outreach_fingerprint text;
   v_lock_key bigint;
   v_existing_id uuid;
   v_existing_expires_at timestamptz;
@@ -668,6 +1279,7 @@ declare
   v_new_id uuid;
   v_expires_at timestamptz;
   v_case_id uuid;
+  v_signal_created boolean;
 begin
   if p_user_id is null then
     raise exception 'p_user_id is required.' using errcode = '22004';
@@ -724,6 +1336,13 @@ begin
     p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, p_title, p_topics, p_postcard, p_body
   );
 
+  -- Checkpoint 5 — see outreach_fingerprint's own column comment above.
+  -- Computed regardless of dedup outcome below (cheap, pure) but only
+  -- ever stored for first_letter; null for every other surface.
+  if p_surface = 'first_letter' then
+    v_outreach_fingerprint := tempa_private.outreach_fingerprint(p_user_id, p_body);
+  end if;
+
   -- Concurrency guard — see this section's own header comment. Must run
   -- BEFORE the dedup lookup below, not after.
   v_lock_key := ('x' || substr(v_fingerprint, 1, 16))::bit(64)::bigint;
@@ -767,10 +1386,12 @@ begin
   -- moment to distinguish it from for a warn disposition.
   insert into public.safety_evaluations (
     user_id, surface, context_id, question_answer_id, secondary_context_id, fingerprint,
+    outreach_fingerprint,
     risk_band, reason_codes, mutation_disposition, escalate_case,
     warning_required, warning_issued_at, expires_at
   ) values (
     p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, v_fingerprint,
+    v_outreach_fingerprint,
     p_risk_band, coalesce(p_reason_codes, '{}'), p_mutation_disposition, p_escalate_case,
     (p_mutation_disposition = 'warn'),
     case when p_mutation_disposition = 'warn' then now() else null end,
@@ -799,11 +1420,41 @@ begin
   -- header comment and safety_signals' own widened domain above), so a
   -- signal is recorded whenever EITHER condition holds, not only when
   -- the band itself is meaningful/high/severe.
-  if p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case then
+  v_signal_created := p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case;
+  if v_signal_created then
     insert into public.safety_signals (evaluation_id, user_id, surface, context_id, risk_band, reason_codes, case_id)
     values (v_new_id, p_user_id, p_surface, p_context_id, p_risk_band, coalesce(p_reason_codes, '{}'), v_case_id)
     on conflict (evaluation_id) do nothing;
   end if;
+
+  -- Checkpoint 5 — behavioral state, evaluated at this content-
+  -- evaluation mutation point (see tempa_private.evaluate_behavior's own
+  -- header for the full timing rationale: first-contact volume/velocity/
+  -- near-duplicate/account-velocity checks run for EVERY first_letter
+  -- evaluation regardless of THIS evaluation's own risk band — they are
+  -- about pattern, not this one message's content; REPEATED_SOLICITATION
+  -- runs only when this evaluation actually produced a signal whose own
+  -- reason codes qualify). Wrapped in its own exception-guarded block —
+  -- a PL/pgSQL BEGIN/EXCEPTION is an implicit subtransaction (savepoint):
+  -- if the behavioral check fails for any reason, execution rolls back
+  -- to that savepoint only, is logged, and this function's own real
+  -- work (the evaluation just recorded above) is completely unaffected
+  -- and still returned/committed normally. A durable POST-EVENT
+  -- observation, deliberately never allowed to become a dependency of
+  -- evaluation succeeding — see this checkpoint's own migration header
+  -- for why this, report_content, and block_user all use this same
+  -- pattern rather than a bare `perform`.
+  begin
+    perform tempa_private.evaluate_behavior(
+      p_user_id,
+      v_outreach_fingerprint,
+      case when v_signal_created then p_reason_codes else null end,
+      false,
+      false
+    );
+  exception when others then
+    raise warning '[safety] evaluate_behavior failed for user %, surface %: %', p_user_id, p_surface, sqlerrm;
+  end;
 
   return query select v_new_id, v_expires_at, true;
 end;

@@ -60,14 +60,18 @@ describe('privacy — no raw Letter/Dispatch/Postcard text anywhere in the migra
   it('safety_evaluations/safety_signals/safety_cases only ever store ids, classifier output, and timestamps — a Postcard is only ever a transient jsonb PARAMETER, never a stored column (independent audit correction — Checkpoint 3 Postcard binding)', () => {
     const evalStart = sql.indexOf('create table public.safety_evaluations')
     const evalEnd = sql.indexOf(');', evalStart)
-    const evalBody = sql.slice(evalStart, evalEnd)
+    // stripLineComments first — this table's own explanatory comments
+    // (Checkpoint 5) legitimately use the word "content" in prose
+    // ("the seven CONTENT surfaces"), which would otherwise falsely trip
+    // this assertion; only the real column/constraint text matters here.
+    const evalBody = stripLineComments(sql.slice(evalStart, evalEnd))
     expect(evalBody).not.toMatch(/\bbody text\b/)
     expect(evalBody).not.toMatch(/\bcontent\b/)
     expect(evalBody).not.toMatch(/\bpostcard/i)
 
     const signalsStart = sql.indexOf('create table public.safety_signals')
     const signalsEnd = sql.indexOf(');', signalsStart)
-    const signalsBody = sql.slice(signalsStart, signalsEnd)
+    const signalsBody = stripLineComments(sql.slice(signalsStart, signalsEnd))
     expect(signalsBody).not.toMatch(/\bpostcard/i)
     expect(signalsBody).not.toMatch(/\breveal_line\b|\bback_message\b/)
 
@@ -86,9 +90,9 @@ describe('safety_evaluations — RLS with no client policy, RPC-only writes', ()
     expect(codeOnly).not.toMatch(/create policy \w+\s+on public\.safety_evaluations/)
   })
 
-  it('constrains surface to the seven real surfaces (Letters + Checkpoint 4 public text) and risk_band/mutation_disposition to the classifier taxonomy', () => {
+  it('constrains surface to the seven content surfaces (Letters + Checkpoint 4 public text) plus the seven Checkpoint 5 behavioral surfaces, and risk_band/mutation_disposition to the classifier taxonomy', () => {
     expect(codeOnly).toMatch(
-      /surface text not null check \(\s*surface in \(\s*'first_letter', 'reply', 'write_anytime',\s*'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply'\s*\)\s*\)/
+      /surface text not null check \(\s*surface in \(\s*'first_letter', 'reply', 'write_anytime',\s*'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply',\s*'behavior_mass_first_contact', 'behavior_near_duplicate_outreach',\s*'behavior_high_contact_velocity', 'behavior_repeated_solicitation',\s*'behavior_report_spike', 'behavior_block_spike', 'behavior_account_velocity'\s*\)\s*\)/
     )
     expect(codeOnly).toMatch(
       /risk_band text not null check \(risk_band in \('none', 'weak', 'meaningful', 'high', 'severe'\)\)/
@@ -181,7 +185,11 @@ describe('safety_signals — individual observations, meaningful+ only, at most 
 
   it('record_safety_evaluation inserts a signal for meaningful/high/severe risk OR whenever the evaluation escalates a case, and only once per evaluation', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).toContain("if p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case then")
+    // Checkpoint 5: the same condition, now captured into v_signal_created
+    // first (reused by the trailing evaluate_behavior call below it) —
+    // still gates the signal insert identically.
+    expect(body).toContain("v_signal_created := p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case;")
+    expect(body).toContain('if v_signal_created then')
     expect(body).toContain('on conflict (evaluation_id) do nothing')
   })
 
@@ -193,9 +201,12 @@ describe('safety_signals — individual observations, meaningful+ only, at most 
     // report a signal_count with no matching signal behind it.
     const body = extractFunctionBody('public.record_safety_evaluation')
     const signalInsertIndex = body.indexOf('insert into public.safety_signals')
-    const guardIndex = body.lastIndexOf("if p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case then", signalInsertIndex)
-    expect(guardIndex, 'expected the widened guard to directly precede the signal insert').toBeGreaterThan(-1)
-    expect(guardIndex).toBeLessThan(signalInsertIndex)
+    const assignIndex = body.lastIndexOf(
+      "v_signal_created := p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case;",
+      signalInsertIndex
+    )
+    expect(assignIndex, 'expected the widened guard to directly precede the signal insert').toBeGreaterThan(-1)
+    expect(assignIndex).toBeLessThan(signalInsertIndex)
   })
 
   it('has nullable source_content_id/proceeded_at columns for linking an evaluation-time signal to the content the member actually proceeded with (independent audit correction — B5)', () => {
