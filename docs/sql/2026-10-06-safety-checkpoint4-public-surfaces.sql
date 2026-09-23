@@ -106,14 +106,29 @@
 -- direct, un-mediated client call is closed. Read access
 -- (dispatches_select_published, dispatch_topics_select_published) is
 -- completely untouched.
+--
+-- Checkpoint 10 preflight correction: these four statements originally
+-- ran before BEGIN, on the theory that plain DDL needed no transactional
+-- envelope of its own. That reasoning does not hold for THIS file: every
+-- other Safety migration's own header calls itself "one coherent,
+-- all-or-nothing checkpoint," and DROP POLICY/REVOKE are ordinary
+-- transactional DDL in Postgres — there is no technical reason to run
+-- them in autocommit mode. Leaving them outside BEGIN meant a failure
+-- later in this same file (e.g. one of the four DROP FUNCTION statements
+-- below not matching production's actual live signature) would leave the
+-- raw-insert bypass already closed while none of the four RPCs had
+-- actually been updated to require Safety — a partially-applied,
+-- silently-drifted state this migration's own "all-or-nothing" claim
+-- promises can't happen. Moved inside the transaction; no behavioral
+-- change to what is closed or how.
+
+begin;
 
 drop policy dispatches_insert_own on public.dispatches;
 revoke insert on public.dispatches from authenticated;
 
 drop policy dispatch_topics_insert_own on public.dispatch_topics;
 revoke insert on public.dispatch_topics from authenticated;
-
-begin;
 
 -- ============================================================
 -- 1. PUBLISH_DISPATCH

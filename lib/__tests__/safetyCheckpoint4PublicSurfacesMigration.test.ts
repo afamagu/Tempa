@@ -36,12 +36,13 @@ describe('one BEGIN/COMMIT for the RPC wiring, not yet applied', () => {
     expect(sql).toContain('STATUS: NOT EXECUTED')
   })
 
-  it('the raw-grant revocations happen before the begin block (DDL-only, not part of the RPC transaction)', () => {
+  it('the raw-grant revocations happen INSIDE the begin block (Checkpoint 10 preflight correction — the whole file is one all-or-nothing transaction, never partially-applied DDL run in autocommit mode)', () => {
     const beginIndex = sql.indexOf('\nbegin;')
-    expect(sql.indexOf('drop policy dispatches_insert_own')).toBeLessThan(beginIndex)
-    expect(sql.indexOf('revoke insert on public.dispatches from authenticated;')).toBeLessThan(beginIndex)
-    expect(sql.indexOf('drop policy dispatch_topics_insert_own')).toBeLessThan(beginIndex)
-    expect(sql.indexOf('revoke insert on public.dispatch_topics from authenticated;')).toBeLessThan(beginIndex)
+    expect(beginIndex).toBeGreaterThan(-1)
+    expect(sql.indexOf('drop policy dispatches_insert_own')).toBeGreaterThan(beginIndex)
+    expect(sql.indexOf('revoke insert on public.dispatches from authenticated;')).toBeGreaterThan(beginIndex)
+    expect(sql.indexOf('drop policy dispatch_topics_insert_own')).toBeGreaterThan(beginIndex)
+    expect(sql.indexOf('revoke insert on public.dispatch_topics from authenticated;')).toBeGreaterThan(beginIndex)
   })
 })
 
