@@ -32,6 +32,11 @@ export type ExtractedIndicators = {
   cryptoAddresses: string[]
   hasCryptoKeyword: boolean
   hasGiftCardKeyword: boolean
+  /** The narrow "buy a gift card, send me the code" scam shape — bound
+   * to a single SENTENCE (see GIFT_CARD_CODE_REQUEST_PATTERN's own
+   * internal proximity budgets), not the whole message, so it can't
+   * bridge two genuinely unrelated sentences ("I bought a Steam gift
+   * card. Please send me the code for the front gate."). */
   hasGiftCardCodeRequest: boolean
   /** Inherently solicitation-shaped ("double your money", "guaranteed
    * returns") — fires regardless of a separate directed-request match,
@@ -114,14 +119,16 @@ export type ExtractedIndicators = {
   /** A URL in the SAME sentence as an explicit phishing phrase —
    * replaces `urls.length > 0 && hasPhishingPhrase`. */
   hasPhishingLinkedUrl: boolean
-  /** A suspicious link shortener in the SAME CLAUSE as SOME other
-   * genuinely suspicious signal (a directed request, a phishing
-   * phrase, a payment handle, or a crypto mention) — a shortener alone
-   * ("Here is the recipe: https://bit.ly/example"), or a shortener
-   * whose only nearby "suspicious" company is an unrelated clause
-   * ("I was reading about Bitcoin; here is the recipe:
-   * https://bit.ly/example"), is only a weak structural signal (see
-   * SUSPICIOUS_LINK's 'weak' rule), never 'meaningful' by itself. */
+  /** A suspicious link shortener in the SAME CLAUSE as an actual
+   * solicitation shape (a directed request, a phishing phrase, or an
+   * explicit investment pitch/promise) — deliberately NOT "a bare
+   * crypto/payment-service topic word shares the clause": "I use
+   * PayPal and here is the recipe: https://bit.ly/example" and "I was
+   * reading about Bitcoin and here is the recipe: https://bit.ly/
+   * example" are not suspicious just because a shortener happens to
+   * share a clause with an unrelated topic mention. A shortener alone,
+   * or with only a bare topic for company, is a weak structural signal
+   * (see SUSPICIOUS_LINK's 'weak' rule), never 'meaningful'. */
   hasSuspiciousShortenerWithContext: boolean
   hasLoanOrBillRequestPhrase: boolean
   hasSuspiciousLinkShortener: boolean
@@ -270,18 +277,43 @@ function splitIntoSentences(displayText: string): string[] {
   return displayText.split(/(?<=[.!?])\s+|\n+/).filter((sentence) => sentence.trim().length > 0)
 }
 
+/** A coordinating "and" is also a clause boundary — but only when what
+ * follows genuinely reads as a NEW, independent statement rather than
+ * a continuation of the same request. Two conservative shapes trigger
+ * it:
+ *  - a new THIRD-PARTY subject stating an ongoing fact ("and my
+ *    brother works at a hospital", "and she lives nearby") — a shift
+ *    to describing someone/something else, not the request itself;
+ *  - an explicit topic-shift marker, "about <topic>", appearing soon
+ *    after "and" ("and let's chat on WhatsApp later about football")
+ *    — signals the "and" clause is about something else entirely.
+ * Deliberately NOT a bare split on every "and" — "Send me the money
+ * and message me on WhatsApp once you've done it." must stay one
+ * clause (a second instruction continuing the SAME request), and "I
+ * need money because I am in hospital." doesn't even use "and" (a
+ * subordinate "because" clause was never split by this file to begin
+ * with). */
+const CLAUSE_SHIFT_AFTER_AND_PATTERN =
+  /\band\b(?=\s+(?:(?:my|his|her|their|our|your)\s+\w+\s+(?:works?|lives?|is|are|was|were|has|does)\b|(?:he|she|they|it)\s+(?:works?|lives?|is|are|was|were|has|does)\b|.{0,40}\babout\b))/i
+
 /** Finer-grained than splitIntoSentences — a single SENTENCE can still
  * contain multiple unrelated CLAUSES ("Could you send me some money,
  * my brother works at a hospital." — one sentence, two unrelated
- * clauses, joined by a comma). Comma and semicolon are treated as
- * clause boundaries identically to period/!/? — which punctuation a
- * letter happens to use between two facts must never be what decides
- * whether they're related. Used only for composites where even same-
- * SENTENCE co-occurrence was shown to manufacture a false relationship
- * (emergency framing, off-platform escalation, shortener context) —
- * see this file's own "LOCALITY PRINCIPLE" header comment. */
+ * clauses, joined by a comma; "Could you send me some money and my
+ * brother works at a hospital." — same thing, joined by "and" instead
+ * — see CLAUSE_SHIFT_AFTER_AND_PATTERN). Comma, semicolon, period/!/?,
+ * and a qualifying "and" are all treated as clause boundaries
+ * identically — which connective a letter happens to use between two
+ * facts must never be what decides whether they're related. Used only
+ * for composites where even same-SENTENCE co-occurrence was shown to
+ * manufacture a false relationship (emergency framing, off-platform
+ * escalation, shortener context) — see this file's own "LOCALITY
+ * PRINCIPLE" header comment. */
 function splitIntoClauses(displayText: string): string[] {
-  return displayText.split(/(?<=[.!?;,])\s+|\n+/).filter((clause) => clause.trim().length > 0)
+  return displayText
+    .split(/(?<=[.!?;,])\s+|\n+/)
+    .flatMap((clause) => clause.split(CLAUSE_SHIFT_AFTER_AND_PATTERN))
+    .filter((clause) => clause.trim().length > 0)
 }
 
 type FinancialTerms = {
@@ -381,15 +413,23 @@ function analyzeDirectedRequest(
     terms = mergeTerms(terms, { any: true, hasAmount: false, hasCryptoTerm: true, hasCryptoAddress: true, hasGiftCardTerm: false, hasPaymentHandleTerm: false })
   }
 
-  if (TRANSFER_TO_ACCOUNT_PATTERN.test(canonicalSentence)) {
+  const transferToAccountMatch = TRANSFER_TO_ACCOUNT_PATTERN.exec(canonicalSentence)
+  if (transferToAccountMatch) {
     isDirected = true
-    // This shape ("transfer/send/pay/wire ... to ... this/my/the
-    // wallet/account") already commits the whole sentence to being a
-    // transfer request, so checking the full sentence for an
-    // additional crypto/amount/gift-card term here is safe — unlike
-    // the generic local-tie case below, there is no OTHER unrelated
-    // clause this sentence could plausibly be about instead.
-    terms = mergeTerms(terms, detectFinancialTerms(canonicalSentence, numericSentence, displaySentence))
+    // Bind additional term detection (an amount, a crypto/gift-card
+    // mention) to the MATCHED transfer phrase itself, not the whole
+    // sentence — "Send the money to my account, I bought my brother a
+    // gift card yesterday." must not attach GIFT_CARD_REQUEST just
+    // because a gift card is mentioned in a later, unrelated clause.
+    // An amount genuinely part of the request ("transfer $500 to my
+    // account") already falls within the match itself, since the verb-
+    // to-"to" gap allows arbitrary characters in between.
+    const matchStart = transferToAccountMatch.index
+    const matchEnd = matchStart + transferToAccountMatch[0].length
+    const canonicalSpan = canonicalSentence.slice(matchStart, matchEnd)
+    const numericSpan = numericSentence.slice(matchStart, matchEnd)
+    const displaySpan = displaySentence.slice(matchStart, matchEnd)
+    terms = mergeTerms(terms, detectFinancialTerms(canonicalSpan, numericSpan, displaySpan))
   }
 
   if (!isDirected) {
@@ -441,13 +481,7 @@ type SentenceAnalysis = {
   hasUrl: boolean
   hasSuspiciousShortener: boolean
   hasPhishingPhrase: boolean
-  /** Broader than hasCryptoTerm/hasPaymentHandleTerm above (those are
-   * scoped to an actual directed request) — used only to decide
-   * whether a link SHORTENER in this sentence has any suspicious
-   * company at all, which doesn't need the full "directed request"
-   * bar (see hasSuspiciousShortenerWithContext's doc comment). */
-  hasCryptoKeywordInSentence: boolean
-  hasPaymentHandleKeywordInSentence: boolean
+  hasGiftCardCodeRequest: boolean
 }
 
 function analyzeSentence(displaySentence: string): SentenceAnalysis {
@@ -470,9 +504,7 @@ function analyzeSentence(displaySentence: string): SentenceAnalysis {
     hasUrl: testPattern(URL_PATTERN, displaySentence),
     hasSuspiciousShortener: LINK_SHORTENER_PATTERN.test(displaySentence),
     hasPhishingPhrase: PHISHING_PHRASE_PATTERN.test(canonicalSentence),
-    hasCryptoKeywordInSentence: CRYPTO_KEYWORD_PATTERN.test(canonicalSentence) || testPattern(CRYPTO_ADDRESS_PATTERN, displaySentence),
-    hasPaymentHandleKeywordInSentence:
-      PAYMENT_HANDLE_KEYWORD_PATTERN.test(canonicalSentence) || testPattern(CASHTAG_PATTERN, displaySentence),
+    hasGiftCardCodeRequest: GIFT_CARD_CODE_REQUEST_PATTERN.test(canonicalSentence),
   }
 }
 
@@ -542,11 +574,20 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
   )
   const hasSolicitationLinkedUrl = analyses.some((s) => s.hasUrl && s.isDirectedMoneyRequest)
   const hasPhishingLinkedUrl = analyses.some((s) => s.hasUrl && s.hasPhishingPhrase)
+  // A bare topic mention (PayPal, Bitcoin) is not "genuinely suspicious
+  // local context" on its own — only an actual solicitation shape
+  // (a directed request, a phishing phrase, or an explicit investment
+  // pitch/promise) upgrades a shortener. "I use PayPal and here is the
+  // recipe: https://bit.ly/example" must stay weak.
   const hasSuspiciousShortenerWithContext = clauseAnalyses.some(
-    (c) =>
-      c.hasSuspiciousShortener &&
-      (c.isDirectedMoneyRequest || c.hasPhishingPhrase || c.hasPaymentHandleKeywordInSentence || c.hasCryptoKeywordInSentence)
+    (c) => c.hasSuspiciousShortener && (c.isDirectedMoneyRequest || c.hasPhishingPhrase || c.hasInvestmentPitch || c.hasInvestmentPromise)
   )
+  // Bound to the SENTENCE the pattern's own internal proximity budgets
+  // (up to 40+15 chars between "buy" and "code") could otherwise let it
+  // bridge across a full stop — "I bought a Steam gift card. Please
+  // send me the code for the front gate." must not read as one scam
+  // shape spanning two unrelated sentences.
+  const hasGiftCardCodeRequest = analyses.some((s) => s.hasGiftCardCodeRequest)
 
   return {
     urls: unique(Array.from(displayText.matchAll(URL_PATTERN)).map((m) => m[0])),
@@ -560,7 +601,7 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
     cryptoAddresses: unique(Array.from(displayText.matchAll(CRYPTO_ADDRESS_PATTERN)).map((m) => m[0])),
     hasCryptoKeyword: CRYPTO_KEYWORD_PATTERN.test(canonicalText),
     hasGiftCardKeyword: GIFT_CARD_KEYWORD_PATTERN.test(canonicalText),
-    hasGiftCardCodeRequest: GIFT_CARD_CODE_REQUEST_PATTERN.test(canonicalText),
+    hasGiftCardCodeRequest,
     hasInvestmentPromiseLanguage: hasInvestmentPromiseLanguageIn(canonicalText),
     hasInvestmentTopicKeyword: INVESTMENT_TOPIC_PATTERN.test(canonicalText),
     hasInvestmentPitchContext: INVESTMENT_PITCH_PHRASE_PATTERN.test(canonicalText),

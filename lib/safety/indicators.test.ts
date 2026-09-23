@@ -233,4 +233,45 @@ describe('extractIndicators — locally-bound composites (do not combine unrelat
         .hasSuspiciousShortenerWithContext
     ).toBe(false)
   })
+
+  it('treats a qualifying "and" as a clause boundary, but not a genuine continuation', () => {
+    expect(
+      extractIndicators('Could you send me some money and my brother works at a hospital.').hasEmergencyFramedMoneyRequest
+    ).toBe(false)
+    expect(
+      extractIndicators("Could you send me some money and let's chat on WhatsApp later about football.")
+        .hasOffPlatformSolicitation
+    ).toBe(false)
+    expect(extractIndicators('I need money because I am in hospital.').hasEmergencyFramedMoneyRequest).toBe(true)
+    expect(
+      extractIndicators("Send me the money and message me on WhatsApp once you've done it.").hasOffPlatformSolicitation
+    ).toBe(true)
+  })
+
+  it('binds TRANSFER_TO_ACCOUNT subtype evidence to the matched phrase, not the whole sentence', () => {
+    const withGiftCard = extractIndicators('Send the money to my account, I bought my brother a gift card yesterday.')
+    expect(withGiftCard.hasDirectedMoneyRequest).toBe(true)
+    expect(withGiftCard.hasDirectedGiftCardRequest).toBe(false)
+
+    const withCrypto = extractIndicators('Send the money to my account, I was reading about Bitcoin earlier.')
+    expect(withCrypto.hasDirectedMoneyRequest).toBe(true)
+    expect(withCrypto.hasDirectedCryptoRequest).toBe(false)
+  })
+
+  it('binds the gift-card-code scam shape to a single sentence', () => {
+    expect(
+      extractIndicators('I bought a Steam gift card. Please send me the code for the front gate.').hasGiftCardCodeRequest
+    ).toBe(false)
+    expect(extractIndicators('Buy a Steam gift card and send me the code.').hasGiftCardCodeRequest).toBe(true)
+  })
+
+  it('does not treat a bare crypto/payment-service topic word as suspicious shortener context', () => {
+    expect(
+      extractIndicators('I use PayPal and here is the recipe: https://bit.ly/example').hasSuspiciousShortenerWithContext
+    ).toBe(false)
+    expect(
+      extractIndicators('I was reading about Bitcoin and here is the recipe: https://bit.ly/example')
+        .hasSuspiciousShortenerWithContext
+    ).toBe(false)
+  })
 })

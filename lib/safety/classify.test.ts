@@ -838,3 +838,80 @@ describe('a shortener needs genuinely suspicious context in the same clause, not
     expect(result.mutationDisposition).not.toBe('allow')
   })
 })
+
+// ============================================================
+// Final residual locality fixes:
+// 1. Clause boundaries must not depend only on punctuation — a
+//    coordinating "and" joining two independent statements is also a
+//    boundary, but a genuine continuation of the same request is not.
+// 2. TRANSFER_TO_ACCOUNT_PATTERN's subtype evidence (crypto/gift-card/
+//    amount) must bind to the matched transfer phrase, not the whole
+//    sentence.
+// 3. The gift-card-code scam shape must not bridge unrelated sentences.
+// 4. A shortener needs an actual solicitation shape nearby, not just a
+//    bare crypto/payment-service topic word.
+// ============================================================
+describe('"and" is a clause boundary only when it introduces a genuinely independent statement', () => {
+  it('an unrelated third-party aside joined by "and" is not EMERGENCY_MONEY_REQUEST', () => {
+    const result = classifyContent('Could you send me some money and my brother works at a hospital.')
+    expect(result.reasonCodes).not.toContain('EMERGENCY_MONEY_REQUEST')
+  })
+
+  it('an unrelated off-platform topic-shift joined by "and" does not escalate', () => {
+    const result = classifyContent("Could you send me some money and let's chat on WhatsApp later about football.")
+    expect(result.reasonCodes).toContain('OFF_PLATFORM_ESCALATION')
+    expect(result.escalateCase).toBe(false)
+    expect(result.riskBand).not.toBe('high')
+  })
+
+  it('preserves a subordinate "because" clause staying bound to the request', () => {
+    const result = classifyContent('I need money because I am in hospital.')
+    expect(result.reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
+  })
+
+  it('preserves a second instruction genuinely continuing the same request, joined by "and"', () => {
+    const result = classifyContent("Send me the money and message me on WhatsApp once you've done it.")
+    expect(result.reasonCodes).toContain('OFF_PLATFORM_ESCALATION')
+  })
+})
+
+describe('TRANSFER_TO_ACCOUNT subtype evidence binds to the matched phrase, not the whole sentence', () => {
+  it('does not attach GIFT_CARD_REQUEST from an unrelated clause', () => {
+    const result = classifyContent('Send the money to my account, I bought my brother a gift card yesterday.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.reasonCodes).not.toContain('GIFT_CARD_REQUEST')
+  })
+
+  it('does not attach CRYPTO_SOLICITATION from an unrelated clause', () => {
+    const result = classifyContent('Send the money to my account, I was reading about Bitcoin earlier.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.reasonCodes).not.toContain('CRYPTO_SOLICITATION')
+  })
+})
+
+describe('the gift-card-code scam shape must not bridge unrelated sentences', () => {
+  it('stays benign when the purchase and the code request are unrelated sentences', () => {
+    const result = classifyContent('I bought a Steam gift card. Please send me the code for the front gate.')
+    expect(result.reasonCodes).not.toContain('GIFT_CARD_REQUEST')
+  })
+
+  it('preserves detection of the actual scam shape in one sentence', () => {
+    const result = classifyContent('Buy a Steam gift card and send me the code.')
+    expect(result.reasonCodes).toContain('GIFT_CARD_REQUEST')
+    expect(result.mutationDisposition).toBe('deny')
+  })
+})
+
+describe('a shortener does not upgrade from a bare crypto/payment-service topic sharing the clause', () => {
+  it('stays allowed next to a bare PayPal mention', () => {
+    const result = classifyContent('I use PayPal and here is the recipe: https://bit.ly/example')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.escalateCase).toBe(false)
+  })
+
+  it('stays allowed next to a bare Bitcoin mention', () => {
+    const result = classifyContent('I was reading about Bitcoin and here is the recipe: https://bit.ly/example')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.escalateCase).toBe(false)
+  })
+})
