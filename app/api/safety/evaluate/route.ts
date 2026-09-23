@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
   const { data: authorized, error: authorizationError } = await supabase.rpc('can_evaluate_safety_context', {
     p_surface: parsed.request.surface,
     p_context_id: parsed.request.contextId,
+    p_question_answer_id: parsed.request.questionAnswerId,
   })
 
   if (authorizationError) {
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
       p_user_id: user.id,
       p_surface: parsed.request.surface,
       p_context_id: parsed.request.contextId,
+      p_question_answer_id: parsed.request.questionAnswerId,
       p_body: parsed.request.body,
       p_risk_band: classification.riskBand,
       p_reason_codes: classification.reasonCodes,

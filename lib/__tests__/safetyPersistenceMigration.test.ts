@@ -107,6 +107,14 @@ describe('safety_evaluations — RLS with no client policy, RPC-only writes', ()
     expect(codeOnly).toMatch(/warning_acknowledged_at timestamptz/)
     expect(codeOnly.toLowerCase()).not.toContain('warning_seen')
   })
+
+  it('has a question_answer_id column structurally required for first_letter and forbidden for the other two surfaces (independent audit correction)', () => {
+    const start = sql.indexOf('create table public.safety_evaluations')
+    const end = sql.indexOf(');', start)
+    const body = sql.slice(start, end)
+    expect(body).toMatch(/question_answer_id uuid,/)
+    expect(body).toContain("check ((surface = 'first_letter') = (question_answer_id is not null))")
+  })
 })
 
 describe('safety_cases — the canonical Safety 2 lifecycle, one active case per subject, never a generic staff SELECT path', () => {
@@ -150,15 +158,30 @@ describe('safety_signals — individual observations, meaningful+ only, at most 
     expect(codeOnly).not.toMatch(/create policy \w+\s+on public\.safety_signals/)
   })
 
-  it('evaluation_id is unique and risk_band excludes none/weak', () => {
+  it('evaluation_id is unique, and risk_band matches safety_evaluations\' full domain (not narrowed to meaningful+)', () => {
     expect(codeOnly).toMatch(/evaluation_id uuid not null unique references public\.safety_evaluations/)
-    expect(codeOnly).toMatch(/risk_band text not null check \(risk_band in \('meaningful', 'high', 'severe'\)\)/)
+    expect(codeOnly).toMatch(
+      /risk_band text not null check \(risk_band in \('none', 'weak', 'meaningful', 'high', 'severe'\)\)/
+    )
   })
 
-  it('record_safety_evaluation only inserts a signal for meaningful/high/severe risk, and only once per evaluation', () => {
+  it('record_safety_evaluation inserts a signal for meaningful/high/severe risk OR whenever the evaluation escalates a case, and only once per evaluation', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).toContain("if p_risk_band in ('meaningful', 'high', 'severe') then")
+    expect(body).toContain("if p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case then")
     expect(body).toContain('on conflict (evaluation_id) do nothing')
+  })
+
+  it('the case/evidence invariant: an escalating evaluation with a weak/none band still gets a persisted signal (independent audit correction)', () => {
+    // Structural proof, not just the condition string above: the signal
+    // insert must be reachable even when p_risk_band is 'weak' or
+    // 'none', because escalate_case is an independently-settable POLICY
+    // axis (see classify.ts's PolicyOverride) — a case must never
+    // report a signal_count with no matching signal behind it.
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    const signalInsertIndex = body.indexOf('insert into public.safety_signals')
+    const guardIndex = body.lastIndexOf("if p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case then", signalInsertIndex)
+    expect(guardIndex, 'expected the widened guard to directly precede the signal insert').toBeGreaterThan(-1)
+    expect(guardIndex).toBeLessThan(signalInsertIndex)
   })
 })
 
@@ -167,7 +190,14 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
     const body = extractFunctionBody('tempa_private.safety_fingerprint')
     expect(body).not.toMatch(/security definer/)
     expect(codeOnly).toContain(
-      'revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, text) from public, anon, authenticated'
+      'revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text) from public, anon, authenticated'
+    )
+  })
+
+  it('binds p_question_answer_id into the digest, so an evaluation for one Question-answer cannot be replayed as clearance for a different first-contact context (independent audit correction)', () => {
+    const body = extractFunctionBody('tempa_private.safety_fingerprint')
+    expect(body).toMatch(
+      /length\(coalesce\(p_question_answer_id::text, ''\)\)::text \|\| ':' \|\| coalesce\(p_question_answer_id::text, ''\)/
     )
   })
 
@@ -194,10 +224,10 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
 describe('record_safety_evaluation — service-role only, dedup/idempotent, derives nothing from an untrusted hash', () => {
   it('is service-role only, with no grant to authenticated or anon', () => {
     expect(codeOnly).toContain(
-      'revoke all on function public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean) from public'
+      'revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) from public'
     )
     expect(codeOnly).toContain(
-      'grant execute on function public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean) to service_role'
+      'grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) to service_role'
     )
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.record_safety_evaluation.*to (anon|authenticated)/
@@ -211,7 +241,21 @@ describe('record_safety_evaluation — service-role only, dedup/idempotent, deri
     expect(params).not.toMatch(/p_fingerprint/)
 
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).toContain('tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_body)')
+    expect(body).toContain(
+      'tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_body)'
+    )
+  })
+
+  it('requires p_question_answer_id for first_letter and forbids it for the other two surfaces (independent audit correction)', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain("if p_surface = 'first_letter' and p_question_answer_id is null then")
+    expect(body).toContain("if p_surface <> 'first_letter' and p_question_answer_id is not null then")
+  })
+
+  it('stores question_answer_id on the evaluation row itself, not only inside the fingerprint', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toMatch(/insert into public\.safety_evaluations \(\s*user_id, surface, context_id, question_answer_id, fingerprint/)
+    expect(body).toMatch(/values \(\s*p_user_id, p_surface, p_context_id, p_question_answer_id, v_fingerprint/)
   })
 
   it('looks up an existing unconsumed, unexpired evaluation for the same (user, surface, context, fingerprint) before inserting', () => {
@@ -259,8 +303,10 @@ describe('record_safety_evaluation — never silently reuses a clearance whose s
 
 describe('can_evaluate_safety_context — proves the mutation context is real and the caller\'s own, before any evaluation is recorded', () => {
   it('is callable by authenticated, never by anon, and is not a service-role table read', () => {
-    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid) from public')
-    expect(codeOnly).toContain('grant execute on function public.can_evaluate_safety_context(text, uuid) to authenticated')
+    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid, uuid) from public')
+    expect(codeOnly).toContain(
+      'grant execute on function public.can_evaluate_safety_context(text, uuid, uuid) to authenticated'
+    )
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.can_evaluate_safety_context.*to (anon|service_role)/
     )
@@ -278,6 +324,17 @@ describe('can_evaluate_safety_context — proves the mutation context is real an
     expect(body).toContain("public.current_account_status() in ('restricted', 'suspended', 'banned')")
     expect(body).toContain('tempa_private.is_correspondence_blocked_pair(auth.uid(), p_context_id)')
     expect(body).toContain('exists (select 1 from public.profiles where id = p_context_id)')
+  })
+
+  it('first_letter: requires a live Question-answer belonging to that exact recipient — mirrors send_first_letter\'s own Discovery gate in full (independent audit correction)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('if p_question_answer_id is null then')
+    expect(body).toContain('from public.question_answers qa')
+    expect(body).toContain('join public.questions q on q.id = qa.question_id')
+    expect(body).toContain('qa.id = p_question_answer_id')
+    expect(body).toContain('qa.user_id = p_context_id')
+    expect(body).toContain('qa.is_current = true')
+    expect(body).toContain('q.is_active = true')
   })
 
   it('reply: mirrors reply_to_letter\'s own row lookup exactly (recipient, sent, deliver_at, still awaiting reply)', () => {

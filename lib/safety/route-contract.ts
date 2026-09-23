@@ -23,10 +23,18 @@ export type SafetySurface = (typeof SAFETY_SURFACES)[number]
 /** What the trusted recording RPC (public.record_safety_evaluation)
  * needs: a validated user id (from the authenticated session, NEVER
  * the request body), a known surface, that surface's own context id,
- * and the exact body text being classified. */
+ * the exact body text being classified, and — for first_letter only —
+ * the specific Question-answer (Discovery entry) the letter is actually
+ * addressed from, matching send_first_letter's own p_question_answer_id.
+ * context_id alone (the recipient, for first_letter) is not specific
+ * enough to bind an evaluation to the real mutation context — a forged
+ * or stale Question-answer for an otherwise-legitimate recipient must
+ * still be rejected. Always null for reply/write_anytime, which have no
+ * Question-answer at all. */
 export type ParsedEvaluateRequest = {
   surface: SafetySurface
   contextId: string
+  questionAnswerId: string | null
   body: string
 }
 
@@ -85,9 +93,20 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     if (!isUuid(fields.recipientId)) {
       return { ok: false, error: 'recipientId must be a UUID.' }
     }
+    // The specific Discovery entry the first-contact letter is actually
+    // addressed from — matches send_first_letter's own
+    // p_question_answer_id. Required here so can_evaluate_safety_context
+    // and the fingerprint can bind the real mutation context, not just
+    // the recipient (see this module's own ParsedEvaluateRequest comment).
+    if (!isUuid(fields.questionAnswerId)) {
+      return { ok: false, error: 'questionAnswerId must be a UUID.' }
+    }
     const bodyResult = readBody(fields.body)
     if (!bodyResult.ok) return bodyResult
-    return { ok: true, request: { surface, contextId: fields.recipientId, body: bodyResult.body } }
+    return {
+      ok: true,
+      request: { surface, contextId: fields.recipientId, questionAnswerId: fields.questionAnswerId, body: bodyResult.body },
+    }
   }
 
   if (surface === 'reply') {
@@ -98,7 +117,7 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     }
     const bodyResult = readBody(fields.body)
     if (!bodyResult.ok) return bodyResult
-    return { ok: true, request: { surface, contextId: fields.letterId, body: bodyResult.body } }
+    return { ok: true, request: { surface, contextId: fields.letterId, questionAnswerId: null, body: bodyResult.body } }
   }
 
   if (surface === 'write_anytime') {
@@ -109,7 +128,10 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     }
     const bodyResult = readBody(fields.body)
     if (!bodyResult.ok) return bodyResult
-    return { ok: true, request: { surface, contextId: fields.correspondenceId, body: bodyResult.body } }
+    return {
+      ok: true,
+      request: { surface, contextId: fields.correspondenceId, questionAnswerId: null, body: bodyResult.body },
+    }
   }
 
   return { ok: false, error: 'Unknown or missing surface.' }

@@ -9,29 +9,50 @@ import {
 const RECIPIENT_ID = '11111111-1111-4111-8111-111111111111'
 const LETTER_ID = '22222222-2222-4222-8222-222222222222'
 const CORRESPONDENCE_ID = '33333333-3333-4333-8333-333333333333'
+const QUESTION_ANSWER_ID = '44444444-4444-4444-8444-444444444444'
 
 describe('parseEvaluateRequest — strict per-surface parsing', () => {
-  it('accepts a valid first_letter request, mapping recipientId to contextId', () => {
-    const result = parseEvaluateRequest({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hello there.' })
+  it('accepts a valid first_letter request, mapping recipientId to contextId and carrying questionAnswerId', () => {
+    const result = parseEvaluateRequest({
+      surface: 'first_letter',
+      recipientId: RECIPIENT_ID,
+      questionAnswerId: QUESTION_ANSWER_ID,
+      body: 'Hello there.',
+    })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'first_letter', contextId: RECIPIENT_ID, body: 'Hello there.' },
+      request: { surface: 'first_letter', contextId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hello there.' },
     })
   })
 
-  it('accepts a valid reply request, mapping letterId to contextId', () => {
+  it('rejects a first_letter request missing questionAnswerId — context_id (the recipient) alone is not the real mutation context', () => {
+    const result = parseEvaluateRequest({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hello there.' })
+    expect(result.ok).toBe(false)
+  })
+
+  it('rejects a first_letter request with a non-UUID questionAnswerId', () => {
+    const result = parseEvaluateRequest({
+      surface: 'first_letter',
+      recipientId: RECIPIENT_ID,
+      questionAnswerId: 'not-a-uuid',
+      body: 'Hello there.',
+    })
+    expect(result.ok).toBe(false)
+  })
+
+  it('accepts a valid reply request, mapping letterId to contextId, with questionAnswerId always null', () => {
     const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'Thanks for writing.' })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'reply', contextId: LETTER_ID, body: 'Thanks for writing.' },
+      request: { surface: 'reply', contextId: LETTER_ID, questionAnswerId: null, body: 'Thanks for writing.' },
     })
   })
 
-  it('accepts a valid write_anytime request, mapping correspondenceId to contextId', () => {
+  it('accepts a valid write_anytime request, mapping correspondenceId to contextId, with questionAnswerId always null', () => {
     const result = parseEvaluateRequest({ surface: 'write_anytime', correspondenceId: CORRESPONDENCE_ID, body: 'More news.' })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'write_anytime', contextId: CORRESPONDENCE_ID, body: 'More news.' },
+      request: { surface: 'write_anytime', contextId: CORRESPONDENCE_ID, questionAnswerId: null, body: 'More news.' },
     })
   })
 
@@ -107,13 +128,14 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     const result = parseEvaluateRequest({
       surface: 'first_letter',
       recipientId: RECIPIENT_ID,
+      questionAnswerId: QUESTION_ANSWER_ID,
       body: 'hi',
       userId: 'attacker-supplied-id',
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.request).not.toHaveProperty('userId')
-      expect(Object.keys(result.request)).toEqual(['surface', 'contextId', 'body'])
+      expect(Object.keys(result.request)).toEqual(['surface', 'contextId', 'questionAnswerId', 'body'])
     }
   })
 })

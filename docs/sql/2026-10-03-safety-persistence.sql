@@ -175,10 +175,19 @@ create extension if not exists pgcrypto with schema extensions;
 -- different surface/context, produces a different fingerprint and
 -- therefore requires a fresh evaluation.
 
+-- p_question_answer_id: null for reply/write_anytime, and the actual
+-- Question-answer id for first_letter — binding it into the fingerprint
+-- (not just context_id, which is the RECIPIENT for first_letter, not
+-- the specific Discovery entry) means an evaluation produced for one
+-- Question-answer can never be replayed as clearance for a different
+-- first-contact context to the same recipient. coalesce'd to '' exactly
+-- like p_body, so a null vs. an empty string can never collide.
+
 create or replace function tempa_private.safety_fingerprint(
   p_user_id uuid,
   p_surface text,
   p_context_id uuid,
+  p_question_answer_id uuid,
   p_body text
 )
 returns text
@@ -192,6 +201,7 @@ as $$
         length(p_user_id::text)::text || ':' || p_user_id::text ||
         length(p_surface)::text || ':' || p_surface ||
         length(p_context_id::text)::text || ':' || p_context_id::text ||
+        length(coalesce(p_question_answer_id::text, ''))::text || ':' || coalesce(p_question_answer_id::text, '') ||
         length(coalesce(p_body, ''))::text || ':' || coalesce(p_body, ''),
         'UTF8'
       ),
@@ -201,7 +211,7 @@ as $$
   )
 $$;
 
-revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, text) from public, anon, authenticated;
+revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text) from public, anon, authenticated;
 
 
 -- ============================================================
@@ -248,6 +258,19 @@ create table public.safety_evaluations (
   user_id uuid not null references auth.users(id) on delete cascade,
   surface text not null check (surface in ('first_letter', 'reply', 'write_anytime')),
   context_id uuid not null,
+
+  -- The specific Question-answer (Discovery entry) a first_letter
+  -- evaluation was actually bound to via can_evaluate_safety_context and
+  -- the fingerprint above — mirrors send_first_letter's own
+  -- p_question_answer_id (docs/sql/2026-09-30-mark-identity-and-admin-
+  -- member-workspace.sql). context_id alone (the RECIPIENT for
+  -- first_letter) is not specific enough: this column is what actually
+  -- ties an evaluation to the real mutation context. Structurally
+  -- required for first_letter and structurally forbidden for the other
+  -- two surfaces, which have no Question-answer at all.
+  question_answer_id uuid,
+  constraint safety_evaluations_question_answer_id_matches_surface
+    check ((surface = 'first_letter') = (question_answer_id is not null)),
 
   -- See tempa_private.safety_fingerprint above.
   fingerprint text not null,
@@ -416,11 +439,17 @@ create table public.safety_signals (
   surface text not null,
   context_id uuid not null,
 
-  -- Created only for meaningful/high/severe evaluations (see
-  -- record_safety_evaluation below) — 'none'/'weak' never reach this
-  -- table at all, so the domain here is intentionally narrower than
-  -- safety_evaluations.risk_band's.
-  risk_band text not null check (risk_band in ('meaningful', 'high', 'severe')),
+  -- Created for meaningful/high/severe evaluations, AND for any
+  -- evaluation that escalates a case regardless of band (see
+  -- record_safety_evaluation below) — escalate_case is a rule-level
+  -- POLICY decision independently settable from a rule's own band (per
+  -- the Checkpoint 1 architecture), so a weak- or even none-banded
+  -- evaluation can still legitimately escalate a case. The domain here
+  -- therefore matches safety_evaluations.risk_band's full domain: a case
+  -- must never carry a signal_count that outruns its actual linked
+  -- signals, which would happen if an escalating weak/none evaluation
+  -- bumped signal_count but had nowhere to record itself here.
+  risk_band text not null check (risk_band in ('none', 'weak', 'meaningful', 'high', 'severe')),
   reason_codes text[] not null default '{}',
 
   -- Set only when the evaluation that produced this signal also had
@@ -495,7 +524,12 @@ revoke all on public.safety_signals from public, anon, authenticated;
 -- consumption step is a separate concern from signal creation here).
 -- escalate_case = true additionally opens/updates the caller's single
 -- ACTIVE case (see safety_cases_one_active_per_subject above) rather
--- than creating an independent case per signal.
+-- than creating an independent case per signal — AND, because
+-- escalate_case is a POLICY axis independent from risk_band, also
+-- guarantees a signal even when the band itself is weak or none: a case
+-- must never report a signal_count with fewer actual linked signals
+-- than that count claims (see safety_signals' own widened risk_band
+-- domain above).
 --
 -- CONTEXT AUTHORIZATION is NOT this function's job — see this file's
 -- own header and public.can_evaluate_safety_context (Part 8) below;
@@ -507,6 +541,7 @@ create or replace function public.record_safety_evaluation(
   p_user_id uuid,
   p_surface text,
   p_context_id uuid,
+  p_question_answer_id uuid,
   p_body text,
   p_risk_band text,
   p_reason_codes text[],
@@ -547,6 +582,14 @@ begin
     raise exception 'p_context_id is required.' using errcode = '22004';
   end if;
 
+  if p_surface = 'first_letter' and p_question_answer_id is null then
+    raise exception 'p_question_answer_id is required for first_letter.' using errcode = '22004';
+  end if;
+
+  if p_surface <> 'first_letter' and p_question_answer_id is not null then
+    raise exception 'p_question_answer_id is only valid for first_letter.' using errcode = '22023';
+  end if;
+
   if p_body is null or length(trim(both from p_body)) = 0 then
     raise exception 'p_body must not be empty.' using errcode = '22023';
   end if;
@@ -559,7 +602,7 @@ begin
     raise exception 'Unknown mutation disposition: %', p_mutation_disposition using errcode = '22023';
   end if;
 
-  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_body);
+  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_body);
 
   -- Concurrency guard — see this section's own header comment. Must run
   -- BEFORE the dedup lookup below, not after.
@@ -598,11 +641,11 @@ begin
   v_expires_at := now() + interval '15 minutes';
 
   insert into public.safety_evaluations (
-    user_id, surface, context_id, fingerprint,
+    user_id, surface, context_id, question_answer_id, fingerprint,
     risk_band, reason_codes, mutation_disposition, escalate_case,
     warning_required, expires_at
   ) values (
-    p_user_id, p_surface, p_context_id, v_fingerprint,
+    p_user_id, p_surface, p_context_id, p_question_answer_id, v_fingerprint,
     p_risk_band, coalesce(p_reason_codes, '{}'), p_mutation_disposition, p_escalate_case,
     (p_mutation_disposition = 'warn'), v_expires_at
   )
@@ -624,7 +667,12 @@ begin
     returning id into v_case_id;
   end if;
 
-  if p_risk_band in ('meaningful', 'high', 'severe') then
+  -- A case must never gain signal_count without an actual linked
+  -- signal — escalate_case is independent from risk_band (see the
+  -- header comment and safety_signals' own widened domain above), so a
+  -- signal is recorded whenever EITHER condition holds, not only when
+  -- the band itself is meaningful/high/severe.
+  if p_risk_band in ('meaningful', 'high', 'severe') or p_escalate_case then
     insert into public.safety_signals (evaluation_id, user_id, surface, context_id, risk_band, reason_codes, case_id)
     values (v_new_id, p_user_id, p_surface, p_context_id, p_risk_band, coalesce(p_reason_codes, '{}'), v_case_id)
     on conflict (evaluation_id) do nothing;
@@ -634,8 +682,8 @@ begin
 end;
 $function$;
 
-revoke all on function public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean) from public;
-grant execute on function public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean) to service_role;
+revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) from public;
+grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) to service_role;
 
 
 -- ============================================================
@@ -670,10 +718,15 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, text
 -- the "is there a live Discovery entry" half of send_first_letter's own
 -- gate is intentionally out of scope here; the real RPC still enforces
 -- that itself at actual send time):
---   - first_letter: mirrors send_first_letter's pre-insert checks other
---     than the question_answer existence check — recipient exists, not
---     self, caller's account not restricted/suspended/banned, no active
---     block either direction/scope.
+--   - first_letter: mirrors send_first_letter's pre-insert checks IN
+--     FULL, including the question_answer existence/liveness check —
+--     recipient exists, not self, caller's account not restricted/
+--     suspended/banned, no active block either direction/scope, and the
+--     supplied p_question_answer_id is a live Discovery entry belonging
+--     to that exact recipient (qa.user_id = p_context_id, qa.is_current,
+--     q.is_active) — otherwise an evaluation could be bound to a
+--     recipient the caller may legitimately write to while the specific
+--     Question-answer context itself is forged or stale.
 --   - reply: mirrors reply_to_letter's own row lookup exactly — the
 --     letter exists, is addressed to the caller, is 'sent', has reached
 --     its own deliver_at, and is still awaiting a reply.
@@ -685,7 +738,7 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, text
 -- read-only "may I?" nature — the Route Handler decides what HTTP
 -- status a `false` becomes.
 
-create or replace function public.can_evaluate_safety_context(p_surface text, p_context_id uuid)
+create or replace function public.can_evaluate_safety_context(p_surface text, p_context_id uuid, p_question_answer_id uuid)
 returns boolean
 language plpgsql
 security definer
@@ -717,7 +770,23 @@ begin
       return false;
     end if;
 
-    return exists (select 1 from public.profiles where id = p_context_id);
+    if not exists (select 1 from public.profiles where id = p_context_id) then
+      return false;
+    end if;
+
+    if p_question_answer_id is null then
+      return false;
+    end if;
+
+    return exists (
+      select 1
+      from public.question_answers qa
+      join public.questions q on q.id = qa.question_id
+      where qa.id = p_question_answer_id
+        and qa.user_id = p_context_id
+        and qa.is_current = true
+        and q.is_active = true
+    );
 
   elsif p_surface = 'reply' then
     return exists (
@@ -759,8 +828,8 @@ begin
 end;
 $function$;
 
-revoke all on function public.can_evaluate_safety_context(text, uuid) from public;
-grant execute on function public.can_evaluate_safety_context(text, uuid) to authenticated;
+revoke all on function public.can_evaluate_safety_context(text, uuid, uuid) from public;
+grant execute on function public.can_evaluate_safety_context(text, uuid, uuid) to authenticated;
 
 
 -- ============================================================

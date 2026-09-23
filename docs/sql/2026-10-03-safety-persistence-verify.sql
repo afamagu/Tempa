@@ -79,6 +79,17 @@ evaluations_structure_check as (
         and column_name = 'fingerprint' and data_type = 'text'
     ) as fingerprint_column_present,
     exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'safety_evaluations'
+        and column_name = 'question_answer_id' and data_type = 'uuid'
+    ) as question_answer_id_column_present,
+    exists (
+      select 1 from pg_constraint
+      where conrelid = 'public.safety_evaluations'::regclass
+        and contype = 'c'
+        and pg_get_constraintdef(oid) ilike '%first_letter%question_answer_id%'
+    ) as question_answer_id_bound_to_first_letter,
+    exists (
       select 1 from pg_indexes
       where schemaname = 'public' and tablename = 'safety_evaluations'
         and indexname = 'safety_evaluations_dedup_idx'
@@ -150,18 +161,19 @@ signals_structure_check as (
       select 1 from pg_constraint
       where conrelid = 'public.safety_signals'::regclass
         and contype = 'c'
+        and pg_get_constraintdef(oid) ilike '%none%'
+        and pg_get_constraintdef(oid) ilike '%weak%'
         and pg_get_constraintdef(oid) ilike '%meaningful%high%severe%'
-        and pg_get_constraintdef(oid) not ilike '%none%'
-    ) as risk_band_excludes_none_and_weak
+    ) as risk_band_matches_evaluations_full_domain
 ),
 fingerprint_function_check as (
   select
-    not has_function_privilege('authenticated', 'tempa_private.safety_fingerprint(uuid, text, uuid, text)', 'EXECUTE') as authenticated_cannot,
-    not has_function_privilege('anon', 'tempa_private.safety_fingerprint(uuid, text, uuid, text)', 'EXECUTE') as anon_cannot,
+    not has_function_privilege('authenticated', 'tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)', 'EXECUTE') as anon_cannot,
     coalesce(not p.prosecdef, false) as not_security_definer
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, text)')
+    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)')
 ),
 fingerprint_ts_boundary_check as (
   -- TypeScript never calculates or submits the fingerprint — proves,
@@ -172,13 +184,13 @@ fingerprint_ts_boundary_check as (
     coalesce(pg_get_functiondef(p.oid) ilike '%digest(%', false) as computes_digest_itself
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, text)')
+    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)')
 ),
 record_function_check as (
   select
-    has_function_privilege('service_role', 'public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean)', 'EXECUTE') as service_role_can,
-    not has_function_privilege('authenticated', 'public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean)', 'EXECUTE') as authenticated_cannot,
-    not has_function_privilege('anon', 'public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean)', 'EXECUTE') as anon_cannot
+    has_function_privilege('service_role', 'public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)', 'EXECUTE') as service_role_can,
+    not has_function_privilege('authenticated', 'public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)', 'EXECUTE') as anon_cannot
 ),
 record_function_dedup_check as (
   select
@@ -199,16 +211,21 @@ record_function_dedup_check as (
     ) as advisory_lock_precedes_dedup_lookup,
     coalesce(pg_get_functiondef(p.oid) ilike '%v_existing_risk_band = p_risk_band%', false) as stale_policy_risk_band_compared,
     coalesce(pg_get_functiondef(p.oid) ilike '%v_existing_escalate_case = p_escalate_case%', false) as stale_policy_escalate_compared,
-    coalesce(pg_get_functiondef(p.oid) ilike '%set expires_at = now() where id = v_existing_id%', false) as stale_evaluation_invalidated
+    coalesce(pg_get_functiondef(p.oid) ilike '%set expires_at = now() where id = v_existing_id%', false) as stale_evaluation_invalidated,
+    coalesce(pg_get_functiondef(p.oid) ilike '%p_question_answer_id is required for first_letter%', false) as question_answer_id_required_for_first_letter,
+    coalesce(
+      pg_get_functiondef(p.oid) ilike '%p_risk_band in (''meaningful'', ''high'', ''severe'') or p_escalate_case%',
+      false
+    ) as signal_created_when_escalated_even_if_weak
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('public.record_safety_evaluation(uuid, text, uuid, text, text, text[], text, boolean)')
+    on p.oid = to_regprocedure('public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)')
 ),
 context_function_check as (
   select
-    has_function_privilege('authenticated', 'public.can_evaluate_safety_context(text, uuid)', 'EXECUTE') as authenticated_can,
-    not has_function_privilege('anon', 'public.can_evaluate_safety_context(text, uuid)', 'EXECUTE') as anon_cannot,
-    not has_function_privilege('service_role', 'public.can_evaluate_safety_context(text, uuid)', 'EXECUTE') as service_role_not_specifically_granted
+    has_function_privilege('authenticated', 'public.can_evaluate_safety_context(text, uuid, uuid)', 'EXECUTE') as authenticated_can,
+    not has_function_privilege('anon', 'public.can_evaluate_safety_context(text, uuid, uuid)', 'EXECUTE') as anon_cannot,
+    not has_function_privilege('service_role', 'public.can_evaluate_safety_context(text, uuid, uuid)', 'EXECUTE') as service_role_not_specifically_granted
 ),
 context_function_semantics_check as (
   select
@@ -216,10 +233,14 @@ context_function_semantics_check as (
     coalesce(pg_get_functiondef(p.oid) ilike '%is_correspondence_blocked_pair%', false) as checks_blocked_pair,
     coalesce(pg_get_functiondef(p.oid) ilike '%l.recipient_id = auth.uid()%', false) as reply_checks_recipient_is_caller,
     coalesce(pg_get_functiondef(p.oid) ilike '%participant_low%' and pg_get_functiondef(p.oid) ilike '%participant_high%', false)
-      as write_anytime_checks_participant
+      as write_anytime_checks_participant,
+    coalesce(
+      pg_get_functiondef(p.oid) ilike '%qa.user_id = p_context_id%' and pg_get_functiondef(p.oid) ilike '%qa.is_current = true%',
+      false
+    ) as first_letter_checks_question_answer
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('public.can_evaluate_safety_context(text, uuid)')
+    on p.oid = to_regprocedure('public.can_evaluate_safety_context(text, uuid, uuid)')
 ),
 cleanup_function_check as (
   select
@@ -251,6 +272,8 @@ select
   evs.consumed_at_column_present as evaluations_consumed_at_present,
   evs.warning_issued_at_column_present as evaluations_warning_issued_at_present,
   evs.fingerprint_column_present as evaluations_fingerprint_present,
+  evs.question_answer_id_column_present as evaluations_question_answer_id_present,
+  evs.question_answer_id_bound_to_first_letter as evaluations_question_answer_id_bound_to_first_letter,
   evs.dedup_index_present as evaluations_dedup_index_present,
   c.anon_no_select as cases_anon_no_select,
   c.authenticated_no_select as cases_authenticated_no_select,
@@ -263,7 +286,7 @@ select
   s.authenticated_no_select as signals_authenticated_no_select,
   sp.no_policy_of_any_kind as signals_no_policy,
   ss.evaluation_id_unique as signals_evaluation_id_unique,
-  ss.risk_band_excludes_none_and_weak as signals_risk_band_excludes_none_and_weak,
+  ss.risk_band_matches_evaluations_full_domain as signals_risk_band_matches_evaluations_full_domain,
   ff.authenticated_cannot as fingerprint_authenticated_cannot,
   ff.anon_cannot as fingerprint_anon_cannot,
   ff.not_security_definer as fingerprint_not_security_definer,
@@ -280,12 +303,15 @@ select
   rfd.stale_policy_risk_band_compared as record_stale_policy_risk_band_compared,
   rfd.stale_policy_escalate_compared as record_stale_policy_escalate_compared,
   rfd.stale_evaluation_invalidated as record_stale_evaluation_invalidated,
+  rfd.question_answer_id_required_for_first_letter as record_question_answer_id_required_for_first_letter,
+  rfd.signal_created_when_escalated_even_if_weak as record_signal_created_when_escalated_even_if_weak,
   cx.authenticated_can as context_authenticated_can,
   cx.anon_cannot as context_anon_cannot,
   cxs.requires_session as context_requires_session,
   cxs.checks_blocked_pair as context_checks_blocked_pair,
   cxs.reply_checks_recipient_is_caller as context_reply_checks_recipient_is_caller,
   cxs.write_anytime_checks_participant as context_write_anytime_checks_participant,
+  cxs.first_letter_checks_question_answer as context_first_letter_checks_question_answer,
   cf.service_role_can as cleanup_service_role_can,
   cf.authenticated_cannot as cleanup_authenticated_cannot,
   cf.anon_cannot as cleanup_anon_cannot,
@@ -295,21 +321,24 @@ select
     and ev.anon_no_select and ev.authenticated_no_select and ev.authenticated_no_insert and ev.authenticated_no_update
     and evp.no_policy_of_any_kind
     and evs.surface_check_present and evs.consumed_at_column_present and evs.warning_issued_at_column_present
-    and evs.fingerprint_column_present and evs.dedup_index_present
+    and evs.fingerprint_column_present and evs.question_answer_id_column_present and evs.question_answer_id_bound_to_first_letter
+    and evs.dedup_index_present
     and c.anon_no_select and c.authenticated_no_select and c.service_role_no_select
     and cp.no_policy_of_any_kind
     and cs.one_active_per_subject_index_present and cs.canonical_status_lifecycle_present and cs.placeholder_dismissed_status_absent
     and s.anon_no_select and s.authenticated_no_select
     and sp.no_policy_of_any_kind
-    and ss.evaluation_id_unique and ss.risk_band_excludes_none_and_weak
+    and ss.evaluation_id_unique and ss.risk_band_matches_evaluations_full_domain
     and ff.authenticated_cannot and ff.anon_cannot and ff.not_security_definer
     and ftb.computes_digest_itself
     and rf.service_role_can and rf.authenticated_cannot and rf.anon_cannot
     and rfd.checks_unconsumed and rfd.checks_unexpired and rfd.signal_dedup_present and rfd.case_upsert_present
     and rfd.advisory_lock_present and rfd.advisory_lock_precedes_dedup_lookup
     and rfd.stale_policy_risk_band_compared and rfd.stale_policy_escalate_compared and rfd.stale_evaluation_invalidated
+    and rfd.question_answer_id_required_for_first_letter and rfd.signal_created_when_escalated_even_if_weak
     and cx.authenticated_can and cx.anon_cannot
     and cxs.requires_session and cxs.checks_blocked_pair and cxs.reply_checks_recipient_is_caller and cxs.write_anytime_checks_participant
+    and cxs.first_letter_checks_question_answer
     and cf.service_role_can and cf.authenticated_cannot and cf.anon_cannot
     and cfa.exempts_active_case_evidence
   ) as overall_pass

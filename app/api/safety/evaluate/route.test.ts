@@ -17,8 +17,10 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 const RECIPIENT_ID = '11111111-1111-4111-8111-111111111111'
+const QUESTION_ANSWER_ID = '55555555-5555-4555-8555-555555555555'
 const FORGED_LETTER_ID = '99999999-9999-4999-8999-999999999999'
 const FORGED_CORRESPONDENCE_ID = '88888888-8888-4888-8888-888888888888'
+const FORGED_QUESTION_ANSWER_ID = '77777777-7777-4777-8777-777777777777'
 
 function request(body: unknown, init: { asString?: string } = {}) {
   return new NextRequest('https://jointempa.com/api/safety/evaluate', {
@@ -42,7 +44,7 @@ describe('POST /api/safety/evaluate', () => {
   it('rejects an unauthenticated request without ever calling the context check, the classifier, or the recording RPC', async () => {
     getUser.mockResolvedValue({ data: { user: null }, error: { message: 'no session' } })
     const { POST } = await import('./route')
-    const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hi there.' }))
+    const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
     expect(response.status).toBe(401)
     expect(authorizationRpc).not.toHaveBeenCalled()
     expect(recordingRpc).not.toHaveBeenCalled()
@@ -57,6 +59,7 @@ describe('POST /api/safety/evaluate', () => {
       request({
         surface: 'first_letter',
         recipientId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
         body: 'Hi there.',
         userId: 'attacker-supplied-id',
       })
@@ -115,7 +118,7 @@ describe('POST /api/safety/evaluate', () => {
       authorizationRpc.mockResolvedValue({ data: false, error: null })
       const { POST } = await import('./route')
 
-      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hi there.' }))
+      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
 
       expect(response.status).toBe(403)
       expect(recordingRpc).not.toHaveBeenCalled()
@@ -126,11 +129,12 @@ describe('POST /api/safety/evaluate', () => {
       rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-1', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
       const { POST } = await import('./route')
 
-      await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hi there.' }))
+      await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
 
       expect(authorizationRpc).toHaveBeenCalledWith('can_evaluate_safety_context', {
         p_surface: 'first_letter',
         p_context_id: RECIPIENT_ID,
+        p_question_answer_id: QUESTION_ANSWER_ID,
       })
       // The authorization call must happen strictly before classification
       // and recording — never in parallel with, or after, the write path.
@@ -142,10 +146,39 @@ describe('POST /api/safety/evaluate', () => {
       authorizationRpc.mockResolvedValue({ data: null, error: { message: 'db is down', code: '500' } })
       const { POST } = await import('./route')
 
-      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hi there.' }))
+      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
       expect(response.status).toBe(500)
       const body = await response.json()
       expect(JSON.stringify(body)).not.toContain('db is down')
+      expect(recordingRpc).not.toHaveBeenCalled()
+    })
+
+    it('rejects a first_letter request with no questionAnswerId at all with 400, never reaching authorization or recording', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      const { POST } = await import('./route')
+
+      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hi there.' }))
+
+      expect(response.status).toBe(400)
+      expect(authorizationRpc).not.toHaveBeenCalled()
+      expect(recordingRpc).not.toHaveBeenCalled()
+    })
+
+    it('rejects a syntactically-valid but forged/stale questionAnswerId for first_letter, with 403 and no evaluation created', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      authorizationRpc.mockResolvedValue({ data: false, error: null })
+      const { POST } = await import('./route')
+
+      const response = await POST(
+        request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: FORGED_QUESTION_ANSWER_ID, body: 'Hi there.' })
+      )
+
+      expect(response.status).toBe(403)
+      expect(authorizationRpc).toHaveBeenCalledWith('can_evaluate_safety_context', {
+        p_surface: 'first_letter',
+        p_context_id: RECIPIENT_ID,
+        p_question_answer_id: FORGED_QUESTION_ANSWER_ID,
+      })
       expect(recordingRpc).not.toHaveBeenCalled()
     })
   })
@@ -155,7 +188,9 @@ describe('POST /api/safety/evaluate', () => {
     rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-1', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
     const { POST } = await import('./route')
 
-    const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Food is expensive here.' }))
+    const response = await POST(
+      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Food is expensive here.' })
+    )
     expect(response.status).toBe(200)
     const json = await response.json()
     expect(json).toEqual({ evaluationId: 'eval-1', disposition: 'allow' })
@@ -167,7 +202,12 @@ describe('POST /api/safety/evaluate', () => {
     const { POST } = await import('./route')
 
     const response = await POST(
-      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Buy a Steam gift card and send me the code.' })
+      request({
+        surface: 'first_letter',
+        recipientId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
+        body: 'Buy a Steam gift card and send me the code.',
+      })
     )
     expect(response.status).toBe(200)
     const json = await response.json()
@@ -192,6 +232,7 @@ describe('POST /api/safety/evaluate', () => {
         p_user_id: 'u1',
         p_surface: 'reply',
         p_context_id: RECIPIENT_ID,
+        p_question_answer_id: null,
         p_body: 'Can you send me $300?',
         p_mutation_disposition: expect.stringMatching(/^(allow|warn|deny)$/),
         p_escalate_case: expect.any(Boolean),
@@ -206,7 +247,7 @@ describe('POST /api/safety/evaluate', () => {
     rpcSingle.mockResolvedValue({ data: null, error: { message: 'db is down', code: '500' } })
     const { POST } = await import('./route')
 
-    const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hi there.' }))
+    const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(JSON.stringify(body)).not.toContain('db is down')
