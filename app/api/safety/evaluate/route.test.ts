@@ -4,10 +4,19 @@ import { NextRequest } from 'next/server'
 const getUser = vi.fn()
 const authorizationRpc = vi.fn<(name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>>()
 
+// check_rate_limit is called directly (awaited, no .single()); record_safety_
+// evaluation is called with .single(). Both go through the same service-role
+// client, so one rpc mock dispatches on the RPC name to the right shape —
+// rateLimitCheck controls the rate-limit outcome per test, rpcSingle
+// controls the recording outcome per test, exactly as before.
 const rpcSingle = vi.fn()
-const recordingRpc = vi.fn<(name: string, params: Record<string, unknown>) => { single: typeof rpcSingle }>(() => ({
-  single: rpcSingle,
-}))
+const rateLimitCheck = vi.fn<(name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>>()
+const recordingRpc = vi.fn((name: string, params: Record<string, unknown>) => {
+  if (name === 'check_rate_limit') {
+    return rateLimitCheck(name, params)
+  }
+  return { single: rpcSingle }
+})
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser }, rpc: authorizationRpc }),
@@ -39,6 +48,10 @@ describe('POST /api/safety/evaluate', () => {
     authorizationRpc.mockResolvedValue({ data: true, error: null })
     recordingRpc.mockClear()
     rpcSingle.mockReset()
+    rateLimitCheck.mockReset()
+    // Under the limit by default — individual tests override this to prove
+    // the 429/fail-closed cases.
+    rateLimitCheck.mockResolvedValue({ data: true, error: null })
   })
 
   it('rejects an unauthenticated request without ever calling the context check, the classifier, or the recording RPC', async () => {
@@ -65,9 +78,7 @@ describe('POST /api/safety/evaluate', () => {
       })
     )
 
-    expect(recordingRpc).toHaveBeenCalledTimes(1)
-    const [, params] = recordingRpc.mock.calls[0]
-    expect(params).toMatchObject({ p_user_id: 'session-user-id' })
+    expect(recordingRpc).toHaveBeenCalledWith('record_safety_evaluation', expect.objectContaining({ p_user_id: 'session-user-id' }))
   })
 
   it('rejects invalid JSON with 400', async () => {
@@ -88,6 +99,66 @@ describe('POST /api/safety/evaluate', () => {
     expect(recordingRpc).not.toHaveBeenCalled()
   })
 
+  describe('Checkpoint 9 — rate limiting (public.check_rate_limit)', () => {
+    it('under the limit: checks both the safety_evaluate backstop and the per-surface action, keyed on the session user id, then proceeds normally', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-rl-1', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+      const { POST } = await import('./route')
+
+      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
+
+      expect(response.status).toBe(200)
+      expect(rateLimitCheck).toHaveBeenCalledWith('check_rate_limit', { p_subject_id: 'u1', p_action: 'safety_evaluate' })
+      expect(rateLimitCheck).toHaveBeenCalledWith('check_rate_limit', { p_subject_id: 'u1', p_action: 'first_letter' })
+      // Rate limiting must run BEFORE context authorization and the write path.
+      expect(authorizationRpc).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects with 429 and a generic message when the per-surface limit is exceeded, without ever calling authorization or recording', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rateLimitCheck.mockImplementation(async (_name, params) =>
+        params.p_action === 'first_letter' ? { data: false, error: null } : { data: true, error: null }
+      )
+      const { POST } = await import('./route')
+
+      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
+
+      expect(response.status).toBe(429)
+      const body = await response.json()
+      expect(body).toEqual({ error: 'Too many requests. Please try again shortly.' })
+      expect(authorizationRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
+    })
+
+    it('rejects with 429 when the safety_evaluate backstop is exceeded, even though the per-surface limit is fine', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rateLimitCheck.mockImplementation(async (_name, params) =>
+        params.p_action === 'safety_evaluate' ? { data: false, error: null } : { data: true, error: null }
+      )
+      const { POST } = await import('./route')
+
+      const response = await POST(request({ surface: 'dispatch_reply', dispatchId: RECIPIENT_ID, body: 'A reply.' }))
+
+      expect(response.status).toBe(429)
+      expect(authorizationRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
+    })
+
+    it('fails closed with 500 (never falls back to allow) when the rate-limit RPC itself errors', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rateLimitCheck.mockResolvedValue({ data: null, error: { message: 'db is down', code: '500' } })
+      const { POST } = await import('./route')
+
+      const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
+
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(JSON.stringify(body)).not.toContain('db is down')
+      expect(authorizationRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
+    })
+  })
+
   describe('context authorization — adversarial forged-UUID cases', () => {
     it('rejects a syntactically-valid but unowned/forged letterId for a reply, with 403 and no evaluation created', async () => {
       getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
@@ -97,7 +168,7 @@ describe('POST /api/safety/evaluate', () => {
       const response = await POST(request({ surface: 'reply', letterId: FORGED_LETTER_ID, body: 'Can you send me $300?' }))
 
       expect(response.status).toBe(403)
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('rejects a syntactically-valid but unowned/forged correspondenceId for write_anytime, with 403 and no evaluation created', async () => {
@@ -110,7 +181,7 @@ describe('POST /api/safety/evaluate', () => {
       )
 
       expect(response.status).toBe(403)
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('rejects a syntactically-valid but blocked/nonexistent recipientId for first_letter, with 403 and no evaluation created', async () => {
@@ -121,7 +192,7 @@ describe('POST /api/safety/evaluate', () => {
       const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
 
       expect(response.status).toBe(403)
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('checks context authorization using the member\'s own authenticated client, not the service-role client', async () => {
@@ -140,7 +211,7 @@ describe('POST /api/safety/evaluate', () => {
       })
       // The authorization call must happen strictly before classification
       // and recording — never in parallel with, or after, the write path.
-      expect(recordingRpc).toHaveBeenCalledTimes(1)
+      expect(rpcSingle).toHaveBeenCalledTimes(1)
     })
 
     it('returns 500 without leaking internals when the authorization check itself errors, and still records nothing', async () => {
@@ -152,7 +223,7 @@ describe('POST /api/safety/evaluate', () => {
       expect(response.status).toBe(500)
       const body = await response.json()
       expect(JSON.stringify(body)).not.toContain('db is down')
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('rejects a first_letter request with no questionAnswerId at all with 400, never reaching authorization or recording', async () => {
@@ -183,7 +254,7 @@ describe('POST /api/safety/evaluate', () => {
         p_secondary_context_id: null,
         p_postcard: null,
       })
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('rejects a first_letter body over the real 2,000-char product cap with 400, before authorization or recording — creates no signal/case (independent audit correction: do not persist Safety evidence for a mutation-impossible payload)', async () => {
@@ -260,7 +331,7 @@ describe('POST /api/safety/evaluate', () => {
         p_escalate_case: expect.any(Boolean),
       })
     )
-    const [, params] = recordingRpc.mock.calls[0]
+    const [, params] = recordingRpc.mock.calls.find(([name]) => name === 'record_safety_evaluation')!
     expect(Array.isArray(params.p_reason_codes)).toBe(true)
   })
 
@@ -319,7 +390,7 @@ describe('POST /api/safety/evaluate', () => {
       const json = await response.json()
       expect(json.disposition).toBe('cannot_send')
 
-      const [, params] = recordingRpc.mock.calls[0]
+      const [, params] = recordingRpc.mock.calls.find(([name]) => name === 'record_safety_evaluation')!
       expect(params.p_risk_band).toBe('severe')
     })
 
@@ -427,7 +498,7 @@ describe('POST /api/safety/evaluate', () => {
       )
 
       expect(response.status).toBe(403)
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('question_answer: mapped from questionId, benign ordinary money discussion allowed', async () => {
@@ -459,7 +530,7 @@ describe('POST /api/safety/evaluate', () => {
       const response = await POST(request({ surface: 'question_answer', questionId: QUESTION_ID, body: 'My answer.' }))
 
       expect(response.status).toBe(403)
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('dispatch_reply: top-level reply maps dispatchId to context, secondary context null', async () => {
@@ -505,7 +576,7 @@ describe('POST /api/safety/evaluate', () => {
       )
 
       expect(response.status).toBe(403)
-      expect(recordingRpc).not.toHaveBeenCalled()
+      expect(rpcSingle).not.toHaveBeenCalled()
     })
 
     it('dispatch_reply: rejects a body over the real 500-char product cap with 400, before authorization or recording', async () => {

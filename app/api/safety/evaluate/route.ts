@@ -63,6 +63,23 @@ function toPostcardJsonb(postcard: ParsedPostcard | null): { postcard_key: strin
  * has no id yet at evaluation time), dispatch_update, question_answer,
  * dispatch_reply (which also carries an optional secondaryContextId, the
  * parent Reply being answered).
+ *
+ * Checkpoint 9: rate-limited via public.check_rate_limit (docs/sql/2026-
+ * 10-10-safety-checkpoint9-hardening.sql), keyed on the authenticated
+ * caller's own user id — never an IP address or anything client-
+ * supplied. Two checks: a 'safety_evaluate' backstop bounding the RAW
+ * request rate to this endpoint regardless of surface (so spreading
+ * requests thin across several surfaces can't individually dodge each
+ * one's own narrower limit), and a per-surface check (e.g.
+ * 'first_letter', 'dispatch_publish') bounding that one surface in
+ * isolation. Checked BEFORE context authorization or classification —
+ * the cheapest possible rejection, before any real work. Every mutation
+ * RPC this endpoint's own evaluation ultimately gates (write_letter/
+ * reply_to_letter/send_first_letter/publish_dispatch/update_dispatch/
+ * create_reply/publish_question_answer) REQUIRES a fresh, single-use
+ * evaluation id first — rate-limiting this one chokepoint therefore
+ * bounds all seven surfaces' real send/publish throughput too, without
+ * needing to touch each of those RPC bodies separately.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -85,6 +102,26 @@ export async function POST(request: NextRequest) {
   const parsed = parseEvaluateRequest(payload)
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
+  }
+
+  const service = createServiceClient()
+
+  const [backstopLimit, surfaceLimit] = await Promise.all([
+    service.rpc('check_rate_limit', { p_subject_id: user.id, p_action: 'safety_evaluate' }),
+    service.rpc('check_rate_limit', { p_subject_id: user.id, p_action: parsed.request.surface }),
+  ])
+
+  if (backstopLimit.error || surfaceLimit.error) {
+    console.error('[safety] check_rate_limit failed', {
+      message: (backstopLimit.error ?? surfaceLimit.error)?.message,
+      code: (backstopLimit.error ?? surfaceLimit.error)?.code,
+      surface: parsed.request.surface,
+    })
+    return NextResponse.json({ error: 'Could not evaluate this content right now. Please try again.' }, { status: 500 })
+  }
+
+  if (backstopLimit.data === false || surfaceLimit.data === false) {
+    return NextResponse.json({ error: 'Too many requests. Please try again shortly.' }, { status: 429 })
   }
 
   // dispatch_publish has no pre-existing Dispatch id at evaluation time
@@ -152,7 +189,6 @@ export async function POST(request: NextRequest) {
   }
   const classification = combineClassifications(classifications)
 
-  const service = createServiceClient()
   const { data, error } = await service
     .rpc('record_safety_evaluation', {
       p_user_id: user.id,
