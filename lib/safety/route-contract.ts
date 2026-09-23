@@ -8,17 +8,27 @@
 // server owns the allowed surface names, each surface's exact required
 // field, and what "context" means for that surface — never a generic
 // client-controlled `surface + fields[]` interface that would let a
-// caller invent an arbitrary surface or field bag. Only the three real
-// Letter surfaces Checkpoint 3 will actually wire this into are
-// accepted; see each surface's own comment below for where its
-// required field comes from (app/write/[recipientId]/first-letter-
-// composer.tsx, app/letters/[letterId]/first-contact-response.tsx,
-// app/letters/[letterId]/moments-composer.tsx).
+// caller invent an arbitrary surface or field bag. Checkpoint 4 widens
+// this from the three Letter surfaces to the public-text surfaces —
+// dispatch_publish, dispatch_update, question_answer, dispatch_reply
+// (app/board/dispatch-composer.tsx, app/question/question-answer.tsx,
+// app/board/[dispatchId]/reply-composer.tsx) — same discipline, never a
+// generic surface.
 
 import type { ContentReasonCode, MutationDisposition } from './reason-codes'
 import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'
+import { TITLE_MAX_CHARS, TOPIC_MAX_CHARS, TOPIC_MAX_COUNT, normalizeTopics } from '@/lib/dispatches'
+import { REPLY_MAX_CHARS } from '@/lib/replies'
 
-export const SAFETY_SURFACES = ['first_letter', 'reply', 'write_anytime'] as const
+export const SAFETY_SURFACES = [
+  'first_letter',
+  'reply',
+  'write_anytime',
+  'dispatch_publish',
+  'dispatch_update',
+  'question_answer',
+  'dispatch_reply',
+] as const
 export type SafetySurface = (typeof SAFETY_SURFACES)[number]
 
 /** The exact optional Postcard shape write_letter/reply_to_letter's own
@@ -55,10 +65,37 @@ export type ParsedPostcard = {
  * requires a fresh evaluation" guarantee the body already has, and are
  * classified alongside the body (never blindly concatenated with it —
  * see lib/safety/classify.ts's own combineClassifications). */
+/** Checkpoint 4 — dispatch_publish has no pre-existing Dispatch id at
+ * evaluation time (the Dispatch does not exist yet). Rather than invent
+ * a schema concept for a no-existing-target creation surface, this
+ * surface's context is the authenticated member's own identity, derived
+ * SERVER-SIDE from the session (never client-supplied) — see route.ts's
+ * own handler, which fills contextId in from user.id after parsing.
+ * null here means exactly that: "not yet known, to be derived", never
+ * "no context requirement at all." Every other surface always parses
+ * its own real, client-supplied (but UUID-shaped) target id. */
 export type ParsedEvaluateRequest = {
   surface: SafetySurface
-  contextId: string
+  contextId: string | null
+  /** dispatch_reply only — the optional parent Reply being answered.
+   * null for a top-level Reply and for every non-dispatch_reply
+   * surface. Bound into the fingerprint as its own field (never folded
+   * into contextId), matching can_evaluate_safety_context's own
+   * secondary_context_id parameter (docs/sql/2026-10-03-safety-
+   * persistence.sql) — changing the parent target after evaluation
+   * must invalidate clearance exactly like any other bound field. */
+  secondaryContextId: string | null
   questionAnswerId: string | null
+  /** dispatch_publish/dispatch_update only — classified and
+   * fingerprinted independently from body (never concatenated), same
+   * pattern as postcard's own fields. null for every other surface. */
+  title: string | null
+  /** dispatch_publish/dispatch_update only — normalizeTopics(input)'s
+   * own output (lib/dispatches.ts), the SAME canonical normalization
+   * publish_dispatch/update_dispatch perform server-side, so the
+   * classified/fingerprinted topics are guaranteed to match what the
+   * real mutation will actually save. null for every other surface. */
+  topics: string[] | null
   postcard: ParsedPostcard | null
   body: string
 }
@@ -202,6 +239,67 @@ function readPostcard(value: unknown): { ok: true; postcard: ParsedPostcard | nu
   return { ok: true, postcard: { postcardKey: fields.postcardKey, revealLine, backMessage: fields.backMessage } }
 }
 
+/** dispatch_publish/dispatch_update only — mirrors dispatchTitleError
+ * (lib/dispatches.ts) exactly, the same canonical TITLE_MAX_CHARS
+ * publish_dispatch/update_dispatch themselves enforce server-side. */
+function readTitle(value: unknown): { ok: true; title: string } | { ok: false; error: string } {
+  if (typeof value !== 'string') {
+    return { ok: false, error: 'title must be a string.' }
+  }
+  if (value.trim().length === 0) {
+    return { ok: false, error: 'title must not be empty.' }
+  }
+  if (value.length > TITLE_MAX_CHARS) {
+    return { ok: false, error: 'title is too long.' }
+  }
+  return { ok: true, title: value }
+}
+
+/** dispatch_publish/dispatch_update only — normalizeTopics (lib/
+ * dispatches.ts) IS the one canonical normalization, reused here
+ * unmodified so the topics this endpoint classifies/fingerprints are
+ * guaranteed to match what publish_dispatch/update_dispatch will
+ * actually save — never a second, independently maintained
+ * implementation. A missing topics field is treated as an empty list
+ * (matches the real RPCs' own `default '{}'`), not an error. */
+function readTopics(value: unknown): { ok: true; topics: string[] } | { ok: false; error: string } {
+  if (value === undefined || value === null) {
+    return { ok: true, topics: [] }
+  }
+  if (!Array.isArray(value) || !value.every((t) => typeof t === 'string')) {
+    return { ok: false, error: 'topics must be an array of strings.' }
+  }
+  if (value.length > TOPIC_MAX_COUNT) {
+    return { ok: false, error: 'too many topics.' }
+  }
+  for (const topic of value) {
+    if (topic.length > TOPIC_MAX_CHARS * 4) {
+      // Modest technical ceiling only, well above TOPIC_MAX_CHARS —
+      // normalizeTopics itself clips to TOPIC_MAX_CHARS below; this
+      // only stops a genuinely abusive single-topic payload from ever
+      // reaching the classifier.
+      return { ok: false, error: 'a topic is too long.' }
+    }
+  }
+  return { ok: true, topics: normalizeTopics(value) }
+}
+
+/** dispatch_reply only — mirrors replyBodyError (lib/replies.ts)
+ * exactly, the same canonical REPLY_MAX_CHARS create_reply itself
+ * enforces server-side. Not readFirstLetterBody's FIRST_LETTER_MAX_
+ * CHARS (a different, unrelated product cap) and not the generic
+ * MAX_BODY_CHARS abuse ceiling alone (which would let a Reply far
+ * longer than the real mutation could ever accept reach the
+ * classifier/database). */
+function readReplyBody(value: unknown): { ok: true; body: string } | { ok: false; error: string } {
+  const bodyResult = readBody(value)
+  if (!bodyResult.ok) return bodyResult
+  if (bodyResult.body.trim().length > REPLY_MAX_CHARS) {
+    return { ok: false, error: 'body is too long for a Reply.' }
+  }
+  return bodyResult
+}
+
 export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResult {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     return { ok: false, error: 'Request body must be an object.' }
@@ -233,7 +331,10 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
       request: {
         surface,
         contextId: fields.recipientId,
+        secondaryContextId: null,
         questionAnswerId: fields.questionAnswerId,
+        title: null,
+        topics: null,
         postcard: null,
         body: bodyResult.body,
       },
@@ -255,7 +356,10 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
       request: {
         surface,
         contextId: fields.letterId,
+        secondaryContextId: null,
         questionAnswerId: null,
+        title: null,
+        topics: null,
         postcard: postcardResult.postcard,
         body: bodyResult.body,
       },
@@ -277,8 +381,124 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
       request: {
         surface,
         contextId: fields.correspondenceId,
+        secondaryContextId: null,
         questionAnswerId: null,
+        title: null,
+        topics: null,
         postcard: postcardResult.postcard,
+        body: bodyResult.body,
+      },
+    }
+  }
+
+  if (surface === 'dispatch_publish') {
+    // Context = the authenticated member's own identity, derived
+    // SERVER-SIDE from the session — see this file's own
+    // ParsedEvaluateRequest doc comment. Never read from the request
+    // body; contextId is left null here and filled in by route.ts.
+    const titleResult = readTitle(fields.title)
+    if (!titleResult.ok) return titleResult
+    const topicsResult = readTopics(fields.topics)
+    if (!topicsResult.ok) return topicsResult
+    const bodyResult = readBody(fields.body)
+    if (!bodyResult.ok) return bodyResult
+    const postcardResult = readPostcard(fields.postcard)
+    if (!postcardResult.ok) return postcardResult
+    return {
+      ok: true,
+      request: {
+        surface,
+        contextId: null,
+        secondaryContextId: null,
+        questionAnswerId: null,
+        title: titleResult.title,
+        topics: topicsResult.topics,
+        postcard: postcardResult.postcard,
+        body: bodyResult.body,
+      },
+    }
+  }
+
+  if (surface === 'dispatch_update') {
+    // Context = the Dispatch being edited — matches update_dispatch's
+    // own p_dispatch_id (app/board/dispatch-composer.tsx).
+    if (!isUuid(fields.dispatchId)) {
+      return { ok: false, error: 'dispatchId must be a UUID.' }
+    }
+    const titleResult = readTitle(fields.title)
+    if (!titleResult.ok) return titleResult
+    const topicsResult = readTopics(fields.topics)
+    if (!topicsResult.ok) return topicsResult
+    const bodyResult = readBody(fields.body)
+    if (!bodyResult.ok) return bodyResult
+    // update_dispatch has no Postcard parameter at all — never even
+    // parsed for this surface (matches this file's own header note on
+    // not inventing one).
+    return {
+      ok: true,
+      request: {
+        surface,
+        contextId: fields.dispatchId,
+        secondaryContextId: null,
+        questionAnswerId: null,
+        title: titleResult.title,
+        topics: topicsResult.topics,
+        postcard: null,
+        body: bodyResult.body,
+      },
+    }
+  }
+
+  if (surface === 'question_answer') {
+    // Context = the Question being answered — matches
+    // publish_question_answer's own p_question_id (app/question/
+    // question-answer.tsx).
+    if (!isUuid(fields.questionId)) {
+      return { ok: false, error: 'questionId must be a UUID.' }
+    }
+    const bodyResult = readBody(fields.body)
+    if (!bodyResult.ok) return bodyResult
+    return {
+      ok: true,
+      request: {
+        surface,
+        contextId: fields.questionId,
+        secondaryContextId: null,
+        questionAnswerId: null,
+        title: null,
+        topics: null,
+        postcard: null,
+        body: bodyResult.body,
+      },
+    }
+  }
+
+  if (surface === 'dispatch_reply') {
+    // Context = the Dispatch being replied to; secondary context = the
+    // optional parent Reply — matches create_reply's own p_dispatch_id/
+    // p_parent_reply_id (app/board/[dispatchId]/reply-composer.tsx).
+    if (!isUuid(fields.dispatchId)) {
+      return { ok: false, error: 'dispatchId must be a UUID.' }
+    }
+    let parentReplyId: string | null = null
+    if (fields.parentReplyId !== undefined && fields.parentReplyId !== null) {
+      if (!isUuid(fields.parentReplyId)) {
+        return { ok: false, error: 'parentReplyId must be a UUID.' }
+      }
+      parentReplyId = fields.parentReplyId
+    }
+    const bodyResult = readReplyBody(fields.body)
+    if (!bodyResult.ok) return bodyResult
+    return {
+      ok: true,
+      request: {
+        surface,
+        contextId: fields.dispatchId,
+        secondaryContextId: parentReplyId,
+        questionAnswerId: null,
+        title: null,
+        topics: null,
+        postcard: null,
         body: bodyResult.body,
       },
     }

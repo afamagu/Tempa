@@ -20,6 +20,8 @@ import {
 } from '@/lib/questions'
 import { insertAtCursor } from '@/lib/textarea-insert'
 import EmojiPicker from '@/app/letters/emoji-picker'
+import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import SafetyWarningDialog from '@/app/safety-warning-dialog'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
@@ -64,6 +66,9 @@ export default function QuestionAnswer({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<string | null>(null)
+  // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
+  // pendingWarning split exactly (see that file's own doc comment).
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
 
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
@@ -95,16 +100,65 @@ export default function QuestionAnswer({
     })
   }
 
+  // Safety 2, Checkpoint 4 — the member's own click. Evaluates FIRST;
+  // only ever calls publish_question_answer itself once that evaluation
+  // resolves to allow (immediately) or the member explicitly
+  // acknowledges a warning (handleAcknowledgeWarning below). A failed
+  // evaluation never falls back to an unscreened save — see lib/safety/
+  // send-with-safety.ts's own doc comment on why evaluateSafety is
+  // fail-closed by construction.
   async function handlePublish() {
     if (!canPublish) return
     setSaving(true)
     setError(null)
 
-    const supabase = createClient()
     const trimmed = body.trim()
+    const outcome = await evaluateSafety({ surface: 'question_answer', questionId, body: trimmed })
+
+    if (outcome.status === 'error') {
+      setError(SAFETY_CHECK_FAILED_MESSAGE)
+      setSaving(false)
+      return
+    }
+    if (outcome.status === 'cannot_send') {
+      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      setSaving(false)
+      return
+    }
+    if (outcome.status === 'warning_required') {
+      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setSaving(false)
+      return
+    }
+
+    await saveAnswer(outcome.evaluationId, false)
+  }
+
+  function handleCancelWarning() {
+    setPendingWarning(null)
+  }
+
+  async function handleAcknowledgeWarning() {
+    if (!pendingWarning) return
+    await saveAnswer(pendingWarning.evaluationId, true)
+  }
+
+  async function saveAnswer(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    setSaving(true)
+    setError(null)
+
+    // Re-read body fresh at call time is unnecessary here — body is
+    // already the single source of truth this whole component reads
+    // from; publish_question_answer's own fingerprint recheck
+    // (tempa_private.consume_safety_evaluation) still rejects it if it
+    // somehow changed since evaluation.
+    const trimmed = body.trim()
+    const supabase = createClient()
     const { error: publishError } = await supabase.rpc('publish_question_answer', {
       p_question_id: questionId,
       p_body: trimmed,
+      p_safety_evaluation_id: safetyEvaluationId,
+      p_warning_acknowledged: warningAcknowledged,
     })
     setSaving(false)
 
@@ -123,6 +177,7 @@ export default function QuestionAnswer({
     }
 
     try { window.localStorage.removeItem(draftKey(questionId, userId)) } catch { /* ignore */ }
+    setPendingWarning(null)
     setConfirmation(questionSaveConfirmationCopy(isFlagship, hadExistingAnswer))
     setPublishedBody(trimmed)
     setBody(trimmed)
@@ -223,6 +278,15 @@ export default function QuestionAnswer({
           </div>
         )}
       </div>
+
+      <SafetyWarningDialog
+        open={pendingWarning !== null}
+        onCancel={handleCancelWarning}
+        onAcknowledgeAndSend={handleAcknowledgeWarning}
+        sending={saving}
+        actionLabel="Save anyway"
+        sendingLabel="Saving…"
+      />
     </main>
   )
 }

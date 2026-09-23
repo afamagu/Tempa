@@ -86,8 +86,10 @@ describe('safety_evaluations — RLS with no client policy, RPC-only writes', ()
     expect(codeOnly).not.toMatch(/create policy \w+\s+on public\.safety_evaluations/)
   })
 
-  it('constrains surface to the three real Letter surfaces and risk_band/mutation_disposition to the classifier taxonomy', () => {
-    expect(codeOnly).toMatch(/surface text not null check \(surface in \('first_letter', 'reply', 'write_anytime'\)\)/)
+  it('constrains surface to the seven real surfaces (Letters + Checkpoint 4 public text) and risk_band/mutation_disposition to the classifier taxonomy', () => {
+    expect(codeOnly).toMatch(
+      /surface text not null check \(\s*surface in \(\s*'first_letter', 'reply', 'write_anytime',\s*'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply'\s*\)\s*\)/
+    )
     expect(codeOnly).toMatch(
       /risk_band text not null check \(risk_band in \('none', 'weak', 'meaningful', 'high', 'severe'\)\)/
     )
@@ -208,7 +210,7 @@ describe('safety_signals — individual observations, meaningful+ only, at most 
 describe('tempa_private.consume_safety_evaluation — Checkpoint 3\'s one trusted consumption path, prepared here for the mutation RPCs to call (independent audit correction — B3)', () => {
   it('is not directly callable by any client role, including service_role', () => {
     expect(codeOnly).toContain(
-      'revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid) from public, anon, authenticated, service_role'
+      'revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid) from public, anon, authenticated, service_role'
     )
   })
 
@@ -226,16 +228,21 @@ describe('tempa_private.consume_safety_evaluation — Checkpoint 3\'s one truste
     expect(body).toContain('v_eval.question_answer_id is distinct from p_question_answer_id')
   })
 
+  it('verifies the secondary (parent Reply) target matches — Checkpoint 4 (independent audit correction)', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain('v_eval.secondary_context_id is distinct from p_secondary_context_id')
+  })
+
   it('rejects an already-consumed or expired evaluation', () => {
     const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
     expect(body).toContain('v_eval.consumed_at is not null')
     expect(body).toContain('v_eval.expires_at <= now()')
   })
 
-  it('recomputes the fingerprint from its own actual received body/postcard and requires an exact match — this is what invalidates edited content', () => {
+  it('recomputes the fingerprint from its own actual received fields and requires an exact match — this is what invalidates edited content', () => {
     const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
-    expect(body).toContain(
-      'tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body)'
+    expect(body).toMatch(
+      /tempa_private\.safety_fingerprint\(\s*p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, p_title, p_topics, p_postcard, p_body\s*\)/
     )
     expect(body).toContain('v_fingerprint <> v_eval.fingerprint')
   })
@@ -286,7 +293,7 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
     const body = extractFunctionBody('tempa_private.safety_fingerprint')
     expect(body).not.toMatch(/security definer/)
     expect(codeOnly).toContain(
-      'revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text) from public, anon, authenticated'
+      'revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, uuid, text, text[], jsonb, text) from public, anon, authenticated'
     )
   })
 
@@ -325,10 +332,10 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
 describe('record_safety_evaluation — service-role only, dedup/idempotent, derives nothing from an untrusted hash', () => {
   it('is service-role only, with no grant to authenticated or anon', () => {
     expect(codeOnly).toContain(
-      'revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) from public'
+      'revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, text, text[], text, boolean) from public'
     )
     expect(codeOnly).toContain(
-      'grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) to service_role'
+      'grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, text, text[], text, boolean) to service_role'
     )
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.record_safety_evaluation.*to (anon|authenticated)/
@@ -342,8 +349,8 @@ describe('record_safety_evaluation — service-role only, dedup/idempotent, deri
     expect(params).not.toMatch(/p_fingerprint/)
 
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).toContain(
-      'tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body)'
+    expect(body).toMatch(
+      /tempa_private\.safety_fingerprint\(\s*p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, p_title, p_topics, p_postcard, p_body\s*\)/
     )
   })
 
@@ -352,16 +359,33 @@ describe('record_safety_evaluation — service-role only, dedup/idempotent, deri
     expect(body).toContain("if p_surface = 'first_letter' and p_postcard is not null then")
   })
 
-  it('requires p_question_answer_id for first_letter and forbids it for the other two surfaces (independent audit correction)', () => {
+  it('rejects a Postcard for question_answer/dispatch_reply/dispatch_update, none of which has one (independent audit correction — Checkpoint 4)', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain("if p_surface in ('question_answer', 'dispatch_reply', 'dispatch_update') and p_postcard is not null then")
+  })
+
+  it('requires p_question_answer_id for first_letter and forbids it for every other surface (independent audit correction)', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
     expect(body).toContain("if p_surface = 'first_letter' and p_question_answer_id is null then")
     expect(body).toContain("if p_surface <> 'first_letter' and p_question_answer_id is not null then")
   })
 
-  it('stores question_answer_id on the evaluation row itself, not only inside the fingerprint', () => {
+  it('forbids p_secondary_context_id for every surface except dispatch_reply (independent audit correction — Checkpoint 4)', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
-    expect(body).toMatch(/insert into public\.safety_evaluations \(\s*user_id, surface, context_id, question_answer_id, fingerprint/)
-    expect(body).toMatch(/values \(\s*p_user_id, p_surface, p_context_id, p_question_answer_id, v_fingerprint/)
+    expect(body).toContain("if p_surface <> 'dispatch_reply' and p_secondary_context_id is not null then")
+  })
+
+  it('forbids p_title/p_topics for every surface except dispatch_publish/dispatch_update (independent audit correction — Checkpoint 4)', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain("if p_surface not in ('dispatch_publish', 'dispatch_update')")
+  })
+
+  it('stores question_answer_id and secondary_context_id on the evaluation row itself, not only inside the fingerprint', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toMatch(
+      /insert into public\.safety_evaluations \(\s*user_id, surface, context_id, question_answer_id, secondary_context_id, fingerprint/
+    )
+    expect(body).toMatch(/values \(\s*p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, v_fingerprint/)
   })
 
   it('looks up an existing unconsumed, unexpired evaluation for the same (user, surface, context, fingerprint) before inserting', () => {
@@ -434,9 +458,9 @@ describe('tempa_private.postcard_shape_is_valid — the one shared read-only Pos
 
 describe('can_evaluate_safety_context — proves the mutation context is real and the caller\'s own, before any evaluation is recorded', () => {
   it('is callable by authenticated, never by anon, and is not a service-role table read', () => {
-    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) from public')
+    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, uuid, jsonb) from public')
     expect(codeOnly).toContain(
-      'grant execute on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) to authenticated'
+      'grant execute on function public.can_evaluate_safety_context(text, uuid, uuid, uuid, jsonb) to authenticated'
     )
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.can_evaluate_safety_context.*to (anon|service_role)/
@@ -499,10 +523,10 @@ describe('can_evaluate_safety_context — proves the mutation context is real an
     expect(occurrences.length).toBe(2)
   })
 
-  it('reply/write_anytime: a present Postcard must pass tempa_private.postcard_shape_is_valid before an evaluation is authorized — never a second, independent product-rule implementation (independent audit correction)', () => {
+  it('reply/write_anytime/dispatch_publish: a present Postcard must pass tempa_private.postcard_shape_is_valid before an evaluation is authorized — never a second, independent product-rule implementation (independent audit correction)', () => {
     const body = extractFunctionBody('public.can_evaluate_safety_context')
     const occurrences = body.match(/tempa_private\.postcard_shape_is_valid\(p_postcard\)/g) ?? []
-    expect(occurrences.length).toBe(2)
+    expect(occurrences.length).toBe(3)
   })
 
   it('reply: a Postcard on a first, establishing reply is never authorized — mirrors reply_to_letter\'s own is_first_reply guard; never additionally requires moments_qualified_for_viewer, matching reply_to_letter\'s own current behavior exactly (independent audit correction)', () => {
@@ -531,6 +555,60 @@ describe('can_evaluate_safety_context — proves the mutation context is real an
   it('never trusts a service-role table read — this function has no relationship to createServiceClient()', () => {
     const body = extractFunctionBody('public.can_evaluate_safety_context')
     expect(body.toLowerCase()).not.toContain('service_role')
+  })
+
+  it('has a secondary_context_id column, structurally forbidden for every surface except dispatch_reply (independent audit correction — Checkpoint 4)', () => {
+    const start = sql.indexOf('create table public.safety_evaluations')
+    const end = sql.indexOf(');', start)
+    const body = sql.slice(start, end)
+    expect(body).toMatch(/secondary_context_id uuid,/)
+    expect(body).toContain("check (secondary_context_id is null or surface = 'dispatch_reply')")
+  })
+})
+
+describe('can_evaluate_safety_context — Checkpoint 4 public text surfaces (independent audit correction)', () => {
+  it('dispatch_publish: binds context_id to the acting member\'s own auth.uid() — no pre-existing Dispatch id at evaluation time — and mirrors publish_dispatch\'s single blanket account-status gate', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const branch = body.slice(body.indexOf("elsif p_surface = 'dispatch_publish' then"), body.indexOf("elsif p_surface = 'dispatch_update' then"))
+    expect(branch).toContain('if p_context_id <> auth.uid() then')
+    expect(branch).toContain("public.current_account_status() in ('restricted', 'suspended', 'banned')")
+    expect(branch).toContain('tempa_private.postcard_shape_is_valid(p_postcard)')
+  })
+
+  it('dispatch_update: mirrors update_dispatch\'s own eligibility exactly — owner, published, 30-minute window, Reply lock, account status, no Postcard param', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const branch = body.slice(body.indexOf("elsif p_surface = 'dispatch_update' then"), body.indexOf("elsif p_surface = 'question_answer' then"))
+    expect(branch).toContain('and author_id = auth.uid()')
+    expect(branch).toContain("and status = 'published'")
+    expect(branch).toContain("now() > v_dispatch_row.published_at + interval '30 minutes'")
+    expect(branch).toContain('exists (select 1 from public.dispatch_replies where dispatch_id = p_context_id)')
+    expect(branch).toContain('if p_postcard is not null then')
+  })
+
+  it('question_answer: mirrors publish_question_answer\'s own is_active/hidden-freeze checks, plus an existence check the real RPC\'s own is_active check alone would not catch', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const branch = body.slice(body.indexOf("elsif p_surface = 'question_answer' then"), body.indexOf("elsif p_surface = 'dispatch_reply' then"))
+    expect(branch).toContain('not exists (select 1 from public.questions where id = p_context_id)')
+    expect(branch).toContain('v_question_active is not null and not v_question_active')
+    expect(branch).toContain("v_answer_moderation_status = 'hidden'")
+  })
+
+  it('dispatch_reply: mirrors create_reply\'s own eligibility exactly — full-scope block (never is_correspondence_blocked_pair), published+visible Dispatch, author publicly visible', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const branch = stripLineComments(body.slice(body.indexOf("elsif p_surface = 'dispatch_reply' then"), body.lastIndexOf('else')))
+    expect(branch).toContain("v_reply_dispatch.status <> 'published' or v_reply_dispatch.moderation_status <> 'visible'")
+    expect(branch).toContain('tempa_private.is_blocked_pair(auth.uid(), v_reply_dispatch.author_id)')
+    expect(branch).not.toContain('is_correspondence_blocked_pair')
+    expect(branch).toContain('tempa_private.author_content_publicly_visible(v_reply_dispatch.author_id)')
+  })
+
+  it('dispatch_reply: when nested, validates the parent Reply belongs to the same Dispatch, is not hidden/deleted, and its author is eligible — mirrors create_reply\'s own parent checks exactly', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const branch = body.slice(body.indexOf("elsif p_surface = 'dispatch_reply' then"), body.lastIndexOf('else'))
+    expect(branch).toContain('if p_secondary_context_id is not null then')
+    expect(branch).toContain('v_parent_reply.dispatch_id <> p_context_id')
+    expect(branch).toContain("v_parent_reply.moderation_status <> 'visible' or v_parent_reply.deleted_at is not null")
+    expect(branch).toContain('tempa_private.is_blocked_pair(auth.uid(), v_parent_reply.author_id)')
   })
 })
 

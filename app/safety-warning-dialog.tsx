@@ -32,11 +32,19 @@ export default function SafetyWarningDialog({
   onCancel,
   onAcknowledgeAndSend,
   sending,
+  actionLabel = 'Send anyway',
+  sendingLabel = 'Sending…',
 }: {
   open: boolean
   onCancel: () => void
   onAcknowledgeAndSend: () => void
   sending: boolean
+  /** Checkpoint 4 — the natural verb for the surface calling this
+   * shared dialog ("Publish anyway", "Save anyway", "Post anyway"),
+   * while every composer still shares this one component/copy. Letter
+   * composers pass nothing and keep the original "Send anyway". */
+  actionLabel?: string
+  sendingLabel?: string
 }) {
   useEffect(() => {
     if (!open) return
@@ -73,7 +81,7 @@ export default function SafetyWarningDialog({
             Let me look again
           </button>
           <button type="button" onClick={onAcknowledgeAndSend} disabled={sending} className={primaryButtonClass}>
-            {sending ? 'Sending…' : 'Send anyway'}
+            {sending ? sendingLabel : actionLabel}
           </button>
         </div>
       </div>

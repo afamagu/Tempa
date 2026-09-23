@@ -4,6 +4,10 @@
 // composer (first-letter-composer.tsx, first-contact-response.tsx,
 // moments-composer.tsx) now calls before its own mutation RPC, instead
 // of calling send_first_letter/reply_to_letter/write_letter directly.
+// Checkpoint 4 widens this to the public-text composers — dispatch-
+// composer.tsx (publish and update), question-answer.tsx, reply-
+// composer.tsx — same gate, same fail-closed guarantee, never a
+// per-surface reimplementation.
 //
 // FAIL-CLOSED: if this call itself fails (network error, non-OK HTTP
 // status, malformed response), the outcome is `'error'`, never
@@ -27,6 +31,16 @@ export type EvaluatePayload =
       body: string
       postcard?: { postcardKey: string; revealLine: string | null; backMessage: string } | null
     }
+  | {
+      surface: 'dispatch_publish'
+      title: string
+      topics: string[]
+      body: string
+      postcard?: { postcardKey: string; revealLine: string | null; backMessage: string } | null
+    }
+  | { surface: 'dispatch_update'; dispatchId: string; title: string; topics: string[]; body: string }
+  | { surface: 'question_answer'; questionId: string; body: string }
+  | { surface: 'dispatch_reply'; dispatchId: string; parentReplyId?: string | null; body: string }
 
 export type EvaluateOutcome =
   | { status: 'allow'; evaluationId: string }
@@ -77,10 +91,15 @@ export async function evaluateSafety(payload: EvaluatePayload): Promise<Evaluate
  * the wording can never quietly drift apart between them. Never
  * mentions "scam"/"fraud"/risk band/reason codes; frames the warning as
  * a pause for the member's own benefit, not an accusation, per the
- * product's own explicit requirement. */
-export const SAFETY_WARNING_TITLE = 'A moment before you send'
+ * product's own explicit requirement.
+ *
+ * Checkpoint 4 — made surface-neutral ("what you've written", not "this
+ * message") now that Dispatches and Question answers share this same
+ * copy, rather than adding a per-surface accusation-language variant.
+ * The final action button's own label stays per-surface (SafetyWarningDialog's
+ * own actionLabel prop — "Publish anyway", "Save anyway", etc.). */
+export const SAFETY_WARNING_TITLE = 'A moment before you continue'
 export const SAFETY_WARNING_BODY =
-  "This message includes something Tempa asks members to pause on before sending — often it's nothing. You can look it over again, or send it as it is."
-export const SAFETY_CANNOT_SEND_MESSAGE =
-  "This message can't be sent as written. Please take another look at what you've written."
-export const SAFETY_CHECK_FAILED_MESSAGE = "Couldn't check your message right now. Please try again."
+  "What you've written includes something Tempa asks members to pause on before continuing — often it's nothing. You can look it over again, or continue as it is."
+export const SAFETY_CANNOT_SEND_MESSAGE = "This can't be sent as written. Please take another look at what you've written."
+export const SAFETY_CHECK_FAILED_MESSAGE = "Couldn't check this right now. Please try again."

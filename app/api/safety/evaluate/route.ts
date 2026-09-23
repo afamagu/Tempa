@@ -54,6 +54,15 @@ function toPostcardJsonb(postcard: ParsedPostcard | null): { postcard_key: strin
  * is fail-closed for those three surfaces: if this call fails, the
  * composer must never fall back to sending unscreened (see each
  * composer's own submit handler, lib/safety/send-with-safety.ts).
+ *
+ * Checkpoint 4: the same fail-closed, single-use consumption is now also
+ * required by publish_dispatch/update_dispatch/publish_question_answer/
+ * create_reply (docs/sql/2026-10-06-safety-checkpoint4-public-surfaces.
+ * sql) for the four public-text surfaces — dispatch_publish (its context
+ * is the acting member's own auth.uid(), derived below, since a Dispatch
+ * has no id yet at evaluation time), dispatch_update, question_answer,
+ * dispatch_reply (which also carries an optional secondaryContextId, the
+ * parent Reply being answered).
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -78,6 +87,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
 
+  // dispatch_publish has no pre-existing Dispatch id at evaluation time
+  // — its context is the authenticated member's own identity, derived
+  // HERE from the verified session, never from the request body (see
+  // route-contract.ts's own ParsedEvaluateRequest doc comment). Every
+  // other surface already parsed a real, client-supplied context id.
+  const contextId = parsed.request.surface === 'dispatch_publish' ? user.id : parsed.request.contextId
+
   const postcardJsonb = toPostcardJsonb(parsed.request.postcard)
 
   // Context authorization — via the member's own authenticated
@@ -86,11 +102,14 @@ export async function POST(request: NextRequest) {
   // comment above. p_postcard lets the restricted-account gate apply
   // correctly (a restricted member may still evaluate a plain-text
   // reply/write, just not one carrying a Postcard — see can_evaluate_
-  // safety_context's own doc comment).
+  // safety_context's own doc comment). p_secondary_context_id is the
+  // optional parent Reply for dispatch_reply, null for every other
+  // surface.
   const { data: authorized, error: authorizationError } = await supabase.rpc('can_evaluate_safety_context', {
     p_surface: parsed.request.surface,
-    p_context_id: parsed.request.contextId,
+    p_context_id: contextId,
     p_question_answer_id: parsed.request.questionAnswerId,
+    p_secondary_context_id: parsed.request.secondaryContextId,
     p_postcard: postcardJsonb,
   })
 
@@ -107,13 +126,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You are not able to write in this context.' }, { status: 403 })
   }
 
-  // The body and any user-written Postcard text (Reveal Line/back
-  // message) are classified SEPARATELY and combined structurally
-  // (combineClassifications), never concatenated into one string first
-  // — see that function's own doc comment for why. A complete
-  // solicitation entirely contained in the Postcard therefore produces
-  // the same intervention it would in the body.
+  // Every member-written text field is classified SEPARATELY and
+  // combined structurally (combineClassifications), never concatenated
+  // into one string first — see that function's own doc comment for
+  // why. A complete solicitation entirely contained in a topic, the
+  // title, or a Postcard therefore produces the same intervention it
+  // would in the body. title/topics are null for every surface that
+  // doesn't have them (first_letter/reply/write_anytime/question_
+  // answer/dispatch_reply), so this naturally degrades to the existing
+  // body(+postcard) classification for those surfaces.
   const classifications = [classifyContent(parsed.request.body)]
+  if (parsed.request.title) {
+    classifications.push(classifyContent(parsed.request.title))
+  }
+  if (parsed.request.topics) {
+    for (const topic of parsed.request.topics) {
+      classifications.push(classifyContent(topic))
+    }
+  }
   if (parsed.request.postcard?.revealLine) {
     classifications.push(classifyContent(parsed.request.postcard.revealLine))
   }
@@ -127,8 +157,11 @@ export async function POST(request: NextRequest) {
     .rpc('record_safety_evaluation', {
       p_user_id: user.id,
       p_surface: parsed.request.surface,
-      p_context_id: parsed.request.contextId,
+      p_context_id: contextId,
       p_question_answer_id: parsed.request.questionAnswerId,
+      p_secondary_context_id: parsed.request.secondaryContextId,
+      p_title: parsed.request.title,
+      p_topics: parsed.request.topics,
       p_postcard: postcardJsonb,
       p_body: parsed.request.body,
       p_risk_band: classification.riskBand,

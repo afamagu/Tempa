@@ -210,7 +210,7 @@ describe('tempa_private.consume_safety_evaluation is never directly callable by 
       'utf8'
     )
     expect(persistenceSql).toContain(
-      'revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid) from public, anon, authenticated, service_role;'
+      'revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid) from public, anon, authenticated, service_role;'
     )
   })
 })

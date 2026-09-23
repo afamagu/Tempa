@@ -24,7 +24,10 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
       request: {
         surface: 'first_letter',
         contextId: RECIPIENT_ID,
+        secondaryContextId: null,
         questionAnswerId: QUESTION_ANSWER_ID,
+        title: null,
+        topics: null,
         postcard: null,
         body: 'Hello there.',
       },
@@ -93,7 +96,16 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'Thanks for writing.' })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'reply', contextId: LETTER_ID, questionAnswerId: null, postcard: null, body: 'Thanks for writing.' },
+      request: {
+        surface: 'reply',
+        contextId: LETTER_ID,
+        secondaryContextId: null,
+        questionAnswerId: null,
+        title: null,
+        topics: null,
+        postcard: null,
+        body: 'Thanks for writing.',
+      },
     })
   })
 
@@ -104,7 +116,10 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
       request: {
         surface: 'write_anytime',
         contextId: CORRESPONDENCE_ID,
+        secondaryContextId: null,
         questionAnswerId: null,
+        title: null,
+        topics: null,
         postcard: null,
         body: 'More news.',
       },
@@ -121,7 +136,10 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
         request: {
           surface: 'reply',
           contextId: LETTER_ID,
+          secondaryContextId: null,
           questionAnswerId: null,
+          title: null,
+          topics: null,
           postcard: VALID_POSTCARD,
           body: 'Thanks!',
         },
@@ -317,8 +335,259 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.request).not.toHaveProperty('userId')
-      expect(Object.keys(result.request)).toEqual(['surface', 'contextId', 'questionAnswerId', 'postcard', 'body'])
+      expect(Object.keys(result.request)).toEqual([
+        'surface',
+        'contextId',
+        'secondaryContextId',
+        'questionAnswerId',
+        'title',
+        'topics',
+        'postcard',
+        'body',
+      ])
     }
+  })
+})
+
+describe('parseEvaluateRequest — Checkpoint 4 public text surfaces', () => {
+  const DISPATCH_ID = '55555555-5555-4555-8555-555555555555'
+  const QUESTION_ID = '66666666-6666-4666-8666-666666666666'
+  const PARENT_REPLY_ID = '77777777-7777-4777-8777-777777777777'
+
+  describe('dispatch_publish', () => {
+    it('accepts a valid request, leaving contextId null for the route handler to derive server-side from the session', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_publish',
+        title: 'My Dispatch',
+        topics: ['travel', 'family'],
+        body: 'Here is my news.',
+      })
+      expect(result).toEqual({
+        ok: true,
+        request: {
+          surface: 'dispatch_publish',
+          contextId: null,
+          secondaryContextId: null,
+          questionAnswerId: null,
+          title: 'My Dispatch',
+          topics: ['travel', 'family'],
+          postcard: null,
+          body: 'Here is my news.',
+        },
+      })
+    })
+
+    it('never reads a client-supplied contextId/dispatchId field for this surface', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_publish',
+        dispatchId: 'attacker-supplied-id',
+        title: 'My Dispatch',
+        body: 'Here is my news.',
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.contextId).toBeNull()
+    })
+
+    it('accepts a Postcard, classified/fingerprinted independently, same shape as reply/write_anytime', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_publish',
+        title: 'My Dispatch',
+        body: 'Here is my news.',
+        postcard: { postcardKey: 'seaside', revealLine: 'Hi', backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.postcard).toEqual({ postcardKey: 'seaside', revealLine: 'Hi', backMessage: 'Thinking of you.' })
+    })
+
+    it('rejects a missing/blank title', () => {
+      expect(parseEvaluateRequest({ surface: 'dispatch_publish', title: '', body: 'x' }).ok).toBe(false)
+      expect(parseEvaluateRequest({ surface: 'dispatch_publish', body: 'x' }).ok).toBe(false)
+    })
+
+    it('rejects a title over TITLE_MAX_CHARS (140)', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_publish', title: 'x'.repeat(141), body: 'x' })
+      expect(result.ok).toBe(false)
+    })
+
+    it('normalizes topics the same way normalizeTopics does server-side — trims and dedups case-insensitively, keeping the first casing', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_publish',
+        title: 'My Dispatch',
+        topics: [' Travel ', 'travel', 'Family'],
+        body: 'x',
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.topics).toEqual(['Travel', 'Family'])
+    })
+
+    it('rejects more than TOPIC_MAX_COUNT (3) raw topic entries, matching publish_dispatch\'s own array_length check before dedup', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_publish',
+        title: 'My Dispatch',
+        topics: ['travel', 'family', 'cooking', 'extra'],
+        body: 'x',
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('treats a missing topics field as an empty list, not an error', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_publish', title: 'My Dispatch', body: 'x' })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.topics).toEqual([])
+    })
+
+    it('rejects a non-array topics field', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_publish', title: 'My Dispatch', body: 'x', topics: 'travel' })
+      expect(result.ok).toBe(false)
+    })
+  })
+
+  describe('dispatch_update', () => {
+    it('accepts a valid request, mapping dispatchId to contextId, no Postcard param', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_update',
+        dispatchId: DISPATCH_ID,
+        title: 'Updated title',
+        topics: ['travel'],
+        body: 'Updated body.',
+      })
+      expect(result).toEqual({
+        ok: true,
+        request: {
+          surface: 'dispatch_update',
+          contextId: DISPATCH_ID,
+          secondaryContextId: null,
+          questionAnswerId: null,
+          title: 'Updated title',
+          topics: ['travel'],
+          postcard: null,
+          body: 'Updated body.',
+        },
+      })
+    })
+
+    it('never even parses a postcard field for this surface — always null regardless of what was sent', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_update',
+        dispatchId: DISPATCH_ID,
+        title: 'Updated title',
+        body: 'Updated body.',
+        postcard: { postcardKey: 'seaside', backMessage: 'x' },
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.postcard).toBeNull()
+    })
+
+    it('rejects a non-UUID dispatchId', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_update', dispatchId: 'not-a-uuid', title: 'x', body: 'x' })
+      expect(result.ok).toBe(false)
+    })
+
+    it('rejects a missing dispatchId', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_update', title: 'x', body: 'x' })
+      expect(result.ok).toBe(false)
+    })
+  })
+
+  describe('question_answer', () => {
+    it('accepts a valid request, mapping questionId to contextId', () => {
+      const result = parseEvaluateRequest({ surface: 'question_answer', questionId: QUESTION_ID, body: 'My answer.' })
+      expect(result).toEqual({
+        ok: true,
+        request: {
+          surface: 'question_answer',
+          contextId: QUESTION_ID,
+          secondaryContextId: null,
+          questionAnswerId: null,
+          title: null,
+          topics: null,
+          postcard: null,
+          body: 'My answer.',
+        },
+      })
+    })
+
+    it('rejects a non-UUID questionId', () => {
+      const result = parseEvaluateRequest({ surface: 'question_answer', questionId: 'not-a-uuid', body: 'x' })
+      expect(result.ok).toBe(false)
+    })
+
+    it('does not impose the first_letter-only 2000-char cap — an ordinary long answer under the generic ceiling is accepted', () => {
+      const result = parseEvaluateRequest({ surface: 'question_answer', questionId: QUESTION_ID, body: 'x'.repeat(5000) })
+      expect(result.ok).toBe(true)
+    })
+  })
+
+  describe('dispatch_reply', () => {
+    it('accepts a top-level reply, mapping dispatchId to contextId, secondaryContextId null', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_reply', dispatchId: DISPATCH_ID, body: 'A reply.' })
+      expect(result).toEqual({
+        ok: true,
+        request: {
+          surface: 'dispatch_reply',
+          contextId: DISPATCH_ID,
+          secondaryContextId: null,
+          questionAnswerId: null,
+          title: null,
+          topics: null,
+          postcard: null,
+          body: 'A reply.',
+        },
+      })
+    })
+
+    it('accepts a nested reply, mapping parentReplyId to secondaryContextId', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_reply',
+        dispatchId: DISPATCH_ID,
+        parentReplyId: PARENT_REPLY_ID,
+        body: 'A nested reply.',
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.secondaryContextId).toBe(PARENT_REPLY_ID)
+    })
+
+    it('rejects a non-UUID parentReplyId', () => {
+      const result = parseEvaluateRequest({
+        surface: 'dispatch_reply',
+        dispatchId: DISPATCH_ID,
+        parentReplyId: 'not-a-uuid',
+        body: 'x',
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('rejects a body over REPLY_MAX_CHARS (500), the real create_reply product cap', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_reply', dispatchId: DISPATCH_ID, body: 'x'.repeat(501) })
+      expect(result.ok).toBe(false)
+    })
+
+    it('accepts a body right at the 500-char cap', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_reply', dispatchId: DISPATCH_ID, body: 'x'.repeat(500) })
+      expect(result.ok).toBe(true)
+    })
+
+    it('rejects a non-UUID dispatchId', () => {
+      const result = parseEvaluateRequest({ surface: 'dispatch_reply', dispatchId: 'not-a-uuid', body: 'x' })
+      expect(result.ok).toBe(false)
+    })
+  })
+
+  it('benign regression corpus — an ordinary money/banking/price mention on a public-surface title/topic/body is not rejected at this parsing layer (enforcement is the classifier\'s job, not the parser\'s)', () => {
+    const publishResult = parseEvaluateRequest({
+      surface: 'dispatch_publish',
+      title: 'Saving for rent this month',
+      topics: ['budgeting', 'Bitcoin'],
+      body: 'I paid $50 in rent and put some savings into a Bitcoin index fund this week.',
+    })
+    expect(publishResult.ok).toBe(true)
+
+    const answerResult = parseEvaluateRequest({
+      surface: 'question_answer',
+      questionId: QUESTION_ID,
+      body: 'My rent is $1200 a month, which felt like a lot until I moved.',
+    })
+    expect(answerResult.ok).toBe(true)
   })
 })
 

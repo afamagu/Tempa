@@ -175,7 +175,7 @@ describe('getDispatchById — reader', () => {
 describe('publishDispatch', () => {
   it('2. requires a title — blank is rejected', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
-    const { data, error } = await publishDispatch(client(fake), { title: '   ', body: 'x', topics: [] })
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id', title: '   ', body: 'x', topics: [] })
     expect(data).toBeNull()
     expect(error?.message).toContain('needs a title')
   })
@@ -183,7 +183,7 @@ describe('publishDispatch', () => {
   // Smoke-test contract completion checkpoint: 70 -> 140.
   it('2. title max length is enforced', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'x'.repeat(141),
       body: 'x',
       topics: [],
@@ -195,7 +195,7 @@ describe('publishDispatch', () => {
   // Smoke-test contract completion checkpoint: 70 -> 140.
   it('a title at exactly 140 characters succeeds', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'x'.repeat(140),
       body: 'A long-form Dispatch.',
       topics: [],
@@ -206,7 +206,7 @@ describe('publishDispatch', () => {
 
   it('a successful publish returns the new row, authored by the caller', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'A letter to whoever finds it',
       body: 'A letter to whoever finds it.',
       topics: ['ritual'],
@@ -217,7 +217,7 @@ describe('publishDispatch', () => {
 
   it('independent review item 5 (final audit round): a freshly published Dispatch always lands moderation_status = visible — a raw insert cannot forge a hidden/moderated state, mirrored by dispatches_insert_own\'s tightened WITH CHECK', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Freshly published',
       body: 'x',
       topics: [],
@@ -238,7 +238,7 @@ describe('publishDispatch', () => {
   // migration's single transaction), not require a second write.
   it('F. a publish with topics AND a Moment together succeeds atomically with a non-null publishedAt', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [] })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'A quiet morning ritual',
       body: 'A short Dispatch with a photo.',
       topics: ['ritual', 'memory'],
@@ -268,7 +268,7 @@ const CURRENT_VERSION: FakePostcardVersionRow = {
 describe('publishDispatch — Postcard (Checkpoint 2)', () => {
   it('no Postcard remains valid behavior — omitting it publishes exactly as before', async () => {
     const fake = createFakeDispatches({ viewerId: AUTHOR_A, rows: [], profiles: [{ id: AUTHOR_A, pseudonym: 'Evening Quill' }] })
-    const { data, error } = await publishDispatch(client(fake), { title: 'No postcard here', body: 'x', topics: [] })
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id', title: 'No postcard here', body: 'x', topics: [] })
     expect(error).toBeNull()
     expect(fake._dispatchPostcards).toHaveLength(0)
     expect(data?.id).toBeTruthy()
@@ -282,7 +282,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'A Dispatch with a Postcard',
       body: 'x',
       topics: [],
@@ -305,7 +305,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: [{ key: 'retired', is_active: false }],
       postcardVersions: [{ ...CURRENT_VERSION, id: 'v-retired', postcard_key: 'retired' }],
     })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Should never publish',
       body: 'x',
       topics: [],
@@ -328,7 +328,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Blank back message',
       body: 'x',
       topics: [],
@@ -347,7 +347,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Too long a reveal line',
       body: 'x',
       topics: [],
@@ -366,7 +366,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Too long a back message',
       body: 'x',
       topics: [],
@@ -384,7 +384,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const { data, error } = await publishDispatch(client(fake), {
+    const { data, error } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'A long back message',
       body: 'x',
       topics: [],
@@ -402,13 +402,13 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const first = await publishDispatch(client(fake), {
+    const first = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'First',
       body: 'x',
       topics: [],
       postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: 'One.' },
     })
-    const second = await publishDispatch(client(fake), {
+    const second = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Second',
       body: 'x',
       topics: [],
@@ -427,7 +427,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       postcardCatalog: ACTIVE_CATALOG,
       postcardVersions: [CURRENT_VERSION],
     })
-    const { data } = await publishDispatch(client(fake), {
+    const { data } = await publishDispatch(client(fake), { safetyEvaluationId: 'test-eval-id',
       title: 'Has a Postcard',
       body: 'x',
       topics: [],
@@ -435,7 +435,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
     })
     // updateDispatch's own TypeScript input type has no postcard field —
     // this call is exactly what the composer's edit-mode submit sends.
-    await updateDispatch(client(fake), data!.id, { title: 'Edited title', body: 'edited body', topics: [] })
+    await updateDispatch(client(fake), data!.id, { safetyEvaluationId: 'test-eval-id', title: 'Edited title', body: 'edited body', topics: [] })
     expect(fake._dispatchPostcards).toHaveLength(1)
     expect(fake._dispatchPostcards[0].back_message).toBe('Frozen forever.')
   })
@@ -1034,7 +1034,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old title', published_at: justPublished() })],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', {
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id',
       title: 'New title',
       body: 'New body.',
       topics: ['fashion'],
@@ -1049,7 +1049,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_B,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Hijacked', body: 'x', topics: [] })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Hijacked', body: 'x', topics: [] })
     expect(data).toBeNull()
     expect(error?.message).toContain('author')
   })
@@ -1059,7 +1059,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
-    const { data } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { data } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(data?.id).toBe('d-1')
   })
 
@@ -1069,7 +1069,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
     const share = await shareDispatch(client(fake), 'd-1')
-    await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     const stillActive = await getActiveDispatchShare(client(fake), 'd-1')
     expect(stillActive?.id).toBe(share.data?.id)
   })
@@ -1080,7 +1080,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: original })],
     })
-    const { data } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { data } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(data?.publishedAt).toBe(original)
   })
 
@@ -1089,7 +1089,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Untouched', published_at: justPublished() })],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: '  ', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: '  ', body: 'x', topics: [] })
     expect(error).not.toBeNull()
 
     const stillThere = await getDispatchById(client(fake), 'd-1')
@@ -1102,7 +1102,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
-    const tooLong = await updateDispatch(client(fake), 'd-1', { title: 'x'.repeat(141), body: 'x', topics: [] })
+    const tooLong = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'x'.repeat(141), body: 'x', topics: [] })
     expect(tooLong.error?.message).toContain('too long')
   })
 
@@ -1111,7 +1111,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', {
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id',
       title: 'x'.repeat(140),
       body: 'x',
       topics: [],
@@ -1130,7 +1130,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: justPublished() })],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', {
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id',
       title: 'Fine',
       body: 'x',
       topics: ['a', 'b', 'c', 'd'],
@@ -1153,7 +1153,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
         }),
       ],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', {
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id',
       title: 'Sneaky rewrite',
       body: 'x',
       topics: [],
@@ -1172,7 +1172,7 @@ describe('Board usability checkpoint — updateDispatch (edit)', () => {
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, title: 'Old', moderation_status: 'hidden', published_at: justPublished() })],
     })
     fake._rows.find((r) => r.id === 'd-1')!.moderation_status = 'visible'
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'New', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'New', body: 'x', topics: [] })
     expect(error).toBeNull()
   })
 })
@@ -1192,7 +1192,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(0) })],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(error).toBeNull()
   })
 
@@ -1201,7 +1201,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
       viewerId: AUTHOR_B,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(0) })],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Hijacked', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Hijacked', body: 'x', topics: [] })
     expect(error?.message).toContain('author')
   })
 
@@ -1210,7 +1210,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(29) })],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(error).toBeNull()
   })
 
@@ -1219,7 +1219,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, published_at: minutesAgo(31) })],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Too late', body: 'x', topics: [] })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Too late', body: 'x', topics: [] })
     expect(data).toBeNull()
     expect(error?.message).toBe('This Dispatch can no longer be edited.')
   })
@@ -1243,7 +1243,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
         },
       ],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Too late', body: 'x', topics: [] })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Too late', body: 'x', topics: [] })
     expect(data).toBeNull()
     expect(error?.message).toBe('This Dispatch can no longer be edited.')
   })
@@ -1256,7 +1256,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
     // "Page load": eligibility was fine (no replies yet) — this app
     // never trusts that moment; it only ever calls updateDispatch,
     // which re-derives eligibility fresh, right now.
-    const beforeReply = await updateDispatch(client(fake), 'd-1', { title: 'First edit', body: 'x', topics: [] })
+    const beforeReply = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'First edit', body: 'x', topics: [] })
     expect(beforeReply.error).toBeNull()
 
     // A reply lands.
@@ -1275,7 +1275,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
 
     // The "stale" submission — same author, same Dispatch, submitted as
     // though nothing had changed since their own earlier successful edit.
-    const staleSubmission = await updateDispatch(client(fake), 'd-1', { title: 'Stale edit', body: 'x', topics: [] })
+    const staleSubmission = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Stale edit', body: 'x', topics: [] })
     expect(staleSubmission.data).toBeNull()
     expect(staleSubmission.error?.message).toBe('This Dispatch can no longer be edited.')
   })
@@ -1304,7 +1304,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
         },
       ],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(error?.message).toBe('This Dispatch can no longer be edited.')
   })
 
@@ -1327,7 +1327,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
         },
       ],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(error?.message).toBe('This Dispatch can no longer be edited.')
   })
 
@@ -1350,7 +1350,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
         },
       ],
     })
-    const { error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(error?.message).toBe('This Dispatch can no longer be edited.')
   })
 
@@ -1359,7 +1359,7 @@ describe('Smoke-test contract completion — published Dispatch edit window / re
       viewerId: AUTHOR_A,
       rows: [row({ id: 'd-1', author_id: AUTHOR_A, status: 'unpublished', published_at: minutesAgo(0) })],
     })
-    const { data, error } = await updateDispatch(client(fake), 'd-1', { title: 'Edited', body: 'x', topics: [] })
+    const { data, error } = await updateDispatch(client(fake), 'd-1', { safetyEvaluationId: 'test-eval-id', title: 'Edited', body: 'x', topics: [] })
     expect(data).toBeNull()
     expect(error?.message).toContain('author')
   })

@@ -189,26 +189,52 @@ create extension if not exists pgcrypto with schema extensions;
 -- like p_body, so a null vs. an empty string can never collide.
 --
 -- p_postcard: null when no Postcard is attached (always null for
--- first_letter, which has no Postcard at all — Checkpoint 3's own
--- correction), or the EXACT jsonb payload reply/write_anytime's real
--- mutation RPC (write_letter/reply_to_letter) will itself receive as
--- p_postcard — same shape, not a re-derived summary, so the mutation
--- RPC can recompute this exact fingerprint from its own actual received
--- p_postcard at consumption time (tempa_private.consume_safety_
--- evaluation below). `::text` on a jsonb value is Postgres's own
--- canonical serialization (normalized key order, no insignificant
--- whitespace) — two jsonb values that are semantically equal always
--- serialize identically, so this is a safe, deterministic fingerprint
--- input, not a byte-for-byte comparison of whatever the client
--- literally sent. Changing the Postcard (or removing/adding one) after
--- evaluation produces a different fingerprint and therefore requires a
--- fresh evaluation, exactly like editing the body.
+-- first_letter/question_answer/dispatch_reply, which have no Postcard at
+-- all, and for dispatch_update, whose real RPC has no Postcard parameter
+-- — Checkpoint 3/4's own corrections), or the EXACT jsonb payload the
+-- real mutation RPC (write_letter/reply_to_letter/publish_dispatch) will
+-- itself receive as p_postcard — same shape, not a re-derived summary,
+-- so the mutation RPC can recompute this exact fingerprint from its own
+-- actual received p_postcard at consumption time (tempa_private.
+-- consume_safety_evaluation below). `::text` on a jsonb value is
+-- Postgres's own canonical serialization (normalized key order, no
+-- insignificant whitespace) — two jsonb values that are semantically
+-- equal always serialize identically, so this is a safe, deterministic
+-- fingerprint input, not a byte-for-byte comparison of whatever the
+-- client literally sent. Changing the Postcard (or removing/adding one)
+-- after evaluation produces a different fingerprint and therefore
+-- requires a fresh evaluation, exactly like editing the body.
+--
+-- Checkpoint 4 additions:
+--
+-- p_secondary_context_id: null for every surface except dispatch_reply,
+-- where it is the optional parent Reply id (null for a top-level Reply,
+-- a real id for a Reply-to-Reply) — binding it means an evaluation for a
+-- top-level Reply can never be replayed as clearance for a nested one
+-- targeting a different parent, or vice versa, and changing the parent
+-- after evaluation (impossible in the real create_reply flow, but
+-- defense in depth) invalidates it exactly like editing the body would.
+--
+-- p_title / p_topics: null/empty for every surface except dispatch_
+-- publish/dispatch_update, which are the only two with a title or topics
+-- at all. p_topics is serialized the same length-prefixed way every
+-- other field here is (never a plain delimiter-joined string, which
+-- would be ambiguous the instant a topic itself could contain that
+-- delimiter) — see the WITH clause below. This is bound in the exact
+-- same NORMALIZED array shape (see lib/dispatches.ts's own
+-- normalizeTopics: trimmed, deduped case-insensitively, length-clipped,
+-- capped at 3) both publish_dispatch/update_dispatch already apply and
+-- the Route Handler already sends — editing any topic, or their order,
+-- after evaluation produces a different fingerprint.
 
 create or replace function tempa_private.safety_fingerprint(
   p_user_id uuid,
   p_surface text,
   p_context_id uuid,
   p_question_answer_id uuid,
+  p_secondary_context_id uuid,
+  p_title text,
+  p_topics text[],
   p_postcard jsonb,
   p_body text
 )
@@ -217,6 +243,10 @@ language sql
 immutable
 set search_path to 'pg_catalog'
 as $$
+  with topics_serialized as (
+    select coalesce(string_agg(length(t)::text || ':' || t, '|'), '') as value
+    from unnest(coalesce(p_topics, '{}'::text[])) as t
+  )
   select encode(
     extensions.digest(
       convert_to(
@@ -224,6 +254,9 @@ as $$
         length(p_surface)::text || ':' || p_surface ||
         length(p_context_id::text)::text || ':' || p_context_id::text ||
         length(coalesce(p_question_answer_id::text, ''))::text || ':' || coalesce(p_question_answer_id::text, '') ||
+        length(coalesce(p_secondary_context_id::text, ''))::text || ':' || coalesce(p_secondary_context_id::text, '') ||
+        length(coalesce(p_title, ''))::text || ':' || coalesce(p_title, '') ||
+        length(topics_serialized.value)::text || ':' || topics_serialized.value ||
         length(coalesce(p_postcard::text, ''))::text || ':' || coalesce(p_postcard::text, '') ||
         length(coalesce(p_body, ''))::text || ':' || coalesce(p_body, ''),
         'UTF8'
@@ -232,9 +265,10 @@ as $$
     ),
     'hex'
   )
+  from topics_serialized
 $$;
 
-revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text) from public, anon, authenticated;
+revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, uuid, text, text[], jsonb, text) from public, anon, authenticated;
 
 
 -- ============================================================
@@ -268,10 +302,16 @@ revoke all on function tempa_private.safety_risk_band_rank(text) from public, an
 -- ============================================================
 -- 4. SAFETY_EVALUATIONS — one row per classified attempt
 -- ============================================================
--- context_id is surface-dependent (the recipient for a first-contact
--- letter, the letter being replied to, or the correspondence for a
--- Write Anytime letter) — the Route Handler owns exactly which id that
--- is per surface (see app/api/safety/evaluate/route.ts and
+-- context_id is surface-dependent — the recipient for first_letter, the
+-- letter being replied to for reply, the correspondence for
+-- write_anytime, the ACTING MEMBER'S OWN auth.uid() for dispatch_publish
+-- (there is no pre-existing Dispatch id at evaluation time — Checkpoint
+-- 4's own resolution, chosen over inventing a fake placeholder id: see
+-- can_evaluate_safety_context's own header comment), the Dispatch id for
+-- dispatch_update, the Question id for question_answer, and the
+-- Dispatch id for dispatch_reply (its optional parent Reply id lives in
+-- secondary_context_id below, not here) — the Route Handler owns exactly
+-- which id that is per surface (see app/api/safety/evaluate/route.ts and
 -- lib/safety/route-contract.ts); this table only ever stores the id,
 -- never which specific field it came from beyond `surface` itself.
 
@@ -279,7 +319,12 @@ create table public.safety_evaluations (
   id uuid primary key default gen_random_uuid(),
 
   user_id uuid not null references auth.users(id) on delete cascade,
-  surface text not null check (surface in ('first_letter', 'reply', 'write_anytime')),
+  surface text not null check (
+    surface in (
+      'first_letter', 'reply', 'write_anytime',
+      'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply'
+    )
+  ),
   context_id uuid not null,
 
   -- The specific Question-answer (Discovery entry) a first_letter
@@ -289,11 +334,22 @@ create table public.safety_evaluations (
   -- member-workspace.sql). context_id alone (the RECIPIENT for
   -- first_letter) is not specific enough: this column is what actually
   -- ties an evaluation to the real mutation context. Structurally
-  -- required for first_letter and structurally forbidden for the other
-  -- two surfaces, which have no Question-answer at all.
+  -- required for first_letter and structurally forbidden for every other
+  -- surface, none of which has a Question-answer at all.
   question_answer_id uuid,
   constraint safety_evaluations_question_answer_id_matches_surface
     check ((surface = 'first_letter') = (question_answer_id is not null)),
+
+  -- Checkpoint 4 — the OPTIONAL secondary target dispatch_reply alone
+  -- needs: the parent Reply id for a Reply-to-Reply, null for a
+  -- top-level Reply. Unlike question_answer_id above, this is never
+  -- REQUIRED even for its one applicable surface (a top-level Reply is a
+  -- completely legitimate, common case) — only structurally FORBIDDEN
+  -- for every surface other than dispatch_reply, which has no secondary
+  -- target concept at all.
+  secondary_context_id uuid,
+  constraint safety_evaluations_secondary_context_id_only_for_dispatch_reply
+    check (secondary_context_id is null or surface = 'dispatch_reply'),
 
   -- See tempa_private.safety_fingerprint above.
   fingerprint text not null,
@@ -581,6 +637,9 @@ create or replace function public.record_safety_evaluation(
   p_surface text,
   p_context_id uuid,
   p_question_answer_id uuid,
+  p_secondary_context_id uuid,
+  p_title text,
+  p_topics text[],
   p_postcard jsonb,
   p_body text,
   p_risk_band text,
@@ -614,7 +673,10 @@ begin
     raise exception 'p_user_id is required.' using errcode = '22004';
   end if;
 
-  if p_surface not in ('first_letter', 'reply', 'write_anytime') then
+  if p_surface not in (
+    'first_letter', 'reply', 'write_anytime',
+    'dispatch_publish', 'dispatch_update', 'question_answer', 'dispatch_reply'
+  ) then
     raise exception 'Unknown safety surface: %', p_surface using errcode = '22023';
   end if;
 
@@ -630,8 +692,20 @@ begin
     raise exception 'p_question_answer_id is only valid for first_letter.' using errcode = '22023';
   end if;
 
+  if p_surface <> 'dispatch_reply' and p_secondary_context_id is not null then
+    raise exception 'p_secondary_context_id is only valid for dispatch_reply.' using errcode = '22023';
+  end if;
+
+  if p_surface not in ('dispatch_publish', 'dispatch_update') and (p_title is not null or coalesce(array_length(p_topics, 1), 0) > 0) then
+    raise exception 'p_title/p_topics are only valid for dispatch_publish/dispatch_update.' using errcode = '22023';
+  end if;
+
   if p_surface = 'first_letter' and p_postcard is not null then
     raise exception 'first_letter has no Postcard.' using errcode = '22023';
+  end if;
+
+  if p_surface in ('question_answer', 'dispatch_reply', 'dispatch_update') and p_postcard is not null then
+    raise exception '% has no Postcard.', p_surface using errcode = '22023';
   end if;
 
   if p_body is null or length(trim(both from p_body)) = 0 then
@@ -646,7 +720,9 @@ begin
     raise exception 'Unknown mutation disposition: %', p_mutation_disposition using errcode = '22023';
   end if;
 
-  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body);
+  v_fingerprint := tempa_private.safety_fingerprint(
+    p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, p_title, p_topics, p_postcard, p_body
+  );
 
   -- Concurrency guard — see this section's own header comment. Must run
   -- BEFORE the dedup lookup below, not after.
@@ -690,11 +766,11 @@ begin
   -- that warning copy to the member" — there is no separate later
   -- moment to distinguish it from for a warn disposition.
   insert into public.safety_evaluations (
-    user_id, surface, context_id, question_answer_id, fingerprint,
+    user_id, surface, context_id, question_answer_id, secondary_context_id, fingerprint,
     risk_band, reason_codes, mutation_disposition, escalate_case,
     warning_required, warning_issued_at, expires_at
   ) values (
-    p_user_id, p_surface, p_context_id, p_question_answer_id, v_fingerprint,
+    p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, v_fingerprint,
     p_risk_band, coalesce(p_reason_codes, '{}'), p_mutation_disposition, p_escalate_case,
     (p_mutation_disposition = 'warn'),
     case when p_mutation_disposition = 'warn' then now() else null end,
@@ -733,8 +809,8 @@ begin
 end;
 $function$;
 
-revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) from public;
-grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) to service_role;
+revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, text, text[], text, boolean) from public;
+grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, text, text[], text, boolean) to service_role;
 
 
 -- ============================================================
@@ -906,6 +982,7 @@ create or replace function public.can_evaluate_safety_context(
   p_surface text,
   p_context_id uuid,
   p_question_answer_id uuid,
+  p_secondary_context_id uuid,
   p_postcard jsonb
 )
 returns boolean
@@ -920,6 +997,11 @@ declare
   v_status text;
   v_first_letter_corr public.correspondences;
   v_reply_letter public.letters;
+  v_dispatch_row record;
+  v_question_active boolean;
+  v_answer_moderation_status text;
+  v_reply_dispatch record;
+  v_parent_reply record;
 begin
   if auth.uid() is null then
     return false;
@@ -1076,14 +1158,185 @@ begin
 
     return v_corr.status = 'active' and v_corr.established_at is not null;
 
+  -- ============================================================
+  -- Checkpoint 4 — public text surfaces. Every check below is copied
+  -- from the actual live RPC bodies (docs/sql/2026-09-28-title-postcard-
+  -- and-edit-window.sql's publish_dispatch/update_dispatch, docs/sql/
+  -- 2026-09-29-your-mark-production.sql's publish_question_answer,
+  -- docs/sql/2026-09-23-dispatch-replies.sql's create_reply), re-read
+  -- directly before writing this, not from memory. Title/topic/body
+  -- length ceilings are NOT re-checked here — those are pure, DB-free
+  -- product-shape rules, mirrored once in lib/safety/route-contract.ts
+  -- against the SAME exported constants lib/dispatches.ts/lib/
+  -- replies.ts already use (TITLE_MAX_CHARS/TOPIC_MAX_CHARS/
+  -- TOPIC_MAX_COUNT/REPLY_MAX_CHARS), the same split already established
+  -- for first_letter's own 2,000-char cap — this function only ever
+  -- checks what actually needs a database read.
+  -- ============================================================
+
+  elsif p_surface = 'dispatch_publish' then
+    -- No pre-existing Dispatch id at evaluation time — the trusted
+    -- publish-context identity is the acting member's own auth.uid(),
+    -- derived server-side (see this migration's own header note on
+    -- safety_evaluations.context_id and lib/safety/route-contract.ts) —
+    -- never a client-invented placeholder UUID. The Route Handler is
+    -- what actually sets p_context_id := the authenticated user's own
+    -- id; this check merely confirms that binding was honored.
+    if p_context_id <> auth.uid() then
+      return false;
+    end if;
+
+    -- publish_dispatch's own top-level gate is a single blanket check —
+    -- unlike write_letter/reply_to_letter, 'restricted' blocks
+    -- publishing a Dispatch AT ALL here, not merely a Postcard/Moment
+    -- attachment, so there is no separate restricted-Postcard branch
+    -- the way reply/write_anytime above have one.
+    if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+      return false;
+    end if;
+
+    if p_postcard is not null and not tempa_private.postcard_shape_is_valid(p_postcard) then
+      return false;
+    end if;
+
+    return true;
+
+  elsif p_surface = 'dispatch_update' then
+    if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+      return false;
+    end if;
+
+    -- update_dispatch has no p_postcard parameter at all — never invent
+    -- one here either.
+    if p_postcard is not null then
+      return false;
+    end if;
+
+    select id, published_at into v_dispatch_row
+    from public.dispatches
+    where id = p_context_id
+      and author_id = auth.uid()
+      and status = 'published';
+
+    if not found then
+      return false;
+    end if;
+
+    -- The 30-minute post-publish edit window — published_at is the only
+    -- authoritative anchor, exactly like update_dispatch's own check.
+    if now() > v_dispatch_row.published_at + interval '30 minutes' then
+      return false;
+    end if;
+
+    -- The Reply lock — bare row EXISTENCE, deliberately unfiltered by
+    -- moderation_status/deleted_at, matching update_dispatch's own
+    -- check exactly (no dispatch_replies row can ever be hard-deleted).
+    if exists (select 1 from public.dispatch_replies where dispatch_id = p_context_id) then
+      return false;
+    end if;
+
+    return true;
+
+  elsif p_surface = 'question_answer' then
+    if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+      return false;
+    end if;
+
+    -- publish_question_answer's own is_active check is NULL-tolerant in
+    -- a specific way (a nonexistent p_question_id never raises from that
+    -- check alone — SELECT INTO leaves the variable NULL, and `is not
+    -- null and not v_question_active` is then simply false) — mirrored
+    -- exactly below, EXCEPT this function additionally confirms the
+    -- Question actually exists at all: an evaluation must not be
+    -- authorized for a target that would fail with a foreign-key
+    -- violation the instant the real INSERT ran, which is exactly the
+    -- "payload the mutation could never accept" case this checkpoint
+    -- exists to close — never a "fix" to publish_question_answer's own
+    -- accepted behavior, which is untouched.
+    if not exists (select 1 from public.questions where id = p_context_id) then
+      return false;
+    end if;
+
+    select is_active into v_question_active from public.questions where id = p_context_id;
+    if v_question_active is not null and not v_question_active then
+      return false;
+    end if;
+
+    -- The hidden-answer freeze — mirrors publish_question_answer's own
+    -- `if existing_moderation_status = 'hidden' then raise`.
+    select moderation_status into v_answer_moderation_status
+    from public.question_answers
+    where user_id = auth.uid() and question_id = p_context_id;
+
+    if v_answer_moderation_status = 'hidden' then
+      return false;
+    end if;
+
+    return true;
+
+  elsif p_surface = 'dispatch_reply' then
+    if public.current_account_status() in ('restricted', 'suspended', 'banned') then
+      return false;
+    end if;
+
+    select id, author_id, status, moderation_status into v_reply_dispatch
+    from public.dispatches
+    where id = p_context_id;
+
+    if not found then
+      return false;
+    end if;
+
+    -- LOCKED RULE, no exception for the Dispatch's own author — mirrors
+    -- create_reply's own unconditional gate exactly.
+    if v_reply_dispatch.status <> 'published' or v_reply_dispatch.moderation_status <> 'visible' then
+      return false;
+    end if;
+
+    -- Full-scope block, either direction — the SAME helper create_reply
+    -- itself uses (tempa_private.is_blocked_pair, never
+    -- is_correspondence_blocked_pair: a Letters-scope Stop letters block
+    -- must have zero effect here).
+    if tempa_private.is_blocked_pair(auth.uid(), v_reply_dispatch.author_id)
+       or not tempa_private.author_content_publicly_visible(v_reply_dispatch.author_id) then
+      return false;
+    end if;
+
+    if p_secondary_context_id is not null then
+      select id, dispatch_id, author_id, moderation_status, deleted_at into v_parent_reply
+      from public.dispatch_replies
+      where id = p_secondary_context_id;
+
+      if not found then
+        return false;
+      end if;
+
+      if v_parent_reply.dispatch_id <> p_context_id then
+        return false;
+      end if;
+
+      -- A moderator-hidden OR member-deleted parent is not a legitimate
+      -- new-Reply target — mirrors create_reply's own check exactly.
+      if v_parent_reply.moderation_status <> 'visible' or v_parent_reply.deleted_at is not null then
+        return false;
+      end if;
+
+      if tempa_private.is_blocked_pair(auth.uid(), v_parent_reply.author_id)
+         or not tempa_private.author_content_publicly_visible(v_parent_reply.author_id) then
+        return false;
+      end if;
+    end if;
+
+    return true;
+
   else
     return false;
   end if;
 end;
 $function$;
 
-revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) from public;
-grant execute on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) to authenticated;
+revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, uuid, jsonb) from public;
+grant execute on function public.can_evaluate_safety_context(text, uuid, uuid, uuid, jsonb) to authenticated;
 
 
 -- ============================================================
@@ -1157,6 +1410,9 @@ create or replace function tempa_private.consume_safety_evaluation(
   p_surface text,
   p_context_id uuid,
   p_question_answer_id uuid,
+  p_secondary_context_id uuid,
+  p_title text,
+  p_topics text[],
   p_postcard jsonb,
   p_body text,
   p_warning_acknowledged boolean,
@@ -1196,6 +1452,15 @@ begin
     raise exception 'Safety evaluation is for a different Question-answer.' using errcode = '22023';
   end if;
 
+  -- Checkpoint 4 — a Safety evaluation for a top-level Reply must not be
+  -- replayable for a nested Reply (or vice versa), and changing the
+  -- parent target after evaluation must invalidate clearance. IS
+  -- DISTINCT FROM is NULL-safe: both null (two top-level Replies) is a
+  -- match; either side non-null and differing from the other is not.
+  if v_eval.secondary_context_id is distinct from p_secondary_context_id then
+    raise exception 'Safety evaluation is for a different target.' using errcode = '22023';
+  end if;
+
   if v_eval.consumed_at is not null then
     raise exception 'This Safety evaluation has already been used.' using errcode = '22023';
   end if;
@@ -1204,7 +1469,9 @@ begin
     raise exception 'This Safety evaluation has expired. Please try again.' using errcode = '22023';
   end if;
 
-  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body);
+  v_fingerprint := tempa_private.safety_fingerprint(
+    p_user_id, p_surface, p_context_id, p_question_answer_id, p_secondary_context_id, p_title, p_topics, p_postcard, p_body
+  );
 
   if v_fingerprint <> v_eval.fingerprint then
     raise exception 'This content has changed since it was last checked. Please try again.' using errcode = '22023';
@@ -1253,7 +1520,7 @@ begin
 end;
 $function$;
 
-revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid) from public, anon, authenticated, service_role;
+revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid) from public, anon, authenticated, service_role;
 
 
 -- ============================================================
