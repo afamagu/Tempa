@@ -62,18 +62,27 @@ type Rule = {
 // per spec §6, "one reusable classification interface" rather than
 // scattered per-surface logic. Order doesn't matter; every matching
 // rule contributes its reason code and its band is combined via max().
+// Every `fires` below combines only the LOCALLY-BOUND composite
+// indicators from indicators.ts (hasDirected*/has*Request/
+// has*LinkedUrl/...) — never raw message-wide fields like
+// moneyAmounts, cryptoAddresses, hasCryptoKeyword, hasEmergencyKeyword,
+// hasPaymentHandleKeyword, or urls directly. A long letter can contain
+// several unrelated topics; ANDing raw per-message facts together
+// would manufacture relationships between them that were never
+// actually there (see indicators.ts's own "LOCALITY PRINCIPLE" header
+// comment for the worked examples this guards against).
 const RULES: Rule[] = [
   {
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'meaningful',
-    fires: (i) => i.hasDirectedMoneyRequest && !i.hasCryptoKeyword && !i.hasGiftCardKeyword,
+    fires: (i) => i.hasDirectedMoneyRequest && !i.hasDirectedCryptoRequest && !i.hasDirectedGiftCardRequest,
   },
   {
-    // A directed request WITH an explicit amount is more concrete than
-    // a bare request — bumped to 'high'.
+    // A directed request WITH an explicit amount LOCALLY tied to it is
+    // more concrete than a bare request — bumped to 'high'.
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'high',
-    fires: (i) => i.hasDirectedMoneyRequest && i.moneyAmounts.length > 0,
+    fires: (i) => i.hasDirectedMoneyRequestWithAmount,
   },
   {
     reasonCode: 'LOAN_OR_BILL_REQUEST',
@@ -82,24 +91,23 @@ const RULES: Rule[] = [
   },
   {
     // A crypto keyword alone ("my Ethereum wallet address is 0x...")
-    // is a topic/disclosure, not a solicitation — this requires an
-    // actual directed request (hasDirectedMoneyRequest already covers
-    // "send USDT to 0x..." via the transfer-verb+address check in
-    // indicators.ts).
+    // is a topic/disclosure, not a solicitation — this requires the
+    // SAME request to be crypto-flavored (hasDirectedCryptoRequest
+    // already covers "send USDT to 0x..." via the transfer-verb+
+    // address check in indicators.ts).
     reasonCode: 'CRYPTO_SOLICITATION',
     band: 'high',
-    fires: (i) => i.hasCryptoKeyword && i.hasDirectedMoneyRequest,
+    fires: (i) => i.hasDirectedCryptoRequest,
   },
   {
-    // An address being SOLICITED (transfer verb + the address, or a
-    // crypto keyword alongside an actual request) is unambiguous. An
-    // address merely being STATED, with no request attached ("my
-    // wallet address is 0x...", "this article uses 0x... as an
-    // example"), is not — a bare address+keyword co-occurrence is not
-    // enough for 'severe' by itself.
+    // An address being SOLICITED (tied to the SAME directed request) is
+    // unambiguous. An address merely being STATED, with no request
+    // attached ("my wallet address is 0x...", "this article uses 0x...
+    // as an example"), is not — a bare address+keyword co-occurrence is
+    // not enough for 'severe' by itself.
     reasonCode: 'CRYPTO_SOLICITATION',
     band: 'severe',
-    fires: (i) => i.cryptoAddresses.length > 0 && i.hasDirectedMoneyRequest,
+    fires: (i) => i.hasDirectedCryptoTransfer,
   },
   {
     reasonCode: 'INVESTMENT_SOLICITATION',
@@ -119,7 +127,7 @@ const RULES: Rule[] = [
   {
     reasonCode: 'GIFT_CARD_REQUEST',
     band: 'meaningful',
-    fires: (i) => i.hasGiftCardKeyword && i.hasDirectedMoneyRequest,
+    fires: (i) => i.hasDirectedGiftCardRequest,
   },
   {
     // "Buy a Steam gift card and send me the code" — a narrow, highly
@@ -145,18 +153,19 @@ const RULES: Rule[] = [
   {
     reasonCode: 'PAYMENT_DETAILS',
     band: 'meaningful',
-    fires: (i) => i.hasPaymentHandleKeyword && i.hasDirectedMoneyRequest,
+    fires: (i) => i.hasDirectedPaymentHandleRequest,
   },
   {
     // Emergency VOCABULARY plus an incidental amount ("My hospital
     // bill was $500.", "The surgery cost us $2,000.") is a descriptive
-    // statement, not a solicitation — this requires an actual request
-    // for money/payment/value (a directed money request or a genuine
+    // statement, not a solicitation — this requires the emergency
+    // vocabulary to be in the SAME sentence as an actual request for
+    // money/payment/value (a directed money request or a genuine
     // bill/loan-help ask), not merely emergency words co-occurring
-    // with a number.
+    // anywhere in the letter with an unrelated request or number.
     reasonCode: 'EMERGENCY_MONEY_REQUEST',
     band: 'high',
-    fires: (i) => i.hasEmergencyKeyword && (i.hasDirectedMoneyRequest || i.hasLoanOrBillRequestPhrase),
+    fires: (i) => i.hasEmergencyFramedMoneyRequest,
   },
   {
     reasonCode: 'OFF_PLATFORM_ESCALATION',
@@ -164,14 +173,15 @@ const RULES: Rule[] = [
     fires: (i) => i.hasOffPlatformKeyword,
   },
   {
-    // Off-platform correlates with genuine solicitation shapes only:
-    // an actual directed money request, explicit investment pitch
-    // language, or an explicit investment promise — never a bare topic
-    // word co-occurring somewhere in the message (see
-    // hasInvestmentPitchContext's doc comment in indicators.ts).
+    // Off-platform correlates with genuine solicitation shapes only,
+    // in the SAME sentence: an actual directed money request, explicit
+    // investment pitch language, or an explicit investment promise —
+    // never a bare topic word or request co-occurring somewhere else
+    // in the message (see hasOffPlatformSolicitation's doc comment in
+    // indicators.ts).
     reasonCode: 'OFF_PLATFORM_ESCALATION',
     band: 'high',
-    fires: (i) => i.hasOffPlatformKeyword && (i.hasDirectedMoneyRequest || i.hasInvestmentPitchContext || i.hasInvestmentPromiseLanguage),
+    fires: (i) => i.hasOffPlatformSolicitation,
   },
   {
     reasonCode: 'SUSPICIOUS_LINK',
@@ -180,19 +190,20 @@ const RULES: Rule[] = [
   },
   {
     // A link next to emergency/hospital vocabulary is completely
-    // ordinary ("This is the hospital website: https://...") — only an
-    // actual directed money request (or a suspicious shortener)
-    // upgrades a bare link to 'meaningful'. Genuine phishing concern is
-    // otherwise carried by PHISHING_SIGNAL's own explicit-phrase rule
-    // below.
+    // ordinary ("This is the hospital website: https://...") — only a
+    // directed money request in the SAME sentence as the link, or a
+    // shortener alongside genuinely suspicious local context, upgrades
+    // it to 'meaningful'. A shortener ALONE ("Here is the recipe:
+    // https://bit.ly/example") stays 'weak'. Genuine phishing concern
+    // is otherwise carried by PHISHING_SIGNAL's own rule below.
     reasonCode: 'SUSPICIOUS_LINK',
     band: 'meaningful',
-    fires: (i) => i.hasSuspiciousLinkShortener || (i.urls.length > 0 && i.hasDirectedMoneyRequest),
+    fires: (i) => i.hasSolicitationLinkedUrl || i.hasSuspiciousShortenerWithContext,
   },
   {
     reasonCode: 'PHISHING_SIGNAL',
     band: 'high',
-    fires: (i) => i.urls.length > 0 && i.hasPhishingPhrase,
+    fires: (i) => i.hasPhishingLinkedUrl,
   },
 ]
 

@@ -5,6 +5,20 @@
 // extractor here is a plain regex/heuristic — deterministic, no
 // external calls, matching the "no simplistic keyword filter, but also
 // no external AI" boundary this checkpoint is scoped to.
+//
+// LOCALITY PRINCIPLE: a long letter can contain several unrelated
+// topics. Raw facts like "this message contains an amount" or "this
+// message mentions crypto" say nothing about whether that amount/topic
+// is actually part of a request — "Can you send me $100? This article
+// uses 0x... as an example Ethereum address." must not become crypto
+// solicitation just because a directed request and a crypto mention
+// both happen to exist somewhere in the text. Every composite indicator
+// below (hasDirected*, has*Request, has*LinkedUrl, ...) is built by
+// binding facts within the SAME sentence (or an even tighter local
+// window right after a request verb) — never by ANDing message-wide
+// booleans/arrays together. classify.ts must only combine these
+// composites, never the raw per-message fields, when expressing a
+// relationship between two facts.
 
 import { toDisplayText, toCanonicalText, toNumericText } from './normalize'
 
@@ -19,14 +33,15 @@ export type ExtractedIndicators = {
   hasCryptoKeyword: boolean
   hasGiftCardKeyword: boolean
   hasGiftCardCodeRequest: boolean
-  /** Inherently solicitation-shaped ("I can double your money",
-   * "guaranteed returns") — fires regardless of a separate directed-
-   * request match, since these phrases already address the recipient's
-   * money directly. */
+  /** Inherently solicitation-shaped ("double your money", "guaranteed
+   * returns") — fires regardless of a separate directed-request match,
+   * since these phrases already address the recipient's money
+   * directly. Excludes DISCUSSION of the phrase ("Anyone promising to
+   * double your money is probably scamming you.") — see
+   * INVESTMENT_PROMISE_DISCUSSION_PATTERN. */
   hasInvestmentPromiseLanguage: boolean
   /** Neutral topic mention only ("invest", "forex", "trading platform")
-   * — never fires solicitation alone; see lib/safety/classify.ts for
-   * how this combines with other indicators (e.g. off-platform). */
+   * — never fires solicitation alone. */
   hasInvestmentTopicKeyword: boolean
   /** Explicit pitch/proposition language ("forex opportunity", "invest
    * with me", "show you the investment") — deliberately NOT "a topic
@@ -44,16 +59,64 @@ export type ExtractedIndicators = {
   hasUrgencyLanguage: boolean
   /** A directed request for money/value. A bare directed-action verb
    * ("can you send me a photo?", "could you give me your opinion?",
-   * "can you pay attention?") is never enough on its own — different
-   * verb classes require different proof (see the verb-class patterns
-   * below): "transfer"/"wire" carry strong inherent financial meaning
-   * and only need a financial term somewhere in the same SENTENCE;
-   * "send"/"give"/"lend"/"pay"/"buy" have ordinary non-financial senses
-   * too, so their financial object must be LOCALLY tied to the verb (a
-   * short character window right after it), not merely present
-   * anywhere later in the sentence — "Can you send me the photo of the
-   * camera I bought for $300?" must not count the unrelated $300. */
+   * "can you pay attention?") is never enough on its own — the
+   * financial object must be LOCALLY tied to the verb (a short
+   * character window right after it, cut off at the first clause
+   * boundary), not merely present anywhere later in the sentence —
+   * "Can you send me the photo of the camera I bought for $300?" and
+   * "Can you transfer me the file I bought for $300?" must not count
+   * the unrelated $300. See LOCAL_TIE_VERB_LEAD_IN_PATTERN. */
   hasDirectedMoneyRequest: boolean
+  /** hasDirectedMoneyRequest where the SAME request also has an amount
+   * locally bound to it — replaces a message-wide `moneyAmounts.length
+   * > 0` check, which would count an unrelated amount elsewhere in the
+   * letter ("Could you send me some money? My camera cost $300."). */
+  hasDirectedMoneyRequestWithAmount: boolean
+  /** hasDirectedMoneyRequest where the SAME request is also tied to a
+   * crypto keyword or address — replaces `hasCryptoKeyword &&
+   * hasDirectedMoneyRequest`, which would fire from two unrelated
+   * sentences ("Can you send me $100? This article uses 0x... as an
+   * example Ethereum address."). */
+  hasDirectedCryptoRequest: boolean
+  /** hasDirectedCryptoRequest, but specifically tied to an ACTUAL
+   * address rather than just a keyword — the bar for treating a crypto
+   * solicitation as 'severe'. A bare "my wallet address is 0x..."
+   * statement (no request) is not this; "Send USDT to 0x..." is. */
+  hasDirectedCryptoTransfer: boolean
+  /** hasDirectedMoneyRequest where the SAME request is also tied to a
+   * gift-card keyword — replaces `hasGiftCardKeyword &&
+   * hasDirectedMoneyRequest`. */
+  hasDirectedGiftCardRequest: boolean
+  /** hasDirectedMoneyRequest where the SAME request is also tied to a
+   * payment-handle keyword or cashtag — replaces `hasPaymentHandleKeyword
+   * && hasDirectedMoneyRequest`. */
+  hasDirectedPaymentHandleRequest: boolean
+  /** Emergency vocabulary in the SAME sentence as an actual request
+   * (a directed money request or a genuine bill/loan-help ask) —
+   * replaces `hasEmergencyKeyword && hasDirectedMoneyRequest`, which
+   * would fire from an unrelated aside ("Could you send me some money?
+   * My brother works at a hospital."). */
+  hasEmergencyFramedMoneyRequest: boolean
+  /** An off-platform mention in the SAME sentence as an actual
+   * solicitation shape (a directed money request, explicit investment
+   * pitch language, or an explicit investment promise) — replaces
+   * `hasOffPlatformKeyword && hasDirectedMoneyRequest`. */
+  hasOffPlatformSolicitation: boolean
+  /** A URL in the SAME sentence as a directed money request — replaces
+   * `urls.length > 0 && hasDirectedMoneyRequest`, which would fire from
+   * an unrelated link elsewhere in the letter ("Could you send me some
+   * money? Here is an article I liked: https://example.com"). */
+  hasSolicitationLinkedUrl: boolean
+  /** A URL in the SAME sentence as an explicit phishing phrase —
+   * replaces `urls.length > 0 && hasPhishingPhrase`. */
+  hasPhishingLinkedUrl: boolean
+  /** A suspicious link shortener in the SAME sentence as SOME other
+   * genuinely suspicious signal (a directed request, a phishing
+   * phrase, a payment handle, or a crypto mention) — a shortener alone
+   * ("Here is the recipe: https://bit.ly/example") is only a weak
+   * structural signal (see SUSPICIOUS_LINK's 'weak' rule), never
+   * 'meaningful' by itself. */
+  hasSuspiciousShortenerWithContext: boolean
   hasLoanOrBillRequestPhrase: boolean
   hasSuspiciousLinkShortener: boolean
   hasPhishingPhrase: boolean
@@ -79,8 +142,18 @@ const CRYPTO_KEYWORD_PATTERN =
 const GIFT_CARD_KEYWORD_PATTERN = /\b(gift ?card|steam card|google play card|itunes card|amazon card|redeem code)\b/i
 const GIFT_CARD_CODE_REQUEST_PATTERN =
   /\b(buy|purchase|get)\b.{0,30}\b(gift ?card|steam card|google play card|itunes card)\b.{0,40}\b(send|share|give)\b.{0,15}\b(code|number|pin)\b/i
-const INVESTMENT_PROMISE_PATTERN =
-  /\bi (?:can|will|could) double\b|\bdouble your (?:money|investment)\b|\bguaranteed (?:returns?|profit)\b/i
+// Requires an explicit FINANCIAL object ("double YOUR MONEY/
+// INVESTMENT"), not a bare "I can/will/could double" — that alone also
+// matches ordinary sentences ("I can double the recipe.", "I will
+// double-check that tomorrow." — "double-check" contains a word
+// boundary right after "double", so a naive `double\b` pattern would
+// have matched it too).
+const INVESTMENT_PROMISE_PATTERN = /\bdouble your (?:money|investment|cash|funds)\b|\bguaranteed (?:returns?|profit)\b/i
+// DISCUSSING or warning about the scam phrase ("Anyone promising to
+// double your money is probably scamming you.") is not itself a
+// promise being made to the reader.
+const INVESTMENT_PROMISE_DISCUSSION_PATTERN =
+  /\b(?:anyone|someone|people|scammers?|they)\b.{0,20}\bpromis\w*\b.{0,20}\bdouble your\b/i
 const INVESTMENT_TOPIC_PATTERN = /\b(invest(?:ment|ing)?|forex|trading (?:opportunity|platform))\b/i
 // Explicit proposition/offer language — deliberately phrase-based
 // rather than "topic word + off-platform mention nearby", which is
@@ -119,31 +192,32 @@ const MONEY_WORD_PATTERN = /\b(money|funds?|cash|payment)\b/i
 // no verb-object locality question, it's self-contained.
 const NEED_MONEY_PATTERN = /\bi need\b.{0,15}\b(money|funds|cash)\b/i
 
-// "transfer"/"wire" are rarely used for anything but moving value —
-// no ordinary correspondence sense ("transfer me a photo" doesn't
-// happen) — so these are checked at SENTENCE level like before: the
-// verb anywhere in the sentence plus a financial term anywhere in the
-// same sentence is enough.
-const STRONG_TRANSFER_VERB_PATTERN =
-  /\b(can|could|would) you\b.{0,30}\b(transfer|wire)\b|\bplease\b.{0,20}\b(transfer|wire)\b|\b(transfer|wire)\b.{0,15}\bme\b|\b(transfer|wire)\b.{0,20}\bto\b.{0,15}\b(this|my|the)\b.{0,10}\b(wallet|account)\b|\bi need you to\b.{0,20}\b(transfer|wire)\b/i
-
-// "send"/"give"/"lend"/"pay"/"buy" all have ordinary non-financial
+// send/give/lend/pay/buy/transfer/wire ALL have ordinary non-financial
 // senses ("send me a photo", "give me your opinion", "lend me that
-// book", "pay attention", "buy me a coffee") — a bare sentence-wide
-// financial term is NOT enough for these; the term must be LOCALLY
-// tied to the verb (see sentenceHasLocallyDirectedMoneyRequest below).
-// This pattern only finds the verb+object LEAD-IN; it says nothing
-// about whether the object is financial.
+// book", "pay attention", "buy me a coffee", "transfer me the file",
+// "wire up the circuit") — a bare sentence-wide financial term is NOT
+// enough for any of them; the term must be LOCALLY tied to the verb
+// (see analyzeDirectedRequest below). This pattern only finds the
+// verb+object LEAD-IN; it says nothing about whether the object is
+// financial.
 const LOCAL_TIE_VERB_LEAD_IN_PATTERN =
-  /\b(?:can|could|would) you\b.{0,15}\b(?:send|give|lend|pay|buy)\b(?:\s+me\b)?|\bplease\b.{0,15}\b(?:send|pay)\b(?:\s+me\b)?|\b(?:send|give|lend|pay)\b\s+me\b|\bbuy me\b|\bi need you to\b.{0,15}\b(?:send|pay|buy)\b(?:\s+me\b)?/i
+  /\b(?:can|could|would) you\b.{0,15}\b(?:send|give|lend|pay|buy|transfer|wire)\b(?:\s+me\b)?|\bplease\b.{0,15}\b(?:send|pay|transfer|wire)\b(?:\s+me\b)?|\b(?:send|give|lend|pay|transfer|wire)\b\s+me\b|\bbuy me\b|\bi need you to\b.{0,15}\b(?:send|pay|buy|transfer|wire)\b(?:\s+me\b)?/i
 
 // How far past a local-tie verb's lead-in to look for its financial
-// object. Long enough for "send me $300"/"give me your PayPal", short
-// enough to exclude a financial term in a LATER, unrelated clause
-// ("...the camera I bought for $300" starts well past this window).
-// An approximation, like every other window in this file — not an
-// attempt at real clause parsing.
+// object, before OBJECT_WINDOW_CUTOFF_PATTERN below narrows it further.
+// Long enough for "send me $300"/"give me your PayPal", short enough
+// that a genuinely later clause won't normally fit even without a
+// cutoff match. An approximation, like every other window in this
+// file — not an attempt at real clause parsing.
 const LOCAL_OBJECT_WINDOW_CHARS = 30
+
+// Marks where the local object window should be cut short: sentence-
+// internal punctuation, or a NEW clause describing some other object
+// ("...the camera I BOUGHT for $300", "...the file I BOUGHT for
+// $300") — the amount after "I bought" describes the unrelated object
+// the clause is about, not what the verb's own request is for.
+const OBJECT_WINDOW_CUTOFF_PATTERN =
+  /[.,!?;]|\bi\s+(?:bought|paid|got|found|saw|ordered|purchased|received|made|had|won|earned|owe|spent)\b/i
 
 // A transfer verb followed closely by "to" and then an actual crypto
 // address ("send USDT to 0x...") is unambiguous regardless of whether
@@ -171,61 +245,194 @@ function testPattern(pattern: RegExp, text: string): boolean {
 }
 
 /** Naive sentence split — good enough for a LOCAL PROXIMITY check
- * (does a request verb and a financial term appear in the same
- * breath?), not for anything requiring linguistic precision. Splitting
- * on the ORIGINAL display text (not canonical/numeric) keeps sentence
- * boundaries stable before any lossy matching-only transformation. */
+ * (do two facts appear in the same breath?), not for anything
+ * requiring linguistic precision. Splitting on the ORIGINAL display
+ * text (not canonical/numeric) keeps sentence boundaries stable before
+ * any lossy matching-only transformation. */
 function splitIntoSentences(displayText: string): string[] {
   return displayText.split(/(?<=[.!?])\s+|\n+/).filter((sentence) => sentence.trim().length > 0)
 }
 
-function hasFinancialTerm(canonicalSpan: string, numericSpan: string, displaySpan: string): boolean {
-  return (
-    MONEY_WORD_PATTERN.test(canonicalSpan) ||
-    PAYMENT_HANDLE_KEYWORD_PATTERN.test(canonicalSpan) ||
-    testPattern(CASHTAG_PATTERN, displaySpan) ||
-    CRYPTO_KEYWORD_PATTERN.test(canonicalSpan) ||
-    GIFT_CARD_KEYWORD_PATTERN.test(canonicalSpan) ||
-    LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalSpan) ||
-    testPattern(CURRENCY_SYMBOL_AMOUNT_PATTERN, numericSpan) ||
-    testPattern(CURRENCY_WORD_AMOUNT_PATTERN, numericSpan) ||
-    testPattern(CRYPTO_ADDRESS_PATTERN, displaySpan)
-  )
+type FinancialTerms = {
+  any: boolean
+  hasAmount: boolean
+  hasCryptoTerm: boolean
+  hasCryptoAddress: boolean
+  hasGiftCardTerm: boolean
+  hasPaymentHandleTerm: boolean
 }
 
-/** send/give/lend/pay/buy: require the financial term to appear in a
- * bounded window right after the verb's lead-in, not merely somewhere
- * in the sentence. canonicalSentence is where the (possibly leet-
- * obfuscated) verb lead-in is found; that match's end index is then
- * used to window into all three text representations. Note this index
- * can drift slightly out of alignment with displaySentence/
- * numericSentence when heavy letter-spacing obfuscation occurred
- * earlier in the same sentence (collapseLetterSpacing changes length)
- * — an accepted approximation, like every other heuristic in this
- * file; the window is generous enough to absorb the common case. */
-function sentenceHasLocallyDirectedMoneyRequest(
-  displaySentence: string,
-  canonicalSentence: string,
-  numericSentence: string
-): boolean {
-  const match = LOCAL_TIE_VERB_LEAD_IN_PATTERN.exec(canonicalSentence)
-  if (!match) return false
-  // LOAN_OR_BILL_PHRASE_PATTERN already carries its own internal
-  // proximity (a help/pay verb within 25 chars of rent/bill/etc) and
-  // is safe to check against the whole sentence — checking only the
-  // POST-lead-in window here would exclude the "pay"/"help" word the
-  // phrase pattern itself needs, since that word was just consumed by
-  // the lead-in match above.
-  if (LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalSentence)) return true
-  const objectStart = match.index + match[0].length
-  const canonicalObject = canonicalSentence.slice(objectStart, objectStart + LOCAL_OBJECT_WINDOW_CHARS)
-  const displayObject = displaySentence.slice(objectStart, objectStart + LOCAL_OBJECT_WINDOW_CHARS)
-  const numericObject = numericSentence.slice(objectStart, objectStart + LOCAL_OBJECT_WINDOW_CHARS)
-  return hasFinancialTerm(canonicalObject, numericObject, displayObject)
+const NO_TERMS: FinancialTerms = {
+  any: false,
+  hasAmount: false,
+  hasCryptoTerm: false,
+  hasCryptoAddress: false,
+  hasGiftCardTerm: false,
+  hasPaymentHandleTerm: false,
+}
+
+function detectFinancialTerms(canonicalSpan: string, numericSpan: string, displaySpan: string): FinancialTerms {
+  const hasAmount =
+    testPattern(CURRENCY_SYMBOL_AMOUNT_PATTERN, numericSpan) || testPattern(CURRENCY_WORD_AMOUNT_PATTERN, numericSpan)
+  const hasCryptoAddress = testPattern(CRYPTO_ADDRESS_PATTERN, displaySpan)
+  const hasCryptoTerm = hasCryptoAddress || CRYPTO_KEYWORD_PATTERN.test(canonicalSpan)
+  const hasGiftCardTerm = GIFT_CARD_KEYWORD_PATTERN.test(canonicalSpan)
+  const hasPaymentHandleTerm = PAYMENT_HANDLE_KEYWORD_PATTERN.test(canonicalSpan) || testPattern(CASHTAG_PATTERN, displaySpan)
+  const hasMoneyWordOrBill = MONEY_WORD_PATTERN.test(canonicalSpan) || LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalSpan)
+  return {
+    any: hasAmount || hasCryptoTerm || hasGiftCardTerm || hasPaymentHandleTerm || hasMoneyWordOrBill,
+    hasAmount,
+    hasCryptoTerm,
+    hasCryptoAddress,
+    hasGiftCardTerm,
+    hasPaymentHandleTerm,
+  }
+}
+
+function mergeTerms(a: FinancialTerms, b: FinancialTerms): FinancialTerms {
+  return {
+    any: a.any || b.any,
+    hasAmount: a.hasAmount || b.hasAmount,
+    hasCryptoTerm: a.hasCryptoTerm || b.hasCryptoTerm,
+    hasCryptoAddress: a.hasCryptoAddress || b.hasCryptoAddress,
+    hasGiftCardTerm: a.hasGiftCardTerm || b.hasGiftCardTerm,
+    hasPaymentHandleTerm: a.hasPaymentHandleTerm || b.hasPaymentHandleTerm,
+  }
+}
+
+/** Length of the local object window starting at `start` in `text`,
+ * bounded by LOCAL_OBJECT_WINDOW_CHARS and cut short at the first
+ * clause boundary (see OBJECT_WINDOW_CUTOFF_PATTERN). */
+function localWindowLength(text: string, start: number): number {
+  const rest = text.slice(start, start + LOCAL_OBJECT_WINDOW_CHARS)
+  const cutoff = OBJECT_WINDOW_CUTOFF_PATTERN.exec(rest)
+  return cutoff ? cutoff.index : rest.length
 }
 
 function sentenceHasDirectedCryptoTransfer(displaySentence: string, canonicalSentence: string): boolean {
   return TRANSFER_VERB_TO_PATTERN.test(canonicalSentence) && testPattern(CRYPTO_ADDRESS_PATTERN, displaySentence)
+}
+
+/** The core locality mechanism: is this ONE sentence a directed money
+ * request, and if so, which kinds of financial term (amount, crypto,
+ * gift-card, payment-handle) are actually PART OF that same request —
+ * never a fact borrowed from elsewhere in the sentence/message that
+ * merely happens to co-occur. Each self-contained mechanism (need-
+ * money, crypto-transfer-to-address, transfer-to-account) is checked
+ * and its terms merged in; the generic local-tie+window mechanism is
+ * only consulted if none of the self-contained ones already matched,
+ * since it does the most approximate (character-window) binding. */
+function analyzeDirectedRequest(
+  displaySentence: string,
+  canonicalSentence: string,
+  numericSentence: string
+): FinancialTerms & { isDirected: boolean } {
+  let isDirected = false
+  let terms = NO_TERMS
+
+  if (NEED_MONEY_PATTERN.test(canonicalSentence)) {
+    isDirected = true
+    terms = mergeTerms(terms, { ...NO_TERMS, any: true })
+  }
+
+  if (sentenceHasDirectedCryptoTransfer(displaySentence, canonicalSentence)) {
+    isDirected = true
+    terms = mergeTerms(terms, { any: true, hasAmount: false, hasCryptoTerm: true, hasCryptoAddress: true, hasGiftCardTerm: false, hasPaymentHandleTerm: false })
+  }
+
+  if (TRANSFER_TO_ACCOUNT_PATTERN.test(canonicalSentence)) {
+    isDirected = true
+    // This shape ("transfer/send/pay/wire ... to ... this/my/the
+    // wallet/account") already commits the whole sentence to being a
+    // transfer request, so checking the full sentence for an
+    // additional crypto/amount/gift-card term here is safe — unlike
+    // the generic local-tie case below, there is no OTHER unrelated
+    // clause this sentence could plausibly be about instead.
+    terms = mergeTerms(terms, detectFinancialTerms(canonicalSentence, numericSentence, displaySentence))
+  }
+
+  if (!isDirected) {
+    const leadIn = LOCAL_TIE_VERB_LEAD_IN_PATTERN.exec(canonicalSentence)
+    if (leadIn) {
+      if (LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalSentence)) {
+        // LOAN_OR_BILL_PHRASE_PATTERN already carries its own internal
+        // proximity (a help/pay verb within 25 chars of rent/bill/
+        // etc) and is safe to check against the whole sentence —
+        // checking only the POST-lead-in window would exclude the
+        // "pay"/"help" word the phrase pattern itself needs, since
+        // that word was just consumed by the lead-in match above.
+        isDirected = true
+        terms = mergeTerms(terms, { ...NO_TERMS, any: true })
+      } else {
+        const objectStart = leadIn.index + leadIn[0].length
+        const windowLength = localWindowLength(canonicalSentence, objectStart)
+        const canonicalObject = canonicalSentence.slice(objectStart, objectStart + windowLength)
+        const displayObject = displaySentence.slice(objectStart, objectStart + windowLength)
+        const numericObject = numericSentence.slice(objectStart, objectStart + windowLength)
+        const windowTerms = detectFinancialTerms(canonicalObject, numericObject, displayObject)
+        if (windowTerms.any) {
+          isDirected = true
+          terms = mergeTerms(terms, windowTerms)
+        }
+      }
+    }
+  }
+
+  return { isDirected, ...terms }
+}
+
+function hasInvestmentPromiseLanguageIn(canonicalSpan: string): boolean {
+  return INVESTMENT_PROMISE_PATTERN.test(canonicalSpan) && !INVESTMENT_PROMISE_DISCUSSION_PATTERN.test(canonicalSpan)
+}
+
+type SentenceAnalysis = {
+  isDirectedMoneyRequest: boolean
+  hasAmount: boolean
+  hasCryptoTerm: boolean
+  hasCryptoAddress: boolean
+  hasGiftCardTerm: boolean
+  hasPaymentHandleTerm: boolean
+  isLoanOrBillRequest: boolean
+  hasEmergencyTerm: boolean
+  hasOffPlatformTerm: boolean
+  hasInvestmentPitch: boolean
+  hasInvestmentPromise: boolean
+  hasUrl: boolean
+  hasSuspiciousShortener: boolean
+  hasPhishingPhrase: boolean
+  /** Broader than hasCryptoTerm/hasPaymentHandleTerm above (those are
+   * scoped to an actual directed request) — used only to decide
+   * whether a link SHORTENER in this sentence has any suspicious
+   * company at all, which doesn't need the full "directed request"
+   * bar (see hasSuspiciousShortenerWithContext's doc comment). */
+  hasCryptoKeywordInSentence: boolean
+  hasPaymentHandleKeywordInSentence: boolean
+}
+
+function analyzeSentence(displaySentence: string): SentenceAnalysis {
+  const canonicalSentence = toCanonicalText(displaySentence)
+  const numericSentence = toNumericText(displaySentence)
+  const directed = analyzeDirectedRequest(displaySentence, canonicalSentence, numericSentence)
+
+  return {
+    isDirectedMoneyRequest: directed.isDirected,
+    hasAmount: directed.hasAmount,
+    hasCryptoTerm: directed.hasCryptoTerm,
+    hasCryptoAddress: directed.hasCryptoAddress,
+    hasGiftCardTerm: directed.hasGiftCardTerm,
+    hasPaymentHandleTerm: directed.hasPaymentHandleTerm,
+    isLoanOrBillRequest: LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalSentence),
+    hasEmergencyTerm: EMERGENCY_KEYWORD_PATTERN.test(canonicalSentence),
+    hasOffPlatformTerm: OFF_PLATFORM_KEYWORD_PATTERN.test(canonicalSentence),
+    hasInvestmentPitch: INVESTMENT_PITCH_PHRASE_PATTERN.test(canonicalSentence),
+    hasInvestmentPromise: hasInvestmentPromiseLanguageIn(canonicalSentence),
+    hasUrl: testPattern(URL_PATTERN, displaySentence),
+    hasSuspiciousShortener: LINK_SHORTENER_PATTERN.test(displaySentence),
+    hasPhishingPhrase: PHISHING_PHRASE_PATTERN.test(canonicalSentence),
+    hasCryptoKeywordInSentence: CRYPTO_KEYWORD_PATTERN.test(canonicalSentence) || testPattern(CRYPTO_ADDRESS_PATTERN, displaySentence),
+    hasPaymentHandleKeywordInSentence:
+      PAYMENT_HANDLE_KEYWORD_PATTERN.test(canonicalSentence) || testPattern(CASHTAG_PATTERN, displaySentence),
+  }
 }
 
 function parseAmountValue(digits: string, kilo: boolean): number | null {
@@ -269,17 +476,25 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
   const numericText = toNumericText(rawText)
 
   const sentences = splitIntoSentences(displayText)
-  const hasDirectedMoneyRequest = sentences.some((sentence) => {
-    const canonicalSentence = toCanonicalText(sentence)
-    if (NEED_MONEY_PATTERN.test(canonicalSentence) || TRANSFER_TO_ACCOUNT_PATTERN.test(canonicalSentence)) return true
-    const numericSentence = toNumericText(sentence)
-    if (STRONG_TRANSFER_VERB_PATTERN.test(canonicalSentence) && hasFinancialTerm(canonicalSentence, numericSentence, sentence)) {
-      return true
-    }
-    if (sentenceHasLocallyDirectedMoneyRequest(sentence, canonicalSentence, numericSentence)) return true
-    return sentenceHasDirectedCryptoTransfer(sentence, canonicalSentence)
-  })
-  const hasInvestmentPitchContext = INVESTMENT_PITCH_PHRASE_PATTERN.test(canonicalText)
+  const analyses = sentences.map((sentence) => analyzeSentence(sentence))
+
+  const hasDirectedMoneyRequest = analyses.some((s) => s.isDirectedMoneyRequest)
+  const hasDirectedMoneyRequestWithAmount = analyses.some((s) => s.isDirectedMoneyRequest && s.hasAmount)
+  const hasDirectedCryptoRequest = analyses.some((s) => s.isDirectedMoneyRequest && s.hasCryptoTerm)
+  const hasDirectedCryptoTransfer = analyses.some((s) => s.isDirectedMoneyRequest && s.hasCryptoAddress)
+  const hasDirectedGiftCardRequest = analyses.some((s) => s.isDirectedMoneyRequest && s.hasGiftCardTerm)
+  const hasDirectedPaymentHandleRequest = analyses.some((s) => s.isDirectedMoneyRequest && s.hasPaymentHandleTerm)
+  const hasEmergencyFramedMoneyRequest = analyses.some((s) => s.hasEmergencyTerm && (s.isDirectedMoneyRequest || s.isLoanOrBillRequest))
+  const hasOffPlatformSolicitation = analyses.some(
+    (s) => s.hasOffPlatformTerm && (s.isDirectedMoneyRequest || s.hasInvestmentPitch || s.hasInvestmentPromise)
+  )
+  const hasSolicitationLinkedUrl = analyses.some((s) => s.hasUrl && s.isDirectedMoneyRequest)
+  const hasPhishingLinkedUrl = analyses.some((s) => s.hasUrl && s.hasPhishingPhrase)
+  const hasSuspiciousShortenerWithContext = analyses.some(
+    (s) =>
+      s.hasSuspiciousShortener &&
+      (s.isDirectedMoneyRequest || s.hasPhishingPhrase || s.hasPaymentHandleKeywordInSentence || s.hasCryptoKeywordInSentence)
+  )
 
   return {
     urls: unique(Array.from(displayText.matchAll(URL_PATTERN)).map((m) => m[0])),
@@ -294,15 +509,25 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
     hasCryptoKeyword: CRYPTO_KEYWORD_PATTERN.test(canonicalText),
     hasGiftCardKeyword: GIFT_CARD_KEYWORD_PATTERN.test(canonicalText),
     hasGiftCardCodeRequest: GIFT_CARD_CODE_REQUEST_PATTERN.test(canonicalText),
-    hasInvestmentPromiseLanguage: INVESTMENT_PROMISE_PATTERN.test(canonicalText),
+    hasInvestmentPromiseLanguage: hasInvestmentPromiseLanguageIn(canonicalText),
     hasInvestmentTopicKeyword: INVESTMENT_TOPIC_PATTERN.test(canonicalText),
-    hasInvestmentPitchContext,
+    hasInvestmentPitchContext: INVESTMENT_PITCH_PHRASE_PATTERN.test(canonicalText),
     hasPaymentHandleKeyword: PAYMENT_HANDLE_KEYWORD_PATTERN.test(canonicalText) || testPattern(CASHTAG_PATTERN, displayText),
     hasBankDetailsSharedPhrase: BANK_DETAILS_SHARED_PATTERN.test(canonicalText),
     hasOffPlatformKeyword: OFF_PLATFORM_KEYWORD_PATTERN.test(canonicalText),
     hasEmergencyKeyword: EMERGENCY_KEYWORD_PATTERN.test(canonicalText),
     hasUrgencyLanguage: URGENCY_LANGUAGE_PATTERN.test(canonicalText),
     hasDirectedMoneyRequest,
+    hasDirectedMoneyRequestWithAmount,
+    hasDirectedCryptoRequest,
+    hasDirectedCryptoTransfer,
+    hasDirectedGiftCardRequest,
+    hasDirectedPaymentHandleRequest,
+    hasEmergencyFramedMoneyRequest,
+    hasOffPlatformSolicitation,
+    hasSolicitationLinkedUrl,
+    hasPhishingLinkedUrl,
+    hasSuspiciousShortenerWithContext,
     hasLoanOrBillRequestPhrase: LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalText),
     hasSuspiciousLinkShortener: LINK_SHORTENER_PATTERN.test(displayText),
     hasPhishingPhrase: PHISHING_PHRASE_PATTERN.test(canonicalText),

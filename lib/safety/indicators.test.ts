@@ -156,3 +156,45 @@ describe('extractIndicators — keyword/phrase indicators', () => {
     expect(extractIndicators(`My Ethereum wallet address is ${address}`).hasDirectedMoneyRequest).toBe(false)
   })
 })
+
+describe('extractIndicators — locally-bound composites (do not combine unrelated sentences)', () => {
+  it('binds a crypto term to the request only when they are in the same sentence', () => {
+    const address = '0x' + 'e'.repeat(40)
+    const unrelated = extractIndicators(`Can you send me $100? This article uses ${address} as an example.`)
+    expect(unrelated.hasDirectedCryptoRequest).toBe(false)
+    expect(unrelated.hasDirectedCryptoTransfer).toBe(false)
+
+    const related = extractIndicators(`Send USDT to ${address}`)
+    expect(related.hasDirectedCryptoRequest).toBe(true)
+    expect(related.hasDirectedCryptoTransfer).toBe(true)
+  })
+
+  it('binds an amount to the request only when they are in the same sentence', () => {
+    expect(extractIndicators('Could you send me some money? My camera cost $300.').hasDirectedMoneyRequestWithAmount).toBe(
+      false
+    )
+    expect(extractIndicators('Can you send me $300?').hasDirectedMoneyRequestWithAmount).toBe(true)
+  })
+
+  it('binds emergency vocabulary to the request only when they are in the same sentence', () => {
+    expect(
+      extractIndicators('Could you send me some money? My brother works at a hospital.').hasEmergencyFramedMoneyRequest
+    ).toBe(false)
+    expect(extractIndicators('I need emergency money for hospital treatment.').hasEmergencyFramedMoneyRequest).toBe(true)
+  })
+
+  it('binds a URL to the request only when they are in the same sentence', () => {
+    expect(
+      extractIndicators('Could you send me some money? Here is an article I liked: https://example.com')
+        .hasSolicitationLinkedUrl
+    ).toBe(false)
+    expect(extractIndicators('Can you send me $300 here: https://example.com/pay').hasSolicitationLinkedUrl).toBe(true)
+  })
+
+  it('does not treat a bare link shortener as suspicious context on its own', () => {
+    expect(extractIndicators('Here is the recipe: https://bit.ly/example').hasSuspiciousShortenerWithContext).toBe(false)
+    expect(
+      extractIndicators('Can you send me $300 at my payment page: https://bit.ly/pay').hasSuspiciousShortenerWithContext
+    ).toBe(true)
+  })
+})

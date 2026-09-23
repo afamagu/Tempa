@@ -624,3 +624,139 @@ describe('structural invariants', () => {
     expect(result.reasonCodes).toEqual([])
   })
 })
+
+// ============================================================
+// Locality architecture — classify.ts's rules must never manufacture
+// a relationship between two facts merely because both exist
+// somewhere in the same (possibly long) letter. General principle:
+// whenever two facts combine to raise severity, the same two facts in
+// UNRELATED sentences of the same letter must not.
+// ============================================================
+describe('locality — unrelated facts elsewhere in the letter must not combine', () => {
+  it('a money request in one sentence and an unrelated crypto documentation example in another is a money request, not crypto solicitation, and not severe/deny', () => {
+    const result = classifyContent('Can you send me $100? This article uses 0x' + 'd'.repeat(40) + ' as an example Ethereum address.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.reasonCodes).not.toContain('CRYPTO_SOLICITATION')
+    expect(result.riskBand).not.toBe('severe')
+    expect(result.mutationDisposition).not.toBe('deny')
+  })
+
+  it('a money request and an unrelated mention that a relative works at a hospital is not EMERGENCY_MONEY_REQUEST', () => {
+    const result = classifyContent('Could you send me some money? My brother works at a hospital.')
+    expect(result.reasonCodes).not.toContain('EMERGENCY_MONEY_REQUEST')
+  })
+
+  it('a money request and an unrelated article link does not turn the link into a meaningful SUSPICIOUS_LINK', () => {
+    const withLink = classifyContent('Could you send me some money? Here is an article I liked: https://example.com')
+    const withoutLink = classifyContent('Could you send me some money?')
+    expect(withLink.reasonCodes).toContain('SUSPICIOUS_LINK')
+    expect(withLink.reasonCodes.filter((c) => c === 'SUSPICIOUS_LINK')).toHaveLength(1)
+    // The bare link only ever reaches SUSPICIOUS_LINK's 'weak' tier, so
+    // adding it must not change the band/disposition the money request
+    // alone already produces — the link is not itself "meaningful".
+    expect(withLink.riskBand).toBe(withoutLink.riskBand)
+    expect(withLink.mutationDisposition).toBe(withoutLink.mutationDisposition)
+  })
+
+  it('a money request and an unrelated amount describing something else does not upgrade the request to "high"', () => {
+    const result = classifyContent('Could you send me some money? My camera cost $300.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.riskBand).toBe('meaningful')
+  })
+
+  it('a money request and an unrelated gift-card purchase mention is not GIFT_CARD_REQUEST', () => {
+    const result = classifyContent('Can you send me some money? I bought my brother a gift card yesterday.')
+    expect(result.reasonCodes).not.toContain('GIFT_CARD_REQUEST')
+  })
+
+  it('a money request and an unrelated off-platform aside stays at "weak" off-platform evidence, not "high"', () => {
+    const result = classifyContent('Can you send me some money? Also, let\'s catch up on WhatsApp sometime about something else.')
+    expect(result.reasonCodes).toContain('OFF_PLATFORM_ESCALATION')
+    expect(result.escalateCase).toBe(false)
+  })
+
+  it('a phishing phrase and an unrelated link in a different sentence is not PHISHING_SIGNAL', () => {
+    const result = classifyContent(
+      'Please verify your account details with your bank directly. Here is a photo from my trip: https://example.com/photo.jpg'
+    )
+    expect(result.reasonCodes).not.toContain('PHISHING_SIGNAL')
+  })
+
+  it('a money request and an unrelated PayPal mention is not PAYMENT_DETAILS', () => {
+    const result = classifyContent('Can you send me some money? I use PayPal for other things sometimes.')
+    expect(result.reasonCodes).not.toContain('PAYMENT_DETAILS')
+  })
+})
+
+// ============================================================
+// Item 1 — INVESTMENT_PROMISE_PATTERN must require an explicit
+// financial object, and must not fire from discussion/criticism of
+// the scam phrase itself.
+// ============================================================
+describe('investment promise language requires an explicit financial object, not just "double"', () => {
+  it('ordinary uses of "double" stay allowed', () => {
+    for (const text of ['I can double the recipe.', 'I could double the batch.', 'I will double-check that tomorrow.']) {
+      const result = classifyContent(text)
+      expect(result.riskBand).toBe('none')
+      expect(result.mutationDisposition).toBe('allow')
+      expect(result.reasonCodes).not.toContain('INVESTMENT_SOLICITATION')
+    }
+  })
+
+  it('discussing/warning about the scam phrase is not itself a solicitation', () => {
+    const result = classifyContent('Anyone promising to double your money is probably scamming you.')
+    expect(result.reasonCodes).not.toContain('INVESTMENT_SOLICITATION')
+    expect(result.mutationDisposition).toBe('allow')
+  })
+
+  it('preserves detection of an actual promise', () => {
+    for (const text of ['I can double your money.', 'I will double your investment.']) {
+      expect(classifyContent(text).reasonCodes).toContain('INVESTMENT_SOLICITATION')
+    }
+  })
+})
+
+// ============================================================
+// Item 2 — "transfer" is not inherently financial enough for
+// sentence-wide correlation; it needs the same local object binding as
+// send/give/lend/pay/buy, unless the nearby object is genuinely
+// money/funds/amount/account/wallet.
+// ============================================================
+describe('"transfer" requires a locally-tied financial object, like the other ordinary-sense verbs', () => {
+  it('transferring a file described elsewhere by price stays allowed', () => {
+    const result = classifyContent('Can you transfer me the file I bought for $300?')
+    expect(result.riskBand).toBe('none')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('DIRECT_MONEY_REQUEST')
+  })
+
+  it('transferring photos to a laptop stays allowed', () => {
+    const result = classifyContent('Could you transfer the photos to my laptop?')
+    expect(result.riskBand).toBe('none')
+    expect(result.mutationDisposition).toBe('allow')
+  })
+
+  it('preserves detection of transferring money to an account', () => {
+    const result = classifyContent('Please transfer $500 to my account.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+})
+
+// ============================================================
+// Item 3 — a URL shortener alone is only weak structural evidence; it
+// must combine with genuinely suspicious local context to warn.
+// ============================================================
+describe('a link shortener alone does not warn', () => {
+  it('a shortened recipe link stays allowed with no meaningful link signal', () => {
+    const result = classifyContent('Here is the recipe: https://bit.ly/example')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.escalateCase).toBe(false)
+  })
+
+  it('preserves a shortener combined, in the same sentence, with a directed money request', () => {
+    const result = classifyContent('Can you send me $300 at my payment page: https://bit.ly/pay')
+    expect(result.mutationDisposition).not.toBe('allow')
+    expect(result.reasonCodes).toContain('SUSPICIOUS_LINK')
+  })
+})
