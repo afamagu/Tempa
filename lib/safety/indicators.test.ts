@@ -105,4 +105,37 @@ describe('extractIndicators — keyword/phrase indicators', () => {
   it('detects a link shortener', () => {
     expect(extractIndicators('Click here: bit.ly/abc123').hasSuspiciousLinkShortener).toBe(true)
   })
+
+  it('detects a cashtag-shaped payment handle even though canonicalization folds "$" to "s"', () => {
+    // toCanonicalText's leet-speak pass rewrites '$' -> 's' for keyword
+    // matching, which would destroy a cashtag if tested against
+    // canonical text — the cashtag pattern must run on display text.
+    expect(extractIndicators('You can pay me at $johndoe123').hasPaymentHandleKeyword).toBe(true)
+  })
+
+  it('does not flag a bare IBAN mention as a shared payment detail', () => {
+    expect(extractIndicators('What exactly is an IBAN?').hasBankDetailsSharedPhrase).toBe(false)
+    expect(extractIndicators('My bank asked me for my IBAN yesterday.').hasBankDetailsSharedPhrase).toBe(false)
+  })
+
+  it('detects an actual IBAN disclosure as a shared payment detail', () => {
+    expect(extractIndicators('Here is my IBAN: DE89370400440532013000').hasBankDetailsSharedPhrase).toBe(true)
+  })
+
+  it('does not flag a directed verb with no financial context as a money request', () => {
+    expect(extractIndicators('Can you send me a photo?').hasDirectedMoneyRequest).toBe(false)
+    expect(extractIndicators('Could you give me your opinion?').hasDirectedMoneyRequest).toBe(false)
+  })
+
+  it('does not correlate a topic keyword and an off-platform mention across different sentences', () => {
+    const result = extractIndicators("I lost money investing in crypto last year. Let's chat on WhatsApp sometime.")
+    expect(result.hasInvestmentPitchContext).toBe(false)
+    expect(result.hasOffPlatformTopicCorrelation).toBe(false)
+  })
+
+  it('does correlate a topic keyword and an off-platform mention within the same sentence', () => {
+    const result = extractIndicators("Let's move to Telegram, I have a forex opportunity for you.")
+    expect(result.hasInvestmentPitchContext).toBe(true)
+    expect(result.hasOffPlatformTopicCorrelation).toBe(true)
+  })
 })

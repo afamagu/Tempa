@@ -7,9 +7,15 @@
 // activity. Nothing here stores or implies "SCAMMER = TRUE".
 
 /** Codes classify.ts (Checkpoint 1) can actually produce from a single
- * piece of text. */
+ * piece of text. There is deliberately no umbrella "FINANCIAL_
+ * SOLICITATION" code here — every fired signal must be one of these
+ * concrete, independently-meaningful subtypes, so compounding logic
+ * never double-counts one detection as two signals (a generic
+ * umbrella emitted alongside its own specific code) and evidence
+ * shown to a reviewer is always specific enough to act on. Add an
+ * umbrella value only when a real caller needs one to group/display
+ * these, and keep it out of compounding either way. */
 export const CONTENT_REASON_CODES = [
-  'FINANCIAL_SOLICITATION',
   'DIRECT_MONEY_REQUEST',
   'LOAN_OR_BILL_REQUEST',
   'PAYMENT_DETAILS',

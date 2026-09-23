@@ -24,12 +24,190 @@ describe('false-positive corpus — ordinary conversation about money must never
   ]
 
   for (const text of benignExamples) {
-    it(`"${text}" is allowed, not warned or denied`, () => {
+    it(`"${text}" is allowed, not warned or denied, with no safety reason code`, () => {
       const result = classifyContent(text)
       expect(result.mutationDisposition).toBe('allow')
       expect(result.escalateCase).toBe(false)
+      // Ordinary descriptive financial vocabulary — an amount, a
+      // crypto/gift-card/bank word, a hospital word — with no request
+      // or other suspicious structure attached must produce NO signal
+      // at all, not merely one that happens not to warn. 'weak' is
+      // reserved for actual (if minor) safety-relevant STRUCTURE, like
+      // a bare off-platform mention or a bare link — never for a
+      // financial noun on its own.
+      expect(result.riskBand).toBe('none')
+      expect(result.reasonCodes).toEqual([])
     })
   }
+
+  // Ordinary correspondence verbs that happen to overlap with the
+  // transfer-verb vocabulary ("send", "give", "lend", "pay", "share")
+  // must never, on their own, read as a money request — only an actual
+  // nearby financial/value term does that (see classify.ts's
+  // DIRECT_MONEY_REQUEST rule and indicators.ts's
+  // sentenceHasFinancialContext).
+  const benignDirectedRequests = [
+    'Can you send me a photo?',
+    'Please send me the recipe.',
+    'Could you give me your opinion?',
+    'Can you lend me that book?',
+    'Can you share the photos from your trip?',
+    "Could you give me a hand with this?",
+    "Can you pay attention to what I'm about to say?",
+  ]
+
+  for (const text of benignDirectedRequests) {
+    it(`"${text}" is an ordinary request, not a money request`, () => {
+      const result = classifyContent(text)
+      expect(result.riskBand).toBe('none')
+      expect(result.mutationDisposition).toBe('allow')
+      expect(result.reasonCodes).not.toContain('DIRECT_MONEY_REQUEST')
+    })
+  }
+
+  it('an amount discussed elsewhere in the letter does not retroactively turn an unrelated request into a money request', () => {
+    // The "$300" belongs to a completely separate sentence about the
+    // camera, not to the photo request — financial context must be
+    // tied to the actual request, not merely present anywhere in the
+    // same message body.
+    const result = classifyContent('Can you send me the photo? The camera cost me $300.')
+    expect(result.riskBand).toBe('none')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('DIRECT_MONEY_REQUEST')
+  })
+})
+
+// ============================================================
+// Item 1 — a directed transfer-shaped verb ("send"/"give"/"lend"/
+// "pay") is never, by itself, a money request. It only becomes
+// DIRECT_MONEY_REQUEST when a financial/value term (an amount, money/
+// funds/cash/payment, a payment handle, a crypto asset, gift-card
+// mechanics, or a bill/loan/rent/fees phrase) appears in the same
+// sentence.
+// ============================================================
+describe('directed money request requires nearby financial context, not just a transfer verb', () => {
+  it('preserves detection of an explicit amount request', () => {
+    const result = classifyContent('Can you send me $300?')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+
+  it('preserves detection of a "money" word request with no amount', () => {
+    const result = classifyContent('Could you send me some money?')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+
+  it('preserves detection of an explicit transfer-to-account request', () => {
+    const result = classifyContent('Please transfer $500 to my account.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+
+  it('preserves detection of a "funds" word request', () => {
+    const result = classifyContent('I need you to send me funds.')
+    expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+})
+
+// ============================================================
+// Item 2 — a bare mention of "IBAN" is a topic mention, not a
+// disclosure. Only an actual shared account/IBAN detail counts as
+// PAYMENT_DETAILS.
+// ============================================================
+describe('bank-detail sharing requires an actual disclosure, not a bare mention', () => {
+  it('a question about what an IBAN is stays allowed with no PAYMENT_DETAILS code', () => {
+    const result = classifyContent('What exactly is an IBAN?')
+    expect(result.riskBand).toBe('none')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('PAYMENT_DETAILS')
+  })
+
+  it('recounting that a bank asked for an IBAN stays allowed with no PAYMENT_DETAILS code', () => {
+    const result = classifyContent('My bank asked me for my IBAN yesterday.')
+    expect(result.riskBand).toBe('none')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).not.toContain('PAYMENT_DETAILS')
+  })
+
+  it('actually sharing an IBAN triggers PAYMENT_DETAILS', () => {
+    const result = classifyContent('Here is my IBAN: DE89370400440532013000')
+    expect(result.reasonCodes).toContain('PAYMENT_DETAILS')
+  })
+})
+
+// ============================================================
+// Item 3 — a neutral investment/crypto/gift-card topic and an off-
+// platform mention only correlate when they occur in the SAME
+// sentence, not merely somewhere in the same message.
+// ============================================================
+describe('investment/off-platform correlation requires local proximity, not just co-occurrence', () => {
+  it('an unrelated crypto aside and an unrelated off-platform aside in the same message stay low-risk', () => {
+    const result = classifyContent('I lost money investing in crypto last year. Let\'s chat on WhatsApp sometime.')
+    expect(result.riskBand).not.toBe('high')
+    expect(result.riskBand).not.toBe('severe')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.escalateCase).toBe(false)
+    expect(result.reasonCodes).not.toContain('INVESTMENT_SOLICITATION')
+  })
+
+  it('preserves the escalation shape when the pitch and the platform are in the same sentence', () => {
+    const codes = classifyContent("Let's move to Telegram, I have a forex opportunity for you.").reasonCodes
+    expect(codes).toContain('OFF_PLATFORM_ESCALATION')
+    expect(codes).toContain('INVESTMENT_SOLICITATION')
+  })
+
+  it('preserves detection of an explicit investment promise regardless of proximity wording', () => {
+    const result = classifyContent('Invest with me and I will double your money.')
+    expect(result.reasonCodes).toContain('INVESTMENT_SOLICITATION')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+})
+
+// ============================================================
+// Item 4 — a cashtag-shaped payment handle ("$name") must be detected
+// from display text, not the leet-folded canonical text (which turns
+// '$' into 's').
+// ============================================================
+describe('cashtag/payment-handle detection survives canonicalization', () => {
+  it('detects a directed request to a cashtag as PAYMENT_DETAILS', () => {
+    const result = classifyContent('You can pay me at $johndoe123')
+    expect(result.reasonCodes).toContain('PAYMENT_DETAILS')
+    expect(result.mutationDisposition).not.toBe('allow')
+  })
+})
+
+// ============================================================
+// Item 5 — risk_band, mutation_disposition, and escalate_case are
+// genuinely independent axes, not one value under three names.
+// ============================================================
+describe('risk, enforcement, and case escalation are independent axes', () => {
+  it('an unprompted bank-details disclosure is classified high-risk and escalated, but not auto-blocked', () => {
+    const result = classifyContent('Here is my IBAN: DE89370400440532013000')
+    expect(result.riskBand).toBe('high')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.escalateCase).toBe(true)
+  })
+
+  it('a meaningful-risk bill request warns without escalating a case', () => {
+    // Deliberately has no transfer-verb match (no send/pay/transfer/
+    // wire/lend/give), so only LOAN_OR_BILL_REQUEST fires — a single
+    // meaningful signal, not a compounded pair (contrast "Please pay
+    // my electricity bill.", which also matches the "please...pay"
+    // transfer verb and compounds to 'high').
+    const result = classifyContent('Could you help me with my electricity bill this month?')
+    expect(result.riskBand).toBe('meaningful')
+    expect(result.mutationDisposition).toBe('warn')
+    expect(result.escalateCase).toBe(false)
+  })
+
+  it('a severe-risk gift-card-code scam denies and escalates', () => {
+    const result = classifyContent('Buy a Steam gift card and send me the code.')
+    expect(result.riskBand).toBe('severe')
+    expect(result.mutationDisposition).toBe('deny')
+    expect(result.escalateCase).toBe(true)
+  })
 })
 
 // ============================================================
