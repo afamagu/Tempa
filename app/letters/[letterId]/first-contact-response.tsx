@@ -19,6 +19,9 @@ import {
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
+import type { Moment } from '@/lib/moments'
+import type { PhotoConsentStatus } from '@/lib/letters'
+import SourceLetterPanel from './source-letter-panel'
 
 type Mode = 'choose' | 'reply' | 'close'
 
@@ -37,15 +40,41 @@ export default function FirstContactResponse({
   letterId,
   correspondenceId,
   recipientPseudonym,
+  viewerId,
+  sourceLetterBody,
+  sourceLetterMoments,
+  sourceLetterPhotoConsent,
 }: {
   letterId: string
   correspondenceId: string
   recipientPseudonym: string
+  /** The current viewer's own id — needed only to key the "View
+   * [pseudonym]'s letter" reference panel's reading-position state
+   * (lib/reading-places.ts), never sent anywhere; the actual reply
+   * still authenticates via auth.uid() inside reply_to_letter, same as
+   * before. */
+  viewerId: string
+  /** The exact source Letter (letterId) being replied to — already
+   * fetched by the parent page for its own LetterBody render just
+   * above this component, passed through here rather than re-fetched,
+   * so "View [pseudonym]'s letter" opens instantly with no extra
+   * round-trip. */
+  sourceLetterBody: string
+  sourceLetterMoments: Moment[]
+  sourceLetterPhotoConsent?: {
+    correspondenceId: string
+    status: PhotoConsentStatus
+    requestedBy: string | null
+    resolvedBy: string | null
+    userId: string
+    otherPseudonym: string
+  }
 }) {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>('choose')
   const [sendingReply, setSendingReply] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
+  const [showSourceLetter, setShowSourceLetter] = useState(false)
 
   const [reason, setReason] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
@@ -192,8 +221,10 @@ export default function FirstContactResponse({
     router.refresh()
   }
 
+  let content: React.ReactNode
+
   if (mode === 'choose') {
-    return (
+    content = (
       <div className="flex flex-wrap gap-3">
         <button type="button" onClick={() => setMode('reply')} className={primaryButtonClass}>
           Reply
@@ -203,11 +234,23 @@ export default function FirstContactResponse({
         </button>
       </div>
     )
-  }
-
-  if (mode === 'reply') {
-    return (
+  } else if (mode === 'reply') {
+    content = (
       <div className="space-y-4">
+        <div>
+          {/* Restrained secondary action, never "Quick view" — always
+              references THIS specific source letter (letterId), never
+              merely the sender's newest one. Opens SourceLetterPanel as
+              a sibling overlay; the Tiptap editor below is untouched by
+              this open/close, so nothing already typed is ever lost. */}
+          <button
+            type="button"
+            onClick={() => setShowSourceLetter(true)}
+            className="text-[13px] text-foreground/60 underline decoration-foreground/20 underline-offset-4 transition-colors hover:text-foreground/90 hover:decoration-foreground/50"
+          >
+            View {recipientPseudonym}&rsquo;s letter
+          </button>
+        </div>
         <div className="space-y-2">
           <WritingToolbar editor={editor} />
           <EditorContent editor={editor} />
@@ -223,30 +266,46 @@ export default function FirstContactResponse({
         </div>
       </div>
     )
+  } else {
+    content = (
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <p className={helperTextClass}>Why are you passing on this letter?</p>
+          <p className={helperTextClass}>This ends this correspondence request.</p>
+        </div>
+        <ChoiceGroup
+          ariaLabel="Reason for passing on this letter"
+          options={CLOSE_REASONS.map((r) => ({ value: r, label: r }))}
+          selected={reason ? [reason] : []}
+          onToggle={setReason}
+          layout="card"
+        />
+        {closeError && <p className="text-sm text-red-600">{closeError}</p>}
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={() => setMode('choose')} className={secondaryButtonClass}>
+            Back
+          </button>
+          <button type="button" onClick={handleClose} disabled={!reason || closing} className={primaryButtonClass}>
+            {closing ? 'Passing…' : 'Pass on this letter'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <p className={helperTextClass}>Why are you passing on this letter?</p>
-        <p className={helperTextClass}>This ends this correspondence request.</p>
-      </div>
-      <ChoiceGroup
-        ariaLabel="Reason for passing on this letter"
-        options={CLOSE_REASONS.map((r) => ({ value: r, label: r }))}
-        selected={reason ? [reason] : []}
-        onToggle={setReason}
-        layout="card"
+    <>
+      {content}
+      <SourceLetterPanel
+        open={showSourceLetter}
+        onClose={() => setShowSourceLetter(false)}
+        pseudonym={recipientPseudonym}
+        viewerId={viewerId}
+        letterId={letterId}
+        body={sourceLetterBody}
+        moments={sourceLetterMoments}
+        photoConsent={sourceLetterPhotoConsent}
       />
-      {closeError && <p className="text-sm text-red-600">{closeError}</p>}
-      <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={() => setMode('choose')} className={secondaryButtonClass}>
-          Back
-        </button>
-        <button type="button" onClick={handleClose} disabled={!reason || closing} className={primaryButtonClass}>
-          {closing ? 'Passing…' : 'Pass on this letter'}
-        </button>
-      </div>
-    </div>
+    </>
   )
 }

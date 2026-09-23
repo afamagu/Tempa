@@ -38,6 +38,7 @@ export default function LetterBody({
   body,
   moments,
   photoConsent,
+  paragraphAttrs,
 }: {
   body: string
   moments: Moment[]
@@ -52,6 +53,16 @@ export default function LetterBody({
     userId: string
     otherPseudonym: string
   }
+  /** Optional per-paragraph DOM attributes (e.g. `data-paragraph-index`
+   * for a reading-position tracker — see app/board/dispatch-body.tsx's
+   * identical prop, and app/letters/[letterId]/letter-reader.tsx, the
+   * Letter-side counterpart to app/board/[dispatchId]/dispatch-
+   * reader.tsx) — kept optional so an ordinary reading context isn't
+   * forced to supply a no-op. Applied to the paragraph's whole BLOCK
+   * (this outer wrapper), not just its text, since a locked-photo or
+   * postcard Moment sits alongside the text as part of the same
+   * paragraph's reading position. */
+  paragraphAttrs?: (index: number) => Record<string, string | number>
 }) {
   const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string; momentId: string } | null>(null)
   // Stripped ONCE against the whole raw body, before paragraph
@@ -71,7 +82,7 @@ export default function LetterBody({
           const photoUrl = moment?.type === 'photo' ? moment.imageUrl : null
 
           return (
-            <div key={index}>
+            <div key={index} {...(paragraphAttrs?.(index) ?? {})}>
               <p className={`whitespace-pre-wrap ${proseBodyClass}`}>
                 <FormattedText text={paragraph} isRich={isRich} />
                 {moment?.type === 'photo' && photoUrl && (

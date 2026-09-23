@@ -29,7 +29,7 @@ import PhotoConsent from './photo-consent'
 import MomentsWalkthroughGate from './moments-walkthrough-gate'
 import MomentsAvailableNotice from './moments-available-notice'
 import LetterActionMenu from './letter-action-menu'
-import LetterBody from './letter-body'
+import LetterReader from './letter-reader'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import FirstContactResponse from './first-contact-response'
 import ClosureStatusNotice from './closure-status-notice'
@@ -198,6 +198,22 @@ export default async function LetterPage({
   )
   const writeHref = establishedForViewer ? `/letters/with/${otherPartyId}/write` : null
 
+  // Computed once, shared by both the normal reader's LetterReader
+  // below and (when this is the un-replied first-contact letter) the
+  // reply composer's "View [pseudonym]'s letter" reference panel —
+  // both render the SAME target letter, so they must see the same
+  // photo-consent state, not two independently-built objects.
+  const targetPhotoConsent = correspondence
+    ? {
+        correspondenceId: correspondence.id,
+        status: correspondence.photoConsentStatus,
+        requestedBy: correspondence.photoConsentRequestedBy,
+        resolvedBy: correspondence.photoConsentResolvedBy,
+        userId: user.id,
+        otherPseudonym,
+      }
+    : undefined
+
   // Letter 1/2 stay text-only; Letter 3 onward carries Moments — but
   // ONLY once Letter 2 has actually delivered (deliver_at <= now()),
   // for BOTH participants, not merely established_at being set.
@@ -363,21 +379,12 @@ export default async function LetterPage({
             )}
 
             <div className="mt-4 max-w-[68ch]">
-              <LetterBody
+              <LetterReader
+                viewerId={user.id}
+                letterId={target.id}
                 body={target.body}
                 moments={momentsByLetterId.get(target.id) ?? []}
-                photoConsent={
-                  correspondence
-                    ? {
-                        correspondenceId: correspondence.id,
-                        status: correspondence.photoConsentStatus,
-                        requestedBy: correspondence.photoConsentRequestedBy,
-                        resolvedBy: correspondence.photoConsentResolvedBy,
-                        userId: user.id,
-                        otherPseudonym,
-                      }
-                    : undefined
-                }
+                photoConsent={targetPhotoConsent}
               />
             </div>
           </div>
@@ -388,6 +395,10 @@ export default async function LetterPage({
                 letterId={target.id}
                 correspondenceId={target.correspondenceId}
                 recipientPseudonym={otherPseudonym}
+                viewerId={user.id}
+                sourceLetterBody={target.body}
+                sourceLetterMoments={momentsByLetterId.get(target.id) ?? []}
+                sourceLetterPhotoConsent={targetPhotoConsent}
               />
             )}
 
