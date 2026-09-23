@@ -63,7 +63,7 @@ describe('every new admin RPC re-checks is_staff() itself, never relying on the 
     expect(codeOnly).toContain('grant execute on function public.admin_list_safety_cases(text, integer, integer) to authenticated;')
     expect(codeOnly).toContain('grant execute on function public.admin_get_safety_case(uuid) to authenticated;')
     expect(codeOnly).toContain('grant execute on function public.admin_list_case_signals(uuid) to authenticated;')
-    expect(codeOnly).toContain('grant execute on function public.admin_get_safety_signal_evidence(uuid) to authenticated;')
+    expect(codeOnly).toContain('grant execute on function public.admin_get_safety_signal_evidence(uuid, uuid) to authenticated;')
     expect(codeOnly).toContain('grant execute on function public.admin_transition_safety_case(uuid, text, text, text) to authenticated;')
   })
 })
@@ -134,10 +134,11 @@ describe('admin_list_case_signals — structured evidence, no internal implement
 })
 
 describe('admin_get_safety_signal_evidence — the narrowest possible private-content path', () => {
-  it('takes ONLY a signal id — no raw content/letter/correspondence id parameter exists anywhere in its signature', () => {
+  it('takes ONLY a case id and a signal id — no raw content/letter/correspondence id parameter exists anywhere in its signature', () => {
     const start = sql.indexOf('create or replace function public.admin_get_safety_signal_evidence(')
     const paramsEnd = sql.indexOf(')\nreturns table', start)
     const params = sql.slice(start, paramsEnd)
+    expect(params).toContain('p_case_id uuid')
     expect(params).toContain('p_signal_id uuid')
     expect(params).not.toMatch(/p_letter_id|p_content_id|p_correspondence_id|p_dispatch_id/)
   })
@@ -151,6 +152,43 @@ describe('admin_get_safety_signal_evidence — the narrowest possible private-co
   it('a nonexistent signal id is rejected explicitly — a guessed id can never fall through to "no evidence"', () => {
     const body = extractFunctionBody('public.admin_get_safety_signal_evidence')
     expect(body).toContain("raise exception 'Signal not found.';")
+  })
+
+  describe('independent audit correction — requires the full case -> signal -> content chain', () => {
+    it('verifies the case itself exists before ever looking at the signal', () => {
+      const body = extractFunctionBody('public.admin_get_safety_signal_evidence')
+      const caseCheckIndex = body.indexOf("raise exception 'Case not found.';")
+      const signalLookupIndex = body.indexOf('select id, surface, source_content_id')
+      expect(caseCheckIndex).toBeGreaterThan(-1)
+      expect(caseCheckIndex).toBeLessThan(signalLookupIndex)
+    })
+
+    it('the signal lookup requires case_id = p_case_id in the SAME where clause as the signal id — never a separate, bypassable check', () => {
+      const body = extractFunctionBody('public.admin_get_safety_signal_evidence')
+      expect(body).toMatch(/where id = p_signal_id\s*\n\s*and case_id = p_case_id/)
+    })
+
+    it('a signal with case_id IS NULL (never escalated into a case) can never match — the join is an exact equality, not IS NOT DISTINCT FROM or similar', () => {
+      const body = extractFunctionBody('public.admin_get_safety_signal_evidence')
+      // A plain `=` against a real (non-null) p_case_id is already
+      // NULL-rejecting by ordinary SQL semantics — this asserts the
+      // migration never "helpfully" widens it (e.g. to `is not distinct
+      // from`, which WOULD wrongly match a null case_id if p_case_id
+      // itself were ever null, which can't happen since it's verified
+      // to reference a real, existing case immediately above).
+      expect(body).not.toMatch(/case_id\s+is\s+not\s+distinct\s+from\s+p_case_id/)
+      expect(body).not.toMatch(/coalesce\(case_id/)
+    })
+
+    it('a guessed/unrelated signal id (belonging to a different case, or no case) produces the exact same "Signal not found" rejection as a truly nonexistent id — no separate, more revealing error path', () => {
+      const body = extractFunctionBody('public.admin_get_safety_signal_evidence')
+      // Only ONE raise for a missing v_signal — proving there's no
+      // second branch that distinguishes "signal exists but wrong case"
+      // from "signal doesn't exist at all" (which would leak whether a
+      // given signal id is real, just not part of this case).
+      const occurrences = (body.match(/raise exception 'Signal not found\.';/g) ?? []).length
+      expect(occurrences).toBe(1)
+    })
   })
 
   it('the private-letter branch is the only one that ever returns body text — every public-surface branch returns only identifiers to link out with', () => {

@@ -61,12 +61,17 @@
 -- PRIVATE-CONTENT BOUNDARY (item 4, the load-bearing guarantee this
 -- whole file exists to enforce): there is NO RPC anywhere below that
 -- accepts a raw Letter id, a correspondence id, or a recipient id as
--- client input. admin_get_safety_signal_evidence takes ONLY a
--- safety_signals id; every content id it ever returns is one that
--- specific, already-existing signal row already names in its own
--- source_content_id column — never a client-supplied content id, never
--- an arbitrary lookup, never a list, never next/previous navigation.
--- An Admin who has never had a real Safety signal point at a given
+-- client input. admin_get_safety_signal_evidence takes ONLY a case id
+-- and a safety_signals id, and only ever resolves the signal when it
+-- both exists AND belongs to that exact case (`s.case_id = p_case_id`
+-- — see that function's own "INDEPENDENT AUDIT CORRECTION" comment for
+-- why the case id is required, not merely the signal id, added post-
+-- approval). Every content id it ever returns is one that specific,
+-- already-existing, already-case-verified signal row already names in
+-- its own source_content_id column — never a client-supplied content
+-- id, never an arbitrary lookup, never a list, never next/previous
+-- navigation. An Admin who has never had a real Safety signal point at
+-- a given
 -- Letter has no path through this file to that Letter's body at all.
 --
 -- EVIDENCE MINIMIZATION (item 5): no RPC below ever selects
@@ -304,7 +309,29 @@ grant execute on function public.admin_list_case_signals(uuid) to authenticated;
 --     still null (evaluated but never proceeded): no content evidence
 --     exists — returns evidence_kind = 'none'; the caller already has
 --     this signal's own observed_counts/reason_codes from Part 3 above.
-create or replace function public.admin_get_safety_signal_evidence(p_signal_id uuid)
+--
+-- INDEPENDENT AUDIT CORRECTION (post-approval): not every qualifying
+-- signal escalates a case — record_safety_evaluation/record_behavior_
+-- signal only ever set safety_signals.case_id when escalate_case was
+-- true, so a real, legitimate signal can exist with case_id IS NULL
+-- (meaningful/high content that never opened a review case) or with a
+-- case_id belonging to some OTHER, unrelated case. The original single-
+-- parameter version below only verified "does this signal id exist,"
+-- which let a staff caller who merely knew (or enumerated) a valid non-
+-- case signal id read that signal's own private Letter evidence even
+-- though that signal never entered the Needs Attention case-review
+-- workflow at all — a real path around the case-review boundary this
+-- checkpoint exists to enforce. Fixed by requiring the FULL case ->
+-- signal -> content chain: the caller must name the case it believes
+-- this signal belongs to, and the lookup below only ever matches a row
+-- where `s.id = p_signal_id and s.case_id = p_case_id` — a signal with
+-- a null case_id, or a case_id naming a different case, or a p_case_id
+-- that does not exist at all, all fail this single WHERE clause
+-- identically. Still no raw Letter/content/correspondence id parameter
+-- anywhere — only the two ids the case-detail page already legitimately
+-- has (the case it is showing, and one of that case's own displayed
+-- signals).
+create or replace function public.admin_get_safety_signal_evidence(p_case_id uuid, p_signal_id uuid)
 returns table (
   evidence_kind text,
   letter_body text,
@@ -329,10 +356,15 @@ begin
     raise exception 'Not authorized.';
   end if;
 
+  if not exists (select 1 from public.safety_cases where id = p_case_id) then
+    raise exception 'Case not found.';
+  end if;
+
   select id, surface, source_content_id
   into v_signal
   from public.safety_signals
-  where id = p_signal_id;
+  where id = p_signal_id
+    and case_id = p_case_id;
 
   if v_signal.id is null then
     raise exception 'Signal not found.';
@@ -408,8 +440,8 @@ begin
 end;
 $function$;
 
-revoke all on function public.admin_get_safety_signal_evidence(uuid) from public;
-grant execute on function public.admin_get_safety_signal_evidence(uuid) to authenticated;
+revoke all on function public.admin_get_safety_signal_evidence(uuid, uuid) from public;
+grant execute on function public.admin_get_safety_signal_evidence(uuid, uuid) to authenticated;
 
 
 -- ============================================================

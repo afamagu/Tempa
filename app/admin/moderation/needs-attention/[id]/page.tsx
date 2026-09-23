@@ -129,7 +129,7 @@ export default async function NeedsAttentionCaseDetailPage({ params }: { params:
                   </dl>
                 )}
 
-                <SignalEvidence signalId={s.id} hasSourceContent={Boolean(s.sourceContentId)} />
+                <SignalEvidence caseId={safetyCase.id} signalId={s.id} hasSourceContent={Boolean(s.sourceContentId)} />
               </div>
             ))}
           </div>

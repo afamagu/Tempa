@@ -15,7 +15,7 @@ signatures_present_check as (
     to_regprocedure('public.admin_list_safety_cases(text, integer, integer)') is not null as list_cases_present,
     to_regprocedure('public.admin_get_safety_case(uuid)') is not null as get_case_present,
     to_regprocedure('public.admin_list_case_signals(uuid)') is not null as list_signals_present,
-    to_regprocedure('public.admin_get_safety_signal_evidence(uuid)') is not null as get_evidence_present,
+    to_regprocedure('public.admin_get_safety_signal_evidence(uuid, uuid)') is not null as get_evidence_present,
     to_regprocedure('public.admin_transition_safety_case(uuid, text, text, text)') is not null as transition_case_present
 ),
 grant_check as (
@@ -23,10 +23,10 @@ grant_check as (
     has_function_privilege('authenticated', 'public.admin_list_safety_cases(text, integer, integer)', 'EXECUTE') as authenticated_can_call_list_cases,
     has_function_privilege('authenticated', 'public.admin_get_safety_case(uuid)', 'EXECUTE') as authenticated_can_call_get_case,
     has_function_privilege('authenticated', 'public.admin_list_case_signals(uuid)', 'EXECUTE') as authenticated_can_call_list_signals,
-    has_function_privilege('authenticated', 'public.admin_get_safety_signal_evidence(uuid)', 'EXECUTE') as authenticated_can_call_get_evidence,
+    has_function_privilege('authenticated', 'public.admin_get_safety_signal_evidence(uuid, uuid)', 'EXECUTE') as authenticated_can_call_get_evidence,
     has_function_privilege('authenticated', 'public.admin_transition_safety_case(uuid, text, text, text)', 'EXECUTE') as authenticated_can_call_transition,
     not has_function_privilege('anon', 'public.admin_list_safety_cases(text, integer, integer)', 'EXECUTE') as anon_cannot_call_list_cases,
-    not has_function_privilege('anon', 'public.admin_get_safety_signal_evidence(uuid)', 'EXECUTE') as anon_cannot_call_get_evidence,
+    not has_function_privilege('anon', 'public.admin_get_safety_signal_evidence(uuid, uuid)', 'EXECUTE') as anon_cannot_call_get_evidence,
     not has_function_privilege('anon', 'public.admin_transition_safety_case(uuid, text, text, text)', 'EXECUTE') as anon_cannot_call_transition
 ),
 -- The load-bearing guarantee (item 10): granting EXECUTE to
@@ -46,7 +46,7 @@ staff_gate_check as (
   left join pg_proc p1 on p1.oid = to_regprocedure('public.admin_list_safety_cases(text, integer, integer)')
   left join pg_proc p2 on p2.oid = to_regprocedure('public.admin_get_safety_case(uuid)')
   left join pg_proc p3 on p3.oid = to_regprocedure('public.admin_list_case_signals(uuid)')
-  left join pg_proc p4 on p4.oid = to_regprocedure('public.admin_get_safety_signal_evidence(uuid)')
+  left join pg_proc p4 on p4.oid = to_regprocedure('public.admin_get_safety_signal_evidence(uuid, uuid)')
   left join pg_proc p5 on p5.oid = to_regprocedure('public.admin_transition_safety_case(uuid, text, text, text)')
 ),
 -- The private-table-grant guarantee (item 10): safety_cases/
@@ -69,10 +69,17 @@ evidence_wiring_check as (
       false
     ) as evidence_view_is_audited,
     -- No parameter anywhere in this function's signature accepts a raw
-    -- content id — the ONLY input is the signal id itself.
-    coalesce(pg_get_function_arguments(p.oid) = 'p_signal_id uuid', false) as evidence_takes_only_signal_id
+    -- content id — the ONLY inputs are the case id and the signal id,
+    -- per the independent-audit correction requiring the full case ->
+    -- signal -> content chain (never merely "does this signal id exist").
+    coalesce(pg_get_function_arguments(p.oid) = 'p_case_id uuid, p_signal_id uuid', false) as evidence_takes_only_case_and_signal_id,
+    -- The actual fix: the signal lookup requires case_id = p_case_id in
+    -- the same WHERE clause as the signal id — a signal with a null
+    -- case_id or a different case's id can never match.
+    coalesce(pg_get_functiondef(p.oid) ilike '%where id = p_signal_id%and case_id = p_case_id%', false) as evidence_requires_case_signal_match,
+    coalesce(pg_get_functiondef(p.oid) ilike '%case not found%', false) as evidence_verifies_case_exists
   from (select 1 as anchor) _anchor
-  left join pg_proc p on p.oid = to_regprocedure('public.admin_get_safety_signal_evidence(uuid)')
+  left join pg_proc p on p.oid = to_regprocedure('public.admin_get_safety_signal_evidence(uuid, uuid)')
 ),
 transition_wiring_check as (
   select
@@ -98,7 +105,8 @@ select
   sg.get_evidence_checks_is_staff, sg.transition_checks_is_staff,
   ng.authenticated_cannot_select_cases, ng.authenticated_cannot_select_signals, ng.authenticated_cannot_select_evaluations,
   ng.anon_cannot_select_cases, ng.anon_cannot_select_signals,
-  ew.evidence_view_is_audited, ew.evidence_takes_only_signal_id,
+  ew.evidence_view_is_audited, ew.evidence_takes_only_case_and_signal_id,
+  ew.evidence_requires_case_signal_match, ew.evidence_verifies_case_exists,
   tw.locks_case_row, tw.null_safe_staleness_check, tw.transition_is_audited, tw.never_sets_checkpoint8_statuses,
   (
     ss.list_cases_present and ss.get_case_present and ss.list_signals_present and ss.get_evidence_present and ss.transition_case_present
@@ -109,7 +117,8 @@ select
     and sg.get_evidence_checks_is_staff and sg.transition_checks_is_staff
     and ng.authenticated_cannot_select_cases and ng.authenticated_cannot_select_signals and ng.authenticated_cannot_select_evaluations
     and ng.anon_cannot_select_cases and ng.anon_cannot_select_signals
-    and ew.evidence_view_is_audited and ew.evidence_takes_only_signal_id
+    and ew.evidence_view_is_audited and ew.evidence_takes_only_case_and_signal_id
+    and ew.evidence_requires_case_signal_match and ew.evidence_verifies_case_exists
     and tw.locks_case_row and tw.null_safe_staleness_check and tw.transition_is_audited and tw.never_sets_checkpoint8_statuses
   ) as overall_pass
 from signatures_present_check ss, grant_check g, staff_gate_check sg, no_direct_grant_check ng,

@@ -146,8 +146,11 @@ describe('getSafetyEvidence', () => {
       ],
       error: null,
     }))
-    const { data } = await getSafetyEvidence(supabase, 'signal-1')
-    expect(supabase.rpc).toHaveBeenCalledWith('admin_get_safety_signal_evidence', { p_signal_id: 'signal-1' })
+    const { data } = await getSafetyEvidence(supabase, 'case-1', 'signal-1')
+    expect(supabase.rpc).toHaveBeenCalledWith('admin_get_safety_signal_evidence', {
+      p_case_id: 'case-1',
+      p_signal_id: 'signal-1',
+    })
     expect(data).toEqual({
       kind: 'letter',
       body: 'Hello there.',
@@ -173,14 +176,29 @@ describe('getSafetyEvidence', () => {
       ],
       error: null,
     }))
-    const { data } = await getSafetyEvidence(supabase, 'signal-2')
+    const { data } = await getSafetyEvidence(supabase, 'case-2', 'signal-2')
     expect(data).toEqual({ kind: 'public', contentType: 'dispatch', contentId: 'dispatch-1', dispatchId: 'dispatch-1' })
   })
 
   it('maps a none/unavailable evidence row without inventing content', async () => {
     const supabase = fakeClient(() => ({ data: [{ evidence_kind: 'none' }], error: null }))
-    const { data } = await getSafetyEvidence(supabase, 'signal-3')
+    const { data } = await getSafetyEvidence(supabase, 'case-3', 'signal-3')
     expect(data).toEqual({ kind: 'none' })
+  })
+
+  it('independent audit correction: always passes BOTH the case id and the signal id — a signal id alone is never sufficient to request evidence', async () => {
+    const supabase = fakeClient(() => ({ data: [{ evidence_kind: 'none' }], error: null }))
+    await getSafetyEvidence(supabase, 'case-4', 'signal-4')
+    const [, params] = (supabase.rpc as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(params).toEqual({ p_case_id: 'case-4', p_signal_id: 'signal-4' })
+    expect(Object.keys(params)).toHaveLength(2)
+  })
+
+  it('a "Signal not found" error (e.g. a signal that exists but belongs to a different case, or has no case at all) surfaces as the wrapper\'s own error, never fabricated evidence', async () => {
+    const supabase = fakeClient(() => ({ data: null, error: { message: 'Signal not found.', code: '22023' } }))
+    const { data, error } = await getSafetyEvidence(supabase, 'case-5', 'signal-not-in-this-case')
+    expect(data).toBeNull()
+    expect(error?.message).toBe('Signal not found.')
   })
 })
 

@@ -216,11 +216,24 @@ export type SafetyEvidence =
   | { kind: 'letter'; body: string; senderPseudonym: string; recipientPseudonym: string; createdAt: string }
   | { kind: 'public'; contentType: 'dispatch' | 'dispatch_reply' | 'question_answer'; contentId: string; dispatchId: string | null }
 
+/**
+ * Independent audit correction: requires the case this signal is
+ * believed to belong to, not merely the signal id — a signal can
+ * legitimately exist with no case (never escalated) or with a
+ * DIFFERENT case's id, and admin_get_safety_signal_evidence now only
+ * ever resolves a signal whose own case_id matches p_case_id, verified
+ * server-side. Still no raw Letter/content/correspondence id parameter
+ * anywhere — caseId is the case-detail page's own already-loaded case.
+ */
 export async function getSafetyEvidence(
   supabase: SupabaseClient,
+  caseId: string,
   signalId: string
 ): Promise<{ data: SafetyEvidence | null; error: AdminError }> {
-  const { data, error } = await supabase.rpc('admin_get_safety_signal_evidence', { p_signal_id: signalId })
+  const { data, error } = await supabase.rpc('admin_get_safety_signal_evidence', {
+    p_case_id: caseId,
+    p_signal_id: signalId,
+  })
   if (error) return { data: null, error: { message: error.message, code: error.code } }
   const row = (Array.isArray(data) ? data[0] : data) as
     | {

@@ -27,8 +27,23 @@ const PUBLIC_LINKS: Record<'dispatch' | 'dispatch_reply' | 'question_answer', (c
  * previous/next navigation. For public content (Dispatch/Reply/
  * Question answer), this only ever links out to the SAME public page
  * any member could already reach — never an embedded copy.
+ *
+ * Independent audit correction: now requires `caseId` (the case this
+ * signal is displayed under, on the case-detail page) alongside
+ * `signalId` — admin_get_safety_signal_evidence only ever resolves a
+ * signal that actually belongs to that exact case, closing off a real
+ * signal id that has no case (or a different case) from ever
+ * surfacing evidence outside the Needs Attention review workflow.
  */
-export default function SignalEvidence({ signalId, hasSourceContent }: { signalId: string; hasSourceContent: boolean }) {
+export default function SignalEvidence({
+  caseId,
+  signalId,
+  hasSourceContent,
+}: {
+  caseId: string
+  signalId: string
+  hasSourceContent: boolean
+}) {
   const [evidence, setEvidence] = useState<SafetyEvidence | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +54,7 @@ export default function SignalEvidence({ signalId, hasSourceContent }: { signalI
     if (loading || evidence) return
     setLoading(true)
     setError(null)
-    const { data, error: fetchError } = await getSafetyEvidence(createClient(), signalId)
+    const { data, error: fetchError } = await getSafetyEvidence(createClient(), caseId, signalId)
     setLoading(false)
     if (fetchError || !data) {
       setError('Could not load evidence for this signal.')
