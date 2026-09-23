@@ -73,6 +73,17 @@ describe('reading_places — one shared table for both content types, RLS scoped
     expect(codeOnly).not.toMatch(/resume_paragraph_index integer[^,]*default/)
     expect(codeOnly).not.toMatch(/saved_paragraph_index integer[^,]*default/)
   })
+
+  it('has an intra-paragraph char-offset column for each anchor pair, structurally requiring the paragraph index whenever an offset is set (independent audit correction)', () => {
+    expect(codeOnly).toMatch(/resume_char_offset integer\s+check \(resume_char_offset is null or resume_char_offset >= 0\)/)
+    expect(codeOnly).toMatch(/saved_char_offset integer\s+check \(saved_char_offset is null or saved_char_offset >= 0\)/)
+    expect(codeOnly).toContain('check (resume_char_offset is null or resume_paragraph_index is not null)')
+    expect(codeOnly).toContain('check (saved_char_offset is null or saved_paragraph_index is not null)')
+  })
+
+  it('never stores a raw pixel scroll coordinate as the durable anchor', () => {
+    expect(codeOnly.toLowerCase()).not.toMatch(/scroll_top|pixel_offset|scroll_position/)
+  })
 })
 
 describe('verification SQL', () => {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { recordDispatchProgress, type DispatchMoment } from '@/lib/dispatches'
 import { getReadingPlaceState, saveReadingPlace, removeSavedReadingPlace } from '@/lib/reading-places'
+import { findScrollRoot, getCurrentReadingAnchor, scrollToAnchor } from '@/app/reading-position'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import DispatchBody from '../dispatch-body'
@@ -25,14 +26,21 @@ const PROGRESS_SAVE_INTERVAL_MS = 4000
  * own RLS enforces this; nothing here changes that).
  *
  * Automatic resume itself is UNCHANGED — still dispatch_views, via
- * recordDispatchProgress, exactly as before this feature. The
- * deliberate "Saved place" half (SavedPlaceControls/SavedPlaceRibbon,
+ * recordDispatchProgress, exactly as before this feature (including its
+ * own pre-existing "furthest paragraph passed" tracking — out of scope
+ * to alter; that mechanism is live, shipped production infrastructure).
+ * The deliberate "Saved place" half (SavedPlaceControls/SavedPlaceRibbon,
  * app/reading-place-controls.tsx) is new, and lives on the separate,
  * shared reading_places table (lib/reading-places.ts) — the same one
  * app/letters/[letterId]/letter-reader.tsx uses for Letters — kept
  * fully independent of the automatic-resume state above: reading
  * further after saving a place never moves it, and saving/moving/
- * removing it never touches dispatch_views.
+ * removing it never touches dispatch_views. Saved place ALWAYS
+ * re-measures the current reading position fresh (app/reading-
+ * position.ts's getCurrentReadingAnchor) at the moment "Save my place"
+ * is clicked, independent of dispatch_views' own ratchet above — see
+ * that module's own doc comment for why a ratchet is the wrong anchor
+ * for a deliberate "save what I'm looking at right now" action.
  */
 export default function DispatchReader({
   viewerId,
@@ -48,12 +56,15 @@ export default function DispatchReader({
   initialPosition: number
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const scrollRootRef = useRef<HTMLElement | null>(null)
   const lastPassedRef = useRef(initialPosition)
   const savedRef = useRef(initialPosition)
   const [savedParagraphIndex, setSavedParagraphIndex] = useState<number | null>(null)
+  const [savedCharOffset, setSavedCharOffset] = useState<number | null>(null)
   const [ribbonTop, setRibbonTop] = useState<number | null>(null)
   const [ribbonReady, setRibbonReady] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const { body: cleanBody } = stripRichBodyMarker(body)
   const paragraphCount = splitParagraphs(cleanBody).length
@@ -108,10 +119,13 @@ export default function DispatchReader({
   // resume effect above (different table, different concern).
   useEffect(() => {
     let cancelled = false
+    const container = containerRef.current
+    if (container) scrollRootRef.current = findScrollRoot(container)
     const supabase = createClient()
     getReadingPlaceState(supabase, viewerId, 'dispatch', dispatchId).then((state) => {
       if (!cancelled) {
         setSavedParagraphIndex(state.savedParagraphIndex)
+        setSavedCharOffset(state.savedCharOffset)
         setRibbonReady(true)
       }
     })
@@ -140,26 +154,43 @@ export default function DispatchReader({
   }, [savedParagraphIndex, ribbonReady, body])
 
   async function handleSave() {
+    const container = containerRef.current
+    if (!container) return
+    // Re-measured fresh at the moment of the click — see this
+    // component's own doc comment on why this is independent of
+    // dispatch_views' own ratchet-based lastPassedRef above.
+    const anchor = getCurrentReadingAnchor(container, scrollRootRef.current) ?? { paragraphIndex: 0, charOffset: null }
     setBusy(true)
+    setErrorMessage(null)
     const supabase = createClient()
-    const index = Math.min(Math.max(lastPassedRef.current, 0), Math.max(paragraphCount - 1, 0))
-    await saveReadingPlace(supabase, viewerId, 'dispatch', dispatchId, index)
-    setSavedParagraphIndex(index)
+    const result = await saveReadingPlace(supabase, viewerId, 'dispatch', dispatchId, anchor.paragraphIndex, anchor.charOffset)
+    if (result.ok) {
+      setSavedParagraphIndex(anchor.paragraphIndex)
+      setSavedCharOffset(anchor.charOffset)
+    } else {
+      setErrorMessage('Could not save your place. Please try again.')
+    }
     setBusy(false)
   }
 
   async function handleRemove() {
     setBusy(true)
+    setErrorMessage(null)
     const supabase = createClient()
-    await removeSavedReadingPlace(supabase, viewerId, 'dispatch', dispatchId)
-    setSavedParagraphIndex(null)
+    const result = await removeSavedReadingPlace(supabase, viewerId, 'dispatch', dispatchId)
+    if (result.ok) {
+      setSavedParagraphIndex(null)
+      setSavedCharOffset(null)
+    } else {
+      setErrorMessage('Could not remove your saved place. Please try again.')
+    }
     setBusy(false)
   }
 
   function handleJumpToSaved() {
-    if (savedParagraphIndex === null) return
-    const target = containerRef.current?.querySelector(`[data-paragraph-index="${savedParagraphIndex}"]`)
-    target?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    const container = containerRef.current
+    if (savedParagraphIndex === null || !container) return
+    scrollToAnchor(container, scrollRootRef.current, savedParagraphIndex, savedCharOffset, 'smooth')
   }
 
   return (
@@ -168,7 +199,10 @@ export default function DispatchReader({
         {ribbonTop !== null && <SavedPlaceRibbon top={ribbonTop} />}
         <DispatchBody body={body} moments={moments} paragraphAttrs={(index) => ({ 'data-paragraph-index': index })} />
       </div>
-      <div className="mt-3">
+      {/* Sticky, not floating — stays reachable while reading a long
+          Dispatch without becoming a toolbar or a social-media-style
+          floating action button, same treatment as the Letter reader. */}
+      <div className="sticky bottom-0 z-10 -mx-1 mt-3 border-t border-foreground/10 bg-background/90 px-1 py-2 backdrop-blur-sm">
         <SavedPlaceControls
           hasSavedPlace={savedParagraphIndex !== null}
           onSave={handleSave}
@@ -176,6 +210,7 @@ export default function DispatchReader({
           onRemove={handleRemove}
           busy={busy}
         />
+        {errorMessage && <p className="mt-1 text-[13px] text-red-600">{errorMessage}</p>}
       </div>
     </div>
   )

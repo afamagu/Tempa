@@ -2,15 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import {
-  clampReadingPosition,
-  getReadingPlaceState,
-  recordReadingProgress,
-  saveReadingPlace,
-  removeSavedReadingPlace,
-} from '@/lib/reading-places'
-import { splitParagraphs, type Moment } from '@/lib/moments'
-import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
+import { getReadingPlaceState, recordReadingProgress, saveReadingPlace, removeSavedReadingPlace } from '@/lib/reading-places'
+import { findScrollRoot, getCurrentReadingAnchor, scrollToAnchor } from '@/app/reading-position'
+import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
 import LetterBody from './letter-body'
 import SavedPlaceControls, { SavedPlaceRibbon } from '@/app/reading-place-controls'
@@ -19,10 +13,8 @@ const PROGRESS_SAVE_INTERVAL_MS = 4000
 
 /**
  * The Letter-side counterpart to app/board/[dispatchId]/dispatch-
- * reader.tsx — automatic reading-position resume, same paragraph-index/
- * IntersectionObserver approach, same "save on an interval and on
- * unmount, never on every scroll event" discipline — PLUS the
- * deliberate Saved-place controls (SavedPlaceControls/SavedPlaceRibbon,
+ * reader.tsx — automatic reading-position resume, PLUS the deliberate
+ * Saved-place controls (SavedPlaceControls/SavedPlaceRibbon,
  * app/reading-place-controls.tsx), which Dispatches also get via their
  * own reader. Both automatic resume and Saved place persist through
  * lib/reading-places.ts, keyed by (viewer, 'letter', letterId) — the
@@ -33,6 +25,18 @@ const PROGRESS_SAVE_INTERVAL_MS = 4000
  * normal reader and then opening the same letter via the reply
  * reference resumes at the same place, and vice versa.
  *
+ * The reading position is always RE-MEASURED FRESH from the live DOM
+ * (app/reading-position.ts's getCurrentReadingAnchor), never a
+ * ratcheting "furthest paragraph ever scrolled past" accumulator — a
+ * member who scrolls back up before closing this Letter has their
+ * automatic resume position (and, if they click Save my place at that
+ * moment, their deliberate Saved place too) reflect where they actually
+ * stopped, not the furthest point they reached earlier. The same
+ * measurement is scroll-root-aware (app/reading-position.ts's
+ * findScrollRoot): inside SourceLetterPanel's own scrollable overlay,
+ * positions are measured relative to that overlay, not the browser
+ * window, so tracking is correct there too.
+ *
  * Unlike DispatchReader (which receives its initial position as a
  * server-fetched prop, since it only ever mounts from a fresh page
  * load), this component fetches its own initial state on mount — it
@@ -40,6 +44,17 @@ const PROGRESS_SAVE_INTERVAL_MS = 4000
  * reply composer), where there is no fresh server round-trip to carry
  * a prop from, and the state could have changed since that page's own
  * last render.
+ *
+ * Reusability note (kept deliberately generic, not first-contact-
+ * specific): nothing about this component or SourceLetterPanel assumes
+ * the letter being shown is a first-contact letter specifically — both
+ * take a plain letterId/body/moments. If an established-correspondence
+ * composer (app/letters/[letterId]/moments-composer.tsx) ever grows a
+ * genuine "replying to a specific earlier Letter" (`replyToId`) affordance,
+ * it can reuse this same reference-reading architecture rather than a
+ * second implementation. This task does not add a per-letter Reply
+ * button to established correspondence itself — Tempa's established
+ * flow is deliberately the quill/Write Anytime composer, unchanged here.
  */
 export default function LetterReader({
   viewerId,
@@ -62,57 +77,50 @@ export default function LetterReader({
   }
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const lastPassedRef = useRef(0)
-  const savedResumeRef = useRef(0)
+  const scrollRootRef = useRef<HTMLElement | null>(null)
+  const savedResumeRef = useRef<{ paragraphIndex: number; charOffset: number | null } | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
   const [ready, setReady] = useState(false)
   const [savedParagraphIndex, setSavedParagraphIndex] = useState<number | null>(null)
+  const [savedCharOffset, setSavedCharOffset] = useState<number | null>(null)
   const [ribbonTop, setRibbonTop] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
-
-  const { body: cleanBody } = stripRichBodyMarker(body)
-  const paragraphCount = splitParagraphs(cleanBody).length
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // One-time load of this member's existing reading state for this
   // exact letter, then scroll-to-resume and start tracking. Combined
   // into one effect (rather than load-then-a-second-effect） so the
-  // IntersectionObserver is only ever set up once, against the final
-  // resume position, never twice.
+  // periodic tracker is only ever set up once, against the final resume
+  // position, never twice.
   useEffect(() => {
     let cancelled = false
-    const supabase = createClient()
     const container = containerRef.current
+    if (!container) return
+    const supabase = createClient()
+    const scrollRoot = findScrollRoot(container)
+    scrollRootRef.current = scrollRoot
 
     getReadingPlaceState(supabase, viewerId, 'letter', letterId).then((state) => {
-      if (cancelled || !container) return
+      if (cancelled) return
 
       setSavedParagraphIndex(state.savedParagraphIndex)
+      setSavedCharOffset(state.savedCharOffset)
 
-      const clamped = clampReadingPosition(state.resumeParagraphIndex, paragraphCount)
-      lastPassedRef.current = clamped
-      savedResumeRef.current = clamped
-      if (clamped > 0) {
-        const target = container.querySelector(`[data-paragraph-index="${clamped}"]`)
-        target?.scrollIntoView({ block: 'start' })
+      if (state.resumeParagraphIndex !== null) {
+        scrollToAnchor(container, scrollRoot, state.resumeParagraphIndex, state.resumeCharOffset, 'auto')
+        savedResumeRef.current = { paragraphIndex: state.resumeParagraphIndex, charOffset: state.resumeCharOffset }
       }
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            const index = Number((entry.target as HTMLElement).dataset.paragraphIndex)
-            if (entry.boundingClientRect.top < 0 && index > lastPassedRef.current) {
-              lastPassedRef.current = index
-            }
-          }
-        },
-        { threshold: 0 }
-      )
-      container.querySelectorAll('[data-paragraph-index]').forEach((el) => observer.observe(el))
-
+      // Always re-measures the CURRENT reading position fresh from the
+      // live DOM on every tick — see this component's own doc comment
+      // on why that replaces a ratcheting accumulator.
       const interval = window.setInterval(() => {
-        if (lastPassedRef.current !== savedResumeRef.current) {
-          savedResumeRef.current = lastPassedRef.current
-          void recordReadingProgress(supabase, viewerId, 'letter', letterId, savedResumeRef.current)
+        const anchor = getCurrentReadingAnchor(container, scrollRoot)
+        if (!anchor) return
+        const prev = savedResumeRef.current
+        if (!prev || anchor.paragraphIndex !== prev.paragraphIndex || anchor.charOffset !== prev.charOffset) {
+          savedResumeRef.current = anchor
+          void recordReadingProgress(supabase, viewerId, 'letter', letterId, anchor.paragraphIndex, anchor.charOffset)
         }
       }, PROGRESS_SAVE_INTERVAL_MS)
 
@@ -121,10 +129,11 @@ export default function LetterReader({
       // Cleanup captured in a ref so the outer effect's own cleanup
       // (below) can reach it after this async callback resolved.
       cleanupRef.current = () => {
-        observer.disconnect()
         window.clearInterval(interval)
-        if (lastPassedRef.current !== savedResumeRef.current) {
-          void recordReadingProgress(supabase, viewerId, 'letter', letterId, lastPassedRef.current)
+        const anchor = getCurrentReadingAnchor(container, scrollRoot)
+        const prev = savedResumeRef.current
+        if (anchor && (!prev || anchor.paragraphIndex !== prev.paragraphIndex || anchor.charOffset !== prev.charOffset)) {
+          void recordReadingProgress(supabase, viewerId, 'letter', letterId, anchor.paragraphIndex, anchor.charOffset)
         }
       }
     })
@@ -140,7 +149,11 @@ export default function LetterReader({
   // Position the ribbon at the saved paragraph whenever it changes (or
   // once paragraphs first render) — decoupled from the resume-tracking
   // effect above since it only reacts to savedParagraphIndex, not to
-  // scroll. queueMicrotask defers the setState call out of the effect
+  // scroll. Uses the paragraph's own offsetTop within this component's
+  // positioned container (not a scroll-root-relative measurement, since
+  // this positions a ribbon in the document's own layout flow, not a
+  // live scroll position — see app/reading-place-controls.tsx's own doc
+  // comment). queueMicrotask defers the setState call out of the effect
   // body itself, the established pattern here for satisfying
   // react-hooks/set-state-in-effect (see letterhead-postcard.tsx) when
   // syncing a DOM measurement — taken only after paint — into state.
@@ -159,26 +172,43 @@ export default function LetterReader({
   }, [savedParagraphIndex, ready, body])
 
   async function handleSave() {
+    const container = containerRef.current
+    if (!container) return
+    // Re-measured fresh at the moment of the click — Save my place saves
+    // the position currently being read, never a stale/furthest-ever
+    // value from the periodic tracker.
+    const anchor = getCurrentReadingAnchor(container, scrollRootRef.current) ?? { paragraphIndex: 0, charOffset: null }
     setBusy(true)
+    setErrorMessage(null)
     const supabase = createClient()
-    const index = clampReadingPosition(lastPassedRef.current, paragraphCount)
-    await saveReadingPlace(supabase, viewerId, 'letter', letterId, index)
-    setSavedParagraphIndex(index)
+    const result = await saveReadingPlace(supabase, viewerId, 'letter', letterId, anchor.paragraphIndex, anchor.charOffset)
+    if (result.ok) {
+      setSavedParagraphIndex(anchor.paragraphIndex)
+      setSavedCharOffset(anchor.charOffset)
+    } else {
+      setErrorMessage('Could not save your place. Please try again.')
+    }
     setBusy(false)
   }
 
   async function handleRemove() {
     setBusy(true)
+    setErrorMessage(null)
     const supabase = createClient()
-    await removeSavedReadingPlace(supabase, viewerId, 'letter', letterId)
-    setSavedParagraphIndex(null)
+    const result = await removeSavedReadingPlace(supabase, viewerId, 'letter', letterId)
+    if (result.ok) {
+      setSavedParagraphIndex(null)
+      setSavedCharOffset(null)
+    } else {
+      setErrorMessage('Could not remove your saved place. Please try again.')
+    }
     setBusy(false)
   }
 
   function handleJumpToSaved() {
-    if (savedParagraphIndex === null) return
-    const target = containerRef.current?.querySelector(`[data-paragraph-index="${savedParagraphIndex}"]`)
-    target?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    const container = containerRef.current
+    if (savedParagraphIndex === null || !container) return
+    scrollToAnchor(container, scrollRootRef.current, savedParagraphIndex, savedCharOffset, 'smooth')
   }
 
   return (
@@ -192,7 +222,13 @@ export default function LetterReader({
           paragraphAttrs={(index) => ({ 'data-paragraph-index': index })}
         />
       </div>
-      <div className="mt-3">
+      {/* Sticky, not floating — stays reachable while reading a long
+          Letter without becoming a toolbar or a social-media-style
+          floating action button; resolves relative to whichever
+          ancestor is actually scrollable (the page itself, or
+          SourceLetterPanel's own overlay), exactly like the reading-
+          position tracking above. */}
+      <div className="sticky bottom-0 z-10 -mx-1 mt-3 border-t border-foreground/10 bg-background/90 px-1 py-2 backdrop-blur-sm">
         <SavedPlaceControls
           hasSavedPlace={savedParagraphIndex !== null}
           onSave={handleSave}
@@ -200,6 +236,7 @@ export default function LetterReader({
           onRemove={handleRemove}
           busy={busy}
         />
+        {errorMessage && <p className="mt-1 text-[13px] text-red-600">{errorMessage}</p>}
       </div>
     </div>
   )

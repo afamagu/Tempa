@@ -64,7 +64,27 @@ structure_check as (
       select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'reading_places'
         and column_name = 'saved_paragraph_index' and is_nullable = 'YES'
-    ) as saved_column_nullable
+    ) as saved_column_nullable,
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'reading_places'
+        and column_name = 'resume_char_offset' and is_nullable = 'YES'
+    ) as resume_char_offset_nullable,
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'reading_places'
+        and column_name = 'saved_char_offset' and is_nullable = 'YES'
+    ) as saved_char_offset_nullable,
+    exists (
+      select 1 from pg_constraint
+      where conrelid = 'public.reading_places'::regclass and contype = 'c'
+        and pg_get_constraintdef(oid) ilike '%resume_char_offset%resume_paragraph_index%'
+    ) as resume_offset_needs_index,
+    exists (
+      select 1 from pg_constraint
+      where conrelid = 'public.reading_places'::regclass and contype = 'c'
+        and pg_get_constraintdef(oid) ilike '%saved_char_offset%saved_paragraph_index%'
+    ) as saved_offset_needs_index
 ),
 no_body_text_check as (
   select not exists (
@@ -88,6 +108,10 @@ select
   s.composite_primary_key_present,
   s.resume_column_nullable,
   s.saved_column_nullable,
+  s.resume_char_offset_nullable,
+  s.saved_char_offset_nullable,
+  s.resume_offset_needs_index,
+  s.saved_offset_needs_index,
   nb.no_content_column,
   (
     t.table_present and t.rls_enabled
@@ -96,6 +120,8 @@ select
     and p.policy_exists and p.scoped_to_own_user_id and p.with_check_scoped_to_own_user_id
     and s.content_type_check_present and s.composite_primary_key_present
     and s.resume_column_nullable and s.saved_column_nullable
+    and s.resume_char_offset_nullable and s.saved_char_offset_nullable
+    and s.resume_offset_needs_index and s.saved_offset_needs_index
     and nb.no_content_column
   ) as overall_pass
 from table_check t, grant_check g, policy_check p, structure_check s, no_body_text_check nb;

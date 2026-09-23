@@ -52,14 +52,25 @@
 -- naturally stable content unit either a Letter or a Dispatch body
 -- actually has (both are stored as a single plain `text` column — see
 -- docs/sql/2026-08-30-letters.sql / 2026-09-07-dispatches-and-board.sql
--- — with no per-paragraph id or character-offset infrastructure
--- anywhere in this codebase). A raw pixel scroll offset was
--- deliberately rejected, matching dispatch-reader.tsx's own existing
--- rationale: it breaks across viewport widths, font-size changes, and
--- any future reflow, where a paragraph index does not. The
--- application-side clamp (mirroring lib/dispatches.ts's own
--- clampReadingPosition) is the recovery/fallback strategy for a stored
--- index that no longer fits the content's current paragraph count.
+-- — with no per-paragraph id infrastructure anywhere in this codebase).
+-- A raw pixel scroll offset was deliberately rejected, matching
+-- dispatch-reader.tsx's own existing rationale: it breaks across
+-- viewport widths, font-size changes, and any future reflow, where a
+-- paragraph index does not. The application-side clamp (mirroring
+-- lib/dispatches.ts's own clampReadingPosition) is the recovery/
+-- fallback strategy for a stored index that no longer fits the
+-- content's current paragraph count.
+--
+-- INTRA-PARAGRAPH OFFSET: each anchor pair also carries a nullable
+-- *_char_offset — an approximate character position within that
+-- paragraph's own text (lib/reading-places.ts's estimateCharOffset/
+-- estimateScrollFraction, derived geometrically from how far scrolled
+-- past the paragraph's own top the reading line was, never from raw
+-- pixel coordinates persisted directly). This is what makes the anchor
+-- an actual exact-spot marker rather than "somewhere in this
+-- paragraph" — still safely degrades to the paragraph alone whenever
+-- the offset is NULL (never recorded, e.g. an empty paragraph) or no
+-- longer fits the paragraph's current text length (content changed).
 --
 -- PRIVACY: no Letter/Dispatch body text of any kind is stored here —
 -- only ids and integer paragraph positions.
@@ -90,21 +101,32 @@ create table public.reading_places (
 
   -- Automatic resume — silently tracked while reading, no member
   -- action involved. NULL until the member has actually read any of
-  -- this content.
+  -- this content. resume_char_offset is only ever non-null alongside a
+  -- non-null resume_paragraph_index (see this file's own "INTRA-
+  -- PARAGRAPH OFFSET" note above) — a NULL offset with a real paragraph
+  -- index is the ordinary, always-safe "paragraph-only" case.
   resume_paragraph_index integer
     check (resume_paragraph_index is null or resume_paragraph_index >= 0),
+  resume_char_offset integer
+    check (resume_char_offset is null or resume_char_offset >= 0),
   resume_updated_at timestamptz,
+  constraint reading_places_resume_offset_needs_index
+    check (resume_char_offset is null or resume_paragraph_index is not null),
 
   -- Deliberate Saved place — set only by an explicit "Save my place"/
   -- "Move my place" action. NULL until the member has deliberately
-  -- saved a place in this content. Saving again UPDATES these same two
+  -- saved a place in this content. Saving again UPDATES these same
   -- columns (moves the place) rather than ever inserting a second row
   -- — this table structurally supports at most one saved place per
   -- (member, content item), matching the product requirement directly,
   -- with no separate "which saved place" identifier needed.
   saved_paragraph_index integer
     check (saved_paragraph_index is null or saved_paragraph_index >= 0),
+  saved_char_offset integer
+    check (saved_char_offset is null or saved_char_offset >= 0),
   saved_at timestamptz,
+  constraint reading_places_saved_offset_needs_index
+    check (saved_char_offset is null or saved_paragraph_index is not null),
 
   created_at timestamptz not null default now(),
 
