@@ -91,16 +91,20 @@ export type ExtractedIndicators = {
    * payment-handle keyword or cashtag — replaces `hasPaymentHandleKeyword
    * && hasDirectedMoneyRequest`. */
   hasDirectedPaymentHandleRequest: boolean
-  /** Emergency vocabulary in the SAME sentence as an actual request
-   * (a directed money request or a genuine bill/loan-help ask) —
-   * replaces `hasEmergencyKeyword && hasDirectedMoneyRequest`, which
-   * would fire from an unrelated aside ("Could you send me some money?
-   * My brother works at a hospital."). */
+  /** Emergency vocabulary in the SAME CLAUSE (not just sentence — see
+   * splitIntoClauses) as an actual request (a directed money request or
+   * a genuine bill/loan-help ask) — replaces `hasEmergencyKeyword &&
+   * hasDirectedMoneyRequest`, which would fire from an unrelated
+   * clause sharing the same sentence ("Could you send me some money,
+   * my brother works at a hospital."). */
   hasEmergencyFramedMoneyRequest: boolean
-  /** An off-platform mention in the SAME sentence as an actual
+  /** An off-platform mention in the SAME CLAUSE as an actual
    * solicitation shape (a directed money request, explicit investment
    * pitch language, or an explicit investment promise) — replaces
-   * `hasOffPlatformKeyword && hasDirectedMoneyRequest`. */
+   * `hasOffPlatformKeyword && hasDirectedMoneyRequest`. A comma joining
+   * two unrelated clauses in one sentence ("Could you send me some
+   * money, and let's chat on WhatsApp later about the football match.")
+   * must not count. */
   hasOffPlatformSolicitation: boolean
   /** A URL in the SAME sentence as a directed money request — replaces
    * `urls.length > 0 && hasDirectedMoneyRequest`, which would fire from
@@ -110,12 +114,14 @@ export type ExtractedIndicators = {
   /** A URL in the SAME sentence as an explicit phishing phrase —
    * replaces `urls.length > 0 && hasPhishingPhrase`. */
   hasPhishingLinkedUrl: boolean
-  /** A suspicious link shortener in the SAME sentence as SOME other
+  /** A suspicious link shortener in the SAME CLAUSE as SOME other
    * genuinely suspicious signal (a directed request, a phishing
    * phrase, a payment handle, or a crypto mention) — a shortener alone
-   * ("Here is the recipe: https://bit.ly/example") is only a weak
-   * structural signal (see SUSPICIOUS_LINK's 'weak' rule), never
-   * 'meaningful' by itself. */
+   * ("Here is the recipe: https://bit.ly/example"), or a shortener
+   * whose only nearby "suspicious" company is an unrelated clause
+   * ("I was reading about Bitcoin; here is the recipe:
+   * https://bit.ly/example"), is only a weak structural signal (see
+   * SUSPICIOUS_LINK's 'weak' rule), never 'meaningful' by itself. */
   hasSuspiciousShortenerWithContext: boolean
   hasLoanOrBillRequestPhrase: boolean
   hasSuspiciousLinkShortener: boolean
@@ -221,10 +227,21 @@ const OBJECT_WINDOW_CUTOFF_PATTERN =
 
 // A transfer verb followed closely by "to" and then an actual crypto
 // address ("send USDT to 0x...") is unambiguous regardless of whether
-// the address is also preceded by a recognizable word like "wallet" —
-// checked against DISPLAY text (never canonical — canonicalization's
-// leet-speak pass would corrupt hex digits in the address itself).
+// the address is also preceded by a recognizable word like "wallet".
+// Only finds the verb+"to" LEAD-IN — sentenceHasDirectedCryptoTransfer
+// below then requires the address to appear right where the transfer
+// TARGET should be (immediately after "to"), not merely anywhere in
+// the sentence: "This article uses 0x... as an example; can you send
+// the photo to me?" has both a "send...to" phrase and an address
+// somewhere in the sentence, but the address is nowhere near "to".
 const TRANSFER_VERB_TO_PATTERN = /\b(send|pay|transfer|wire)\b.{0,20}\bto\b/i
+
+// How far past "to" to look for the actual address — long enough for
+// the longest address shape this file recognizes (an EVM address is
+// "0x" + 40 hex chars = 42) plus a few filler words ("to the address
+// 0x..."), short enough that an address seen much earlier in the
+// sentence, before the transfer phrase even started, can't count.
+const CRYPTO_TRANSFER_TARGET_WINDOW_CHARS = 50
 
 // Self-contained, like NEED_MONEY_PATTERN: "wallet"/"account" IS the
 // financial object here, directly adjacent to "this/my/the" — no
@@ -251,6 +268,20 @@ function testPattern(pattern: RegExp, text: string): boolean {
  * any lossy matching-only transformation. */
 function splitIntoSentences(displayText: string): string[] {
   return displayText.split(/(?<=[.!?])\s+|\n+/).filter((sentence) => sentence.trim().length > 0)
+}
+
+/** Finer-grained than splitIntoSentences — a single SENTENCE can still
+ * contain multiple unrelated CLAUSES ("Could you send me some money,
+ * my brother works at a hospital." — one sentence, two unrelated
+ * clauses, joined by a comma). Comma and semicolon are treated as
+ * clause boundaries identically to period/!/? — which punctuation a
+ * letter happens to use between two facts must never be what decides
+ * whether they're related. Used only for composites where even same-
+ * SENTENCE co-occurrence was shown to manufacture a false relationship
+ * (emergency framing, off-platform escalation, shortener context) —
+ * see this file's own "LOCALITY PRINCIPLE" header comment. */
+function splitIntoClauses(displayText: string): string[] {
+  return displayText.split(/(?<=[.!?;,])\s+|\n+/).filter((clause) => clause.trim().length > 0)
 }
 
 type FinancialTerms = {
@@ -309,8 +340,18 @@ function localWindowLength(text: string, start: number): number {
   return cutoff ? cutoff.index : rest.length
 }
 
+/** "verb...to" plus an address is not enough — the address must be
+ * right where the transfer TARGET should be, immediately after "to",
+ * not merely present somewhere else in the sentence (see
+ * TRANSFER_VERB_TO_PATTERN's doc comment). Checked against DISPLAY
+ * text, never canonical — canonicalization's leet-speak pass would
+ * corrupt hex digits in the address itself. */
 function sentenceHasDirectedCryptoTransfer(displaySentence: string, canonicalSentence: string): boolean {
-  return TRANSFER_VERB_TO_PATTERN.test(canonicalSentence) && testPattern(CRYPTO_ADDRESS_PATTERN, displaySentence)
+  const match = TRANSFER_VERB_TO_PATTERN.exec(canonicalSentence)
+  if (!match) return false
+  const targetStart = match.index + match[0].length
+  const targetWindow = displaySentence.slice(targetStart, targetStart + CRYPTO_TRANSFER_TARGET_WINDOW_CHARS)
+  return testPattern(CRYPTO_ADDRESS_PATTERN, targetWindow)
 }
 
 /** The core locality mechanism: is this ONE sentence a directed money
@@ -478,22 +519,33 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
   const sentences = splitIntoSentences(displayText)
   const analyses = sentences.map((sentence) => analyzeSentence(sentence))
 
+  // Finer-grained than sentence-level: emergency framing, off-platform
+  // escalation, and shortener context are all checked at CLAUSE
+  // granularity, because a single sentence can still join two
+  // unrelated facts with a comma ("Could you send me some money, my
+  // brother works at a hospital." — one sentence, two clauses). See
+  // splitIntoClauses's own doc comment.
+  const clauses = splitIntoClauses(displayText)
+  const clauseAnalyses = clauses.map((clause) => analyzeSentence(clause))
+
   const hasDirectedMoneyRequest = analyses.some((s) => s.isDirectedMoneyRequest)
   const hasDirectedMoneyRequestWithAmount = analyses.some((s) => s.isDirectedMoneyRequest && s.hasAmount)
   const hasDirectedCryptoRequest = analyses.some((s) => s.isDirectedMoneyRequest && s.hasCryptoTerm)
   const hasDirectedCryptoTransfer = analyses.some((s) => s.isDirectedMoneyRequest && s.hasCryptoAddress)
   const hasDirectedGiftCardRequest = analyses.some((s) => s.isDirectedMoneyRequest && s.hasGiftCardTerm)
   const hasDirectedPaymentHandleRequest = analyses.some((s) => s.isDirectedMoneyRequest && s.hasPaymentHandleTerm)
-  const hasEmergencyFramedMoneyRequest = analyses.some((s) => s.hasEmergencyTerm && (s.isDirectedMoneyRequest || s.isLoanOrBillRequest))
-  const hasOffPlatformSolicitation = analyses.some(
-    (s) => s.hasOffPlatformTerm && (s.isDirectedMoneyRequest || s.hasInvestmentPitch || s.hasInvestmentPromise)
+  const hasEmergencyFramedMoneyRequest = clauseAnalyses.some(
+    (c) => c.hasEmergencyTerm && (c.isDirectedMoneyRequest || c.isLoanOrBillRequest)
+  )
+  const hasOffPlatformSolicitation = clauseAnalyses.some(
+    (c) => c.hasOffPlatformTerm && (c.isDirectedMoneyRequest || c.hasInvestmentPitch || c.hasInvestmentPromise)
   )
   const hasSolicitationLinkedUrl = analyses.some((s) => s.hasUrl && s.isDirectedMoneyRequest)
   const hasPhishingLinkedUrl = analyses.some((s) => s.hasUrl && s.hasPhishingPhrase)
-  const hasSuspiciousShortenerWithContext = analyses.some(
-    (s) =>
-      s.hasSuspiciousShortener &&
-      (s.isDirectedMoneyRequest || s.hasPhishingPhrase || s.hasPaymentHandleKeywordInSentence || s.hasCryptoKeywordInSentence)
+  const hasSuspiciousShortenerWithContext = clauseAnalyses.some(
+    (c) =>
+      c.hasSuspiciousShortener &&
+      (c.isDirectedMoneyRequest || c.hasPhishingPhrase || c.hasPaymentHandleKeywordInSentence || c.hasCryptoKeywordInSentence)
   )
 
   return {

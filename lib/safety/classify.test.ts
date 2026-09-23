@@ -525,9 +525,15 @@ describe('compounding', () => {
   })
 
   it('three or more independent meaningful-or-above codes together escalate to severe', () => {
-    // DIRECT_MONEY_REQUEST + EMERGENCY_MONEY_REQUEST + OFF_PLATFORM_ESCALATION(high variant)
+    // DIRECT_MONEY_REQUEST(high, amount) + EMERGENCY_MONEY_REQUEST(high)
+    // + OFF_PLATFORM_ESCALATION(high) — deliberately keeps the
+    // emergency framing and the off-platform mention in the SAME
+    // clause as the request (no comma anywhere), so this exercises
+    // compounding without depending on cross-clause binding, which is
+    // no longer how these composites work (see the locality-focused
+    // describe blocks below).
     const result = classifyContent(
-      'This is an emergency, I need you to send me money right now, message me on WhatsApp so I can explain.'
+      'This is an emergency and I need you to send me $500 right now and please message me on WhatsApp immediately.'
     )
     expect(result.reasonCodes.length).toBeGreaterThanOrEqual(3)
     expect(result.riskBand).toBe('severe')
@@ -758,5 +764,77 @@ describe('a link shortener alone does not warn', () => {
     const result = classifyContent('Can you send me $300 at my payment page: https://bit.ly/pay')
     expect(result.mutationDisposition).not.toBe('allow')
     expect(result.reasonCodes).toContain('SUSPICIOUS_LINK')
+  })
+})
+
+// ============================================================
+// Residual locality fixes — same-SENTENCE co-occurrence was still too
+// broad for four composites: a crypto address anywhere in a sentence
+// containing a "verb...to" phrase, and three composites (emergency,
+// off-platform, shortener) that didn't account for a single sentence
+// joining multiple unrelated CLAUSES with a comma or semicolon.
+// ============================================================
+describe('crypto address must be bound to the actual transfer target, not just present in the sentence', () => {
+  it('stays benign when the address and the transfer phrase are unrelated parts of the same sentence', () => {
+    const address = '0x' + 'f'.repeat(40)
+    const result = classifyContent(`This article uses ${address} as an example; can you send the photo to me?`)
+    expect(result.reasonCodes).not.toContain('CRYPTO_SOLICITATION')
+    expect(result.riskBand).not.toBe('severe')
+    expect(result.mutationDisposition).not.toBe('deny')
+  })
+
+  it('preserves severe/deny when the address is the actual transfer target', () => {
+    const address = '0x' + '1'.repeat(40)
+    const result = classifyContent(`Send USDT to ${address}`)
+    expect(result.reasonCodes).toContain('CRYPTO_SOLICITATION')
+    expect(result.riskBand).toBe('severe')
+    expect(result.mutationDisposition).toBe('deny')
+  })
+})
+
+describe('emergency framing must be bound to the request within the same clause, regardless of comma vs. period', () => {
+  it('an unrelated third-party aside in the same sentence, comma-joined, is not EMERGENCY_MONEY_REQUEST', () => {
+    const result = classifyContent('Could you send me some money, my brother works at a hospital.')
+    expect(result.reasonCodes).not.toContain('EMERGENCY_MONEY_REQUEST')
+  })
+
+  it('preserves detection when the emergency vocabulary is actually part of the request', () => {
+    expect(classifyContent('Could you send me money for my hospital bill?').reasonCodes).toContain(
+      'EMERGENCY_MONEY_REQUEST'
+    )
+    expect(classifyContent('I need emergency money for surgery.').reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
+  })
+})
+
+describe('off-platform escalation must be bound to the solicitation within the same clause', () => {
+  it('an unrelated off-platform aside in the same sentence, comma-joined, does not escalate', () => {
+    const result = classifyContent(
+      "Could you send me some money, and let's chat on WhatsApp later about the football match."
+    )
+    expect(result.reasonCodes).toContain('OFF_PLATFORM_ESCALATION')
+    expect(result.escalateCase).toBe(false)
+    expect(result.riskBand).not.toBe('high')
+  })
+
+  it('preserves detection when the off-platform move is actually part of the solicitation', () => {
+    const codes1 = classifyContent("Send me the money and message me on WhatsApp once you've done it.").reasonCodes
+    expect(codes1).toContain('OFF_PLATFORM_ESCALATION')
+
+    const codes2 = classifyContent("Let's move to Telegram so I can show you the investment opportunity.").reasonCodes
+    expect(codes2).toContain('OFF_PLATFORM_ESCALATION')
+    expect(codes2).toContain('INVESTMENT_SOLICITATION')
+  })
+})
+
+describe('a shortener needs genuinely suspicious context in the same clause, not just the same sentence', () => {
+  it('an unrelated crypto aside sharing a sentence with a shortened link stays weak', () => {
+    const result = classifyContent('I was reading about Bitcoin; here is the recipe: https://bit.ly/example')
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.escalateCase).toBe(false)
+  })
+
+  it('preserves a shortener actually tied to a payment/solicitation instruction', () => {
+    const result = classifyContent('Can you send me $300 at my payment page: https://bit.ly/pay')
+    expect(result.mutationDisposition).not.toBe('allow')
   })
 })

@@ -197,4 +197,40 @@ describe('extractIndicators — locally-bound composites (do not combine unrelat
       extractIndicators('Can you send me $300 at my payment page: https://bit.ly/pay').hasSuspiciousShortenerWithContext
     ).toBe(true)
   })
+
+  it('binds a crypto address to the actual transfer target, not just anywhere in the sentence', () => {
+    const address = '0x' + 'f'.repeat(40)
+    expect(
+      extractIndicators(`This article uses ${address} as an example; can you send the photo to me?`).hasDirectedCryptoTransfer
+    ).toBe(false)
+    expect(extractIndicators(`Send USDT to ${address}`).hasDirectedCryptoTransfer).toBe(true)
+  })
+
+  it('binds emergency framing to the request within the same CLAUSE, not just the same sentence', () => {
+    expect(
+      extractIndicators('Could you send me some money, my brother works at a hospital.').hasEmergencyFramedMoneyRequest
+    ).toBe(false)
+    expect(extractIndicators('Could you send me money for my hospital bill?').hasEmergencyFramedMoneyRequest).toBe(true)
+    expect(extractIndicators('I need emergency money for surgery.').hasEmergencyFramedMoneyRequest).toBe(true)
+  })
+
+  it('binds off-platform escalation to the solicitation within the same CLAUSE, not just the same sentence', () => {
+    expect(
+      extractIndicators("Could you send me some money, and let's chat on WhatsApp later about the football match.")
+        .hasOffPlatformSolicitation
+    ).toBe(false)
+    expect(
+      extractIndicators("Send me the money and message me on WhatsApp once you've done it.").hasOffPlatformSolicitation
+    ).toBe(true)
+    expect(
+      extractIndicators("Let's move to Telegram so I can show you the investment opportunity.").hasOffPlatformSolicitation
+    ).toBe(true)
+  })
+
+  it('binds shortener context within the same CLAUSE, not just the same sentence', () => {
+    expect(
+      extractIndicators('I was reading about Bitcoin; here is the recipe: https://bit.ly/example')
+        .hasSuspiciousShortenerWithContext
+    ).toBe(false)
+  })
 })
