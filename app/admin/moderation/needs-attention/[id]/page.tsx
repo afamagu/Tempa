@@ -5,8 +5,12 @@ import { getSafetyCase, listCaseSignals } from '@/lib/admin-safety'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { sectionTitleClass, sectionLabelClass, helperTextClass, metadataTextClass } from '@/app/profile/ui'
 import CaseTransitionActions from '../case-transition-actions'
+import CaseAccountInterventionActions from '../case-account-intervention-actions'
 import SignalEvidence from '../signal-evidence'
 import { reasonCodeLabel, caseStatusLabel, riskBandLabel, surfaceLabel } from '../reason-labels'
+
+const INTERVENTION_STATUSES = new Set(['restricted', 'suspended', 'banned'])
+const ACTIVE_CASE_STATUSES = new Set(['open', 'reviewing'])
 
 /**
  * Safety 2, Checkpoint 7 — case detail. Shows this ONE case's own
@@ -90,6 +94,24 @@ export default async function NeedsAttentionCaseDetailPage({ params }: { params:
           )}
         </div>
         <CaseTransitionActions caseId={safetyCase.id} status={safetyCase.status} />
+      </div>
+
+      <div className="space-y-2">
+        <p className={sectionLabelClass}>Account action</p>
+        {ACTIVE_CASE_STATUSES.has(safetyCase.status) ? (
+          <CaseAccountInterventionActions
+            caseId={safetyCase.id}
+            caseStatus={safetyCase.status}
+            accountStatus={safetyCase.subjectAccountStatus}
+          />
+        ) : INTERVENTION_STATUSES.has(safetyCase.status) ? (
+          <p className={helperTextClass}>
+            This case resulted in: {caseStatusLabel(safetyCase.status)}
+            {safetyCase.reviewedByPseudonym ? ` (by ${safetyCase.reviewedByPseudonym})` : ''}
+          </p>
+        ) : (
+          <p className={helperTextClass}>No account action was taken on this case.</p>
+        )}
       </div>
 
       <div className="space-y-3">

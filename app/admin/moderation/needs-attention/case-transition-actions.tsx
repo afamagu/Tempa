@@ -18,6 +18,14 @@ const NEXT_ACTIONS: Record<CaseStatus, { target: CaseTransitionTarget; label: st
   ],
   no_action: [],
   resolved: [],
+  // Checkpoint 8's own graduated-intervention terminal outcomes (and
+  // the still-deferred 'warned') — all terminal, all offer nothing
+  // further through THIS review-only component; CaseAccountIntervention
+  // Actions handles restricted/suspended/banned as its own action set.
+  warned: [],
+  restricted: [],
+  suspended: [],
+  banned: [],
 }
 
 /**

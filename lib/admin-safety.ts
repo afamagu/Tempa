@@ -3,16 +3,27 @@ import type { AdminError, AccountStatus } from './admin'
 import type { RiskBand } from './safety'
 
 /**
- * Safety 2, Checkpoint 7 — thin wrappers around the staff-only Needs
+ * Safety 2, Checkpoints 7-8 — thin wrappers around the staff-only Needs
  * Attention RPCs (docs/sql/2026-10-08-safety-checkpoint7-admin-needs-
- * attention.sql, prepared but not yet applied). Every RPC checks
+ * attention.sql, docs/sql/2026-10-09-safety-checkpoint8-graduated-
+ * interventions.sql — prepared but not yet applied). Every RPC checks
  * is_staff() itself, server-side — same convention as lib/admin.ts/
  * lib/admin-moderation.ts; these wrappers are a call-shape convenience
  * only, never the authorization boundary.
  */
 
-export type CaseStatus = 'open' | 'reviewing' | 'no_action' | 'resolved'
+// Checkpoint 8 — 'warned'/'restricted'/'suspended'/'banned' are all
+// real, historical TERMINAL outcomes safety_cases' own CHECK constraint
+// has always allowed (Checkpoint 2's original domain) — only 'open' and
+// 'reviewing' are ever "active" for the one-active-case invariant.
+// 'warned' remains structurally valid but is not reachable through any
+// RPC yet (see the Checkpoint 8 migration's own header for why).
+export type CaseStatus = 'open' | 'reviewing' | 'no_action' | 'resolved' | 'warned' | 'restricted' | 'suspended' | 'banned'
 export type CaseStatusFilter = CaseStatus | 'active' | 'all'
+/** The three graduated account interventions this checkpoint actually
+ * makes reachable — never 'warned' (deferred), never a review-only
+ * outcome (Checkpoint 7's own admin_transition_safety_case owns those). */
+export type CaseInterventionStatus = 'restricted' | 'suspended' | 'banned'
 
 export type SafetyCaseRow = {
   id: string
@@ -276,8 +287,9 @@ export async function getSafetyEvidence(
   return { data: { kind: 'none' }, error: null }
 }
 
-/** The three review-only transitions this checkpoint owns — never
- * restriction/suspension/ban/warning, which stay Checkpoint 8's alone. */
+/** The three review-only transitions Checkpoint 7 owns — never
+ * restriction/suspension/ban (Checkpoint 8's own applySafetyCaseIntervention
+ * below) or warning (deferred). */
 export type CaseTransitionTarget = 'reviewing' | 'no_action' | 'resolved'
 
 export async function transitionSafetyCase(
@@ -292,6 +304,38 @@ export async function transitionSafetyCase(
     p_expected_status: expectedStatus,
     p_new_status: newStatus,
     p_reason: reason?.trim() || null,
+  })
+  if (error) return { error: { message: error.message, code: error.code } }
+  return { error: null }
+}
+
+/**
+ * Safety 2, Checkpoint 8 — the one case-aware, transactional graduated-
+ * intervention path. Requires BOTH the case's own expected status and
+ * the member's own expected account status (item 6 — optimistic
+ * concurrency on both axes independently, since the account status can
+ * also change via the entirely separate ordinary member-workspace path,
+ * app/admin/account-status-actions.tsx, which never touches the case at
+ * all). A reason is always required — admin_apply_safety_case_
+ * intervention rejects a blank one itself, the same way admin_set_
+ * account_status already does.
+ */
+export async function applySafetyCaseIntervention(
+  supabase: SupabaseClient,
+  params: {
+    caseId: string
+    expectedCaseStatus: CaseStatus
+    expectedAccountStatus: AccountStatus
+    newStatus: CaseInterventionStatus
+    reason: string
+  }
+): Promise<{ error: AdminError }> {
+  const { error } = await supabase.rpc('admin_apply_safety_case_intervention', {
+    p_case_id: params.caseId,
+    p_expected_case_status: params.expectedCaseStatus,
+    p_expected_account_status: params.expectedAccountStatus,
+    p_new_status: params.newStatus,
+    p_reason: params.reason.trim(),
   })
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }

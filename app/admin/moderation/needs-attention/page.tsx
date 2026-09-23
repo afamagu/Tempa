@@ -13,6 +13,12 @@ const STATUS_FILTERS: { label: string; value: CaseStatusFilter | undefined }[] =
   { label: 'Reviewing', value: 'reviewing' },
   { label: 'No action', value: 'no_action' },
   { label: 'Resolved', value: 'resolved' },
+  // Checkpoint 8 — the three reachable graduated-intervention outcomes,
+  // so a reviewer can filter the queue down to cases already closed by
+  // an account action.
+  { label: 'Restricted', value: 'restricted' },
+  { label: 'Suspended', value: 'suspended' },
+  { label: 'Banned', value: 'banned' },
   { label: 'All', value: 'all' },
 ]
 

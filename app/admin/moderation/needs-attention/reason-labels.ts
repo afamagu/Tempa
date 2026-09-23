@@ -37,6 +37,14 @@ export const CASE_STATUS_LABELS: Record<string, string> = {
   reviewing: 'Reviewing',
   no_action: 'No action',
   resolved: 'Resolved',
+  // Checkpoint 8 — the three reachable graduated-intervention outcomes,
+  // plus the structurally-valid-but-unreachable 'warned' (kept only so
+  // an existing historical row, if one ever appears, still renders a
+  // real label instead of a raw enum value).
+  restricted: 'Restricted',
+  suspended: 'Suspended',
+  banned: 'Banned',
+  warned: 'Warned',
 }
 
 export function caseStatusLabel(status: string): string {

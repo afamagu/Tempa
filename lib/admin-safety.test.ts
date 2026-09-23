@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { listSafetyCases, getSafetyCase, listCaseSignals, getSafetyEvidence, transitionSafetyCase } from './admin-safety'
+import {
+  listSafetyCases,
+  getSafetyCase,
+  listCaseSignals,
+  getSafetyEvidence,
+  transitionSafetyCase,
+  applySafetyCaseIntervention,
+} from './admin-safety'
 
 // Same lightweight convention as app/api/safety/evaluate/route.test.ts's
 // own RPC mocking — this file proves the wrapper's own RPC name/param
@@ -221,5 +228,67 @@ describe('transitionSafetyCase', () => {
     }))
     const { error } = await transitionSafetyCase(supabase, 'case-1', 'open', 'no_action')
     expect(error?.message).toBe('This case has changed since you loaded it. Please refresh and try again.')
+  })
+})
+
+describe('applySafetyCaseIntervention', () => {
+  it('passes case id, BOTH expected statuses (case and account), new status, and a trimmed reason', async () => {
+    const supabase = fakeClient(() => ({ data: null, error: null }))
+    await applySafetyCaseIntervention(supabase, {
+      caseId: 'case-1',
+      expectedCaseStatus: 'reviewing',
+      expectedAccountStatus: 'active',
+      newStatus: 'suspended',
+      reason: '  repeated financial solicitation across recipients  ',
+    })
+    expect(supabase.rpc).toHaveBeenCalledWith('admin_apply_safety_case_intervention', {
+      p_case_id: 'case-1',
+      p_expected_case_status: 'reviewing',
+      p_expected_account_status: 'active',
+      p_new_status: 'suspended',
+      p_reason: 'repeated financial solicitation across recipients',
+    })
+  })
+
+  it('a case-staleness error surfaces as the wrapper\'s own error message', async () => {
+    const supabase = fakeClient(() => ({
+      data: null,
+      error: { message: 'This case has changed since you loaded it. Please refresh and try again.', code: '22023' },
+    }))
+    const { error } = await applySafetyCaseIntervention(supabase, {
+      caseId: 'case-1',
+      expectedCaseStatus: 'open',
+      expectedAccountStatus: 'active',
+      newStatus: 'restricted',
+      reason: 'testing',
+    })
+    expect(error?.message).toBe('This case has changed since you loaded it. Please refresh and try again.')
+  })
+
+  it('an account-staleness error (changed via the ordinary member-workspace path) surfaces distinctly, never silently overwritten', async () => {
+    const supabase = fakeClient(() => ({
+      data: null,
+      error: { message: "This member's account status has changed since you loaded it. Please refresh and try again.", code: '22023' },
+    }))
+    const { error } = await applySafetyCaseIntervention(supabase, {
+      caseId: 'case-1',
+      expectedCaseStatus: 'reviewing',
+      expectedAccountStatus: 'active',
+      newStatus: 'restricted',
+      reason: 'testing',
+    })
+    expect(error?.message).toBe("This member's account status has changed since you loaded it. Please refresh and try again.")
+  })
+
+  it('a "Not authorized" error (non-staff caller) surfaces unchanged', async () => {
+    const supabase = fakeClient(() => ({ data: null, error: { message: 'Not authorized.', code: '42501' } }))
+    const { error } = await applySafetyCaseIntervention(supabase, {
+      caseId: 'case-1',
+      expectedCaseStatus: 'open',
+      expectedAccountStatus: 'active',
+      newStatus: 'banned',
+      reason: 'testing',
+    })
+    expect(error?.message).toBe('Not authorized.')
   })
 })
