@@ -90,6 +90,12 @@ describe('tempa_private.outreach_fingerprint — deliberately separate from safe
       'revoke all on function tempa_private.outreach_fingerprint(uuid, text) from public, anon, authenticated, service_role;'
     )
   })
+
+  it('calls the schema-qualified extensions.digest(...), matching the canonical safety_fingerprint\'s own pgcrypto-schema convention — set search_path is pg_catalog only, so an unqualified digest() would fail to resolve', () => {
+    const body = extractSqlLanguageFunction(persistenceSql, 'tempa_private.outreach_fingerprint')
+    expect(body).toContain('extensions.digest(')
+    expect(body).not.toMatch(/[^.]\bdigest\(/)
+  })
 })
 
 describe('tempa_private.solicitation_reason_codes — reuses the existing CONTENT_REASON_CODES taxonomy, no duplicate synonyms', () => {

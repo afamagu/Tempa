@@ -715,7 +715,7 @@ immutable
 set search_path to 'pg_catalog'
 as $$
   select encode(
-    digest(
+    extensions.digest(
       p_user_id::text || ':' || lower(regexp_replace(trim(both from coalesce(p_body, '')), '\s+', ' ', 'g')),
       'sha256'
     ),
