@@ -1,0 +1,108 @@
+import { describe, it, expect } from 'vitest'
+import { extractIndicators } from './indicators'
+
+describe('extractIndicators — structural extraction', () => {
+  it('extracts a URL', () => {
+    expect(extractIndicators('Check this out: https://example.com/promo').urls).toEqual([
+      'https://example.com/promo',
+    ])
+  })
+
+  it('extracts an email address', () => {
+    expect(extractIndicators('Reach me at hello@example.com').emails).toEqual(['hello@example.com'])
+  })
+
+  it('extracts a plausible phone number and ignores short digit runs', () => {
+    const result = extractIndicators('Call me on +1 555-123-4567, or extension 42')
+    expect(result.phoneNumbers).toEqual(['+1 555-123-4567'])
+  })
+
+  it('extracts a currency-symbol amount', () => {
+    const result = extractIndicators('Can you send me $300?')
+    expect(result.moneyAmounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: 300, currencyHint: '$' })])
+    )
+  })
+
+  it('extracts a word-form currency amount', () => {
+    const result = extractIndicators('I need 50000 naira please')
+    expect(result.moneyAmounts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: 50000 })])
+    )
+  })
+
+  it('extracts an obfuscated spaced-out amount', () => {
+    const result = extractIndicators('send $ 3 0 0 now')
+    expect(result.moneyAmounts.some((a) => a.value === 300)).toBe(true)
+  })
+
+  it('extracts an ETH-style crypto address', () => {
+    const address = '0x' + 'a'.repeat(40)
+    expect(extractIndicators(`send to ${address}`).cryptoAddresses).toEqual([address])
+  })
+
+  it('does not extract a crypto address from ordinary hex-free text', () => {
+    expect(extractIndicators('The weather was 0 degrees today.').cryptoAddresses).toEqual([])
+  })
+})
+
+describe('extractIndicators — keyword/phrase indicators', () => {
+  it('detects a directed money request ("can you send")', () => {
+    expect(extractIndicators('Can you send me $300?').hasDirectedMoneyRequest).toBe(true)
+  })
+
+  it('does not flag a bare currency mention as a directed request', () => {
+    expect(extractIndicators('I bought this for $200.').hasDirectedMoneyRequest).toBe(false)
+  })
+
+  it('detects a loan/bill request phrase', () => {
+    expect(extractIndicators('Please help pay my rent this month.').hasLoanOrBillRequestPhrase).toBe(true)
+  })
+
+  it('does not flag a bare rent statement as a loan/bill request', () => {
+    expect(extractIndicators('My rent increased this month.').hasLoanOrBillRequestPhrase).toBe(false)
+  })
+
+  it('detects a crypto keyword', () => {
+    expect(extractIndicators('Bitcoin fell again.').hasCryptoKeyword).toBe(true)
+  })
+
+  it('detects a gift-card keyword', () => {
+    expect(extractIndicators('I bought my brother a gift card.').hasGiftCardKeyword).toBe(true)
+  })
+
+  it('detects the narrow gift-card-code-request pattern only for the specific scam shape', () => {
+    expect(
+      extractIndicators('Buy a Steam gift card and send me the code.').hasGiftCardCodeRequest
+    ).toBe(true)
+    expect(extractIndicators('I bought my brother a gift card.').hasGiftCardCodeRequest).toBe(false)
+  })
+
+  it('separates investment PROMISE language from neutral investment TOPIC mentions', () => {
+    expect(extractIndicators('I can double your investment.').hasInvestmentPromiseLanguage).toBe(true)
+    expect(extractIndicators('I lost money investing in crypto.').hasInvestmentPromiseLanguage).toBe(false)
+    expect(extractIndicators('I lost money investing in crypto.').hasInvestmentTopicKeyword).toBe(true)
+  })
+
+  it('detects an off-platform escalation phrase', () => {
+    expect(extractIndicators("Let's move to Telegram.").hasOffPlatformKeyword).toBe(true)
+  })
+
+  it('detects emergency language', () => {
+    expect(extractIndicators('I need emergency money for hospital treatment.').hasEmergencyKeyword).toBe(true)
+  })
+
+  it('does not flag a past-tense complaint as emergency solicitation input alone', () => {
+    const result = extractIndicators('My hospital bill was shocking.')
+    expect(result.hasEmergencyKeyword).toBe(true) // topic present
+    expect(result.hasDirectedMoneyRequest).toBe(false) // but no request
+  })
+
+  it('detects bank details being shared unprompted', () => {
+    expect(extractIndicators('Here is my bank account: 12345.').hasBankDetailsSharedPhrase).toBe(true)
+  })
+
+  it('detects a link shortener', () => {
+    expect(extractIndicators('Click here: bit.ly/abc123').hasSuspiciousLinkShortener).toBe(true)
+  })
+})
