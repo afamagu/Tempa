@@ -38,6 +38,58 @@ describe('one BEGIN/COMMIT, not yet applied', () => {
   })
 })
 
+describe('documentation correction — the restricted/plain-text exception is scoped to Letters only', () => {
+  it('the behavioral-matrix header explicitly states restricted does NOT generally permit Dispatch/Reply/Question-answer publication', () => {
+    expect(sql).toContain('NOT generalize to Dispatch publish/update, Dispatch Reply, or')
+    expect(sql).toContain('A `restricted` member cannot publish')
+    expect(sql).toContain('or edit a Dispatch, cannot reply to one, and cannot publish a')
+  })
+})
+
+describe('admin_set_account_status (Part 0) — redefined ONLY to lock the target profile row, otherwise unchanged', () => {
+  const body = () => extractFunctionBody('public.admin_set_account_status')
+
+  it('this migration redefines it (the one shared-lock fix requires touching both writers)', () => {
+    expect(sql).toContain('create or replace function public.admin_set_account_status(')
+  })
+
+  it('signature is unchanged — admin_set_account_status(uuid, text, text) — so AccountStatusActions/setAccountStatus need zero client-side change', () => {
+    const start = sql.indexOf('create or replace function public.admin_set_account_status(')
+    const paramsEnd = sql.indexOf(')\nreturns void', start)
+    const params = sql.slice(start, paramsEnd)
+    expect(params).toContain('p_user_id uuid')
+    expect(params).toContain('p_status text')
+    expect(params).toContain('p_reason text')
+  })
+
+  it('locks the target profile row FOR UPDATE as part of its own existence check, before it ever reads/upserts account_enforcement_state', () => {
+    const b = body()
+    const lockIndex = b.indexOf('from public.profiles where id = p_user_id for update')
+    const enforcementReadIndex = b.indexOf('from public.account_enforcement_state')
+    expect(lockIndex).toBeGreaterThan(-1)
+    expect(enforcementReadIndex).toBeGreaterThan(-1)
+    expect(lockIndex).toBeLessThan(enforcementReadIndex)
+  })
+
+  it('still rejects a nonexistent member with the same "Member not found." message', () => {
+    const b = body()
+    expect(b).toContain("raise exception 'Member not found.';")
+  })
+
+  it('preserves staff-account protection, the is_staff(\'moderator\') gate, reason validation, the upsert, and its own audit row unchanged', () => {
+    const b = body()
+    expect(b).toContain("if not public.is_staff('moderator') then")
+    expect(b).toContain("raise exception 'Staff accounts must be managed separately.';")
+    expect(b).toContain("raise exception 'A reason is required.';")
+    expect(b).toContain('on conflict (user_id) do update')
+    expect(b).toContain("'set_account_status'")
+  })
+
+  it('grants EXECUTE to authenticated, matching the unchanged live convention', () => {
+    expect(codeOnly).toContain('grant execute on function public.admin_set_account_status(uuid, text, text) to authenticated;')
+  })
+})
+
 describe('admin_apply_safety_case_intervention — the one case-aware transactional enforcement path', () => {
   const body = () => extractFunctionBody('public.admin_apply_safety_case_intervention')
 
@@ -59,22 +111,42 @@ describe('admin_apply_safety_case_intervention — the one case-aware transactio
     expect(b).not.toContain("'reviewing'::text = p_new_status")
   })
 
-  it('locks and verifies the case row (FOR UPDATE, then its own staleness check), THEN locks and verifies the account_enforcement_state row the same way', () => {
+  it('locks and verifies the case row (FOR UPDATE, then its own staleness check), THEN locks the subject\'s profiles row, THEN reads and verifies account_enforcement_state', () => {
     const b = body()
     const caseLockIndex = b.indexOf('from public.safety_cases')
     const caseStaleCheckIndex = b.indexOf('is distinct from p_expected_case_status')
-    const accountLockIndex = b.indexOf('from public.account_enforcement_state')
+    const profileLockIndex = b.indexOf('from public.profiles where id = v_case.subject_user_id for update')
+    const accountReadIndex = b.indexOf('from public.account_enforcement_state')
     const accountStaleCheckIndex = b.indexOf('is distinct from p_expected_account_status')
     expect(caseLockIndex).toBeGreaterThan(-1)
-    expect(accountLockIndex).toBeGreaterThan(-1)
+    expect(profileLockIndex).toBeGreaterThan(-1)
+    expect(accountReadIndex).toBeGreaterThan(-1)
     expect(caseLockIndex).toBeLessThan(caseStaleCheckIndex)
-    expect(caseStaleCheckIndex).toBeLessThan(accountLockIndex)
-    expect(accountLockIndex).toBeLessThan(accountStaleCheckIndex)
-    // Both locks are FOR UPDATE, not a plain read.
+    expect(caseStaleCheckIndex).toBeLessThan(profileLockIndex)
+    expect(profileLockIndex).toBeLessThan(accountReadIndex)
+    expect(accountReadIndex).toBeLessThan(accountStaleCheckIndex)
+    // The case lock is FOR UPDATE.
     const caseSelectBlock = b.slice(caseLockIndex, b.indexOf(';', caseLockIndex))
-    const accountSelectBlock = b.slice(accountLockIndex, b.indexOf(';', accountLockIndex))
     expect(caseSelectBlock).toContain('for update')
-    expect(accountSelectBlock).toContain('for update')
+  })
+
+  it('INDEPENDENT AUDIT CORRECTION: locks the subject\'s own profiles row (an always-existing row) rather than account_enforcement_state itself — the fix for the "absent row cannot be locked" race', () => {
+    const b = body()
+    expect(b).toContain('perform 1 from public.profiles where id = v_case.subject_user_id for update;')
+    // The account_enforcement_state read itself is now a PLAIN select —
+    // its own FOR UPDATE would have been meaningless anyway (nothing to
+    // lock when no row exists), and is no longer needed: the profiles
+    // lock already serializes against any other writer, since admin_
+    // set_account_status (Part 0) locks the identical row before IT
+    // touches account_enforcement_state too.
+    const accountReadStart = b.indexOf('select status into v_actual_account_status')
+    const accountReadBlock = b.slice(accountReadStart, b.indexOf(';', accountReadStart))
+    expect(accountReadBlock).not.toContain('for update')
+  })
+
+  it('does NOT reason that a missing account_enforcement_state row means "nothing to lock, nothing can race" — that reasoning was the bug being corrected', () => {
+    const b = stripLineComments(body())
+    expect(b.toLowerCase()).not.toMatch(/nothing to lock/)
   })
 
   it('both staleness checks are NULL-safe (IS DISTINCT FROM), never <>', () => {
@@ -100,9 +172,11 @@ describe('admin_apply_safety_case_intervention — the one case-aware transactio
     expect(b).not.toContain('Staff accounts must be managed separately')
   })
 
-  it('this migration never redefines admin_set_account_status itself — only calls it, so the ordinary member-workspace path is completely untouched', () => {
-    expect(sql).not.toContain('create or replace function public.admin_set_account_status(')
-  })
+  // Whether this migration redefines admin_set_account_status itself is
+  // covered by its own dedicated describe block above ("admin_set_
+  // account_status (Part 0)") — the independent audit correction
+  // requires it to (adding the shared profile lock), with its
+  // signature/behavior otherwise preserved.
 
   it('has NO exception handler anywhere in its body — a failure in admin_set_account_status, the case update, or the audit insert must abort the WHOLE transaction, never be swallowed (rollback safety, items 7/12)', () => {
     const b = body()

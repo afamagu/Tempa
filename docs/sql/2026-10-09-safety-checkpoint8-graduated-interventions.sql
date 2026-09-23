@@ -55,7 +55,7 @@
 --       update_dispatch, create_reply, publish_question_answer, and
 --       every other CREATE-shaped mutation across the app treat all
 --       three non-active statuses IDENTICALLY: fully blocked.
---     - The one real behavioral SPLIT exists only in write_letter/
+--     - The one real behavioral SPLIT exists ONLY in write_letter/
 --       reply_to_letter (docs/sql/2026-09-13-write-letter-reply-to-
 --       letter-ambiguous-m-fix.sql and later revisions): `suspended`/
 --       `banned` are blocked from the ENTIRE mutation (the letter/reply
@@ -63,7 +63,18 @@
 --       `restricted` caller MAY still send/reply with plain text, but is
 --       blocked specifically from attaching Moments (and, by the same
 --       shape, a Postcard) — i.e. restricted = ordinary correspondence
---       continues, rich-media attachments do not.
+--       continues, rich-media attachments do not. CORRECTION: this
+--       plain-text exception is specific to established Letter
+--       correspondence (write_letter/reply_to_letter) ONLY — it does
+--       NOT generalize to Dispatch publish/update, Dispatch Reply, or
+--       Question answers, all of which are already covered by the FIRST
+--       bullet above (the flat `in ('restricted','suspended','banned')`
+--       gate: publish_dispatch/update_dispatch/create_reply/publish_
+--       question_answer all fully block a `restricted` caller, exactly
+--       like `suspended`/`banned`). A `restricted` member cannot publish
+--       or edit a Dispatch, cannot reply to one, and cannot publish a
+--       Question answer — only an existing Letter correspondence's own
+--       plain-text reply/write is the narrow exception.
 --     - No RPC anywhere in this codebase distinguishes `suspended` from
 --       `banned` behaviorally — every gate that checks either checks
 --       both together. The only place 'banned' is read alone is a pure
@@ -123,17 +134,156 @@
 --
 -- ARCHITECTURE REUSED, NOT DUPLICATED: account_enforcement_state stays
 -- the one authoritative enforcement table; admin_set_account_status
--- stays the one enforcement write path, called UNMODIFIED and UNWRAPPED
--- from inside the one new function below (Postgres nested calls inside
--- one PL/pgSQL function body run in the SAME transaction — no savepoint,
--- no exception handler around the call — so a later failure, including
--- the case UPDATE or the audit INSERT, rolls the account-status change
--- back with it, and a failure INSIDE admin_set_account_status itself
--- (blank reason, staff-account target, unknown status) aborts before
--- the case is ever touched). Its own staff-account protection and
--- validation are reused by CALLING it, never re-implemented.
+-- stays the one enforcement write path, called from inside the new
+-- function below with its own body otherwise UNCHANGED (Postgres nested
+-- calls inside one PL/pgSQL function body run in the SAME transaction —
+-- no savepoint, no exception handler around the call — so a later
+-- failure, including the case UPDATE or the audit INSERT, rolls the
+-- account-status change back with it, and a failure INSIDE admin_set_
+-- account_status itself (blank reason, staff-account target, unknown
+-- status) aborts before the case is ever touched). Its own staff-
+-- account protection and validation are reused by CALLING it, never
+-- re-implemented.
+--
+-- INDEPENDENT AUDIT CORRECTION — CONCURRENCY (post-approval): the
+-- original version of this migration locked account_enforcement_state
+-- itself FOR UPDATE and, when no row existed yet (a never-before-
+-- enforced member), reasoned that "there is nothing to lock, so nothing
+-- can race" — that reasoning was the bug. `FOR UPDATE` locks nothing
+-- when the target row does not exist, so two concurrent paths could
+-- both observe "no row, therefore active" and then both proceed to
+-- write, with whichever commits second silently overwriting whichever
+-- committed first (e.g. the case-intervention path reads absence ->
+-- expects 'active', the ordinary member-workspace path independently
+-- creates 'suspended', and the case-intervention path's own later
+-- upsert to 'restricted' then overwrites that newer suspension — the
+-- exact stale-downgrade item 6 exists to prevent). Fixed by locking a
+-- row that ALWAYS exists instead: admin_set_account_status is
+-- redefined below (Part 0) to lock the target's own public.profiles row
+-- FOR UPDATE before it ever reads/upserts account_enforcement_state,
+-- and admin_apply_safety_case_intervention (Part 1) locks that SAME
+-- profiles row, the same way, before its own account_enforcement_state
+-- read. Both the ordinary Restore/Restrict/Suspend/Ban path and the
+-- case-intervention path therefore always serialize on one common,
+-- always-existing row — whichever gets there first completes and
+-- commits; the second waits, then re-reads the now-current status and
+-- correctly rejects a stale expected value rather than silently
+-- downgrading it. No new locking table or advisory-lock subsystem —
+-- profiles already exists, one row per member, exactly the "one shared
+-- always-existing lock" this correction asks for.
 
 begin;
+
+-- ============================================================
+-- 0. ADMIN_SET_ACCOUNT_STATUS — redefined ONLY to lock the target's own
+--    profiles row before reading/upserting account_enforcement_state
+-- ============================================================
+-- Reproduced in full from its current live definition (docs/sql/2026-
+-- 09-17-reporting-and-admin-moderation.sql) with EXACTLY ONE behavioral
+-- change: the existing `if not exists (select 1 from public.profiles
+-- where id = p_user_id)` existence check now also takes `for update` on
+-- that same row — still the identical "Member not found." rejection
+-- when the profile doesn't exist, now ALSO holding a row lock for the
+-- rest of this transaction when it does. Every other line — the
+-- is_staff('moderator') gate, status/reason validation, the staff-
+-- account protection, the account_enforcement_state upsert, and its own
+-- 'set_account_status' audit row — is byte-for-byte unchanged. Signature
+-- unchanged (still admin_set_account_status(uuid, text, text)), so
+-- AccountStatusActions/setAccountStatus (the ordinary member-workspace
+-- path) and its own audit history keep working exactly as before, with
+-- no client-side change of any kind.
+create or replace function public.admin_set_account_status(
+  p_user_id uuid,
+  p_status text,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+
+declare
+  v_old_status text;
+  v_reason text;
+  v_actor_pseudonym text;
+  v_target_pseudonym text;
+
+begin
+
+  if auth.uid() is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  if not public.is_staff('moderator') then
+    raise exception 'Not authorized.';
+  end if;
+
+  if p_status not in ('active', 'restricted', 'suspended', 'banned') then
+    raise exception 'Unknown status.';
+  end if;
+
+  v_reason := trim(both from coalesce(p_reason, ''));
+  if char_length(v_reason) = 0 then
+    raise exception 'A reason is required.';
+  end if;
+  if char_length(v_reason) > 500 then
+    raise exception 'Reason is too long.';
+  end if;
+
+  -- INDEPENDENT AUDIT CORRECTION: `for update` added — this is now the
+  -- one shared, always-existing lock both this function and
+  -- admin_apply_safety_case_intervention serialize on before either
+  -- touches account_enforcement_state, closing the race a nonexistent-
+  -- row FOR UPDATE could never have prevented on its own.
+  if not exists (select 1 from public.profiles where id = p_user_id for update) then
+    raise exception 'Member not found.';
+  end if;
+
+  if exists (
+    select 1
+    from public.staff_roles
+    where user_id = p_user_id
+  ) then
+    raise exception 'Staff accounts must be managed separately.';
+  end if;
+
+  select status into v_old_status
+  from public.account_enforcement_state
+  where user_id = p_user_id;
+
+  v_old_status := coalesce(v_old_status, 'active');
+
+  insert into public.account_enforcement_state (
+    user_id, status, status_reason, changed_by, changed_at
+  ) values (
+    p_user_id, p_status, v_reason, auth.uid(), now()
+  )
+  on conflict (user_id) do update
+    set status = excluded.status,
+        status_reason = excluded.status_reason,
+        changed_by = excluded.changed_by,
+        changed_at = excluded.changed_at;
+
+  select pseudonym into v_actor_pseudonym from public.profiles where id = auth.uid();
+  select pseudonym into v_target_pseudonym from public.profiles where id = p_user_id;
+
+  insert into public.admin_audit_log (
+    actor_id, actor_identifier_snapshot, action,
+    target_type, target_id, target_identifier_snapshot,
+    reason, metadata
+  ) values (
+    auth.uid(), coalesce(v_actor_pseudonym, auth.uid()::text), 'set_account_status',
+    'account_status', p_user_id, coalesce(v_target_pseudonym, p_user_id::text),
+    v_reason, jsonb_build_object('old_status', v_old_status, 'new_status', p_status)
+  );
+
+end;
+$function$;
+
+revoke all on function public.admin_set_account_status(uuid, text, text) from public;
+grant execute on function public.admin_set_account_status(uuid, text, text) to authenticated;
+
 
 -- ============================================================
 -- 1. ADMIN_APPLY_SAFETY_CASE_INTERVENTION — the one case-aware,
@@ -149,18 +299,24 @@ begin;
 -- does not wire anything existing INTO it.
 --
 -- CONCURRENCY (item 6): locks the case row FOR UPDATE, then the
--- account_enforcement_state row FOR UPDATE (when one already exists —
--- a brand-new 'active' member has none yet, nothing to lock, see this
--- function's own inline note), BEFORE comparing either against the
--- caller's own p_expected_case_status/p_expected_account_status. Row-
--- level locks are enforced by Postgres itself on the physical row,
--- regardless of which function is trying to touch it — this serializes
--- correctly even against a concurrent admin_set_account_status call
--- made directly from the ordinary member workspace (app/admin/members/
--- [id]/page.tsx), which never needs to know about or take this same
--- lock explicitly. This is what makes "Admin A's stale Restrict click
--- must not silently downgrade a suspension Admin B already applied a
--- moment earlier" true, whichever of the two paths Admin B used.
+-- subject's own public.profiles row FOR UPDATE — the SAME always-
+-- existing row admin_set_account_status (Part 0 above) now also locks
+-- before it reads/upserts account_enforcement_state — BEFORE comparing
+-- either the case or the account status against the caller's own
+-- p_expected_case_status/p_expected_account_status. Locking profiles
+-- (never account_enforcement_state itself, which may not have a row
+-- yet for a never-before-enforced member — see Part 0's own "audit
+-- correction" note for why that was the bug) is what actually
+-- serializes this function against a concurrent admin_set_account_
+-- status call made directly from the ordinary member workspace
+-- (app/admin/members/[id]/page.tsx): both functions lock the identical
+-- physical row before touching enforcement state, so whichever gets
+-- there first completes and commits, and the second necessarily waits,
+-- then re-reads the NOW-current status. This is what makes "Admin A's
+-- stale Restrict click must not silently downgrade a suspension Admin B
+-- already applied a moment earlier" true even when the account had NO
+-- account_enforcement_state row at all when Admin A's page first
+-- loaded, whichever of the two paths Admin B used.
 --
 -- ATOMICITY (item 7): one PL/pgSQL function, no internal exception
 -- handler around any of its three real effects (the account-status
@@ -244,16 +400,26 @@ begin
     raise exception 'That case transition is not allowed.' using errcode = '22023';
   end if;
 
-  -- Locks the row when one already exists — a brand-new member with no
-  -- account_enforcement_state row at all has nothing to lock; the
-  -- default 'active' interpretation below still applies, and the very
-  -- first write to that row (by either this function or admin_set_
-  -- account_status called directly) is inherently the "first" one, with
-  -- no earlier state that could be silently overwritten.
+  -- INDEPENDENT AUDIT CORRECTION: lock the subject's own profiles row —
+  -- the SAME always-existing row admin_set_account_status (Part 0)
+  -- locks before touching account_enforcement_state — rather than
+  -- trying to lock account_enforcement_state itself, which may have NO
+  -- row at all for a never-before-enforced member. `FOR UPDATE` locks
+  -- nothing when the target row doesn't exist, so locking THAT table
+  -- alone could never have prevented two concurrent paths from both
+  -- observing "no row, therefore active" and racing to write — this is
+  -- what closes that race: both this function and admin_set_account_
+  -- status now serialize on the identical physical profiles row before
+  -- either one reads or writes account_enforcement_state. The subject's
+  -- profile is guaranteed to exist here (admin_get_safety_case/admin_
+  -- list_safety_cases both INNER JOIN profiles to even produce a case
+  -- the UI could show in the first place), so no existence check is
+  -- needed — only the lock itself.
+  perform 1 from public.profiles where id = v_case.subject_user_id for update;
+
   select status into v_actual_account_status
   from public.account_enforcement_state
-  where user_id = v_case.subject_user_id
-  for update;
+  where user_id = v_case.subject_user_id;
 
   v_actual_account_status := coalesce(v_actual_account_status, 'active');
 
@@ -261,13 +427,17 @@ begin
     raise exception 'This member''s account status has changed since you loaded it. Please refresh and try again.' using errcode = '22023';
   end if;
 
-  -- The one enforcement write path, reused unmodified. Its own is_staff
-  -- gate, status validation, reason validation, and staff-account
-  -- protection all apply exactly as they already do for the ordinary
-  -- member-workspace path — nothing here duplicates or re-implements
-  -- any of them. If this raises for any reason, everything above (the
-  -- two FOR UPDATE locks) rolls back with the rest of this transaction;
-  -- nothing below it ever executes.
+  -- The one enforcement write path, reused with its own behavior
+  -- otherwise unchanged (Part 0's only change is the added profile
+  -- lock, already held again harmlessly here — re-acquiring a FOR
+  -- UPDATE lock a transaction already holds on the same row is a safe
+  -- no-op in Postgres, never a self-deadlock). Its own is_staff gate,
+  -- status validation, reason validation, and staff-account protection
+  -- all apply exactly as they already do for the ordinary member-
+  -- workspace path — nothing here duplicates or re-implements any of
+  -- them. If this raises for any reason, everything above (the case
+  -- lock and the profile lock) rolls back with the rest of this
+  -- transaction; nothing below it ever executes.
   perform public.admin_set_account_status(v_case.subject_user_id, p_new_status, v_reason);
 
   update public.safety_cases
