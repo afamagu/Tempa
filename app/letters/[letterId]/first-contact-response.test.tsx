@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import FirstContactResponse from './first-contact-response'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }))
@@ -67,5 +69,40 @@ describe('FirstContactResponse — default (choose) mode', () => {
     const html = renderToStaticMarkup(<FirstContactResponse {...baseProps} />)
     expect(html).not.toContain('aria-modal')
     expect(html).not.toContain(`${baseProps.recipientPseudonym}&rsquo;s letter`)
+  })
+})
+
+// Safety 2, Checkpoint 3 — same source-inspection convention as
+// first-letter-composer.test.tsx's own identical block; the interactive
+// submit flow (evaluate -> gate -> mutate) is unreachable via
+// renderToStaticMarkup for the same click-gated-editor reason already
+// documented at the top of this file.
+describe('FirstContactResponse — Safety-gated reply (Checkpoint 3)', () => {
+  const source = readFileSync(path.join(__dirname, 'first-contact-response.tsx'), 'utf8')
+
+  it('evaluates via evaluateSafety before ever calling reply_to_letter, with surface: reply and no Postcard', () => {
+    const evaluateIndex = source.indexOf("evaluateSafety({ surface: 'reply', letterId, body })")
+    const rpcIndex = source.indexOf("supabase.rpc('reply_to_letter'")
+    expect(evaluateIndex, 'expected a call to evaluateSafety').toBeGreaterThan(-1)
+    expect(rpcIndex, 'expected a call to reply_to_letter').toBeGreaterThan(-1)
+    expect(evaluateIndex).toBeLessThan(rpcIndex)
+  })
+
+  it('a failed evaluation (status: error) never falls through to reply_to_letter — fails closed', () => {
+    const handleReplyBody = source.slice(source.indexOf('async function handleReply()'), source.indexOf('async function sendReply'))
+    expect(handleReplyBody).toContain("outcome.status === 'error'")
+    expect(handleReplyBody).not.toContain("supabase.rpc('reply_to_letter'")
+  })
+
+  it('warning_required opens the shared SafetyWarningDialog', () => {
+    expect(source).toContain('<SafetyWarningDialog')
+    expect(source).toContain('open={pendingWarning !== null}')
+    expect(source).toContain('onAcknowledgeAndSend={handleAcknowledgeWarning}')
+  })
+
+  it('passes p_safety_evaluation_id and p_warning_acknowledged to reply_to_letter', () => {
+    const sendReplyBody = source.slice(source.indexOf('async function sendReply'), source.indexOf('async function handleClose'))
+    expect(sendReplyBody).toContain('p_safety_evaluation_id: safetyEvaluationId')
+    expect(sendReplyBody).toContain('p_warning_acknowledged: warningAcknowledged')
   })
 })

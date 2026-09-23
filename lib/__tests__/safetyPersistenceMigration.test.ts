@@ -55,15 +55,27 @@ describe('privacy — no raw Letter/Dispatch/Postcard text anywhere in the migra
     expect(codeOnly.toLowerCase()).not.toMatch(/\bl\.body\b|\bletters\.body\b/)
     expect(codeOnly.toLowerCase()).not.toMatch(/\bd\.body\b|\bdispatches\.body\b/)
     expect(codeOnly.toLowerCase()).not.toMatch(/\bmoments\b/)
-    expect(codeOnly.toLowerCase()).not.toMatch(/\bpostcard/)
   })
 
-  it('safety_evaluations/safety_signals/safety_cases only ever store ids, classifier output, and timestamps', () => {
+  it('safety_evaluations/safety_signals/safety_cases only ever store ids, classifier output, and timestamps — a Postcard is only ever a transient jsonb PARAMETER, never a stored column (independent audit correction — Checkpoint 3 Postcard binding)', () => {
     const evalStart = sql.indexOf('create table public.safety_evaluations')
     const evalEnd = sql.indexOf(');', evalStart)
     const evalBody = sql.slice(evalStart, evalEnd)
     expect(evalBody).not.toMatch(/\bbody text\b/)
     expect(evalBody).not.toMatch(/\bcontent\b/)
+    expect(evalBody).not.toMatch(/\bpostcard/i)
+
+    const signalsStart = sql.indexOf('create table public.safety_signals')
+    const signalsEnd = sql.indexOf(');', signalsStart)
+    const signalsBody = sql.slice(signalsStart, signalsEnd)
+    expect(signalsBody).not.toMatch(/\bpostcard/i)
+    expect(signalsBody).not.toMatch(/\breveal_line\b|\bback_message\b/)
+
+    // p_postcard itself is a jsonb PARAMETER, consumed only inside the
+    // fingerprint's own digest() call — the column-absence checks above
+    // already structurally guarantee no table can ever store it,
+    // regardless of what any INSERT statement's own values reference.
+    expect(codeOnly).not.toMatch(/\bpostcard\s+jsonb\s+not\s+null\b/)
   })
 })
 
@@ -95,11 +107,11 @@ describe('safety_evaluations — RLS with no client policy, RPC-only writes', ()
     expect(codeOnly).toMatch(/expires_at timestamptz not null default \(now\(\) \+ interval '15 minutes'\)/)
   })
 
-  it('never sets consumed_at, warning_issued_at, or warning_acknowledged_at itself — Checkpoint 3 is where those get written', () => {
+  it('sets warning_issued_at itself (at evaluation time, the same instant the HTTP response serves the warning copy) but never consumed_at or warning_acknowledged_at — those belong solely to tempa_private.consume_safety_evaluation', () => {
     const body = extractFunctionBody('public.record_safety_evaluation')
     expect(body).not.toMatch(/\bconsumed_at\s*=/)
-    expect(body).not.toMatch(/warning_issued_at\s*=/)
     expect(body).not.toMatch(/warning_acknowledged_at\s*=/)
+    expect(body).toContain("case when p_mutation_disposition = 'warn' then now() else null end")
   })
 
   it('has a warning_issued_at column, distinct from warning_required/warning_acknowledged_at, and never calls anything "warning_seen"', () => {
@@ -183,6 +195,71 @@ describe('safety_signals — individual observations, meaningful+ only, at most 
     expect(guardIndex, 'expected the widened guard to directly precede the signal insert').toBeGreaterThan(-1)
     expect(guardIndex).toBeLessThan(signalInsertIndex)
   })
+
+  it('has nullable source_content_id/proceeded_at columns for linking an evaluation-time signal to the content the member actually proceeded with (independent audit correction — B5)', () => {
+    const start = sql.indexOf('create table public.safety_signals')
+    const end = sql.indexOf(');', start)
+    const body = sql.slice(start, end)
+    expect(body).toMatch(/source_content_id uuid,/)
+    expect(body).toMatch(/proceeded_at timestamptz,/)
+  })
+})
+
+describe('tempa_private.consume_safety_evaluation — Checkpoint 3\'s one trusted consumption path, prepared here for the mutation RPCs to call (independent audit correction — B3)', () => {
+  it('is not directly callable by any client role, including service_role', () => {
+    expect(codeOnly).toContain(
+      'revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid) from public, anon, authenticated, service_role'
+    )
+  })
+
+  it('locks the evaluation row FOR UPDATE before checking it', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain('from public.safety_evaluations')
+    expect(body).toContain('for update')
+  })
+
+  it('verifies ownership, surface, context, and Question-answer match before ever considering consumption', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain('v_eval.user_id <> p_user_id')
+    expect(body).toContain('v_eval.surface <> p_surface')
+    expect(body).toContain('v_eval.context_id <> p_context_id')
+    expect(body).toContain('v_eval.question_answer_id is distinct from p_question_answer_id')
+  })
+
+  it('rejects an already-consumed or expired evaluation', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain('v_eval.consumed_at is not null')
+    expect(body).toContain('v_eval.expires_at <= now()')
+  })
+
+  it('recomputes the fingerprint from its own actual received body/postcard and requires an exact match — this is what invalidates edited content', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain(
+      'tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body)'
+    )
+    expect(body).toContain('v_fingerprint <> v_eval.fingerprint')
+  })
+
+  it('deny never proceeds regardless of acknowledgement; warn requires explicit p_warning_acknowledged', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain("v_eval.mutation_disposition = 'deny'")
+    expect(body).toContain("v_eval.mutation_disposition = 'warn' and not p_warning_acknowledged")
+  })
+
+  it('sets consumed_at and, only when acknowledged, warning_acknowledged_at, scoped to unconsumed/unexpired', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain('consumed_at = now()')
+    expect(body).toContain('warning_acknowledged_at = case when p_warning_acknowledged then now() else warning_acknowledged_at end')
+    expect(body).toContain('and consumed_at is null')
+    expect(body).toContain('and expires_at > now()')
+  })
+
+  it('links this evaluation\'s own signal (if any) to the newly-created content, only on successful consumption', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    expect(body).toContain('update public.safety_signals')
+    expect(body).toContain('set source_content_id = p_new_content_id, proceeded_at = now()')
+    expect(body).toContain('where evaluation_id = p_evaluation_id')
+  })
 })
 
 describe('tempa_private.safety_fingerprint — the one canonical fingerprint implementation', () => {
@@ -190,7 +267,7 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
     const body = extractFunctionBody('tempa_private.safety_fingerprint')
     expect(body).not.toMatch(/security definer/)
     expect(codeOnly).toContain(
-      'revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text) from public, anon, authenticated'
+      'revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text) from public, anon, authenticated'
     )
   })
 
@@ -199,6 +276,11 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
     expect(body).toMatch(
       /length\(coalesce\(p_question_answer_id::text, ''\)\)::text \|\| ':' \|\| coalesce\(p_question_answer_id::text, ''\)/
     )
+  })
+
+  it('binds the canonical jsonb Postcard payload into the digest, so changing the Postcard after evaluation invalidates it (independent audit correction — Checkpoint 3 Postcard-text bypass)', () => {
+    const body = extractFunctionBody('tempa_private.safety_fingerprint')
+    expect(body).toMatch(/length\(coalesce\(p_postcard::text, ''\)\)::text \|\| ':' \|\| coalesce\(p_postcard::text, ''\)/)
   })
 
   it('computes the digest itself from the raw fields — TypeScript never calculates or submits a hash', () => {
@@ -224,10 +306,10 @@ describe('tempa_private.safety_fingerprint — the one canonical fingerprint imp
 describe('record_safety_evaluation — service-role only, dedup/idempotent, derives nothing from an untrusted hash', () => {
   it('is service-role only, with no grant to authenticated or anon', () => {
     expect(codeOnly).toContain(
-      'revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) from public'
+      'revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) from public'
     )
     expect(codeOnly).toContain(
-      'grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) to service_role'
+      'grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) to service_role'
     )
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.record_safety_evaluation.*to (anon|authenticated)/
@@ -242,8 +324,13 @@ describe('record_safety_evaluation — service-role only, dedup/idempotent, deri
 
     const body = extractFunctionBody('public.record_safety_evaluation')
     expect(body).toContain(
-      'tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_body)'
+      'tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body)'
     )
+  })
+
+  it('rejects a Postcard for first_letter, which has none (independent audit correction)', () => {
+    const body = extractFunctionBody('public.record_safety_evaluation')
+    expect(body).toContain("if p_surface = 'first_letter' and p_postcard is not null then")
   })
 
   it('requires p_question_answer_id for first_letter and forbids it for the other two surfaces (independent audit correction)', () => {
@@ -303,9 +390,9 @@ describe('record_safety_evaluation — never silently reuses a clearance whose s
 
 describe('can_evaluate_safety_context — proves the mutation context is real and the caller\'s own, before any evaluation is recorded', () => {
   it('is callable by authenticated, never by anon, and is not a service-role table read', () => {
-    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid, uuid) from public')
+    expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) from public')
     expect(codeOnly).toContain(
-      'grant execute on function public.can_evaluate_safety_context(text, uuid, uuid) to authenticated'
+      'grant execute on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) to authenticated'
     )
     expect(codeOnly).not.toMatch(
       /grant execute on function public\.can_evaluate_safety_context.*to (anon|service_role)/
@@ -337,6 +424,17 @@ describe('can_evaluate_safety_context — proves the mutation context is real an
     expect(body).toContain('q.is_active = true')
   })
 
+  it('first_letter: rejects a pending correspondence that is already active/established, or where the caller has already sent their own root first-contact letter — but preserves crossed-direction first contact (independent audit correction — B1)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('c.participant_low = least(auth.uid(), p_context_id)')
+    expect(body).toContain('c.participant_high = greatest(auth.uid(), p_context_id)')
+    expect(body).toContain("c.status in ('pending', 'active')")
+    expect(body).toContain("v_first_letter_corr.status = 'active' or v_first_letter_corr.established_at is not null")
+    expect(body).toContain('l.correspondence_id = v_first_letter_corr.id')
+    expect(body).toContain('l.reply_to_id is null')
+    expect(body).toContain('l.sender_id = auth.uid()')
+  })
+
   it('reply: mirrors reply_to_letter\'s own row lookup exactly (recipient, sent, deliver_at, still awaiting reply)', () => {
     const body = extractFunctionBody('public.can_evaluate_safety_context')
     expect(body).toContain('l.recipient_id = auth.uid()')
@@ -345,11 +443,23 @@ describe('can_evaluate_safety_context — proves the mutation context is real an
     expect(body).toContain('l.reply_to_id is not null or l.expires_at > now()')
   })
 
+  it('reply: rejects a blocked pair and a suspended/banned caller — gaps the previous implementation had left open (independent audit correction — B1)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    expect(body).toContain('tempa_private.is_correspondence_blocked_pair(auth.uid(), v_reply_letter.sender_id)')
+    expect(body).toMatch(/elsif p_surface = 'reply' then[\s\S]*?v_status in \('suspended', 'banned'\)/)
+  })
+
+  it('reply/write_anytime: reject a restricted caller only when a Postcard is present, preserving restricted plain-text reply/write (independent audit correction — B2/B1)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const occurrences = body.match(/p_postcard is not null and v_status = 'restricted'/g) ?? []
+    expect(occurrences.length).toBe(2)
+  })
+
   it('write_anytime: mirrors write_letter\'s own pre-insert checks (participant, blocked-pair, account status, active correspondence)', () => {
     const body = extractFunctionBody('public.can_evaluate_safety_context')
     expect(body).toContain('auth.uid() <> v_corr.participant_low and auth.uid() <> v_corr.participant_high')
     expect(body).toContain('tempa_private.is_correspondence_blocked_pair(auth.uid(), v_recipient)')
-    expect(body).toContain("public.current_account_status() in ('suspended', 'banned')")
+    expect(body).toContain("v_status in ('suspended', 'banned')")
     expect(body).toContain("v_corr.status = 'active' and v_corr.established_at is not null")
   })
 

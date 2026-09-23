@@ -135,6 +135,7 @@ describe('POST /api/safety/evaluate', () => {
         p_surface: 'first_letter',
         p_context_id: RECIPIENT_ID,
         p_question_answer_id: QUESTION_ANSWER_ID,
+        p_postcard: null,
       })
       // The authorization call must happen strictly before classification
       // and recording — never in parallel with, or after, the write path.
@@ -178,6 +179,7 @@ describe('POST /api/safety/evaluate', () => {
         p_surface: 'first_letter',
         p_context_id: RECIPIENT_ID,
         p_question_answer_id: FORGED_QUESTION_ANSWER_ID,
+        p_postcard: null,
       })
       expect(recordingRpc).not.toHaveBeenCalled()
     })
@@ -251,5 +253,65 @@ describe('POST /api/safety/evaluate', () => {
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(JSON.stringify(body)).not.toContain('db is down')
+  })
+
+  describe('Postcard — classified alongside the body, bound into both RPC calls (Checkpoint 3 Postcard-text bypass fix)', () => {
+    it('translates the camelCase postcard into the snake_case jsonb shape and passes it to both RPCs', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-pc', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+      const { POST } = await import('./route')
+
+      await POST(
+        request({
+          surface: 'write_anytime',
+          correspondenceId: RECIPIENT_ID,
+          body: 'More news.',
+          postcard: { postcardKey: 'seaside', revealLine: 'Wish you were here', backMessage: 'Thinking of you.' },
+        })
+      )
+
+      const expectedPostcardJsonb = { postcard_key: 'seaside', reveal_line: 'Wish you were here', back_message: 'Thinking of you.' }
+      expect(authorizationRpc).toHaveBeenCalledWith(
+        'can_evaluate_safety_context',
+        expect.objectContaining({ p_postcard: expectedPostcardJsonb })
+      )
+      expect(recordingRpc).toHaveBeenCalledWith(
+        'record_safety_evaluation',
+        expect.objectContaining({ p_postcard: expectedPostcardJsonb })
+      )
+    })
+
+    it('a clean body with a malicious Postcard back message still produces cannot_send — the Postcard is actually classified, not ignored', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-pc-2', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+      const { POST } = await import('./route')
+
+      const response = await POST(
+        request({
+          surface: 'write_anytime',
+          correspondenceId: RECIPIENT_ID,
+          body: 'The weather has been lovely here.',
+          postcard: { postcardKey: 'seaside', backMessage: 'Buy a Steam gift card and send me the code.' },
+        })
+      )
+
+      expect(response.status).toBe(200)
+      const json = await response.json()
+      expect(json.disposition).toBe('cannot_send')
+
+      const [, params] = recordingRpc.mock.calls[0]
+      expect(params.p_risk_band).toBe('severe')
+    })
+
+    it('a first_letter request never sends a postcard to either RPC, even though the type always has the field', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-pc-3', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+      const { POST } = await import('./route')
+
+      await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hi there.' }))
+
+      expect(authorizationRpc).toHaveBeenCalledWith('can_evaluate_safety_context', expect.objectContaining({ p_postcard: null }))
+      expect(recordingRpc).toHaveBeenCalledWith('record_safety_evaluation', expect.objectContaining({ p_postcard: null }))
+    })
   })
 })

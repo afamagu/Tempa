@@ -19,6 +19,8 @@ import {
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
+import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
 import SourceLetterPanel from './source-letter-panel'
@@ -75,6 +77,9 @@ export default function FirstContactResponse({
   const [sendingReply, setSendingReply] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
   const [showSourceLetter, setShowSourceLetter] = useState(false)
+  // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
+  // identical field for the full explanation.
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
 
   const [reason, setReason] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
@@ -155,11 +160,56 @@ export default function FirstContactResponse({
   const canSendReply =
     Boolean(editor) && canSendLetter(replyDocJSON, { aboveMax: false, submitting: sendingReply })
 
+  // Safety 2, Checkpoint 3 — evaluates before ever calling
+  // reply_to_letter. Never a Postcard here — this reply is always
+  // text-only (see this component's own header comment) — so
+  // evaluateSafety's own payload for this surface never carries one. A
+  // failed evaluation (status: error) never falls back to an unscreened
+  // send.
   async function handleReply() {
     if (!editor || !canSendReply) return
     setSendingReply(true)
     setReplyError(null)
 
+    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    const outcome = await evaluateSafety({ surface: 'reply', letterId, body })
+
+    if (outcome.status === 'error') {
+      setReplyError(SAFETY_CHECK_FAILED_MESSAGE)
+      setSendingReply(false)
+      return
+    }
+    if (outcome.status === 'cannot_send') {
+      setReplyError(SAFETY_CANNOT_SEND_MESSAGE)
+      setSendingReply(false)
+      return
+    }
+    if (outcome.status === 'warning_required') {
+      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setSendingReply(false)
+      return
+    }
+
+    await sendReply(outcome.evaluationId, false)
+  }
+
+  function handleCancelWarning() {
+    setPendingWarning(null)
+  }
+
+  async function handleAcknowledgeWarning() {
+    if (!pendingWarning) return
+    await sendReply(pendingWarning.evaluationId, true)
+  }
+
+  async function sendReply(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    if (!editor) return
+    setSendingReply(true)
+    setReplyError(null)
+
+    // Re-read fresh, never a value captured before the warning dialog
+    // opened — same reasoning as first-letter-composer.tsx's own
+    // sendLetter.
     const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
 
     // try/finally so a thrown rejection (never just an RPC-level
@@ -172,6 +222,8 @@ export default function FirstContactResponse({
       const { error } = await supabase.rpc('reply_to_letter', {
         p_letter_id: letterId,
         p_body: body,
+        p_safety_evaluation_id: safetyEvaluationId,
+        p_warning_acknowledged: warningAcknowledged,
       })
 
       if (error) {
@@ -187,6 +239,7 @@ export default function FirstContactResponse({
       }
 
       clearLetterDraft(correspondenceId)
+      setPendingWarning(null)
       router.refresh()
     } catch (err) {
       console.error('[letters] first-contact reply threw', {
@@ -305,6 +358,12 @@ export default function FirstContactResponse({
         body={sourceLetterBody}
         moments={sourceLetterMoments}
         photoConsent={sourceLetterPhotoConsent}
+      />
+      <SafetyWarningDialog
+        open={pendingWarning !== null}
+        onCancel={handleCancelWarning}
+        onAcknowledgeAndSend={handleAcknowledgeWarning}
+        sending={sendingReply}
       />
     </>
   )

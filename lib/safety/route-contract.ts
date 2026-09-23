@@ -20,6 +20,19 @@ import type { ContentReasonCode, MutationDisposition } from './reason-codes'
 export const SAFETY_SURFACES = ['first_letter', 'reply', 'write_anytime'] as const
 export type SafetySurface = (typeof SAFETY_SURFACES)[number]
 
+/** The exact optional Postcard shape write_letter/reply_to_letter's own
+ * p_postcard jsonb actually accepts (postcard_key/reveal_line/
+ * back_message) — camelCase here at the TS boundary, translated to
+ * snake_case only where the Route Handler builds the actual RPC/jsonb
+ * payload (app/api/safety/evaluate/route.ts), never renamed elsewhere,
+ * so the same object shape a composer already builds for its own
+ * mutation call can be reused for evaluation with no extra mapping. */
+export type ParsedPostcard = {
+  postcardKey: string
+  revealLine: string | null
+  backMessage: string
+}
+
 /** What the trusted recording RPC (public.record_safety_evaluation)
  * needs: a validated user id (from the authenticated session, NEVER
  * the request body), a known surface, that surface's own context id,
@@ -30,11 +43,22 @@ export type SafetySurface = (typeof SAFETY_SURFACES)[number]
  * enough to bind an evaluation to the real mutation context — a forged
  * or stale Question-answer for an otherwise-legitimate recipient must
  * still be rejected. Always null for reply/write_anytime, which have no
- * Question-answer at all. */
+ * Question-answer at all.
+ *
+ * postcard: the optional Postcard reply/write_anytime may carry —
+ * always null for first_letter, which structurally has none (never even
+ * parsed for that surface). Bound into the SQL fingerprint exactly like
+ * body (docs/sql/2026-10-03-safety-persistence.sql's own
+ * tempa_private.safety_fingerprint), so a Postcard's user-written
+ * Reveal Line/back message get the same "changing it after evaluation
+ * requires a fresh evaluation" guarantee the body already has, and are
+ * classified alongside the body (never blindly concatenated with it —
+ * see lib/safety/classify.ts's own combineClassifications). */
 export type ParsedEvaluateRequest = {
   surface: SafetySurface
   contextId: string
   questionAnswerId: string | null
+  postcard: ParsedPostcard | null
   body: string
 }
 
@@ -80,6 +104,46 @@ function readBody(value: unknown): { ok: true; body: string } | { ok: false; err
   return { ok: true, body: value }
 }
 
+/** Optional — undefined/null means "no Postcard", the ordinary case for
+ * most reply/write_anytime evaluations. When present, only shape-
+ * validates (non-empty postcardKey/backMessage, backMessage under the
+ * same technical abuse ceiling as body); the actual PRODUCT limits
+ * (Reveal Line <= 32 chars, back message <= 300 chars, an active
+ * postcard_key) remain write_letter/reply_to_letter's own job to
+ * enforce at mutation time, exactly like this module's own MAX_BODY_
+ * CHARS is a technical ceiling, never a re-derivation of a product
+ * rule. */
+function readPostcard(value: unknown): { ok: true; postcard: ParsedPostcard | null } | { ok: false; error: string } {
+  if (value === undefined || value === null) {
+    return { ok: true, postcard: null }
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'postcard must be an object.' }
+  }
+  const fields = value as Record<string, unknown>
+
+  if (typeof fields.postcardKey !== 'string' || fields.postcardKey.trim().length === 0) {
+    return { ok: false, error: 'postcard.postcardKey must be a non-empty string.' }
+  }
+
+  let revealLine: string | null = null
+  if (fields.revealLine !== undefined && fields.revealLine !== null) {
+    if (typeof fields.revealLine !== 'string') {
+      return { ok: false, error: 'postcard.revealLine must be a string or null.' }
+    }
+    revealLine = fields.revealLine
+  }
+
+  if (typeof fields.backMessage !== 'string' || fields.backMessage.trim().length === 0) {
+    return { ok: false, error: 'postcard.backMessage must be a non-empty string.' }
+  }
+  if (fields.backMessage.length > MAX_BODY_CHARS) {
+    return { ok: false, error: 'postcard.backMessage is too long.' }
+  }
+
+  return { ok: true, postcard: { postcardKey: fields.postcardKey, revealLine, backMessage: fields.backMessage } }
+}
+
 export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResult {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     return { ok: false, error: 'Request body must be an object.' }
@@ -103,9 +167,18 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     }
     const bodyResult = readBody(fields.body)
     if (!bodyResult.ok) return bodyResult
+    // first_letter structurally has no Postcard — never even parsed for
+    // this surface, matching send_first_letter's own signature, which
+    // has no p_postcard parameter at all.
     return {
       ok: true,
-      request: { surface, contextId: fields.recipientId, questionAnswerId: fields.questionAnswerId, body: bodyResult.body },
+      request: {
+        surface,
+        contextId: fields.recipientId,
+        questionAnswerId: fields.questionAnswerId,
+        postcard: null,
+        body: bodyResult.body,
+      },
     }
   }
 
@@ -117,7 +190,18 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     }
     const bodyResult = readBody(fields.body)
     if (!bodyResult.ok) return bodyResult
-    return { ok: true, request: { surface, contextId: fields.letterId, questionAnswerId: null, body: bodyResult.body } }
+    const postcardResult = readPostcard(fields.postcard)
+    if (!postcardResult.ok) return postcardResult
+    return {
+      ok: true,
+      request: {
+        surface,
+        contextId: fields.letterId,
+        questionAnswerId: null,
+        postcard: postcardResult.postcard,
+        body: bodyResult.body,
+      },
+    }
   }
 
   if (surface === 'write_anytime') {
@@ -128,9 +212,17 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     }
     const bodyResult = readBody(fields.body)
     if (!bodyResult.ok) return bodyResult
+    const postcardResult = readPostcard(fields.postcard)
+    if (!postcardResult.ok) return postcardResult
     return {
       ok: true,
-      request: { surface, contextId: fields.correspondenceId, questionAnswerId: null, body: bodyResult.body },
+      request: {
+        surface,
+        contextId: fields.correspondenceId,
+        questionAnswerId: null,
+        postcard: postcardResult.postcard,
+        body: bodyResult.body,
+      },
     }
   }
 

@@ -1,11 +1,16 @@
 -- ============================================================
 -- TEMPA — SAFETY 2, CHECKPOINT 2: PERSISTENCE + POLICY LAYER
+-- (extended in place for Checkpoint 3's persistence-layer
+-- prerequisites — see Part 9's own header for what those are; still
+-- one coherent, still-unapplied migration, not two)
 -- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor.
 -- Does NOT merge to main, deploy, or enable enforcement for real
 -- members. No Letter RPC (send_first_letter/reply_to_letter/
--- write_letter) is modified by this migration — this checkpoint builds
--- the evaluation/persistence surface only; wiring the mutation RPCs to
--- consume an evaluation transactionally is Checkpoint 3's job.
+-- write_letter) is modified by THIS migration — Checkpoint 3's actual
+-- wiring of those three mutation RPCs to consume an evaluation
+-- transactionally is a separate, later-dated migration (docs/sql/
+-- 2026-10-05-safety-checkpoint3-letter-wiring.sql), which calls Part 9's
+-- tempa_private.consume_safety_evaluation, prepared here.
 -- ============================================================
 --
 -- Trust boundary this migration exists to enforce (approved
@@ -182,12 +187,29 @@ create extension if not exists pgcrypto with schema extensions;
 -- Question-answer can never be replayed as clearance for a different
 -- first-contact context to the same recipient. coalesce'd to '' exactly
 -- like p_body, so a null vs. an empty string can never collide.
+--
+-- p_postcard: null when no Postcard is attached (always null for
+-- first_letter, which has no Postcard at all — Checkpoint 3's own
+-- correction), or the EXACT jsonb payload reply/write_anytime's real
+-- mutation RPC (write_letter/reply_to_letter) will itself receive as
+-- p_postcard — same shape, not a re-derived summary, so the mutation
+-- RPC can recompute this exact fingerprint from its own actual received
+-- p_postcard at consumption time (tempa_private.consume_safety_
+-- evaluation below). `::text` on a jsonb value is Postgres's own
+-- canonical serialization (normalized key order, no insignificant
+-- whitespace) — two jsonb values that are semantically equal always
+-- serialize identically, so this is a safe, deterministic fingerprint
+-- input, not a byte-for-byte comparison of whatever the client
+-- literally sent. Changing the Postcard (or removing/adding one) after
+-- evaluation produces a different fingerprint and therefore requires a
+-- fresh evaluation, exactly like editing the body.
 
 create or replace function tempa_private.safety_fingerprint(
   p_user_id uuid,
   p_surface text,
   p_context_id uuid,
   p_question_answer_id uuid,
+  p_postcard jsonb,
   p_body text
 )
 returns text
@@ -202,6 +224,7 @@ as $$
         length(p_surface)::text || ':' || p_surface ||
         length(p_context_id::text)::text || ':' || p_context_id::text ||
         length(coalesce(p_question_answer_id::text, ''))::text || ':' || coalesce(p_question_answer_id::text, '') ||
+        length(coalesce(p_postcard::text, ''))::text || ':' || coalesce(p_postcard::text, '') ||
         length(coalesce(p_body, ''))::text || ':' || coalesce(p_body, ''),
         'UTF8'
       ),
@@ -211,7 +234,7 @@ as $$
   )
 $$;
 
-revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text) from public, anon, authenticated;
+revoke all on function tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text) from public, anon, authenticated;
 
 
 -- ============================================================
@@ -294,34 +317,34 @@ create table public.safety_evaluations (
   -- read by, the member):
   --   1. warning REQUIRED — set once, at evaluation time, purely from
   --      mutation_disposition = 'warn'.
-  --   2. warning ISSUED — `warning_issued_at`, set later (Checkpoint 3,
-  --      once a member-facing warning UI exists) at the instant the
-  --      server actually serves that warning copy to the member, e.g.
-  --      when the Letter composer first renders it. Prepared here,
-  --      column-only — this migration's own record_safety_evaluation
-  --      never sets it.
-  --   3. warning ACKNOWLEDGED — `warning_acknowledged_at`, set later
-  --      (Checkpoint 3) only when the member takes an explicit
-  --      "I understand, send anyway" (or equivalent) action — never
+  --   2. warning ISSUED — `warning_issued_at`, set by record_safety_
+  --      evaluation itself (Checkpoint 3), in the SAME insert as the
+  --      evaluation row, at the instant the server actually serves that
+  --      warning copy to the member — the HTTP response this very
+  --      request produces (buildEvaluateResponse) IS that instant; there
+  --      is no separate later moment to distinguish it from.
+  --   3. warning ACKNOWLEDGED — `warning_acknowledged_at`, set only by
+  --      tempa_private.consume_safety_evaluation (Checkpoint 3, called
+  --      from inside the real Letter mutation RPCs), only when the
+  --      member's own p_warning_acknowledged is explicitly true — never
   --      inferred from the warning merely having been issued.
-  --   4. mutation actually PROCEEDED — `consumed_at` below; once
-  --      Checkpoint 3 wires evaluation consumption into the same
-  --      transaction as the real Letter mutation, `consumed_at` being
-  --      set is exactly "the member's send went through", and needs no
-  --      separate column, provided that transactional pairing stays
-  --      exact (consumption and the mutation committing or rolling back
-  --      together, never one without the other).
+  --   4. mutation actually PROCEEDED — `consumed_at` below; set only by
+  --      tempa_private.consume_safety_evaluation, in the SAME
+  --      transaction as the real Letter mutation, so `consumed_at` being
+  --      set is exactly "the member's send went through" — if the
+  --      mutation later fails for any reason, this update rolls back
+  --      with it, needing no special-casing beyond both happening in one
+  --      transaction.
   warning_required boolean not null default false,
   warning_issued_at timestamptz,
   warning_acknowledged_at timestamptz,
 
-  -- Single-use transactional consumption is designed for here but NOT
-  -- wired up by this checkpoint (per this checkpoint's own scope) —
-  -- Checkpoint 3's mutation RPCs will consume an evaluation with
-  -- exactly `UPDATE public.safety_evaluations SET consumed_at = now()
-  -- WHERE id = ... AND consumed_at IS NULL AND expires_at > now()`,
-  -- which can only ever succeed once per row. Nothing in THIS migration
-  -- ever sets this column.
+  -- Single-use transactional consumption — tempa_private.consume_
+  -- safety_evaluation (Part 9 below) sets this with exactly
+  -- `UPDATE public.safety_evaluations SET consumed_at = now() WHERE
+  -- id = ... AND consumed_at IS NULL AND expires_at > now()`, which can
+  -- only ever succeed once per row. record_safety_evaluation itself
+  -- never sets this column — only consumption does.
   consumed_at timestamptz,
 
   created_at timestamptz not null default now(),
@@ -458,6 +481,22 @@ create table public.safety_signals (
   -- axes) is still recorded here with case_id left null.
   case_id uuid references public.safety_cases(id) on delete set null,
 
+  -- Checkpoint 3: links an evaluation-time signal to the specific
+  -- content it turned out to be about, once (and only if/when) the
+  -- member actually proceeds with the mutation. A signal can exist
+  -- before any Letter does (evaluation happens before send), so this
+  -- starts null and is filled in by tempa_private.consume_safety_
+  -- evaluation, in the SAME transaction as the real Letter insert, only
+  -- on a successful proceed — never on a denied/abandoned/warned-but-
+  -- not-sent attempt. Structured and privacy-minimal: an id only, never
+  -- a copy of the Letter's own body. proceeded_at is this signal's own
+  -- durable "the member actually went ahead" marker for Checkpoint 7
+  -- review, kept separate from the evaluation's own consumed_at (which
+  -- exists regardless of whether THIS evaluation ever produced a
+  -- signal at all).
+  source_content_id uuid,
+  proceeded_at timestamptz,
+
   created_at timestamptz not null default now()
 );
 
@@ -542,6 +581,7 @@ create or replace function public.record_safety_evaluation(
   p_surface text,
   p_context_id uuid,
   p_question_answer_id uuid,
+  p_postcard jsonb,
   p_body text,
   p_risk_band text,
   p_reason_codes text[],
@@ -590,6 +630,10 @@ begin
     raise exception 'p_question_answer_id is only valid for first_letter.' using errcode = '22023';
   end if;
 
+  if p_surface = 'first_letter' and p_postcard is not null then
+    raise exception 'first_letter has no Postcard.' using errcode = '22023';
+  end if;
+
   if p_body is null or length(trim(both from p_body)) = 0 then
     raise exception 'p_body must not be empty.' using errcode = '22023';
   end if;
@@ -602,7 +646,7 @@ begin
     raise exception 'Unknown mutation disposition: %', p_mutation_disposition using errcode = '22023';
   end if;
 
-  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_body);
+  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body);
 
   -- Concurrency guard — see this section's own header comment. Must run
   -- BEFORE the dedup lookup below, not after.
@@ -640,14 +684,21 @@ begin
 
   v_expires_at := now() + interval '15 minutes';
 
+  -- warning_issued_at is set HERE, not left for a later step: the HTTP
+  -- response this same request produces (buildEvaluateResponse, lib/
+  -- safety/route-contract.ts) is itself "the server actually serving
+  -- that warning copy to the member" — there is no separate later
+  -- moment to distinguish it from for a warn disposition.
   insert into public.safety_evaluations (
     user_id, surface, context_id, question_answer_id, fingerprint,
     risk_band, reason_codes, mutation_disposition, escalate_case,
-    warning_required, expires_at
+    warning_required, warning_issued_at, expires_at
   ) values (
     p_user_id, p_surface, p_context_id, p_question_answer_id, v_fingerprint,
     p_risk_band, coalesce(p_reason_codes, '{}'), p_mutation_disposition, p_escalate_case,
-    (p_mutation_disposition = 'warn'), v_expires_at
+    (p_mutation_disposition = 'warn'),
+    case when p_mutation_disposition = 'warn' then now() else null end,
+    v_expires_at
   )
   returning id into v_new_id;
 
@@ -682,8 +733,8 @@ begin
 end;
 $function$;
 
-revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) from public;
-grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean) to service_role;
+revoke all on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) from public;
+grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean) to service_role;
 
 
 -- ============================================================
@@ -713,32 +764,58 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid
 -- definitions — docs/sql/2026-09-28-title-postcard-and-edit-window.sql
 -- — before writing this, not from memory), narrowed to what this
 -- function can actually check given the fields the Safety Route Handler
--- itself accepts (see lib/safety/route-contract.ts — first_letter's
--- context is only ever a recipient id, never a question_answer id, so
--- the "is there a live Discovery entry" half of send_first_letter's own
--- gate is intentionally out of scope here; the real RPC still enforces
--- that itself at actual send time):
+-- itself accepts (see lib/safety/route-contract.ts):
 --   - first_letter: mirrors send_first_letter's pre-insert checks IN
---     FULL, including the question_answer existence/liveness check —
---     recipient exists, not self, caller's account not restricted/
---     suspended/banned, no active block either direction/scope, and the
---     supplied p_question_answer_id is a live Discovery entry belonging
---     to that exact recipient (qa.user_id = p_context_id, qa.is_current,
---     q.is_active) — otherwise an evaluation could be bound to a
---     recipient the caller may legitimately write to while the specific
---     Question-answer context itself is forged or stale.
+--     FULL — recipient exists, not self, caller's account not
+--     restricted/suspended/banned, no active block either direction/
+--     scope, the supplied p_question_answer_id is a live Discovery
+--     entry belonging to that exact recipient (qa.user_id = p_context_id,
+--     qa.is_current, q.is_active), AND (Checkpoint 3 correction) the
+--     pair's non-established correspondence state: if this pair already
+--     has an ACTIVE/established correspondence, a first_letter
+--     evaluation is not authorized (send_first_letter itself would
+--     refuse with "already established, use write_letter instead"); if
+--     the caller has already sent their own root first-contact letter
+--     in the current pending episode, likewise not authorized
+--     (send_first_letter's own 23505 "already sent" guard). Crossed-
+--     direction first contact — the OTHER party having already sent
+--     THEIR OWN first-contact letter in a still-pending episode, before
+--     either has replied — is deliberately still authorized, exactly
+--     matching send_first_letter's own current behavior (its "already
+--     sent" check is scoped to `sender_id = auth.uid()`, never to the
+--     correspondence as a whole). This lookup is READ-ONLY — it never
+--     creates or locks a correspondence row; that remains
+--     send_first_letter's own job at actual send time, and this
+--     function's own result can still race against a concurrent send
+--     (matching every other "may I?" read here) — the real RPC's own
+--     FOR UPDATE lock is always the final, authoritative gate.
 --   - reply: mirrors reply_to_letter's own row lookup exactly — the
 --     letter exists, is addressed to the caller, is 'sent', has reached
---     its own deliver_at, and is still awaiting a reply.
+--     its own deliver_at, and is still awaiting a reply — PLUS
+--     (Checkpoint 3 correction) reply_to_letter's own remaining pre-
+--     insert checks this function had omitted: no active block between
+--     the pair, caller's account not suspended/banned. A 'restricted'
+--     caller may still evaluate a PLAIN-TEXT reply (reply_to_letter
+--     itself only blocks restricted from Moments/a Postcard, never
+--     plain text) — p_postcard is checked here for exactly that reason:
+--     restricted + a Postcard present is not authorized, matching
+--     reply_to_letter's own restricted-Postcard gate exactly.
 --   - write_anytime: mirrors write_letter's own pre-insert checks —
 --     correspondence exists, caller is a participant, no active block,
 --     caller's account not suspended/banned, correspondence is
---     'active' with a non-null established_at.
+--     'active' with a non-null established_at, and (Checkpoint 3
+--     correction, same reasoning as reply above) restricted + a
+--     Postcard present is not authorized either.
 -- Returns a plain boolean rather than raising, matching this function's
 -- read-only "may I?" nature — the Route Handler decides what HTTP
 -- status a `false` becomes.
 
-create or replace function public.can_evaluate_safety_context(p_surface text, p_context_id uuid, p_question_answer_id uuid)
+create or replace function public.can_evaluate_safety_context(
+  p_surface text,
+  p_context_id uuid,
+  p_question_answer_id uuid,
+  p_postcard jsonb
+)
 returns boolean
 language plpgsql
 security definer
@@ -748,6 +825,9 @@ as $function$
 declare
   v_corr public.correspondences;
   v_recipient uuid;
+  v_status text;
+  v_first_letter_corr public.correspondences;
+  v_reply_letter public.letters;
 begin
   if auth.uid() is null then
     return false;
@@ -778,7 +858,7 @@ begin
       return false;
     end if;
 
-    return exists (
+    if not exists (
       select 1
       from public.question_answers qa
       join public.questions q on q.id = qa.question_id
@@ -786,18 +866,63 @@ begin
         and qa.user_id = p_context_id
         and qa.is_current = true
         and q.is_active = true
-    );
+    ) then
+      return false;
+    end if;
+
+    -- Correspondence-state check — see this section's own header
+    -- comment. Read-only: no insert, no FOR UPDATE.
+    select * into v_first_letter_corr
+    from public.correspondences c
+    where c.participant_low = least(auth.uid(), p_context_id)
+      and c.participant_high = greatest(auth.uid(), p_context_id)
+      and c.status in ('pending', 'active');
+
+    if found then
+      if v_first_letter_corr.status = 'active' or v_first_letter_corr.established_at is not null then
+        return false;
+      end if;
+
+      if exists (
+        select 1 from public.letters l
+        where l.correspondence_id = v_first_letter_corr.id
+          and l.reply_to_id is null
+          and l.sender_id = auth.uid()
+      ) then
+        return false;
+      end if;
+    end if;
+
+    return true;
 
   elsif p_surface = 'reply' then
-    return exists (
-      select 1
-      from public.letters l
-      where l.id = p_context_id
-        and l.recipient_id = auth.uid()
-        and l.status = 'sent'
-        and l.deliver_at <= now()
-        and (l.reply_to_id is not null or l.expires_at > now())
-    );
+    select * into v_reply_letter
+    from public.letters l
+    where l.id = p_context_id
+      and l.recipient_id = auth.uid()
+      and l.status = 'sent'
+      and l.deliver_at <= now()
+      and (l.reply_to_id is not null or l.expires_at > now());
+
+    if not found then
+      return false;
+    end if;
+
+    if tempa_private.is_correspondence_blocked_pair(auth.uid(), v_reply_letter.sender_id) then
+      return false;
+    end if;
+
+    v_status := public.current_account_status();
+
+    if v_status in ('suspended', 'banned') then
+      return false;
+    end if;
+
+    if p_postcard is not null and v_status = 'restricted' then
+      return false;
+    end if;
+
+    return true;
 
   elsif p_surface = 'write_anytime' then
     select * into v_corr from public.correspondences where id = p_context_id;
@@ -816,7 +941,13 @@ begin
       return false;
     end if;
 
-    if public.current_account_status() in ('suspended', 'banned') then
+    v_status := public.current_account_status();
+
+    if v_status in ('suspended', 'banned') then
+      return false;
+    end if;
+
+    if p_postcard is not null and v_status = 'restricted' then
       return false;
     end if;
 
@@ -828,12 +959,165 @@ begin
 end;
 $function$;
 
-revoke all on function public.can_evaluate_safety_context(text, uuid, uuid) from public;
-grant execute on function public.can_evaluate_safety_context(text, uuid, uuid) to authenticated;
+revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) from public;
+grant execute on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) to authenticated;
 
 
 -- ============================================================
--- 9. CLEANUP_EXPIRED_SAFETY_EVALUATIONS — prepared, NOT scheduled
+-- 9. TEMPA_PRIVATE.CONSUME_SAFETY_EVALUATION — Checkpoint 3's one
+--    trusted consumption path, called from INSIDE send_first_letter/
+--    reply_to_letter/write_letter (docs/sql/2026-10-05-safety-
+--    checkpoint3-letter-wiring.sql), never directly by any client
+-- ============================================================
+-- Not SECURITY DEFINER by grant boundary alone — it IS security
+-- definer (needs to read/write safety_evaluations/safety_signals,
+-- which have no policy or grant for any client role at all), but it is
+-- deliberately given NO EXECUTE grant to authenticated/anon/
+-- service_role: it is only ever called from inside the three mutation
+-- RPCs above, which are themselves SECURITY DEFINER and run as the
+-- same owning role, needing no grant of their own to call this (same
+-- reasoning already established for tempa_private.
+-- is_correspondence_blocked_pair and tempa_private.safety_fingerprint).
+--
+-- Locks the evaluation row FOR UPDATE first — the same row a concurrent
+-- second consumption attempt (a genuine double-submit, or two tabs)
+-- would also try to lock, so the second call blocks until the first
+-- commits/rolls back, then correctly sees consumed_at already set and
+-- fails with "already been used" rather than racing.
+--
+-- Every check below raises a distinct, specific exception (never a
+-- single generic failure) — these messages are for the CALLING
+-- mutation RPC's own error-handling to decide what to show the member;
+-- unlike can_evaluate_safety_context (a member-facing "may I?" read),
+-- this function's caller already knows the caller is authenticated and
+-- is deciding whether ITS OWN mutation may proceed.
+--
+-- The full verify set, in order:
+--   1. evaluation exists;
+--   2. belongs to p_user_id (never trusts a request-supplied id without
+--      this check — this is what stops one member from spending
+--      another member's evaluation);
+--   3. surface matches;
+--   4. context_id matches;
+--   5. question_answer_id matches (IS NOT DISTINCT FROM — both null is
+--      a match, for reply/write_anytime, which have none);
+--   6. not already consumed;
+--   7. not expired;
+--   8. the fingerprint RECOMPUTED HERE, from the mutation RPC's own
+--      actual received p_body/p_postcard (never a client-supplied
+--      hash), exactly matches the evaluation's stored fingerprint —
+--      this is what makes editing the body OR the Postcard after
+--      evaluation invalidate it: a changed field produces a different
+--      recomputed fingerprint, which can never match;
+--   9. the stored disposition is respected — 'deny' never proceeds
+--      regardless of p_warning_acknowledged; 'warn' proceeds only when
+--      p_warning_acknowledged is explicitly true.
+-- Only once every check passes does it set consumed_at (and, only when
+-- p_warning_acknowledged, warning_acknowledged_at) — and link this
+-- evaluation's own signal (if it produced one; a plain UPDATE that
+-- matches zero rows otherwise, never an error) to the newly-created
+-- Letter via source_content_id/proceeded_at, so Checkpoint 7 review can
+-- point at the specific resulting content once the member actually
+-- proceeded, per this checkpoint's own signal-to-content requirement.
+--
+-- Runs inside whatever transaction the CALLING mutation RPC is already
+-- in — there is no explicit transaction control here. If anything later
+-- in that calling RPC raises (a Postcard/Moments check, the Letter
+-- INSERT itself, anything), Postgres's own implicit rollback undoes
+-- this function's own UPDATEs right along with it — "Safety consumption
+-- must roll back with it" needs no special-casing beyond calling this
+-- function from within the same transaction the Letter insert is in.
+
+create or replace function tempa_private.consume_safety_evaluation(
+  p_evaluation_id uuid,
+  p_user_id uuid,
+  p_surface text,
+  p_context_id uuid,
+  p_question_answer_id uuid,
+  p_postcard jsonb,
+  p_body text,
+  p_warning_acknowledged boolean,
+  p_new_content_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  v_eval public.safety_evaluations;
+  v_fingerprint text;
+begin
+  select * into v_eval
+  from public.safety_evaluations
+  where id = p_evaluation_id
+  for update;
+
+  if not found then
+    raise exception 'Safety evaluation not found.' using errcode = '22023';
+  end if;
+
+  if v_eval.user_id <> p_user_id then
+    raise exception 'Safety evaluation does not belong to this member.' using errcode = '22023';
+  end if;
+
+  if v_eval.surface <> p_surface then
+    raise exception 'Safety evaluation is for a different surface.' using errcode = '22023';
+  end if;
+
+  if v_eval.context_id <> p_context_id then
+    raise exception 'Safety evaluation is for a different context.' using errcode = '22023';
+  end if;
+
+  if v_eval.question_answer_id is distinct from p_question_answer_id then
+    raise exception 'Safety evaluation is for a different Question-answer.' using errcode = '22023';
+  end if;
+
+  if v_eval.consumed_at is not null then
+    raise exception 'This Safety evaluation has already been used.' using errcode = '22023';
+  end if;
+
+  if v_eval.expires_at <= now() then
+    raise exception 'This Safety evaluation has expired. Please try again.' using errcode = '22023';
+  end if;
+
+  v_fingerprint := tempa_private.safety_fingerprint(p_user_id, p_surface, p_context_id, p_question_answer_id, p_postcard, p_body);
+
+  if v_fingerprint <> v_eval.fingerprint then
+    raise exception 'This content has changed since it was last checked. Please try again.' using errcode = '22023';
+  end if;
+
+  if v_eval.mutation_disposition = 'deny' then
+    raise exception 'This message cannot be sent.' using errcode = '22023';
+  end if;
+
+  if v_eval.mutation_disposition = 'warn' and not p_warning_acknowledged then
+    raise exception 'Please acknowledge the warning before sending.' using errcode = '22023';
+  end if;
+
+  update public.safety_evaluations
+  set
+    consumed_at = now(),
+    warning_acknowledged_at = case when p_warning_acknowledged then now() else warning_acknowledged_at end
+  where id = p_evaluation_id
+    and consumed_at is null
+    and expires_at > now();
+
+  if not found then
+    raise exception 'This Safety evaluation could not be consumed.' using errcode = '22023';
+  end if;
+
+  update public.safety_signals
+  set source_content_id = p_new_content_id, proceeded_at = now()
+  where evaluation_id = p_evaluation_id;
+end;
+$function$;
+
+revoke all on function tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid) from public, anon, authenticated, service_role;
+
+
+-- ============================================================
+-- 10. CLEANUP_EXPIRED_SAFETY_EVALUATIONS — prepared, NOT scheduled
 -- ============================================================
 -- See this file's own "RETENTION POLICY" header for the full rationale.
 -- No pg_cron job is created by this migration — this function exists so

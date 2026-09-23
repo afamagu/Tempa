@@ -213,6 +213,42 @@ function moreRestrictiveDisposition(a: MutationDisposition, b: MutationDispositi
   return DISPOSITION_SEVERITY[a] >= DISPOSITION_SEVERITY[b] ? a : b
 }
 
+/** Checkpoint 3 — combines several INDEPENDENTLY-produced
+ * ClassificationResults (e.g. a Letter body classified separately from
+ * its optional Postcard's Reveal Line/back message) into one, the same
+ * deterministic way classifyContent's own RULES already combine with
+ * each other: max risk band, union of reason codes, most-restrictive
+ * disposition, OR'd escalateCase. Deliberately never concatenates the
+ * SOURCE TEXTS first and classifies the result — that would invent
+ * semantic proximity between fields that were never actually adjacent
+ * (half a solicitation in the body and an unrelated half-sentence in a
+ * Postcard would then read as one combined solicitation neither field
+ * is on its own). Classifying each field separately and combining only
+ * the STRUCTURED results means a complete solicitation entirely
+ * contained in any ONE field still produces its own full, correct
+ * classification, while two genuinely unrelated fragments in different
+ * fields never manufacture a match that isn't really there. */
+export function combineClassifications(results: ClassificationResult[]): ClassificationResult {
+  let band: RiskBand = 'none'
+  let disposition: MutationDisposition = 'allow'
+  let escalateCase = false
+  const reasonCodeSet = new Set<ContentReasonCode>()
+
+  for (const result of results) {
+    band = maxRiskBand(band, result.riskBand)
+    disposition = moreRestrictiveDisposition(disposition, result.mutationDisposition)
+    escalateCase = escalateCase || result.escalateCase
+    for (const code of result.reasonCodes) reasonCodeSet.add(code)
+  }
+
+  return {
+    riskBand: band,
+    reasonCodes: Array.from(reasonCodeSet),
+    mutationDisposition: disposition,
+    escalateCase,
+  }
+}
+
 /** The explicit POLICY layer's default for a band with no rule-level
  * override — never the only way a band maps to enforcement (see
  * PolicyOverride above), but always what compounding's own risk

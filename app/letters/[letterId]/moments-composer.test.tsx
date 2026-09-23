@@ -394,3 +394,46 @@ describe('MomentsComposer — Postcard FeatureIntroduction (cross-surface first 
     expect(introBlock).not.toContain('getActivePostcards')
   })
 })
+
+// Safety 2, Checkpoint 3 — same source-inspection convention as this
+// file's own existing tests above; the interactive submit flow
+// (evaluate -> gate -> mutate) is unreachable via renderToStaticMarkup
+// for the same click-gated-editor/Preview reason.
+describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard bound in (Checkpoint 3)', () => {
+  it('evaluates via evaluateSafety, surface: write_anytime, before ever calling write_letter — same for both the quill and a reply, since both use this one RPC', () => {
+    const evaluateIndex = source.indexOf("surface: 'write_anytime'")
+    const rpcIndex = source.indexOf("supabase.rpc('write_letter'")
+    expect(evaluateIndex, 'expected a call to evaluateSafety with surface: write_anytime').toBeGreaterThan(-1)
+    expect(rpcIndex, 'expected a call to write_letter').toBeGreaterThan(-1)
+    expect(evaluateIndex).toBeLessThan(rpcIndex)
+  })
+
+  it('a failed evaluation (status: error) never falls through to write_letter — fails closed', () => {
+    const handleSendBody = source.slice(source.indexOf('async function handleSend()'), source.indexOf('function handleCancelWarning'))
+    expect(handleSendBody).toContain("outcome.status === 'error'")
+    expect(handleSendBody).not.toContain("supabase.rpc('write_letter'")
+  })
+
+  it('the Postcard\'s Reveal Line and back message are bound into the Safety evaluation, closing the Postcard-text bypass', () => {
+    const handleSendBody = source.slice(source.indexOf('async function handleSend()'), source.indexOf('function handleCancelWarning'))
+    expect(handleSendBody).toContain('postcardKey: postcardPayload.postcard_key')
+    expect(handleSendBody).toContain('revealLine: postcardPayload.reveal_line')
+    expect(handleSendBody).toContain('backMessage: postcardPayload.back_message')
+  })
+
+  it('warning_required opens the shared SafetyWarningDialog, stacked above LetterPreview', () => {
+    expect(source).toContain('<SafetyWarningDialog')
+    expect(source).toContain('open={pendingWarning !== null}')
+    expect(source).toContain('onAcknowledgeAndSend={handleAcknowledgeWarning}')
+  })
+
+  it('passes p_safety_evaluation_id and p_warning_acknowledged to write_letter — the new required parameters', () => {
+    const sendLetterBody = source.slice(source.indexOf('async function sendLetter'), source.indexOf('function handleReviewPhoto'))
+    expect(sendLetterBody).toContain('p_safety_evaluation_id: safetyEvaluationId')
+    expect(sendLetterBody).toContain('p_warning_acknowledged: warningAcknowledged')
+  })
+
+  it('LetterPreview\'s own onSend still points at handleSend — Send only ever happens through the one Safety-gated path, never a second implementation', () => {
+    expect(source).toContain('onSend={handleSend}')
+  })
+})

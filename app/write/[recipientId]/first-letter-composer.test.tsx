@@ -31,3 +31,46 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
     expect(source.slice(sentBlockStart, sentBlockEnd)).toContain('Back to People')
   })
 })
+
+// Safety 2, Checkpoint 3 — same source-inspection convention as this
+// file's own established tests above: a client composer's actual
+// submit flow (evaluate -> gate -> mutate) can't be exercised via
+// renderToStaticMarkup, so its structure is proven from source instead.
+describe('FirstLetterComposer — Safety-gated send (Checkpoint 3)', () => {
+  it('evaluates via evaluateSafety before ever calling send_first_letter', () => {
+    const evaluateIndex = source.indexOf('evaluateSafety({')
+    const rpcIndex = source.indexOf("supabase.rpc('send_first_letter'")
+    expect(evaluateIndex, 'expected a call to evaluateSafety').toBeGreaterThan(-1)
+    expect(rpcIndex, 'expected a call to send_first_letter').toBeGreaterThan(-1)
+    expect(evaluateIndex).toBeLessThan(rpcIndex)
+  })
+
+  it('a failed evaluation (status: error) never falls through to send_first_letter — fails closed', () => {
+    const handleSendBody = source.slice(source.indexOf('async function handleSend()'), source.indexOf('async function sendLetter'))
+    expect(handleSendBody).toContain("outcome.status === 'error'")
+    expect(handleSendBody).not.toContain("supabase.rpc('send_first_letter'")
+  })
+
+  it('cannot_send blocks inline with no SafetyWarningDialog involved, and no bypass', () => {
+    const handleSendBody = source.slice(source.indexOf('async function handleSend()'), source.indexOf('async function sendLetter'))
+    expect(handleSendBody).toContain("outcome.status === 'cannot_send'")
+    expect(handleSendBody).toContain('SAFETY_CANNOT_SEND_MESSAGE')
+  })
+
+  it('warning_required opens the shared SafetyWarningDialog, gated on the member\'s own explicit acknowledgement', () => {
+    expect(source).toContain('<SafetyWarningDialog')
+    expect(source).toContain('open={pendingWarning !== null}')
+    expect(source).toContain('onAcknowledgeAndSend={handleAcknowledgeWarning}')
+  })
+
+  it('passes p_safety_evaluation_id and p_warning_acknowledged to send_first_letter — the new required parameters', () => {
+    const sendLetterBody = source.slice(source.indexOf('async function sendLetter'), source.indexOf('if (sent) {'))
+    expect(sendLetterBody).toContain('p_safety_evaluation_id: safetyEvaluationId')
+    expect(sendLetterBody).toContain('p_warning_acknowledged: warningAcknowledged')
+  })
+
+  it('re-reads the editor fresh inside sendLetter rather than trusting a value captured before the warning dialog opened', () => {
+    const sendLetterBody = source.slice(source.indexOf('async function sendLetter'), source.indexOf('if (sent) {'))
+    expect(sendLetterBody).toContain('docToPlainBody(editor.getJSON()')
+  })
+})

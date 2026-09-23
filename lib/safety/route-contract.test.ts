@@ -21,7 +21,13 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'first_letter', contextId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Hello there.' },
+      request: {
+        surface: 'first_letter',
+        contextId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
+        postcard: null,
+        body: 'Hello there.',
+      },
     })
   })
 
@@ -40,19 +46,112 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('accepts a valid reply request, mapping letterId to contextId, with questionAnswerId always null', () => {
+  it('accepts a valid reply request, mapping letterId to contextId, with questionAnswerId and postcard both null when omitted', () => {
     const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'Thanks for writing.' })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'reply', contextId: LETTER_ID, questionAnswerId: null, body: 'Thanks for writing.' },
+      request: { surface: 'reply', contextId: LETTER_ID, questionAnswerId: null, postcard: null, body: 'Thanks for writing.' },
     })
   })
 
-  it('accepts a valid write_anytime request, mapping correspondenceId to contextId, with questionAnswerId always null', () => {
+  it('accepts a valid write_anytime request, mapping correspondenceId to contextId, with questionAnswerId and postcard both null when omitted', () => {
     const result = parseEvaluateRequest({ surface: 'write_anytime', correspondenceId: CORRESPONDENCE_ID, body: 'More news.' })
     expect(result).toEqual({
       ok: true,
-      request: { surface: 'write_anytime', contextId: CORRESPONDENCE_ID, questionAnswerId: null, body: 'More news.' },
+      request: {
+        surface: 'write_anytime',
+        contextId: CORRESPONDENCE_ID,
+        questionAnswerId: null,
+        postcard: null,
+        body: 'More news.',
+      },
+    })
+  })
+
+  describe('postcard — reply/write_anytime only, first_letter never parses one', () => {
+    const VALID_POSTCARD = { postcardKey: 'seaside', revealLine: 'Wish you were here', backMessage: 'Thinking of you.' }
+
+    it('accepts a valid postcard on reply, mapped into the parsed request', () => {
+      const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'Thanks!', postcard: VALID_POSTCARD })
+      expect(result).toEqual({
+        ok: true,
+        request: {
+          surface: 'reply',
+          contextId: LETTER_ID,
+          questionAnswerId: null,
+          postcard: VALID_POSTCARD,
+          body: 'Thanks!',
+        },
+      })
+    })
+
+    it('accepts a valid postcard on write_anytime, mapped into the parsed request', () => {
+      const result = parseEvaluateRequest({
+        surface: 'write_anytime',
+        correspondenceId: CORRESPONDENCE_ID,
+        body: 'More news.',
+        postcard: VALID_POSTCARD,
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.postcard).toEqual(VALID_POSTCARD)
+    })
+
+    it('accepts a postcard with a null revealLine, carried through as null', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'seaside', revealLine: null, backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.postcard).toEqual({ postcardKey: 'seaside', revealLine: null, backMessage: 'Thinking of you.' })
+    })
+
+    it('never even parses a postcard field for first_letter — always null regardless of what was sent', () => {
+      const result = parseEvaluateRequest({
+        surface: 'first_letter',
+        recipientId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
+        body: 'Hi',
+        postcard: VALID_POSTCARD,
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.request.postcard).toBeNull()
+    })
+
+    it('rejects a postcard with a missing/empty postcardKey', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { revealLine: 'Hi', backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('rejects a postcard with a missing/blank backMessage', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'seaside', backMessage: '   ' },
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('rejects a non-object postcard', () => {
+      const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'Thanks!', postcard: 'not-an-object' })
+      expect(result.ok).toBe(false)
+    })
+
+    it('rejects an absurdly long backMessage as an abuse guard, same ceiling as body', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'seaside', backMessage: 'x'.repeat(200_001) },
+      })
+      expect(result.ok).toBe(false)
     })
   })
 
@@ -135,7 +234,7 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.request).not.toHaveProperty('userId')
-      expect(Object.keys(result.request)).toEqual(['surface', 'contextId', 'questionAnswerId', 'body'])
+      expect(Object.keys(result.request)).toEqual(['surface', 'contextId', 'questionAnswerId', 'postcard', 'body'])
     }
   })
 })

@@ -41,6 +41,8 @@ import {
   CORRESPONDENCE_CLOSED_MESSAGE,
   type AccountStatus,
 } from '@/lib/account-status'
+import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import { baseWritingExtensions } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { PhotoMoment } from './photo-moment-node'
@@ -179,6 +181,9 @@ export default function MomentsComposer({
 
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
+  // identical field for the full explanation.
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
   // Account enforcement messaging (pre-beta UX polish batch 1) — see
   // lib/account-status.ts's own doc comment. Fetched once on mount,
   // purely to pick a calmer message when a send this status actually
@@ -555,28 +560,93 @@ export default function MomentsComposer({
     setPendingFirstPhoto(null)
   }
 
+  // Letter-Level Postcards V1 — a SEPARATE payload from p_moments, never
+  // inserted into it. Blank revealLine/backMessage are sent as null,
+  // never an empty string, matching this RPC boundary's existing
+  // convention of an explicit null over an empty-but-present value (see
+  // toMomentRpcPayload's own doc comment for the same principle applied
+  // to a Moment's opposite field). Re-derived fresh wherever it's
+  // needed (evaluateSafety, and again inside sendLetter) rather than
+  // captured once — the same "always read live state" discipline the
+  // body itself already gets, in case the member edits the Postcard
+  // between evaluating and actually sending.
+  function buildPostcardPayload(): { postcard_key: string; reveal_line: string | null; back_message: string | null } | null {
+    if (!postcardDraft) return null
+    return {
+      postcard_key: postcardDraft.postcardKey,
+      reveal_line: postcardDraft.revealLine.trim().length > 0 ? postcardDraft.revealLine : null,
+      back_message: postcardDraft.backMessage.trim().length > 0 ? postcardDraft.backMessage : null,
+    }
+  }
+
+  // Safety 2, Checkpoint 3 — evaluates before ever calling write_letter.
+  // Always surface: write_anytime here — this composer is the SAME
+  // component/RPC for both the person-archive quill and "Reply" from a
+  // specific incoming letter (see this component's own header comment),
+  // never reply_to_letter. The Postcard's user-written Reveal Line/back
+  // message are classified alongside the body (never blindly
+  // concatenated with it — see lib/safety/classify.ts's own
+  // combineClassifications), closing the Postcard-text bypass. A failed
+  // evaluation (status: error) never falls back to an unscreened send.
   async function handleSend() {
     if (!editor || !canSend || postcardNeedsMessage) return
+    setSending(true)
+    setError(null)
+
+    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    const postcardPayload = buildPostcardPayload()
+    const outcome = await evaluateSafety({
+      surface: 'write_anytime',
+      correspondenceId,
+      body,
+      postcard: postcardPayload
+        ? {
+            postcardKey: postcardPayload.postcard_key,
+            revealLine: postcardPayload.reveal_line,
+            // postcardNeedsMessage already guards Send against a blank
+            // back message, so this is guaranteed non-null here.
+            backMessage: postcardPayload.back_message as string,
+          }
+        : null,
+    })
+
+    if (outcome.status === 'error') {
+      setError(SAFETY_CHECK_FAILED_MESSAGE)
+      setSending(false)
+      return
+    }
+    if (outcome.status === 'cannot_send') {
+      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      setSending(false)
+      return
+    }
+    if (outcome.status === 'warning_required') {
+      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setSending(false)
+      return
+    }
+
+    await sendLetter(outcome.evaluationId, false)
+  }
+
+  function handleCancelWarning() {
+    setPendingWarning(null)
+  }
+
+  async function handleAcknowledgeWarning() {
+    if (!pendingWarning) return
+    await sendLetter(pendingWarning.evaluationId, true)
+  }
+
+  async function sendLetter(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    if (!editor) return
     setSending(true)
     setError(null)
 
     const finalDoc = editor.getJSON() as LetterDocJSON
     const body = docToPlainBody(finalDoc)
     const momentDrafts = docToMomentDrafts(finalDoc)
-    // Letter-Level Postcards V1 — a SEPARATE payload from p_moments,
-    // never inserted into it: p_moments carries Photo Moments only for
-    // new composition. Blank revealLine/backMessage are sent as null,
-    // never an empty string, matching this RPC boundary's existing
-    // convention of an explicit null over an empty-but-present value
-    // (see toMomentRpcPayload's own doc comment for the same principle
-    // applied to a Moment's opposite field).
-    const postcardPayload = postcardDraft
-      ? {
-          postcard_key: postcardDraft.postcardKey,
-          reveal_line: postcardDraft.revealLine.trim().length > 0 ? postcardDraft.revealLine : null,
-          back_message: postcardDraft.backMessage.trim().length > 0 ? postcardDraft.backMessage : null,
-        }
-      : null
+    const postcardPayload = buildPostcardPayload()
 
     // try/finally so a thrown rejection (network failure, etc.) —
     // never just an RPC-level {error} response, which was already
@@ -589,12 +659,14 @@ export default function MomentsComposer({
       const { error: sendError } = await supabase.rpc('write_letter', {
         p_correspondence_id: correspondenceId,
         p_body: body,
+        p_safety_evaluation_id: safetyEvaluationId,
         p_reply_to_id: replyToId ?? null,
         // toMomentRpcPayload (lib/moments.ts) translates the internal
         // camelCase MomentDraft into the RPC's actual snake_case wire
         // contract right at this boundary.
         p_moments: momentDrafts.map(toMomentRpcPayload),
         p_postcard: postcardPayload,
+        p_warning_acknowledged: warningAcknowledged,
       })
 
       if (sendError) {
@@ -659,6 +731,7 @@ export default function MomentsComposer({
 
       clearLetterEditorDraft(correspondenceId)
       clearLetterPostcardDraft(correspondenceId)
+      setPendingWarning(null)
       router.push(cancelHref)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -885,6 +958,13 @@ export default function MomentsComposer({
           error={error}
         />
       )}
+
+      <SafetyWarningDialog
+        open={pendingWarning !== null}
+        onCancel={handleCancelWarning}
+        onAcknowledgeAndSend={handleAcknowledgeWarning}
+        sending={sending}
+      />
     </div>
   )
 }

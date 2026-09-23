@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyContent } from './classify'
+import { classifyContent, combineClassifications } from './classify'
 import type { RiskBand } from './reason-codes'
 
 // ============================================================
@@ -913,5 +913,68 @@ describe('a shortener does not upgrade from a bare crypto/payment-service topic 
     const result = classifyContent('I was reading about Bitcoin and here is the recipe: https://bit.ly/example')
     expect(result.mutationDisposition).toBe('allow')
     expect(result.escalateCase).toBe(false)
+  })
+})
+
+// ============================================================
+// combineClassifications — Checkpoint 3's Postcard-text bypass fix.
+// Classifies a Letter body separately from its optional Postcard
+// fields, then combines the STRUCTURED results — never concatenates
+// the raw texts first (see the function's own doc comment for why).
+// ============================================================
+describe('combineClassifications — structured combination, never invented cross-field proximity', () => {
+  it('a complete solicitation entirely contained in one field alone produces its own full classification, unaffected by what other fields say', () => {
+    const body = classifyContent('The weather has been lovely here.')
+    const backMessage = classifyContent('Buy a Steam gift card and send me the code.')
+    const combined = combineClassifications([body, backMessage])
+    expect(combined.riskBand).toBe('severe')
+    expect(combined.mutationDisposition).toBe('deny')
+    expect(combined.reasonCodes).toContain('GIFT_CARD_REQUEST')
+  })
+
+  it('two genuinely unrelated half-sentences in different fields never combine into a fabricated match', () => {
+    // Neither half is a directed request on its own — money is merely
+    // mentioned in one field, off-platform is merely mentioned in the
+    // other, with no directed request tying either to the recipient.
+    const body = classifyContent('Rent here is expensive.')
+    const backMessage = classifyContent("Let's talk more sometime.")
+    const combined = combineClassifications([body, backMessage])
+    expect(combined.mutationDisposition).toBe('allow')
+    expect(combined.escalateCase).toBe(false)
+  })
+
+  it('takes the max risk band across fields, not the body\'s alone', () => {
+    const body = classifyContent('Hello there, how are you?')
+    const backMessage = classifyContent('Buy a Steam gift card and send me the code.')
+    expect(body.riskBand).toBe('none')
+    expect(backMessage.riskBand).toBe('severe')
+    const combined = combineClassifications([body, backMessage])
+    expect(combined.riskBand).toBe('severe')
+  })
+
+  it('unions reason codes across fields rather than keeping only one field\'s own', () => {
+    const body = classifyContent('Can you send me $300?')
+    const backMessage = classifyContent('Buy a Steam gift card and send me the code.')
+    const combined = combineClassifications([body, backMessage])
+    expect(combined.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
+    expect(combined.reasonCodes).toContain('GIFT_CARD_REQUEST')
+  })
+
+  it('takes the most restrictive disposition and OR\'s escalateCase across fields', () => {
+    const allowField = classifyContent('Hello, just saying hi.')
+    const denyField = classifyContent('Buy a Steam gift card and send me the code.')
+    const combined = combineClassifications([allowField, denyField])
+    expect(combined.mutationDisposition).toBe('deny')
+  })
+
+  it('a single-element list behaves identically to that field\'s own classification', () => {
+    const only = classifyContent('Can you send me $300?')
+    const combined = combineClassifications([only])
+    expect(combined).toEqual(only)
+  })
+
+  it('an empty list combines to the neutral none/allow/no-escalate result', () => {
+    const combined = combineClassifications([])
+    expect(combined).toEqual({ riskBand: 'none', reasonCodes: [], mutationDisposition: 'allow', escalateCase: false })
   })
 })

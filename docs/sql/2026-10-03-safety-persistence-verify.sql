@@ -164,16 +164,26 @@ signals_structure_check as (
         and pg_get_constraintdef(oid) ilike '%none%'
         and pg_get_constraintdef(oid) ilike '%weak%'
         and pg_get_constraintdef(oid) ilike '%meaningful%high%severe%'
-    ) as risk_band_matches_evaluations_full_domain
+    ) as risk_band_matches_evaluations_full_domain,
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'safety_signals'
+        and column_name = 'source_content_id' and data_type = 'uuid'
+    ) as source_content_id_present,
+    exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'safety_signals'
+        and column_name = 'proceeded_at' and data_type = 'timestamp with time zone'
+    ) as proceeded_at_present
 ),
 fingerprint_function_check as (
   select
-    not has_function_privilege('authenticated', 'tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)', 'EXECUTE') as authenticated_cannot,
-    not has_function_privilege('anon', 'tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)', 'EXECUTE') as anon_cannot,
+    not has_function_privilege('authenticated', 'tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text)', 'EXECUTE') as anon_cannot,
     coalesce(not p.prosecdef, false) as not_security_definer
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)')
+    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text)')
 ),
 fingerprint_ts_boundary_check as (
   -- TypeScript never calculates or submits the fingerprint — proves,
@@ -184,13 +194,13 @@ fingerprint_ts_boundary_check as (
     coalesce(pg_get_functiondef(p.oid) ilike '%digest(%', false) as computes_digest_itself
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, uuid, text)')
+    on p.oid = to_regprocedure('tempa_private.safety_fingerprint(uuid, text, uuid, uuid, jsonb, text)')
 ),
 record_function_check as (
   select
-    has_function_privilege('service_role', 'public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)', 'EXECUTE') as service_role_can,
-    not has_function_privilege('authenticated', 'public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)', 'EXECUTE') as authenticated_cannot,
-    not has_function_privilege('anon', 'public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)', 'EXECUTE') as anon_cannot
+    has_function_privilege('service_role', 'public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean)', 'EXECUTE') as service_role_can,
+    not has_function_privilege('authenticated', 'public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean)', 'EXECUTE') as anon_cannot
 ),
 record_function_dedup_check as (
   select
@@ -219,13 +229,13 @@ record_function_dedup_check as (
     ) as signal_created_when_escalated_even_if_weak
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('public.record_safety_evaluation(uuid, text, uuid, uuid, text, text, text[], text, boolean)')
+    on p.oid = to_regprocedure('public.record_safety_evaluation(uuid, text, uuid, uuid, jsonb, text, text, text[], text, boolean)')
 ),
 context_function_check as (
   select
-    has_function_privilege('authenticated', 'public.can_evaluate_safety_context(text, uuid, uuid)', 'EXECUTE') as authenticated_can,
-    not has_function_privilege('anon', 'public.can_evaluate_safety_context(text, uuid, uuid)', 'EXECUTE') as anon_cannot,
-    not has_function_privilege('service_role', 'public.can_evaluate_safety_context(text, uuid, uuid)', 'EXECUTE') as service_role_not_specifically_granted
+    has_function_privilege('authenticated', 'public.can_evaluate_safety_context(text, uuid, uuid, jsonb)', 'EXECUTE') as authenticated_can,
+    not has_function_privilege('anon', 'public.can_evaluate_safety_context(text, uuid, uuid, jsonb)', 'EXECUTE') as anon_cannot,
+    not has_function_privilege('service_role', 'public.can_evaluate_safety_context(text, uuid, uuid, jsonb)', 'EXECUTE') as service_role_not_specifically_granted
 ),
 context_function_semantics_check as (
   select
@@ -237,10 +247,29 @@ context_function_semantics_check as (
     coalesce(
       pg_get_functiondef(p.oid) ilike '%qa.user_id = p_context_id%' and pg_get_functiondef(p.oid) ilike '%qa.is_current = true%',
       false
-    ) as first_letter_checks_question_answer
+    ) as first_letter_checks_question_answer,
+    coalesce(
+      pg_get_functiondef(p.oid) ilike '%v_first_letter_corr.status = ''active'' or v_first_letter_corr.established_at is not null%',
+      false
+    ) as first_letter_checks_correspondence_state,
+    coalesce(pg_get_functiondef(p.oid) ilike '%tempa_private.is_correspondence_blocked_pair(auth.uid(), v_reply_letter.sender_id)%', false)
+      as reply_checks_blocked_pair,
+    coalesce(pg_get_functiondef(p.oid) ilike '%p_postcard is not null and v_status = ''restricted''%', false)
+      as restricted_postcard_checked
   from (select 1 as anchor) _anchor
   left join pg_proc p
-    on p.oid = to_regprocedure('public.can_evaluate_safety_context(text, uuid, uuid)')
+    on p.oid = to_regprocedure('public.can_evaluate_safety_context(text, uuid, uuid, jsonb)')
+),
+consume_function_check as (
+  select
+    to_regprocedure('tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)') is not null
+      as consume_function_present,
+    not has_function_privilege(
+      'authenticated', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)', 'EXECUTE'
+    ) as authenticated_cannot_call_consume,
+    not has_function_privilege(
+      'service_role', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)', 'EXECUTE'
+    ) as service_role_cannot_call_consume_directly
 ),
 cleanup_function_check as (
   select
@@ -287,6 +316,8 @@ select
   sp.no_policy_of_any_kind as signals_no_policy,
   ss.evaluation_id_unique as signals_evaluation_id_unique,
   ss.risk_band_matches_evaluations_full_domain as signals_risk_band_matches_evaluations_full_domain,
+  ss.source_content_id_present as signals_source_content_id_present,
+  ss.proceeded_at_present as signals_proceeded_at_present,
   ff.authenticated_cannot as fingerprint_authenticated_cannot,
   ff.anon_cannot as fingerprint_anon_cannot,
   ff.not_security_definer as fingerprint_not_security_definer,
@@ -312,6 +343,12 @@ select
   cxs.reply_checks_recipient_is_caller as context_reply_checks_recipient_is_caller,
   cxs.write_anytime_checks_participant as context_write_anytime_checks_participant,
   cxs.first_letter_checks_question_answer as context_first_letter_checks_question_answer,
+  cxs.first_letter_checks_correspondence_state as context_first_letter_checks_correspondence_state,
+  cxs.reply_checks_blocked_pair as context_reply_checks_blocked_pair,
+  cxs.restricted_postcard_checked as context_restricted_postcard_checked,
+  cn.consume_function_present as consume_function_present,
+  cn.authenticated_cannot_call_consume as consume_authenticated_cannot,
+  cn.service_role_cannot_call_consume_directly as consume_service_role_cannot_directly,
   cf.service_role_can as cleanup_service_role_can,
   cf.authenticated_cannot as cleanup_authenticated_cannot,
   cf.anon_cannot as cleanup_anon_cannot,
@@ -329,6 +366,7 @@ select
     and s.anon_no_select and s.authenticated_no_select
     and sp.no_policy_of_any_kind
     and ss.evaluation_id_unique and ss.risk_band_matches_evaluations_full_domain
+    and ss.source_content_id_present and ss.proceeded_at_present
     and ff.authenticated_cannot and ff.anon_cannot and ff.not_security_definer
     and ftb.computes_digest_itself
     and rf.service_role_can and rf.authenticated_cannot and rf.anon_cannot
@@ -339,6 +377,8 @@ select
     and cx.authenticated_can and cx.anon_cannot
     and cxs.requires_session and cxs.checks_blocked_pair and cxs.reply_checks_recipient_is_caller and cxs.write_anytime_checks_participant
     and cxs.first_letter_checks_question_answer
+    and cxs.first_letter_checks_correspondence_state and cxs.reply_checks_blocked_pair and cxs.restricted_postcard_checked
+    and cn.consume_function_present and cn.authenticated_cannot_call_consume and cn.service_role_cannot_call_consume_directly
     and cf.service_role_can and cf.authenticated_cannot and cf.anon_cannot
     and cfa.exempts_active_case_evidence
   ) as overall_pass
@@ -349,5 +389,6 @@ from tables_check t,
      fingerprint_function_check ff, fingerprint_ts_boundary_check ftb,
      record_function_check rf, record_function_dedup_check rfd,
      context_function_check cx, context_function_semantics_check cxs,
+     consume_function_check cn,
      cleanup_function_check cf, cleanup_function_active_case_check cfa,
      no_pg_cron_scheduling_check _np;

@@ -13,7 +13,7 @@
 // module; their own test files import them directly, which is fine —
 // a test exercising internals is not the same thing as an application
 // depending on them.
-export { classifyContent, type ClassificationResult } from './classify'
+export { classifyContent, combineClassifications, type ClassificationResult } from './classify'
 export {
   CONTENT_REASON_CODES,
   BEHAVIORAL_REASON_CODES,
