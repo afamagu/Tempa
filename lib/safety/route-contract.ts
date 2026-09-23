@@ -16,6 +16,7 @@
 // app/letters/[letterId]/moments-composer.tsx).
 
 import type { ContentReasonCode, MutationDisposition } from './reason-codes'
+import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'
 
 export const SAFETY_SURFACES = ['first_letter', 'reply', 'write_anytime'] as const
 export type SafetySurface = (typeof SAFETY_SURFACES)[number]
@@ -86,8 +87,43 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // never quietly become, a new smaller Tempa Letter limit.
 const MAX_BODY_CHARS = 200_000
 
+// first_letter's own product cap — independent audit correction. Unlike
+// the generic MAX_BODY_CHARS abuse ceiling above (deliberately NOT a
+// product rule, see its own comment), this IS the real product rule
+// send_first_letter now enforces server-side, and first-letter-
+// composer.tsx enforces client-side — the SAME canonical constant, so
+// the three can never silently drift apart. Because a meaningful/high/
+// severe evaluation creates a signal/case independent of whether any
+// mutation ever happens, a first_letter body the real RPC could never
+// accept must not be allowed to reach classification/recording at all.
+const FIRST_LETTER_MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
+
+// Modest TECHNICAL ceilings only — deliberately NOT the exact product
+// rules (Reveal Line <= 32, an active postcard_key) the real mutation
+// RPCs and tempa_private.postcard_shape_is_valid (docs/sql/2026-10-03-
+// safety-persistence.sql) already enforce authoritatively. Re-deriving
+// those exact numbers here would be a second, independent product-rule
+// implementation that could silently drift from the SQL one — these
+// exist only to stop a genuinely abusive payload (kilobytes of text in
+// a field that's really a short catalog key/one-line caption) from ever
+// reaching the classifier or the database, same reasoning as MAX_BODY_
+// CHARS itself.
+const POSTCARD_KEY_MAX_CHARS = 200
+const REVEAL_LINE_MAX_CHARS = 500
+
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value)
+}
+
+/** Unicode code-point count, matching first-letter-composer.tsx's own
+ * charLength exactly (Array.from(text).length) — NOT JS's plain
+ * `.length` (UTF-16 code units), which would diverge from that on
+ * supplementary-plane characters. Postgres's own char_length() (what
+ * send_first_letter's server-side cap actually uses) counts the same
+ * way for the same content, so this is the one counting method that
+ * agrees with both the client and the real mutation RPC. */
+function codePointLength(text: string): number {
+  return Array.from(text).length
 }
 
 function readBody(value: unknown): { ok: true; body: string } | { ok: false; error: string } {
@@ -104,15 +140,31 @@ function readBody(value: unknown): { ok: true; body: string } | { ok: false; err
   return { ok: true, body: value }
 }
 
+/** first_letter only — readBody's own generic abuse ceiling first, then
+ * the real Letter-1 product cap (2,000 characters, code-point-counted —
+ * see codePointLength's own doc comment), matching send_first_letter's
+ * server-side check and first-letter-composer.tsx's client-side one
+ * exactly. */
+function readFirstLetterBody(value: unknown): { ok: true; body: string } | { ok: false; error: string } {
+  const bodyResult = readBody(value)
+  if (!bodyResult.ok) return bodyResult
+  if (codePointLength(bodyResult.body) > FIRST_LETTER_MAX_CHARS) {
+    return { ok: false, error: 'body is too long for a first letter.' }
+  }
+  return bodyResult
+}
+
 /** Optional — undefined/null means "no Postcard", the ordinary case for
  * most reply/write_anytime evaluations. When present, only shape-
- * validates (non-empty postcardKey/backMessage, backMessage under the
- * same technical abuse ceiling as body); the actual PRODUCT limits
- * (Reveal Line <= 32 chars, back message <= 300 chars, an active
- * postcard_key) remain write_letter/reply_to_letter's own job to
- * enforce at mutation time, exactly like this module's own MAX_BODY_
- * CHARS is a technical ceiling, never a re-derivation of a product
- * rule. */
+ * validates with modest TECHNICAL ceilings (non-empty postcardKey/
+ * backMessage, each field bounded by its own generous ceiling above);
+ * the actual PRODUCT limits (Reveal Line <= 32 chars, back message
+ * <= 300 chars, an active postcard_key, a current version) are enforced
+ * authoritatively in exactly one place — tempa_private.
+ * postcard_shape_is_valid (docs/sql/2026-10-03-safety-persistence.sql),
+ * called from can_evaluate_safety_context before an evaluation is ever
+ * persisted, and the real mutation RPCs themselves — never re-derived
+ * here, which would risk silently drifting from either. */
 function readPostcard(value: unknown): { ok: true; postcard: ParsedPostcard | null } | { ok: false; error: string } {
   if (value === undefined || value === null) {
     return { ok: true, postcard: null }
@@ -125,11 +177,17 @@ function readPostcard(value: unknown): { ok: true; postcard: ParsedPostcard | nu
   if (typeof fields.postcardKey !== 'string' || fields.postcardKey.trim().length === 0) {
     return { ok: false, error: 'postcard.postcardKey must be a non-empty string.' }
   }
+  if (fields.postcardKey.length > POSTCARD_KEY_MAX_CHARS) {
+    return { ok: false, error: 'postcard.postcardKey is too long.' }
+  }
 
   let revealLine: string | null = null
   if (fields.revealLine !== undefined && fields.revealLine !== null) {
     if (typeof fields.revealLine !== 'string') {
       return { ok: false, error: 'postcard.revealLine must be a string or null.' }
+    }
+    if (fields.revealLine.length > REVEAL_LINE_MAX_CHARS) {
+      return { ok: false, error: 'postcard.revealLine is too long.' }
     }
     revealLine = fields.revealLine
   }
@@ -165,7 +223,7 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
     if (!isUuid(fields.questionAnswerId)) {
       return { ok: false, error: 'questionAnswerId must be a UUID.' }
     }
-    const bodyResult = readBody(fields.body)
+    const bodyResult = readFirstLetterBody(fields.body)
     if (!bodyResult.ok) return bodyResult
     // first_letter structurally has no Postcard — never even parsed for
     // this surface, matching send_first_letter's own signature, which

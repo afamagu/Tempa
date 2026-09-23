@@ -738,6 +738,87 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid
 
 
 -- ============================================================
+-- 7B. TEMPA_PRIVATE.POSTCARD_SHAPE_IS_VALID — shared read-only Postcard
+--     eligibility check, used only by can_evaluate_safety_context below
+-- ============================================================
+-- Independent audit correction: because record_safety_evaluation
+-- creates a signal/case before any mutation happens, an evaluation must
+-- not be persisted for a Postcard payload the real mutation RPCs
+-- (write_letter/reply_to_letter) could never actually accept — a
+-- forged/inactive postcard_key, a Reveal Line or back message outside
+-- the real product bounds, or no non-blank back message at all. Every
+-- check below is copied verbatim from write_letter's/reply_to_letter's
+-- own identical Postcard-shape block (docs/sql/2026-09-28-title-
+-- postcard-and-edit-window.sql — both RPCs share the exact same four
+-- checks) so this stays the ONE place that shape rule lives for
+-- evaluation purposes, never a second implementation that could
+-- silently drift from the real RPCs' own. The caller-specific rules —
+-- restricted account, write_anytime's moments_qualified_for_viewer,
+-- reply's "not on a first establishing reply" — are NOT here, because
+-- they differ per surface; those stay in can_evaluate_safety_context's
+-- own per-surface branches below, right next to the surface they apply
+-- to. Returns true when p_postcard is null — "no Postcard" is never
+-- itself a shape problem; callers decide separately whether a Postcard
+-- was required.
+
+create or replace function tempa_private.postcard_shape_is_valid(p_postcard jsonb)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+stable
+as $function$
+declare
+  v_postcard_key text;
+  v_reveal_line text;
+  v_back_message text;
+begin
+  if p_postcard is null then
+    return true;
+  end if;
+
+  v_postcard_key := p_postcard->>'postcard_key';
+  v_reveal_line := p_postcard->>'reveal_line';
+  v_back_message := p_postcard->>'back_message';
+
+  if v_postcard_key is null or char_length(trim(v_postcard_key)) = 0 then
+    return false;
+  end if;
+
+  if not exists (
+    select 1 from public.postcard_catalog
+    where key = v_postcard_key and is_active
+  ) then
+    return false;
+  end if;
+
+  if not exists (
+    select 1 from public.postcard_versions
+    where postcard_key = v_postcard_key and is_current
+  ) then
+    return false;
+  end if;
+
+  if v_reveal_line is not null and char_length(v_reveal_line) > 32 then
+    return false;
+  end if;
+
+  if v_back_message is null or char_length(trim(both from v_back_message)) = 0 then
+    return false;
+  end if;
+
+  if char_length(trim(both from v_back_message)) > 300 then
+    return false;
+  end if;
+
+  return true;
+end;
+$function$;
+
+revoke all on function tempa_private.postcard_shape_is_valid(jsonb) from public, anon, authenticated, service_role;
+
+
+-- ============================================================
 -- 8. CAN_EVALUATE_SAFETY_CONTEXT — member-session context authorization,
 --    called BEFORE record_safety_evaluation, never with the
 --    service-role client
@@ -797,15 +878,26 @@ grant execute on function public.record_safety_evaluation(uuid, text, uuid, uuid
 --     the pair, caller's account not suspended/banned. A 'restricted'
 --     caller may still evaluate a PLAIN-TEXT reply (reply_to_letter
 --     itself only blocks restricted from Moments/a Postcard, never
---     plain text) — p_postcard is checked here for exactly that reason:
---     restricted + a Postcard present is not authorized, matching
---     reply_to_letter's own restricted-Postcard gate exactly.
+--     plain text). When p_postcard is present (independent audit
+--     correction — a Safety evaluation must not be persisted for a
+--     Postcard the real mutation could never accept): restricted is
+--     rejected; a first, establishing reply cannot carry a Postcard
+--     (mirrors reply_to_letter's own is_first_reply guard); and the
+--     Postcard's own shape must be valid (tempa_private.
+--     postcard_shape_is_valid, Part 7B above) — active catalog key,
+--     current version, Reveal Line <= 32, non-blank back message
+--     <= 300. reply_to_letter's own Postcard block never checks
+--     moments_qualified_for_viewer, so this branch doesn't either —
+--     preserved exactly as the real RPC currently permits it.
 --   - write_anytime: mirrors write_letter's own pre-insert checks —
 --     correspondence exists, caller is a participant, no active block,
 --     caller's account not suspended/banned, correspondence is
---     'active' with a non-null established_at, and (Checkpoint 3
---     correction, same reasoning as reply above) restricted + a
---     Postcard present is not authorized either.
+--     'active' with a non-null established_at. When p_postcard is
+--     present (same reasoning as reply above): restricted is rejected;
+--     moments_qualified_for_viewer(p_context_id) must hold, matching
+--     write_letter's own additional Postcard check reply_to_letter
+--     doesn't have; and the Postcard's own shape must be valid
+--     (tempa_private.postcard_shape_is_valid).
 -- Returns a plain boolean rather than raising, matching this function's
 -- read-only "may I?" nature — the Route Handler decides what HTTP
 -- status a `false` becomes.
@@ -918,8 +1010,24 @@ begin
       return false;
     end if;
 
-    if p_postcard is not null and v_status = 'restricted' then
-      return false;
+    if p_postcard is not null then
+      if v_status = 'restricted' then
+        return false;
+      end if;
+
+      -- A first, establishing reply cannot carry a Postcard — mirrors
+      -- reply_to_letter's own `if is_first_reply then raise 'A Postcard
+      -- is not available until after your first reply...'`. Unlike
+      -- write_anytime below, reply_to_letter's own Postcard block never
+      -- checks moments_qualified_for_viewer — preserved here exactly as
+      -- the real RPC currently permits it (independent audit correction).
+      if v_reply_letter.reply_to_id is null then
+        return false;
+      end if;
+
+      if not tempa_private.postcard_shape_is_valid(p_postcard) then
+        return false;
+      end if;
     end if;
 
     return true;
@@ -947,8 +1055,23 @@ begin
       return false;
     end if;
 
-    if p_postcard is not null and v_status = 'restricted' then
-      return false;
+    if p_postcard is not null then
+      if v_status = 'restricted' then
+        return false;
+      end if;
+
+      -- write_letter's own Postcard block additionally requires
+      -- moments_qualified_for_viewer — reply_to_letter's own does NOT
+      -- (see the reply branch above); preserved as a genuinely
+      -- surface-specific rule, not folded into postcard_shape_is_valid
+      -- (independent audit correction).
+      if not public.moments_qualified_for_viewer(p_context_id) then
+        return false;
+      end if;
+
+      if not tempa_private.postcard_shape_is_valid(p_postcard) then
+        return false;
+      end if;
     end if;
 
     return v_corr.status = 'active' and v_corr.established_at is not null;
@@ -1091,14 +1214,31 @@ begin
     raise exception 'This message cannot be sent.' using errcode = '22023';
   end if;
 
-  if v_eval.mutation_disposition = 'warn' and not p_warning_acknowledged then
+  -- IS NOT TRUE, never `not p_warning_acknowledged` — the latter is
+  -- Postgres's ordinary three-valued boolean logic, where `not null` is
+  -- itself null, not true, so `and not p_warning_acknowledged` silently
+  -- fails to raise when p_warning_acknowledged is NULL (a NULL simply
+  -- makes the whole `and` condition null, which `if` treats as false —
+  -- the raise never fires). p_warning_acknowledged has no NOT NULL
+  -- constraint (PL/pgSQL parameters never do), so a caller passing NULL
+  -- must be rejected exactly like false, never silently treated as
+  -- acknowledged. IS NOT TRUE is NULL-safe: true for both false and
+  -- null, false only for an explicit true (independent audit correction).
+  if v_eval.mutation_disposition = 'warn' and p_warning_acknowledged is not true then
     raise exception 'Please acknowledge the warning before sending.' using errcode = '22023';
   end if;
 
   update public.safety_evaluations
   set
     consumed_at = now(),
-    warning_acknowledged_at = case when p_warning_acknowledged then now() else warning_acknowledged_at end
+    -- Gated on BOTH the stored disposition actually being 'warn' AND an
+    -- explicit true — an 'allow' evaluation submitted with
+    -- p_warning_acknowledged = true must never create a fake warning
+    -- acknowledgement in the audit record (independent audit correction).
+    warning_acknowledged_at = case
+      when v_eval.mutation_disposition = 'warn' and p_warning_acknowledged is true then now()
+      else warning_acknowledged_at
+    end
   where id = p_evaluation_id
     and consumed_at is null
     and expires_at > now();

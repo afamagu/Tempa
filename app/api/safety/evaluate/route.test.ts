@@ -183,6 +183,24 @@ describe('POST /api/safety/evaluate', () => {
       })
       expect(recordingRpc).not.toHaveBeenCalled()
     })
+
+    it('rejects a first_letter body over the real 2,000-char product cap with 400, before authorization or recording — creates no signal/case (independent audit correction: do not persist Safety evidence for a mutation-impossible payload)', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+      const { POST } = await import('./route')
+
+      const response = await POST(
+        request({
+          surface: 'first_letter',
+          recipientId: RECIPIENT_ID,
+          questionAnswerId: QUESTION_ANSWER_ID,
+          body: 'x'.repeat(2001),
+        })
+      )
+
+      expect(response.status).toBe(400)
+      expect(authorizationRpc).not.toHaveBeenCalled()
+      expect(recordingRpc).not.toHaveBeenCalled()
+    })
   })
 
   it('classifies a benign body and returns allow with no warning key', async () => {

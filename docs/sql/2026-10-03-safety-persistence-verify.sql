@@ -254,11 +254,26 @@ context_function_semantics_check as (
     ) as first_letter_checks_correspondence_state,
     coalesce(pg_get_functiondef(p.oid) ilike '%tempa_private.is_correspondence_blocked_pair(auth.uid(), v_reply_letter.sender_id)%', false)
       as reply_checks_blocked_pair,
-    coalesce(pg_get_functiondef(p.oid) ilike '%p_postcard is not null and v_status = ''restricted''%', false)
-      as restricted_postcard_checked
+    coalesce(pg_get_functiondef(p.oid) ilike '%if p_postcard is not null then%if v_status = ''restricted''%', false)
+      as restricted_postcard_checked,
+    coalesce(
+      (select count(*) from regexp_matches(pg_get_functiondef(p.oid), 'tempa_private\.postcard_shape_is_valid\(p_postcard\)', 'g')) = 2,
+      false
+    ) as postcard_shape_checked_for_both_surfaces,
+    coalesce(pg_get_functiondef(p.oid) ilike '%v_reply_letter.reply_to_id is null%', false)
+      as reply_postcard_checks_not_first_reply,
+    coalesce(pg_get_functiondef(p.oid) ilike '%public.moments_qualified_for_viewer(p_context_id)%', false)
+      as write_anytime_postcard_checks_moments_qualified
   from (select 1 as anchor) _anchor
   left join pg_proc p
     on p.oid = to_regprocedure('public.can_evaluate_safety_context(text, uuid, uuid, jsonb)')
+),
+postcard_shape_function_check as (
+  select
+    to_regprocedure('tempa_private.postcard_shape_is_valid(jsonb)') is not null as function_present,
+    not has_function_privilege('authenticated', 'tempa_private.postcard_shape_is_valid(jsonb)', 'EXECUTE') as authenticated_cannot,
+    not has_function_privilege('anon', 'tempa_private.postcard_shape_is_valid(jsonb)', 'EXECUTE') as anon_cannot,
+    not has_function_privilege('service_role', 'tempa_private.postcard_shape_is_valid(jsonb)', 'EXECUTE') as service_role_cannot
 ),
 consume_function_check as (
   select
@@ -270,6 +285,22 @@ consume_function_check as (
     not has_function_privilege(
       'service_role', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)', 'EXECUTE'
     ) as service_role_cannot_call_consume_directly
+),
+consume_function_warning_semantics_check as (
+  -- Independent audit correction: p_warning_acknowledged IS NOT TRUE
+  -- (never the NULL-unsafe `not p_warning_acknowledged`), and
+  -- warning_acknowledged_at only ever set when the stored disposition
+  -- is actually 'warn' AND explicitly true.
+  select
+    coalesce(pg_get_functiondef(p.oid) ilike '%p_warning_acknowledged is not true%', false) as rejects_null_and_false_uniformly,
+    not coalesce(pg_get_functiondef(p.oid) ilike '%and not p_warning_acknowledged%', false) as never_uses_null_unsafe_not,
+    coalesce(
+      pg_get_functiondef(p.oid) ilike '%v_eval.mutation_disposition = ''warn'' and p_warning_acknowledged is true%',
+      false
+    ) as acknowledgement_gated_on_warn_disposition
+  from (select 1 as anchor) _anchor
+  left join pg_proc p
+    on p.oid = to_regprocedure('tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)')
 ),
 cleanup_function_check as (
   select
@@ -346,9 +377,19 @@ select
   cxs.first_letter_checks_correspondence_state as context_first_letter_checks_correspondence_state,
   cxs.reply_checks_blocked_pair as context_reply_checks_blocked_pair,
   cxs.restricted_postcard_checked as context_restricted_postcard_checked,
+  cxs.postcard_shape_checked_for_both_surfaces as context_postcard_shape_checked_for_both_surfaces,
+  cxs.reply_postcard_checks_not_first_reply as context_reply_postcard_checks_not_first_reply,
+  cxs.write_anytime_postcard_checks_moments_qualified as context_write_anytime_postcard_checks_moments_qualified,
+  psf.function_present as postcard_shape_function_present,
+  psf.authenticated_cannot as postcard_shape_authenticated_cannot,
+  psf.anon_cannot as postcard_shape_anon_cannot,
+  psf.service_role_cannot as postcard_shape_service_role_cannot,
   cn.consume_function_present as consume_function_present,
   cn.authenticated_cannot_call_consume as consume_authenticated_cannot,
   cn.service_role_cannot_call_consume_directly as consume_service_role_cannot_directly,
+  cnw.rejects_null_and_false_uniformly as consume_rejects_null_and_false_uniformly,
+  cnw.never_uses_null_unsafe_not as consume_never_uses_null_unsafe_not,
+  cnw.acknowledgement_gated_on_warn_disposition as consume_acknowledgement_gated_on_warn_disposition,
   cf.service_role_can as cleanup_service_role_can,
   cf.authenticated_cannot as cleanup_authenticated_cannot,
   cf.anon_cannot as cleanup_anon_cannot,
@@ -378,7 +419,11 @@ select
     and cxs.requires_session and cxs.checks_blocked_pair and cxs.reply_checks_recipient_is_caller and cxs.write_anytime_checks_participant
     and cxs.first_letter_checks_question_answer
     and cxs.first_letter_checks_correspondence_state and cxs.reply_checks_blocked_pair and cxs.restricted_postcard_checked
+    and cxs.postcard_shape_checked_for_both_surfaces and cxs.reply_postcard_checks_not_first_reply
+    and cxs.write_anytime_postcard_checks_moments_qualified
+    and psf.function_present and psf.authenticated_cannot and psf.anon_cannot and psf.service_role_cannot
     and cn.consume_function_present and cn.authenticated_cannot_call_consume and cn.service_role_cannot_call_consume_directly
+    and cnw.rejects_null_and_false_uniformly and cnw.never_uses_null_unsafe_not and cnw.acknowledgement_gated_on_warn_disposition
     and cf.service_role_can and cf.authenticated_cannot and cf.anon_cannot
     and cfa.exempts_active_case_evidence
   ) as overall_pass
@@ -389,6 +434,7 @@ from tables_check t,
      fingerprint_function_check ff, fingerprint_ts_boundary_check ftb,
      record_function_check rf, record_function_dedup_check rfd,
      context_function_check cx, context_function_semantics_check cxs,
-     consume_function_check cn,
+     postcard_shape_function_check psf,
+     consume_function_check cn, consume_function_warning_semantics_check cnw,
      cleanup_function_check cf, cleanup_function_active_case_check cfa,
      no_pg_cron_scheduling_check _np;

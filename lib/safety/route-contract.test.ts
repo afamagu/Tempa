@@ -46,6 +46,49 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     expect(result.ok).toBe(false)
   })
 
+  describe('first_letter — its own 2,000-char product cap, not the generic 200,000-char abuse ceiling (independent audit correction: do not persist Safety evidence for a mutation-impossible payload)', () => {
+    it('accepts a first_letter body right at the 2,000-char cap', () => {
+      const result = parseEvaluateRequest({
+        surface: 'first_letter',
+        recipientId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
+        body: 'x'.repeat(2000),
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('rejects a first_letter body of 2,001 chars — well under the generic 200,000-char ceiling, so this is the Letter-1 cap actually firing, not the abuse guard', () => {
+      const result = parseEvaluateRequest({
+        surface: 'first_letter',
+        recipientId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
+        body: 'x'.repeat(2001),
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('uses the same Unicode code-point counting as first-letter-composer.tsx\'s own charLength and send_first_letter\'s own char_length() — a 2,000-code-point body built from surrogate-pair characters is not over-counted by .length and wrongly rejected', () => {
+      // Each of these is one code point but two UTF-16 code units — a
+      // plain `.length` count would see 4,000 and reject this body,
+      // which is actually exactly at the real 2,000-character cap.
+      const body = '𝟙'.repeat(2000)
+      expect(body.length).toBe(4000)
+      const result = parseEvaluateRequest({
+        surface: 'first_letter',
+        recipientId: RECIPIENT_ID,
+        questionAnswerId: QUESTION_ANSWER_ID,
+        body,
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('a reply/write_anytime body well over 2,000 chars is unaffected — the Letter-1 cap is first_letter-only', () => {
+      const longEstablishedLetter = 'x'.repeat(5000)
+      const replyResult = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: longEstablishedLetter })
+      expect(replyResult.ok).toBe(true)
+    })
+  })
+
   it('accepts a valid reply request, mapping letterId to contextId, with questionAnswerId and postcard both null when omitted', () => {
     const result = parseEvaluateRequest({ surface: 'reply', letterId: LETTER_ID, body: 'Thanks for writing.' })
     expect(result).toEqual({
@@ -152,6 +195,46 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
         postcard: { postcardKey: 'seaside', backMessage: 'x'.repeat(200_001) },
       })
       expect(result.ok).toBe(false)
+    })
+
+    it('rejects a postcardKey past its own modest technical ceiling (independent audit correction)', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'x'.repeat(201), backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('rejects a revealLine past its own modest technical ceiling — previously had no ceiling at all (independent audit correction)', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'seaside', revealLine: 'x'.repeat(501), backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(false)
+    })
+
+    it('accepts a postcardKey/revealLine right at their own technical ceilings', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'x'.repeat(200), revealLine: 'x'.repeat(500), backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('never re-derives the real 32-char Reveal Line product limit here — a 33-char revealLine, well under the technical ceiling, is not rejected at this layer (that authoritative check lives only in tempa_private.postcard_shape_is_valid)', () => {
+      const result = parseEvaluateRequest({
+        surface: 'reply',
+        letterId: LETTER_ID,
+        body: 'Thanks!',
+        postcard: { postcardKey: 'seaside', revealLine: 'x'.repeat(33), backMessage: 'Thinking of you.' },
+      })
+      expect(result.ok).toBe(true)
     })
   })
 

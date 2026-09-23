@@ -243,15 +243,34 @@ describe('tempa_private.consume_safety_evaluation — Checkpoint 3\'s one truste
   it('deny never proceeds regardless of acknowledgement; warn requires explicit p_warning_acknowledged', () => {
     const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
     expect(body).toContain("v_eval.mutation_disposition = 'deny'")
-    expect(body).toContain("v_eval.mutation_disposition = 'warn' and not p_warning_acknowledged")
+    expect(body).toContain("v_eval.mutation_disposition = 'warn' and p_warning_acknowledged is not true")
   })
 
-  it('sets consumed_at and, only when acknowledged, warning_acknowledged_at, scoped to unconsumed/unexpired', () => {
+  it('uses IS NOT TRUE (never `not p_warning_acknowledged`) — NULL-safe, so SQL NULL cannot satisfy acknowledgement (independent audit correction)', () => {
+    const body = stripLineComments(extractFunctionBody('tempa_private.consume_safety_evaluation'))
+    expect(body).not.toMatch(/and not p_warning_acknowledged/)
+    expect(body).toContain('p_warning_acknowledged is not true')
+  })
+
+  it('sets consumed_at and, only when the stored disposition is actually warn AND explicitly acknowledged, warning_acknowledged_at, scoped to unconsumed/unexpired (independent audit correction)', () => {
     const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
     expect(body).toContain('consumed_at = now()')
-    expect(body).toContain('warning_acknowledged_at = case when p_warning_acknowledged then now() else warning_acknowledged_at end')
+    expect(body).toContain("when v_eval.mutation_disposition = 'warn' and p_warning_acknowledged is true then now()")
+    expect(body).toContain('else warning_acknowledged_at')
     expect(body).toContain('and consumed_at is null')
     expect(body).toContain('and expires_at > now()')
+  })
+
+  it('never sets warning_acknowledged_at from an allow evaluation submitted with p_warning_acknowledged = true — no fake acknowledgement in the audit record', () => {
+    const body = extractFunctionBody('tempa_private.consume_safety_evaluation')
+    // The only place warning_acknowledged_at is assigned must itself be
+    // gated on mutation_disposition = 'warn' — structurally proven by
+    // requiring the exact CASE guard above to directly precede it.
+    const assignIndex = body.indexOf('warning_acknowledged_at = case')
+    const guardIndex = body.indexOf("when v_eval.mutation_disposition = 'warn' and p_warning_acknowledged is true then now()")
+    expect(assignIndex).toBeGreaterThan(-1)
+    expect(guardIndex).toBeGreaterThan(assignIndex)
+    expect(guardIndex - assignIndex).toBeLessThan(200)
   })
 
   it('links this evaluation\'s own signal (if any) to the newly-created content, only on successful consumption', () => {
@@ -388,6 +407,31 @@ describe('record_safety_evaluation — never silently reuses a clearance whose s
   })
 })
 
+describe('tempa_private.postcard_shape_is_valid — the one shared read-only Postcard-shape check, never a second implementation (independent audit correction)', () => {
+  it('is not directly callable by any client role, including service_role', () => {
+    expect(codeOnly).toContain(
+      'revoke all on function tempa_private.postcard_shape_is_valid(jsonb) from public, anon, authenticated, service_role'
+    )
+  })
+
+  it('returns true for a null postcard — "no Postcard" is never itself a shape problem', () => {
+    const body = extractFunctionBody('tempa_private.postcard_shape_is_valid')
+    expect(body).toContain('if p_postcard is null then')
+    expect(body).toContain('return true;')
+  })
+
+  it('checks an active catalog key, a current version, Reveal Line <= 32, and a non-blank back message <= 300 — copied verbatim from write_letter/reply_to_letter\'s own identical block', () => {
+    const body = extractFunctionBody('tempa_private.postcard_shape_is_valid')
+    expect(body).toContain('from public.postcard_catalog')
+    expect(body).toContain('where key = v_postcard_key and is_active')
+    expect(body).toContain('from public.postcard_versions')
+    expect(body).toContain('where postcard_key = v_postcard_key and is_current')
+    expect(body).toContain('char_length(v_reveal_line) > 32')
+    expect(body).toContain("char_length(trim(both from v_back_message)) = 0")
+    expect(body).toContain('char_length(trim(both from v_back_message)) > 300')
+  })
+})
+
 describe('can_evaluate_safety_context — proves the mutation context is real and the caller\'s own, before any evaluation is recorded', () => {
   it('is callable by authenticated, never by anon, and is not a service-role table read', () => {
     expect(codeOnly).toContain('revoke all on function public.can_evaluate_safety_context(text, uuid, uuid, jsonb) from public')
@@ -451,8 +495,29 @@ describe('can_evaluate_safety_context — proves the mutation context is real an
 
   it('reply/write_anytime: reject a restricted caller only when a Postcard is present, preserving restricted plain-text reply/write (independent audit correction — B2/B1)', () => {
     const body = extractFunctionBody('public.can_evaluate_safety_context')
-    const occurrences = body.match(/p_postcard is not null and v_status = 'restricted'/g) ?? []
+    const occurrences = body.match(/if p_postcard is not null then\s+if v_status = 'restricted' then/g) ?? []
     expect(occurrences.length).toBe(2)
+  })
+
+  it('reply/write_anytime: a present Postcard must pass tempa_private.postcard_shape_is_valid before an evaluation is authorized — never a second, independent product-rule implementation (independent audit correction)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const occurrences = body.match(/tempa_private\.postcard_shape_is_valid\(p_postcard\)/g) ?? []
+    expect(occurrences.length).toBe(2)
+  })
+
+  it('reply: a Postcard on a first, establishing reply is never authorized — mirrors reply_to_letter\'s own is_first_reply guard; never additionally requires moments_qualified_for_viewer, matching reply_to_letter\'s own current behavior exactly (independent audit correction)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const replyBranch = stripLineComments(
+      body.slice(body.indexOf("elsif p_surface = 'reply' then"), body.indexOf("elsif p_surface = 'write_anytime' then"))
+    )
+    expect(replyBranch).toContain('v_reply_letter.reply_to_id is null')
+    expect(replyBranch).not.toContain('moments_qualified_for_viewer')
+  })
+
+  it('write_anytime: a Postcard requires moments_qualified_for_viewer — mirrors write_letter\'s own additional Postcard check, which reply_to_letter does not have (independent audit correction)', () => {
+    const body = extractFunctionBody('public.can_evaluate_safety_context')
+    const writeAnytimeBranch = body.slice(body.indexOf("elsif p_surface = 'write_anytime' then"))
+    expect(writeAnytimeBranch).toContain('public.moments_qualified_for_viewer(p_context_id)')
   })
 
   it('write_anytime: mirrors write_letter\'s own pre-insert checks (participant, blocked-pair, account status, active correspondence)', () => {
