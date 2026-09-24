@@ -12,8 +12,7 @@ import { sectionTitleClass, iconButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
-import SystemMessage from '@/app/system-message'
-import MailInTransitIcon from '@/app/mail-in-transit-icon'
+import MailOnTheWay from '@/app/mail-on-the-way'
 import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
 import RemoveFromLetterboxIcon from '@/app/letters/remove-from-letterbox-icon'
 import ArchiveList from './archive-list'
@@ -133,15 +132,7 @@ export default async function LetterArchiveWithUserPage({
               )}
             </div>
 
-            {mailOnTheWayFromThisPerson && (
-              <SystemMessage
-                variant="quiet"
-                icon={<MailInTransitIcon className="h-3.5 w-3.5 text-foreground/50" />}
-                title="Mail on the way"
-              >
-                A letter is travelling to you.
-              </SystemMessage>
-            )}
+            {mailOnTheWayFromThisPerson && <MailOnTheWay />}
           </div>
 
           <ArchiveList

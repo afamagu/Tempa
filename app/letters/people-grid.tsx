@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
-import MailInTransitIcon from '@/app/mail-in-transit-icon'
-import SystemMessage from '@/app/system-message'
+import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
 import { helperTextClass, metadataTextClass } from '@/app/profile/ui'
 import { formatDateShort } from '@/lib/format-date'
@@ -77,10 +76,13 @@ function emptyStateCopy(filter: LetterboxFilter, hasAnyPeopleAtAll: boolean): st
  * (deriveLetterboxCardStatus) — deliberately plain text, not another
  * filled bg-surface-shell strip, so the excerpt reads as a quiet
  * aside rather than a Gmail-style preview strip. The corner unread
- * badge and the independent "Mail on the way" line (SystemMessage,
- * quiet variant) are unchanged from before. Ordering is whatever order
- * `people` already arrives in (getLetterboxPeople sorts newest-
- * activity first) — grid flow alone puts the newest person first.
+ * badge is unchanged from before; the independent "Mail on the way"
+ * block (Brand asset pass, app/mail-on-the-way.tsx) now uses the
+ * approved travelling-envelope asset and pale postal-notice treatment
+ * instead of the old plain stroke icon + inline SystemMessage line.
+ * Ordering is whatever order `people` already arrives in
+ * (getLetterboxPeople sorts newest-activity first) — grid flow alone
+ * puts the newest person first.
  */
 export default function PeopleGrid({
   people,
@@ -140,13 +142,7 @@ export default function PeopleGrid({
 
           <div className="mt-auto space-y-1 pt-1">
             <CardStatusLine person={person} />
-            {mailInTransitPersonIds.has(person.userId) && (
-              <SystemMessage
-                variant="quiet"
-                icon={<MailInTransitIcon className="h-3 w-3 text-foreground/50" />}
-                title="Mail on the way"
-              />
-            )}
+            {mailInTransitPersonIds.has(person.userId) && <MailOnTheWay />}
           </div>
         </Link>
       ))}

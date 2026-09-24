@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
+import TempaBrandLogo from '@/app/tempa-brand-logo'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
 
 /**
@@ -331,7 +332,15 @@ function SignInForm() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-8">
+    <main className="min-h-screen flex flex-col items-center justify-center gap-6 p-8">
+      {/* Brand asset pass (2026-09-24) — /sign-in is the app's one real
+          logged-out landing surface (the root route always redirects
+          here or onward; there is no separate marketing page), so it is
+          where the full brand lockup actually has room to breathe. The
+          heading text inside the card below is unchanged — this is an
+          addition, not a replacement of any existing copy. */}
+      <TempaBrandLogo width={180} priority />
+
       <div className="max-w-sm w-full space-y-5 rounded-md border border-foreground/12 p-6">
         <h1 className="font-serif text-2xl font-medium">
           {joinIntent ? 'Create your Tempa account' : 'Sign in'}
