@@ -110,5 +110,5 @@ export default function PhotoConsent({
     )
   }
 
-  return <TempaNote>Photos are enabled in this correspondence.</TempaNote>
+  return <TempaNote>Moments are enabled in this correspondence.</TempaNote>
 }
