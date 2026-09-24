@@ -120,6 +120,24 @@ describe('getInitialErrorMessage — the initial ?error= query param, read at fi
   })
 })
 
+// Brand asset correction (2026-09-24) — the full poster-style master
+// lockup was replaced with a compact emblem + live text wordmark +
+// live tagline, since the full lockup read as a pasted-on marketing
+// image rather than part of the interface.
+describe('SignInPage — compact brand header (emblem + live wordmark + live tagline)', () => {
+  it('renders the emblem asset, never the full master lockup', () => {
+    const html = render()
+    expect(html).toContain(`url=${encodeURIComponent('/brand/tempa-emblem.png')}`)
+    expect(html).not.toContain('tempa-logo-master')
+  })
+
+  it('renders "Tempa" and the tagline as real live text, not baked into the image', () => {
+    const html = render()
+    expect(html).toContain('>Tempa<')
+    expect(html).toContain('A more human way to connect')
+  })
+})
+
 describe('SignInPage — existing intent=join / sign-in UI behavior remains intact', () => {
   it('renders the default "Sign in" framing and both auth affordances', () => {
     const html = render()

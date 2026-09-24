@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import TempaEmblem from '@/app/tempa-emblem'
 
 type NavKey = 'home' | 'letters' | 'minds' | 'board' | 'you'
 
@@ -102,7 +103,15 @@ export default function AppShell({
   return (
     <div className="sm:flex sm:min-h-screen">
       <nav className="hidden sm:flex sm:w-56 sm:shrink-0 sm:flex-col sm:border-r sm:border-foreground/10 sm:px-4 sm:py-8">
-        <p className="px-2 pb-8 font-serif text-lg italic text-foreground">Tempa</p>
+        {/* Brand asset correction (2026-09-24) — compact emblem + the
+            existing italic-serif "Tempa" wordmark, same understated
+            treatment this sidebar already used, just with the approved
+            emblem crop added beside it. No tagline, no full master
+            lockup — restrained, aligned with the nav rows below it. */}
+        <div className="flex items-center gap-2 px-2 pb-8">
+          <TempaEmblem size={28} />
+          <span className="font-serif text-lg italic text-foreground">Tempa</span>
+        </div>
         <div className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = item.key === active

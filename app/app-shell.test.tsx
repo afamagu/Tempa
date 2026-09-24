@@ -26,6 +26,41 @@ function mobileNavHtml(html: string): string {
   return html.slice(start)
 }
 
+function desktopSidebarHtml(html: string): string {
+  const start = html.indexOf('<nav class="hidden')
+  const end = html.indexOf('<nav class="fixed inset-x-0 bottom-0')
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  return html.slice(start, end)
+}
+
+// Brand asset correction (2026-09-24) — a compact emblem + the existing
+// italic-serif "Tempa" wordmark, desktop sidebar only. No tagline, no
+// full master lockup, and the mobile bottom bar (a tab bar with no
+// header row at all) deliberately gets no branding forced into it.
+describe('AppShell — compact sidebar branding', () => {
+  it('renders the emblem asset alongside the existing italic "Tempa" wordmark in the desktop sidebar only', () => {
+    const html = renderToStaticMarkup(<AppShell active="home" waitingLetterCount={0}>{null}</AppShell>)
+    const sidebar = desktopSidebarHtml(html)
+    expect(sidebar).toContain(`url=${encodeURIComponent('/brand/tempa-emblem.png')}`)
+    expect(sidebar).toMatch(/font-serif[^"]*italic[^"]*"[^<]*>Tempa</)
+  })
+
+  it('never renders a tagline or the full master lockup in the sidebar', () => {
+    const html = renderToStaticMarkup(<AppShell active="home" waitingLetterCount={0}>{null}</AppShell>)
+    const sidebar = desktopSidebarHtml(html)
+    expect(sidebar).not.toContain('A more human way to connect')
+    expect(sidebar).not.toContain('tempa-logo-master.png')
+  })
+
+  it('the mobile bottom nav gets no emblem/wordmark forced into it — it stays exactly the 5-item tab bar', () => {
+    const html = renderToStaticMarkup(<AppShell active="home" waitingLetterCount={0}>{null}</AppShell>)
+    const mobile = mobileNavHtml(html)
+    expect(mobile).not.toContain('tempa-emblem')
+    expect(mobile).not.toContain('>Tempa<')
+  })
+})
+
 // Onboarding & First-Use checkpoint (Section E) — the primary
 // user-visible navigation/discovery noun is now "People," never "Minds"
 // — the route itself (`/minds`) is deliberately unchanged (see this
