@@ -5,9 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { debounce } from '@/lib/debounce'
 import { toSearchResults, type SearchPersonResult, type SearchLetterResult } from '@/lib/search'
 import { inputClass } from '@/app/profile/ui'
-import { filterLetterboxPeople, type LetterboxFilter, type LetterboxPerson } from '@/lib/letters'
+import type { LetterboxPerson } from '@/lib/letters'
 import PeopleGrid from './people-grid'
-import LetterboxFilters from './letterbox-filters'
 import SearchResultsPanel, { type SearchStatus } from './search-results-panel'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
@@ -55,7 +54,6 @@ export default function LetterboxSearch({
   mailInTransitPersonIds: Set<string>
 }) {
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<LetterboxFilter>('all')
   const [status, setStatus] = useState<SearchStatus>('idle')
   const [personResults, setPersonResults] = useState<SearchPersonResult[]>([])
   const [letterResults, setLetterResults] = useState<SearchLetterResult[]>([])
@@ -190,15 +188,7 @@ export default function LetterboxSearch({
           onShowMoreLetters={handleShowMoreLetters}
         />
       ) : (
-        <div className="space-y-4">
-          <LetterboxFilters active={filter} onChange={setFilter} />
-          <PeopleGrid
-            people={filterLetterboxPeople(people, filter)}
-            hasAnyPeopleAtAll={people.length > 0}
-            filter={filter}
-            mailInTransitPersonIds={mailInTransitPersonIds}
-          />
-        </div>
+        <PeopleGrid people={people} mailInTransitPersonIds={mailInTransitPersonIds} />
       )}
     </div>
   )

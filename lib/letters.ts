@@ -1298,9 +1298,6 @@ export type LetterboxPerson = {
    * undelivered incoming letter's content. Null only when somehow no
    * letter body could be resolved (never expected in practice). */
   latestExcerpt: string | null
-  /** Whether the viewer has sent at least one VISIBLE letter to this
-   * person, in any episode — the "Sent" filter's entire definition. */
-  hasSentAny: boolean
   /** Release Polish Pass — whether the single most recent VISIBLE
    * letter with this person (the same one latestExcerpt/activityAt
    * describe) was sent BY the viewer, i.e. "I'm the one waiting on a
@@ -1330,7 +1327,6 @@ export function buildLetterboxPeople(
   hiddenCorrespondenceIds: Set<string>,
   latestLetterByCorrespondence: Map<string, { createdAt: string; body: string; senderId?: string }>,
   unreadCountByCorrespondence: Map<string, number>,
-  sentCorrespondenceIds: Set<string>,
   profilesById: Map<
     string,
     {
@@ -1346,7 +1342,6 @@ export function buildLetterboxPeople(
   const excerptByPerson = new Map<string, string>()
   const lastSenderByPerson = new Map<string, string | undefined>()
   const unreadByPerson = new Map<string, number>()
-  const sentByPerson = new Map<string, boolean>()
 
   for (const c of correspondences) {
     if (hiddenCorrespondenceIds.has(c.id)) continue
@@ -1365,10 +1360,6 @@ export function buildLetterboxPeople(
 
     const unread = unreadCountByCorrespondence.get(c.id) ?? 0
     unreadByPerson.set(otherId, (unreadByPerson.get(otherId) ?? 0) + unread)
-
-    if (sentCorrespondenceIds.has(c.id)) {
-      sentByPerson.set(otherId, true)
-    }
   }
 
   const people: LetterboxPerson[] = []
@@ -1384,7 +1375,6 @@ export function buildLetterboxPeople(
       activityAt,
       unreadCount: unreadByPerson.get(otherId) ?? 0,
       latestExcerpt: excerptByPerson.get(otherId) ?? null,
-      hasSentAny: sentByPerson.get(otherId) ?? false,
       lastLetterFromViewer: lastSenderByPerson.get(otherId) === userId,
     })
   }
@@ -1418,26 +1408,6 @@ export function deriveLetterboxCardStatus(person: LetterboxPerson): LetterboxCar
   if (person.unreadCount > 0) return { kind: 'new', count: person.unreadCount }
   if (person.lastLetterFromViewer) return { kind: 'waiting_for_reply' }
   return { kind: 'last_exchanged', activityAt: person.activityAt }
-}
-
-export type LetterboxFilter = 'all' | 'new' | 'sent'
-
-/**
- * Pure: Letterbox Level 1's All / New / Sent filter — operates entirely
- * on the already-fetched, already viewer-scoped people list (no extra
- * query per filter). "New" = at least one visible unread incoming
- * letter (never counts an undelivered one — unreadCount itself is
- * already sourced from letters_for_participant's own is_unread, which
- * can never be true for an undelivered row). "Sent" = the viewer has
- * sent at least one visible letter to that person, in any episode.
- */
-export function filterLetterboxPeople(
-  people: LetterboxPerson[],
-  filter: LetterboxFilter
-): LetterboxPerson[] {
-  if (filter === 'new') return people.filter((p) => p.unreadCount > 0)
-  if (filter === 'sent') return people.filter((p) => p.hasSentAny)
-  return people
 }
 
 /**
@@ -1477,7 +1447,6 @@ export async function getLetterboxPeople(
     { createdAt: string; body: string; senderId?: string }
   >()
   const unreadCountByCorrespondence = new Map<string, number>()
-  const sentCorrespondenceIds = new Set<string>()
   for (const row of letterRows ?? []) {
     // Rows arrive newest-first (order by created_at desc above), so the
     // first row seen per correspondence is already its latest.
@@ -1493,9 +1462,6 @@ export async function getLetterboxPeople(
         row.correspondence_id,
         (unreadCountByCorrespondence.get(row.correspondence_id) ?? 0) + 1
       )
-    }
-    if (row.sender_id === userId) {
-      sentCorrespondenceIds.add(row.correspondence_id)
     }
   }
 
@@ -1522,7 +1488,6 @@ export async function getLetterboxPeople(
     hiddenCorrespondenceIds,
     latestLetterByCorrespondence,
     unreadCountByCorrespondence,
-    sentCorrespondenceIds,
     profilesById,
     (markId) => publicProfileMarkUrl(supabase, `${markId}.png`)
   )

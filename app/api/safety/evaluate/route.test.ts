@@ -312,6 +312,52 @@ describe('POST /api/safety/evaluate', () => {
     expect(json).not.toHaveProperty('indicators')
   })
 
+  it('"Please send me money. I love you." is a SUCCESSFUL warning_required evaluation (HTTP 200), never the failure path — and it is a signal-creating (meaningful) evaluation', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-money', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+    const { POST } = await import('./route')
+
+    const response = await POST(
+      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Please send me money. I love you.' })
+    )
+
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    expect(json).toMatchObject({ evaluationId: 'eval-money', disposition: 'warning_required' })
+    expect(json).not.toHaveProperty('riskBand')
+    expect(json).not.toHaveProperty('reasonCodes')
+    // meaningful+ evaluations are the ones record_safety_evaluation must
+    // write a safety_signals row for — the exact code path that fails in
+    // production when that SQL function itself is broken (see
+    // lib/safety/send-me-money-regression.test.ts's header).
+    const [, params] = recordingRpc.mock.calls.find(([name]) => name === 'record_safety_evaluation')!
+    expect(params).toMatchObject({ p_risk_band: 'meaningful', p_mutation_disposition: 'warn', p_reason_codes: ['DIRECT_MONEY_REQUEST'] })
+  })
+
+  it('a record_safety_evaluation failure on a signal-creating (warn) evaluation is a fail-closed HTTP 500 with a generic body, logged distinctly from an intervention', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    rpcSingle.mockResolvedValue({
+      data: null,
+      error: { message: 'column reference "evaluation_id" is ambiguous', code: '42702' },
+    })
+    const { POST } = await import('./route')
+
+    const response = await POST(
+      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Please send me money. I love you.' })
+    )
+
+    expect(response.status).toBe(500)
+    const json = await response.json()
+    expect(JSON.stringify(json)).not.toMatch(/ambiguous|42702|evaluation_id/)
+    expect(json).not.toHaveProperty('evaluationId')
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[safety] record_safety_evaluation failed',
+      expect.objectContaining({ code: '42702', surface: 'first_letter' })
+    )
+    consoleSpy.mockRestore()
+  })
+
   it('passes the exact classified fields through to record_safety_evaluation', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
     rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-3', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })

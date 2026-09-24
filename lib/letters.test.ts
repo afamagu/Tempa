@@ -4,7 +4,6 @@ import {
   isPhotoDecisionOutstandingForUser,
   canReconsiderPhotoFree,
   buildLetterboxPeople,
-  filterLetterboxPeople,
   letterPreviewText,
   isRichBody,
   visibleCorrespondenceIdsForPair,
@@ -305,7 +304,6 @@ describe('buildLetterboxPeople', () => {
         ['c-priya', { createdAt: '2026-01-02T00:00:00Z', body: 'b' }],
       ]),
       new Map(),
-      new Set(),
       profiles,
       (markId) => `https://example.test/${markId}.png`
     )
@@ -323,7 +321,7 @@ describe('buildLetterboxPeople', () => {
       ['c-new', { createdAt: '2026-08-01T00:00:00Z', body: 'new letter' }],
     ])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result).toHaveLength(1)
     expect(result[0].userId).toBe(ELVIS)
@@ -340,7 +338,7 @@ describe('buildLetterboxPeople', () => {
       ['c-priya', { createdAt: '2026-08-01T00:00:00Z', body: 'b' }],
     ])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result.map((p) => p.userId)).toEqual([PRIYA, ELVIS])
   })
@@ -362,7 +360,6 @@ describe('buildLetterboxPeople', () => {
       new Set(['c-hidden']),
       latest,
       new Map(),
-      new Set(),
       profilesById
     )
 
@@ -382,7 +379,6 @@ describe('buildLetterboxPeople', () => {
       new Set(['c-only']),
       latest,
       new Map(),
-      new Set(),
       profilesById
     )
 
@@ -403,7 +399,7 @@ describe('buildLetterboxPeople', () => {
       ['c-new', 3],
     ])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, unread, new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, unread, profilesById)
 
     expect(result).toHaveLength(1)
     expect(result[0].unreadCount).toBe(5)
@@ -429,7 +425,6 @@ describe('buildLetterboxPeople', () => {
       new Set(['c-hidden']),
       latest,
       unread,
-      new Set(),
       profilesById
     )
 
@@ -440,58 +435,9 @@ describe('buildLetterboxPeople', () => {
     const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
     const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }]])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result[0].unreadCount).toBe(0)
-  })
-
-  it('hasSentAny: true when the viewer has sent in at least one visible episode with that person', () => {
-    const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
-    const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }]])
-
-    const result = buildLetterboxPeople(
-      VIEWER,
-      correspondences,
-      new Set(),
-      latest,
-      new Map(),
-      new Set(['c-1']),
-      profilesById
-    )
-
-    expect(result[0].hasSentAny).toBe(true)
-  })
-
-  it('hasSentAny: false when the viewer has never sent in any visible episode with that person', () => {
-    const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
-    const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }]])
-
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
-
-    expect(result[0].hasSentAny).toBe(false)
-  })
-
-  it('hasSentAny: a hidden episode the viewer sent in never counts toward a visible person\'s flag', () => {
-    const correspondences = [
-      { id: 'c-hidden', participant_low: ELVIS, participant_high: VIEWER },
-      { id: 'c-visible', participant_low: ELVIS, participant_high: VIEWER },
-    ]
-    const latest = new Map([
-      ['c-hidden', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }],
-      ['c-visible', { createdAt: '2026-03-01T00:00:00Z', body: 'b' }],
-    ])
-
-    const result = buildLetterboxPeople(
-      VIEWER,
-      correspondences,
-      new Set(['c-hidden']),
-      latest,
-      new Map(),
-      new Set(['c-hidden']),
-      profilesById
-    )
-
-    expect(result[0].hasSentAny).toBe(false)
   })
 
   // Release Polish Pass — powers Letterbox's own "Waiting for a reply"
@@ -500,7 +446,7 @@ describe('buildLetterboxPeople', () => {
     const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
     const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a', senderId: VIEWER }]])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result[0].lastLetterFromViewer).toBe(true)
   })
@@ -509,7 +455,7 @@ describe('buildLetterboxPeople', () => {
     const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
     const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a', senderId: ELVIS }]])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result[0].lastLetterFromViewer).toBe(false)
   })
@@ -524,7 +470,7 @@ describe('buildLetterboxPeople', () => {
       ['c-new', { createdAt: '2026-08-01T00:00:00Z', body: 'new', senderId: ELVIS }],
     ])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result[0].lastLetterFromViewer).toBe(false)
   })
@@ -533,7 +479,7 @@ describe('buildLetterboxPeople', () => {
     const correspondences = [{ id: 'c-1', participant_low: ELVIS, participant_high: VIEWER }]
     const latest = new Map([['c-1', { createdAt: '2026-01-01T00:00:00Z', body: 'a' }]])
 
-    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), new Set(), profilesById)
+    const result = buildLetterboxPeople(VIEWER, correspondences, new Set(), latest, new Map(), profilesById)
 
     expect(result[0].lastLetterFromViewer).toBe(false)
   })
@@ -555,7 +501,6 @@ describe('deriveLetterboxCardStatus', () => {
       activityAt: new Date('2026-09-08T00:00:00Z').getTime(),
       unreadCount: 0,
       latestExcerpt: 'hi',
-      hasSentAny: false,
       lastLetterFromViewer: false,
       ...overrides,
     }
@@ -580,56 +525,6 @@ describe('deriveLetterboxCardStatus', () => {
       kind: 'last_exchanged',
       activityAt,
     })
-  })
-})
-
-describe('filterLetterboxPeople', () => {
-  const ALL: LetterboxPerson[] = [
-    {
-      userId: 'has-unread',
-      pseudonym: 'A',
-      country: 'US',
-      ageRange: '25-34',
-      activityAt: 1,
-      unreadCount: 2,
-      latestExcerpt: 'hi',
-      hasSentAny: false,
-      lastLetterFromViewer: false,
-    },
-    {
-      userId: 'has-sent',
-      pseudonym: 'B',
-      country: 'US',
-      ageRange: '25-34',
-      activityAt: 2,
-      unreadCount: 0,
-      latestExcerpt: 'hi',
-      hasSentAny: true,
-      lastLetterFromViewer: false,
-    },
-    {
-      userId: 'neither',
-      pseudonym: 'C',
-      country: 'US',
-      ageRange: '25-34',
-      activityAt: 3,
-      unreadCount: 0,
-      latestExcerpt: 'hi',
-      hasSentAny: false,
-      lastLetterFromViewer: false,
-    },
-  ]
-
-  it('all: returns every row unchanged', () => {
-    expect(filterLetterboxPeople(ALL, 'all')).toEqual(ALL)
-  })
-
-  it('new: only rows with unreadCount > 0', () => {
-    expect(filterLetterboxPeople(ALL, 'new').map((p) => p.userId)).toEqual(['has-unread'])
-  })
-
-  it('sent: only rows with hasSentAny', () => {
-    expect(filterLetterboxPeople(ALL, 'sent').map((p) => p.userId)).toEqual(['has-sent'])
   })
 })
 

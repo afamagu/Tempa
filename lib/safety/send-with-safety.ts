@@ -102,4 +102,10 @@ export const SAFETY_WARNING_TITLE = 'A moment before you continue'
 export const SAFETY_WARNING_BODY =
   "What you've written includes something Tempa asks members to pause on before continuing — often it's nothing. You can look it over again, or continue as it is."
 export const SAFETY_CANNOT_SEND_MESSAGE = "This can't be sent as written. Please take another look at what you've written."
-export const SAFETY_CHECK_FAILED_MESSAGE = "Couldn't check this right now. Please try again."
+/** Shown ONLY for `status: 'error'` — the Safety service itself failing
+ * (network error, non-OK HTTP status, malformed response). Fail-closed:
+ * nothing is sent. Deliberately says nothing about the member or their
+ * writing — it is never used for a successful evaluation that resulted
+ * in a warning or a `cannot_send`, which have their own copy above. */
+export const SAFETY_CHECK_FAILED_MESSAGE =
+  'We couldn’t complete the safety check right now. Please try again in a moment.'

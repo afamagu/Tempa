@@ -12,7 +12,6 @@ function person(overrides: Partial<LetterboxPerson> = {}): LetterboxPerson {
     activityAt: Date.now(),
     unreadCount: 0,
     latestExcerpt: 'A short excerpt of the most recent letter.',
-    hasSentAny: false,
     lastLetterFromViewer: false,
     ...overrides,
   }
@@ -24,14 +23,14 @@ function person(overrides: Partial<LetterboxPerson> = {}): LetterboxPerson {
 describe('PeopleGrid — responsive card grid', () => {
   it('lays out as a 1/2/3-column responsive grid, never a single-column stack only', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).toMatch(/class="[^"]*grid-cols-1[^"]*sm:grid-cols-2[^"]*lg:grid-cols-3[^"]*"/)
   })
 
   it('the pseudonym is visually dominant — larger, bolder text than the metadata beneath it', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).toMatch(/class="[^"]*text-\[17px\][^"]*font-semibold[^"]*"[^>]*>Evening Quill/)
   })
@@ -40,9 +39,9 @@ describe('PeopleGrid — responsive card grid', () => {
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ country: 'South Africa', ageRange: '25-34' })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     expect(html).toContain('South Africa · 25-34')
@@ -52,7 +51,7 @@ describe('PeopleGrid — responsive card grid', () => {
 describe('PeopleGrid — row content', () => {
   it('shows pseudonym and the latest visible excerpt', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).toContain('Evening Quill')
     expect(html).toContain('A short excerpt of the most recent letter.')
@@ -65,7 +64,7 @@ describe('PeopleGrid — row content', () => {
   // not a Gmail-style preview strip.
   it('the excerpt is plain subordinate serif text, never wrapped in the bg-surface-shell filled-strip surface', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).not.toContain('bg-surface-shell')
     expect(html).toMatch(/class="[^"]*font-serif[^"]*italic[^"]*"[^>]*>[\s\S]*A short excerpt/)
@@ -73,7 +72,7 @@ describe('PeopleGrid — row content', () => {
 
   it('the row itself links to the archive, never the public profile', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).toContain('href="/letters/with/user-1"')
     expect(html).not.toContain('href="/minds/user-1"')
@@ -95,9 +94,9 @@ describe('PeopleGrid — excerpt stays a preview, never an unrestricted body', (
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ latestExcerpt: longMultiParagraphBody })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     expect(html).toContain('line-clamp-2')
@@ -111,9 +110,9 @@ describe('PeopleGrid — excerpt stays a preview, never an unrestricted body', (
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ latestExcerpt: longMultiParagraphBody })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     expect(html).toContain('first paragraph of a fairly long letter')
@@ -125,17 +124,17 @@ describe('PeopleGrid — excerpt stays a preview, never an unrestricted body', (
     const shortHtml = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ userId: 'short', latestExcerpt: 'Hi!' })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     const longHtml = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ userId: 'long', latestExcerpt: longMultiParagraphBody })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     // Same excerpt-paragraph class on both — no special-cased "long body"
@@ -147,7 +146,7 @@ describe('PeopleGrid — excerpt stays a preview, never an unrestricted body', (
   it('does not mutate the person object\'s own latestExcerpt while rendering the clamped preview', () => {
     const thePerson = person({ latestExcerpt: longMultiParagraphBody })
     renderToStaticMarkup(
-      <PeopleGrid people={[thePerson]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[thePerson]} mailInTransitPersonIds={new Set()} />
     )
     expect(thePerson.latestExcerpt).toBe(longMultiParagraphBody)
   })
@@ -156,7 +155,7 @@ describe('PeopleGrid — excerpt stays a preview, never an unrestricted body', (
 describe('PeopleGrid — status line (New letter / Waiting for a reply / Last exchanged)', () => {
   it('shows "New letter" when there is an unread letter', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person({ unreadCount: 1 })]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person({ unreadCount: 1 })]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).toContain('New letter')
   })
@@ -165,9 +164,9 @@ describe('PeopleGrid — status line (New letter / Waiting for a reply / Last ex
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ unreadCount: 0, lastLetterFromViewer: true })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     expect(html).toContain('Waiting for a reply')
@@ -177,9 +176,9 @@ describe('PeopleGrid — status line (New letter / Waiting for a reply / Last ex
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ unreadCount: 0, lastLetterFromViewer: false })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set()}
+
+
+ mailInTransitPersonIds={new Set()}
       />
     )
     expect(html).toContain('Last exchanged')
@@ -191,9 +190,9 @@ describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ unreadCount: 2 })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set(['user-1'])}
+
+
+ mailInTransitPersonIds={new Set(['user-1'])}
       />
     )
     expect(html).toContain('2 unread letters')
@@ -202,7 +201,7 @@ describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
 
   it('a person with no unread and no transit mail shows neither the badge nor the transit line', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).not.toContain('unread letter')
     expect(html).not.toContain('Mail on the way')
@@ -215,7 +214,7 @@ describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
     // system-message line regardless of how many letters are actually in
     // transit.
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[person()]} hasAnyPeopleAtAll filter="all" mailInTransitPersonIds={new Set(['user-1'])} />
+      <PeopleGrid people={[person()]} mailInTransitPersonIds={new Set(['user-1'])} />
     )
     expect((html.match(/Mail on the way/g) ?? []).length).toBe(1)
   })
@@ -224,9 +223,9 @@ describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
     const html = renderToStaticMarkup(
       <PeopleGrid
         people={[person({ latestExcerpt: 'A short excerpt of the most recent letter.' })]}
-        hasAnyPeopleAtAll
-        filter="all"
-        mailInTransitPersonIds={new Set(['user-1'])}
+
+
+ mailInTransitPersonIds={new Set(['user-1'])}
       />
     )
     // The excerpt keeps its own serif preview styling; the system line is
@@ -240,23 +239,14 @@ describe('PeopleGrid — unread vs Mail on the way stay distinct', () => {
 describe('PeopleGrid — empty states', () => {
   it('no correspondents at all: address-book empty state', () => {
     const html = renderToStaticMarkup(
-      <PeopleGrid people={[]} hasAnyPeopleAtAll={false} filter="all" mailInTransitPersonIds={new Set()} />
+      <PeopleGrid people={[]} mailInTransitPersonIds={new Set()} />
     )
     expect(html).toContain("don&#x27;t have any letters yet")
   })
 
-  it('New filter with nothing new: distinct, calm copy — never "Inbox zero"', () => {
-    const html = renderToStaticMarkup(
-      <PeopleGrid people={[]} hasAnyPeopleAtAll filter="new" mailInTransitPersonIds={new Set()} />
-    )
-    expect(html).toContain('Nothing new right now.')
-    expect(html.toLowerCase()).not.toContain('inbox zero')
-  })
-
-  it('Sent filter with nothing sent: distinct, correspondence-language copy', () => {
-    const html = renderToStaticMarkup(
-      <PeopleGrid people={[]} hasAnyPeopleAtAll filter="sent" mailInTransitPersonIds={new Set()} />
-    )
-    expect(html).toContain("haven&#x27;t sent a letter yet")
+  it('the empty state is the same single calm line — there are no All / New / Sent filters to vary it', () => {
+    const html = renderToStaticMarkup(<PeopleGrid people={[]} mailInTransitPersonIds={new Set()} />)
+    expect(html).not.toContain('Nothing new right now.')
+    expect(html).not.toContain('sent a letter yet')
   })
 })
