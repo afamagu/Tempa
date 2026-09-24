@@ -529,7 +529,7 @@ describe('getDispatchReplies', () => {
 describe('createReply', () => {
   it('a top-level Reply has null parent/root/reply-to', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow()] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).toBeNull()
     expect(fake._replies).toHaveLength(1)
     expect(fake._replies[0].parent_reply_id).toBeNull()
@@ -546,7 +546,7 @@ describe('createReply', () => {
         replyRow({ id: 'B', author_id: AUTHOR_B, parent_reply_id: 'A', root_reply_id: 'A', reply_to_user_id: AUTHOR_A }),
       ],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Replying to B.', parentReplyId: 'B' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Replying to B.', parentReplyId: 'B' })
     expect(error).toBeNull()
     const created = fake._replies.find((r) => r.parent_reply_id === 'B')!
     expect(created.reply_to_user_id).toBe(AUTHOR_B)
@@ -555,7 +555,7 @@ describe('createReply', () => {
 
   it('rejects an unauthenticated caller', async () => {
     const fake = createFakeDispatches({ viewerId: null, rows: [dispatchRow()] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error?.message).toBe('Authentication required.')
   })
 
@@ -565,43 +565,43 @@ describe('createReply', () => {
       rows: [dispatchRow()],
       accountStatus: { [VIEWER]: status },
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).not.toBeNull()
   })
 
   it('an active caller is allowed', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow()], accountStatus: { [VIEWER]: 'active' } })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).toBeNull()
   })
 
   it('rejects a blank body', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow()] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: '   ' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: '   ' })
     expect(error).not.toBeNull()
   })
 
   it('rejects a body over 500 characters', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow()] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'a'.repeat(501) })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'a'.repeat(501) })
     expect(error).not.toBeNull()
   })
 
   it('rejects replying to an unpublished Dispatch', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow({ status: 'unpublished' })] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).not.toBeNull()
   })
 
   it('rejects replying to a moderator-hidden Dispatch', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow({ moderation_status: 'hidden' })] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).not.toBeNull()
   })
 
   it('replying to your own PUBLISHED, visible Dispatch is allowed', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow({ author_id: VIEWER, status: 'published' })] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Thanks for reading.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Thanks for reading.' })
     expect(error).toBeNull()
   })
 
@@ -611,7 +611,7 @@ describe('createReply', () => {
   // that Dispatch can be replied to.
   it('rejects replying to your OWN unpublished/draft Dispatch — no own-author exception for creating a Reply', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow({ author_id: VIEWER, status: 'unpublished' })] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).not.toBeNull()
     expect(error?.message).toBe('This Dispatch is not open to Replies right now.')
   })
@@ -621,20 +621,20 @@ describe('createReply', () => {
       viewerId: VIEWER,
       rows: [dispatchRow({ author_id: VIEWER, moderation_status: 'hidden' })],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).not.toBeNull()
     expect(error?.message).toBe('This Dispatch is not open to Replies right now.')
   })
 
   it('somebody else\'s published, visible Dispatch is repliable subject to normal account/block rules', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow({ author_id: AUTHOR_A, status: 'published' })] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).toBeNull()
   })
 
   it('somebody else\'s unpublished Dispatch is rejected, exactly like your own would be', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow({ author_id: AUTHOR_A, status: 'unpublished' })] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error?.message).toBe('This Dispatch is not open to Replies right now.')
   })
 
@@ -644,7 +644,7 @@ describe('createReply', () => {
       rows: [dispatchRow()],
       replies: [replyRow({ id: 'own', author_id: VIEWER })],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Following up.', parentReplyId: 'own' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Following up.', parentReplyId: 'own' })
     expect(error).toBeNull()
   })
 
@@ -654,7 +654,7 @@ describe('createReply', () => {
       rows: [dispatchRow({ author_id: AUTHOR_A })],
       blocked: [{ blocker_id: VIEWER, blocked_id: AUTHOR_A, scope: 'full' }],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).not.toBeNull()
   })
 
@@ -664,7 +664,7 @@ describe('createReply', () => {
       rows: [dispatchRow({ author_id: AUTHOR_A })],
       blocked: [{ blocker_id: VIEWER, blocked_id: AUTHOR_A, scope: 'letters' }],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(error).toBeNull()
   })
 
@@ -675,7 +675,7 @@ describe('createReply', () => {
       replies: [replyRow({ id: 'A', author_id: AUTHOR_B })],
       blocked: [{ blocker_id: VIEWER, blocked_id: AUTHOR_B, scope: 'full' }],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
     expect(error).not.toBeNull()
   })
 
@@ -685,13 +685,13 @@ describe('createReply', () => {
       rows: [dispatchRow({ id: 'd-1' }), dispatchRow({ id: 'd-2', author_id: AUTHOR_A })],
       replies: [replyRow({ id: 'A', dispatch_id: 'd-2' })],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
     expect(error).not.toBeNull()
   })
 
   it('rejects a parent Reply id that does not exist', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow()] })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'does-not-exist' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'does-not-exist' })
     expect(error).not.toBeNull()
   })
 
@@ -701,7 +701,7 @@ describe('createReply', () => {
       rows: [dispatchRow()],
       replies: [replyRow({ id: 'A', moderation_status: 'hidden' })],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
     expect(error).not.toBeNull()
   })
 
@@ -711,13 +711,13 @@ describe('createReply', () => {
       rows: [dispatchRow()],
       replies: [replyRow({ id: 'A', body: '', deleted_at: '2026-09-07T02:00:00Z' })],
     })
-    const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
+    const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
     expect(error).not.toBeNull()
   })
 
   it('the created Reply\'s author is always the viewer — there is no parameter through which a caller could supply a different author', async () => {
     const fake = createFakeDispatches({ viewerId: VIEWER, rows: [dispatchRow()] })
-    await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+    await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
     expect(fake._replies[0].author_id).toBe(VIEWER)
   })
 
@@ -734,7 +734,7 @@ describe('createReply', () => {
         rows: [dispatchRow({ author_id: AUTHOR_A })],
         accountStatus: { [AUTHOR_A]: status },
       })
-      const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+      const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
       expect(error).not.toBeNull()
     })
 
@@ -744,7 +744,7 @@ describe('createReply', () => {
         rows: [dispatchRow({ author_id: AUTHOR_A })],
         accountStatus: { [AUTHOR_A]: status },
       })
-      const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.' })
+      const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.' })
       expect(error).toBeNull()
     })
 
@@ -755,7 +755,7 @@ describe('createReply', () => {
         replies: [replyRow({ id: 'A', author_id: AUTHOR_B })],
         accountStatus: { [AUTHOR_B]: status },
       })
-      const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
+      const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
       expect(error).not.toBeNull()
     })
 
@@ -766,7 +766,7 @@ describe('createReply', () => {
         replies: [replyRow({ id: 'A', author_id: AUTHOR_B })],
         accountStatus: { [AUTHOR_B]: status },
       })
-      const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
+      const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Hello.', parentReplyId: 'A' })
       expect(error).toBeNull()
     })
 
@@ -776,7 +776,7 @@ describe('createReply', () => {
         rows: [dispatchRow({ author_id: VIEWER, status: 'published' })],
         accountStatus: { [VIEWER]: 'active' },
       })
-      const { error } = await createReply(client(fake), { dispatchId: 'd-1', body: 'Thanks for reading.' })
+      const { error } = await createReply(client(fake), { safetyEvaluationId: 'test-eval-id', dispatchId: 'd-1', body: 'Thanks for reading.' })
       expect(error).toBeNull()
     })
   })

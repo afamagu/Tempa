@@ -110,7 +110,13 @@ export function dispatchIsRich(body: string): boolean {
 // char_length(p_title) > 140 checks exactly (docs/sql/2026-09-28-title-
 // postcard-and-edit-window.sql). A single shared value: create and edit
 // have always used, and continue to use, the exact same ceiling.
-const TITLE_MAX_CHARS = 140
+// Exported (Safety Checkpoint 4 — independent audit correction): the
+// Safety evaluate endpoint mirrors this exact product cap for
+// dispatch_publish/dispatch_update (lib/safety/route-contract.ts), the
+// same "one canonical constant" principle already established for
+// QUESTION_ANSWER_MAX_CHARS/first_letter — never a second, independently
+// maintained 140 that could silently drift from this one.
+export const TITLE_MAX_CHARS = 140
 
 /**
  * Pure: the composer's own title validation, mirroring
@@ -125,8 +131,9 @@ export function dispatchTitleError(title: string): string | null {
   return null
 }
 
-const TOPIC_MAX_CHARS = 40
-const TOPIC_MAX_COUNT = 3
+// Exported for the same Checkpoint 4 reason as TITLE_MAX_CHARS above.
+export const TOPIC_MAX_CHARS = 40
+export const TOPIC_MAX_COUNT = 3
 
 /**
  * Pure: trims, drops blanks, deduplicates case-insensitively (keeping
@@ -979,11 +986,19 @@ export async function publishDispatch(
     topics: string[]
     moments?: DispatchMomentDraft[]
     postcard?: LetterPostcardDraft | null
+    /** Safety Checkpoint 4 — the evaluation id from a prior /api/safety/
+     * evaluate call, required by publish_dispatch's own p_safety_
+     * evaluation_id (docs/sql/2026-10-06-safety-checkpoint4-public-
+     * surfaces.sql). Never optional — dispatch-composer.tsx always
+     * evaluates before calling this. */
+    safetyEvaluationId: string
+    warningAcknowledged?: boolean
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
   const { data, error } = await supabase.rpc('publish_dispatch', {
     p_title: input.title,
     p_body: input.body,
+    p_safety_evaluation_id: input.safetyEvaluationId,
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
     // Same explicit-null-over-empty-string convention toMomentRpcPayload
@@ -995,6 +1010,7 @@ export async function publishDispatch(
           back_message: input.postcard.backMessage.trim().length > 0 ? input.postcard.backMessage : null,
         }
       : null,
+    p_warning_acknowledged: input.warningAcknowledged ?? false,
   })
 
   if (error) {
@@ -1070,14 +1086,24 @@ export function canEditDispatch(state: {
 export async function updateDispatch(
   supabase: SupabaseClient,
   dispatchId: string,
-  input: { title: string; body: string; topics: string[]; moments?: DispatchMomentDraft[] }
+  input: {
+    title: string
+    body: string
+    topics: string[]
+    moments?: DispatchMomentDraft[]
+    /** Safety Checkpoint 4 — see publishDispatch's own doc comment. */
+    safetyEvaluationId: string
+    warningAcknowledged?: boolean
+  }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
   const { data, error } = await supabase.rpc('update_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,
+    p_safety_evaluation_id: input.safetyEvaluationId,
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
+    p_warning_acknowledged: input.warningAcknowledged ?? false,
   })
 
   if (error) {

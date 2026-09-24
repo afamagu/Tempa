@@ -23,6 +23,8 @@ import {
   clearFirstContactDraft,
 } from '@/lib/letter-editor-draft'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
+import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import SafetyWarningDialog from '@/app/safety-warning-dialog'
 
 // Length-policy audit (2026-09-05): was a locally hard-coded 4000,
 // independent of the Question-answer cap — now the SAME canonical
@@ -69,6 +71,11 @@ export default function FirstLetterComposer({
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Safety 2, Checkpoint 3 — set only while a `warning_required`
+  // disposition is waiting on the member's own explicit choice
+  // (SafetyWarningDialog below). Never set for `allow` (proceeds
+  // immediately) or `cannot_send` (blocks inline, no dialog at all).
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
   // Account enforcement messaging (pre-beta UX polish batch 1) — the
   // CALLER's own status only (see getMyAccountStatus's own doc
   // comment), fetched once on mount purely so a blocked send can show
@@ -133,11 +140,60 @@ export default function FirstLetterComposer({
   const canSend = Boolean(editor) && canSendLetter(docJSON, { aboveMax, submitting: sending })
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
 
+  // Safety 2, Checkpoint 3 — the member's own click. Evaluates FIRST;
+  // only ever calls send_first_letter itself once that evaluation
+  // resolves to allow (immediately) or the member explicitly
+  // acknowledges a warning (handleAcknowledgeWarning below). A failed
+  // evaluation (outcome.status === 'error') never falls back to an
+  // unscreened send — see lib/safety/send-with-safety.ts's own doc
+  // comment on why evaluateSafety is fail-closed by construction.
   async function handleSend() {
     if (!editor || !canSend) return
     setSending(true)
     setError(null)
 
+    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    const outcome = await evaluateSafety({ surface: 'first_letter', recipientId, questionAnswerId, body })
+
+    if (outcome.status === 'error') {
+      setError(SAFETY_CHECK_FAILED_MESSAGE)
+      setSending(false)
+      return
+    }
+    if (outcome.status === 'cannot_send') {
+      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      setSending(false)
+      return
+    }
+    if (outcome.status === 'warning_required') {
+      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setSending(false)
+      return
+    }
+
+    await sendLetter(outcome.evaluationId, false)
+  }
+
+  function handleCancelWarning() {
+    setPendingWarning(null)
+  }
+
+  async function handleAcknowledgeWarning() {
+    if (!pendingWarning) return
+    await sendLetter(pendingWarning.evaluationId, true)
+  }
+
+  async function sendLetter(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    if (!editor) return
+    setSending(true)
+    setError(null)
+
+    // Re-read the editor fresh, never a value captured earlier — the
+    // member may have kept typing while a warning dialog was open. If
+    // the body genuinely changed since evaluation, send_first_letter's
+    // own fingerprint recheck (tempa_private.consume_safety_evaluation)
+    // rejects it, surfacing as the generic failure below — a fresh
+    // evaluation is then required, exactly as it should be.
     const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
 
     // try/finally so a thrown rejection (never just an RPC-level
@@ -151,6 +207,8 @@ export default function FirstLetterComposer({
         p_recipient_id: recipientId,
         p_question_answer_id: questionAnswerId,
         p_body: body,
+        p_safety_evaluation_id: safetyEvaluationId,
+        p_warning_acknowledged: warningAcknowledged,
       })
 
       if (sendError) {
@@ -176,6 +234,7 @@ export default function FirstLetterComposer({
       }
 
       clearFirstContactDraft(recipientId)
+      setPendingWarning(null)
       setSent(true)
     } catch (err) {
       console.error('[letters] send threw', {
@@ -254,6 +313,12 @@ export default function FirstLetterComposer({
           </div>
         </div>
       </div>
+      <SafetyWarningDialog
+        open={pendingWarning !== null}
+        onCancel={handleCancelWarning}
+        onAcknowledgeAndSend={handleAcknowledgeWarning}
+        sending={sending}
+      />
     </main>
   )
 }

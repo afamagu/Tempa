@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { createReply, replyBodyError, REPLY_MAX_CHARS } from '@/lib/replies'
 import { helperTextClass, inputClass, secondaryButtonClass, primaryButtonClass, tertiaryButtonClass } from '@/app/profile/ui'
+import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import SafetyWarningDialog from '@/app/safety-warning-dialog'
 
 const CHAR_WARNING_THRESHOLD = Math.round(REPLY_MAX_CHARS * 0.875)
 
@@ -48,12 +50,16 @@ export default function ReplyComposer({
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
+  // pendingWarning split exactly (see that file's own doc comment).
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
 
   function reset() {
     setOpen(false)
     setBody('')
     setError(null)
     setBusy(false)
+    setPendingWarning(null)
   }
 
   function cancel() {
@@ -61,6 +67,12 @@ export default function ReplyComposer({
     onDone?.()
   }
 
+  // Evaluates FIRST; only ever calls create_reply itself once that
+  // evaluation resolves to allow (immediately) or the member explicitly
+  // acknowledges a warning (handleAcknowledgeWarning below). A failed
+  // evaluation never falls back to an unscreened post — see lib/safety/
+  // send-with-safety.ts's own doc comment on why evaluateSafety is
+  // fail-closed by construction.
   async function handleSubmit() {
     if (busy) return
     const validationError = replyBodyError(body)
@@ -72,10 +84,51 @@ export default function ReplyComposer({
     setBusy(true)
     setError(null)
 
+    const outcome = await evaluateSafety({ surface: 'dispatch_reply', dispatchId, parentReplyId, body })
+
+    if (outcome.status === 'error') {
+      setError(SAFETY_CHECK_FAILED_MESSAGE)
+      setBusy(false)
+      return
+    }
+    if (outcome.status === 'cannot_send') {
+      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      setBusy(false)
+      return
+    }
+    if (outcome.status === 'warning_required') {
+      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setBusy(false)
+      return
+    }
+
+    await postReply(outcome.evaluationId, false)
+  }
+
+  function handleCancelWarning() {
+    setPendingWarning(null)
+  }
+
+  async function handleAcknowledgeWarning() {
+    if (!pendingWarning) return
+    await postReply(pendingWarning.evaluationId, true)
+  }
+
+  async function postReply(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    setBusy(true)
+    setError(null)
+
+    // Re-read body fresh at call time is unnecessary here (unlike the
+    // editor-based composers) — body is already the single source of
+    // truth this whole component reads from; create_reply's own
+    // fingerprint recheck (tempa_private.consume_safety_evaluation)
+    // still rejects it if it somehow changed since evaluation.
     const { error: createError } = await createReply(createClient(), {
       dispatchId,
       body,
       parentReplyId,
+      safetyEvaluationId,
+      warningAcknowledged,
     })
 
     setBusy(false)
@@ -127,6 +180,15 @@ export default function ReplyComposer({
           {busy ? 'Posting…' : 'Post Reply'}
         </button>
       </div>
+
+      <SafetyWarningDialog
+        open={pendingWarning !== null}
+        onCancel={handleCancelWarning}
+        onAcknowledgeAndSend={handleAcknowledgeWarning}
+        sending={busy}
+        actionLabel="Post anyway"
+        sendingLabel="Posting…"
+      />
     </div>
   )
 }

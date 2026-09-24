@@ -224,12 +224,25 @@ export type CreateReplyError = { message: string; code?: string } | null
  */
 export async function createReply(
   supabase: SupabaseClient,
-  input: { dispatchId: string; body: string; parentReplyId?: string | null }
+  input: {
+    dispatchId: string
+    body: string
+    parentReplyId?: string | null
+    /** Safety Checkpoint 4 — the evaluation id from a prior /api/safety/
+     * evaluate call, required by create_reply's own p_safety_
+     * evaluation_id (docs/sql/2026-10-06-safety-checkpoint4-public-
+     * surfaces.sql). Never optional — reply-composer.tsx always
+     * evaluates before calling this. */
+    safetyEvaluationId: string
+    warningAcknowledged?: boolean
+  }
 ): Promise<{ error: CreateReplyError }> {
   const { error } = await supabase.rpc('create_reply', {
     p_dispatch_id: input.dispatchId,
     p_body: input.body,
+    p_safety_evaluation_id: input.safetyEvaluationId,
     p_parent_reply_id: input.parentReplyId ?? null,
+    p_warning_acknowledged: input.warningAcknowledged ?? false,
   })
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }

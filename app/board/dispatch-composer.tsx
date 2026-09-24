@@ -51,6 +51,8 @@ import {
 import { processImageForUpload } from '@/lib/image-processing'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
 import { getActivePostcards, type PostcardCatalogEntry } from '@/lib/postcards'
+import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import FeatureIntroduction from '@/app/feature-introduction'
 import type { LetterPostcardDraft } from '@/lib/moments'
 import { DispatchPhotoMoment } from './dispatch-photo-moment-node'
@@ -215,6 +217,12 @@ export default function DispatchComposer({
   const [topics, setTopics] = useState<string[]>(existingDispatch?.topics ?? [])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
+  // pendingWarning/handleCancelWarning/handleAcknowledgeWarning split
+  // exactly: null means no warning is pending (the ordinary case);
+  // set only when /api/safety/evaluate returns warning_required, and
+  // cleared on cancel or on a successful publish/save.
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
   // Account enforcement messaging (pre-beta UX polish batch 1) — see
   // lib/account-status.ts. publish_dispatch fully blocks restricted,
   // suspended, and banned alike (all three share one generic RPC
@@ -513,12 +521,83 @@ export default function DispatchComposer({
   // completeness gate — since Preview's own Publish button is disabled
   // while `publishing` or `publishBlockedReason`, this can only ever be
   // reached once per click either way.
+  // Safety 2, Checkpoint 4 — the member's own click (either "Save
+  // changes" in edit mode, or DispatchPreview's own "Publish" in create
+  // mode — both call this same handler, per this file's own onPublish
+  // wiring below). Evaluates FIRST; only ever calls publish_dispatch/
+  // update_dispatch itself once that evaluation resolves to allow
+  // (immediately) or the member explicitly acknowledges a warning
+  // (handleAcknowledgeWarning below). A failed evaluation
+  // (outcome.status === 'error') never falls back to an unscreened
+  // publish — see lib/safety/send-with-safety.ts's own doc comment on
+  // why evaluateSafety is fail-closed by construction.
   async function handleSubmit() {
     const canPublish = isEdit ? canSubmit : canPreview && !publishBlockedReason
     if (!editor || !canPublish) return
     setPublishing(true)
     setError(null)
 
+    const finalDoc = editor.getJSON() as LetterDocJSON
+    const body = docToPlainBody(finalDoc)
+    const normalizedTopics = normalizeTopics(topics)
+
+    const outcome =
+      isEdit && existingDispatch
+        ? await evaluateSafety({ surface: 'dispatch_update', dispatchId: existingDispatch.id, title, topics: normalizedTopics, body })
+        : await evaluateSafety({
+            surface: 'dispatch_publish',
+            title,
+            topics: normalizedTopics,
+            body,
+            postcard: postcardDraft
+              ? {
+                  postcardKey: postcardDraft.postcardKey,
+                  revealLine: postcardDraft.revealLine.trim().length > 0 ? postcardDraft.revealLine : null,
+                  backMessage: postcardDraft.backMessage,
+                }
+              : null,
+          })
+
+    if (outcome.status === 'error') {
+      setError(SAFETY_CHECK_FAILED_MESSAGE)
+      setPublishing(false)
+      return
+    }
+    if (outcome.status === 'cannot_send') {
+      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      setPublishing(false)
+      return
+    }
+    if (outcome.status === 'warning_required') {
+      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPublishing(false)
+      return
+    }
+
+    await performSubmit(outcome.evaluationId, false)
+  }
+
+  function handleCancelWarning() {
+    setPendingWarning(null)
+  }
+
+  async function handleAcknowledgeWarning() {
+    if (!pendingWarning) return
+    await performSubmit(pendingWarning.evaluationId, true)
+  }
+
+  async function performSubmit(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    if (!editor) return
+    setPublishing(true)
+    setError(null)
+
+    // Re-read the editor fresh, never a value captured earlier — the
+    // member may have kept editing while a warning dialog was open. If
+    // anything Safety-bound genuinely changed since evaluation, publish_
+    // dispatch/update_dispatch's own fingerprint recheck (tempa_private.
+    // consume_safety_evaluation) rejects it, surfacing as the generic
+    // failure below — a fresh evaluation is then required, exactly as
+    // it should be.
     const finalDoc = editor.getJSON() as LetterDocJSON
     const body = docToPlainBody(finalDoc)
     const moments: DispatchMomentDraft[] = docToMomentDrafts(finalDoc)
@@ -559,8 +638,23 @@ export default function DispatchComposer({
       // accident.
       const { data, error: submitError } =
         isEdit && existingDispatch
-          ? await updateDispatch(createClient(), existingDispatch.id, { title, body, topics, moments })
-          : await publishDispatch(createClient(), { title, body, topics, moments, postcard: postcardDraft })
+          ? await updateDispatch(createClient(), existingDispatch.id, {
+              title,
+              body,
+              topics,
+              moments,
+              safetyEvaluationId,
+              warningAcknowledged,
+            })
+          : await publishDispatch(createClient(), {
+              title,
+              body,
+              topics,
+              moments,
+              postcard: postcardDraft,
+              safetyEvaluationId,
+              warningAcknowledged,
+            })
 
       if (submitError || !data) {
         console.error(isEdit ? '[board] edit failed' : '[board] publish failed', {
@@ -601,6 +695,7 @@ export default function DispatchComposer({
         clearDispatchDraft(authorId)
         clearDispatchPostcardDraft(authorId)
       }
+      setPendingWarning(null)
       router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -840,6 +935,18 @@ export default function DispatchComposer({
           error={error}
         />
       )}
+
+      {/* Safety 2, Checkpoint 4 — the one shared calm interruption,
+          overlays whichever flow triggered it (edit mode's direct "Save
+          changes," or create mode's Preview "Publish"). */}
+      <SafetyWarningDialog
+        open={pendingWarning !== null}
+        onCancel={handleCancelWarning}
+        onAcknowledgeAndSend={handleAcknowledgeWarning}
+        sending={publishing}
+        actionLabel={isEdit ? 'Save anyway' : 'Publish anyway'}
+        sendingLabel={isEdit ? 'Saving…' : 'Publishing…'}
+      />
     </main>
   )
 }
