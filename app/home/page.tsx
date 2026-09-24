@@ -26,8 +26,7 @@ import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
 import { sectionLabelClass, pageTitleClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import MailInTransitIcon from '@/app/mail-in-transit-icon'
-import SystemMessage from '@/app/system-message'
+import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
 import QuestionIncompleteNotice from '@/app/minds/question-incomplete-notice'
 import RecommendedMindCard, { type RecommendedMind } from './recommended-mind-card'
@@ -271,15 +270,7 @@ export default async function HomePage() {
                 <p className={helperTextClass}>Nothing waiting right now.</p>
               )}
 
-              {mailOnTheWay && (
-                <SystemMessage
-                  variant="quiet"
-                  icon={<MailInTransitIcon className="h-3.5 w-3.5 text-foreground/50" />}
-                  title="Mail on the way"
-                >
-                  A letter is travelling to you.
-                </SystemMessage>
-              )}
+              {mailOnTheWay && <MailOnTheWay />}
             </div>
 
             {/* Home Phase 1 — QuestionIncompleteNotice moved up into the
