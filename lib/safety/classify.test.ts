@@ -148,7 +148,7 @@ describe('emergency vocabulary requires an actual solicitation, not just an inci
   })
 
   it('preserves detection of an actual emergency money request', () => {
-    const result = classifyContent('I need emergency money for hospital treatment.')
+    const result = classifyContent('Could you send me emergency money for hospital treatment?')
     expect(result.reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
   })
 
@@ -371,7 +371,7 @@ describe('violation corpus — clear financial solicitation must warn or deny', 
     { text: 'Send USDT to this wallet.' },
     { text: 'I can double your investment.' },
     { text: 'Transfer the money to this account.' },
-    { text: 'I need emergency money for hospital treatment.' },
+    { text: 'Could you send me emergency money for hospital treatment?' },
     { text: "Let's go to Telegram so I can show you the investment." },
   ]
 
@@ -487,7 +487,7 @@ describe('reason codes fire precisely', () => {
   })
 
   it('EMERGENCY_MONEY_REQUEST for an emergency-framed ask', () => {
-    expect(classifyContent('I need emergency money for hospital treatment.').reasonCodes).toContain(
+    expect(classifyContent('Could you send me emergency money for hospital treatment?').reasonCodes).toContain(
       'EMERGENCY_MONEY_REQUEST'
     )
   })
@@ -814,7 +814,7 @@ describe('emergency framing must be bound to the request within the same clause,
     expect(classifyContent('Could you send me money for my hospital bill?').reasonCodes).toContain(
       'EMERGENCY_MONEY_REQUEST'
     )
-    expect(classifyContent('I need emergency money for surgery.').reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
+    expect(classifyContent('Could you send me emergency money for surgery?').reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
   })
 })
 
@@ -877,7 +877,7 @@ describe('"and" is a clause boundary only when it introduces a genuinely indepen
   })
 
   it('preserves a subordinate "because" clause staying bound to the request', () => {
-    const result = classifyContent('I need money because I am in hospital.')
+    const result = classifyContent('Please send me money because I am in hospital.')
     expect(result.reasonCodes).toContain('EMERGENCY_MONEY_REQUEST')
   })
 

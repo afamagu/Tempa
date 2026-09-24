@@ -334,13 +334,13 @@ describe('POST /api/safety/evaluate', () => {
     expect(params).toMatchObject({ p_risk_band: 'meaningful', p_mutation_disposition: 'deny', p_reason_codes: ['DIRECT_MONEY_REQUEST'] })
   })
 
-  it('a lower-confidence (warn) shape is still a SUCCESSFUL warning_required evaluation with the generic copy key', async () => {
+  it('a non-financial (phishing) warn shape is still a SUCCESSFUL warning_required evaluation with the generic copy key', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
     rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-warn', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
     const { POST } = await import('./route')
 
     const response = await POST(
-      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'I need emergency money for surgery.' })
+      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Please verify your account at https://example.com/login to continue.' })
     )
 
     expect(response.status).toBe(200)

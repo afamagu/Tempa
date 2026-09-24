@@ -71,3 +71,45 @@ describe('classifier — a long letter only lets the final ask inherit the IMMED
     expect(classifyContent(letter).mutationDisposition).not.toBe('deny')
   })
 })
+
+// Unified financial-solicitation enforcement: a STATEMENT of hardship with
+// no ask is allowed; an ask directed at the correspondent is denied by
+// whichever detector path finds it; nothing financial is ever a warning.
+describe('classifier — hardship statements vs. asks (one policy, every detector path)', () => {
+  const STATEMENTS = [
+    'I need emergency money for surgery.',
+    'I need emergency money for hospital treatment.',
+    'I need money because I am in hospital.',
+    'My rent is due tomorrow.',
+    'I cannot afford the shipment fee.',
+    'I need to find $200 before Friday.',
+  ]
+  const ASKS = [
+    'I need emergency money for surgery. Could you help me?',
+    'My rent is due tomorrow. Can you lend me something?',
+    'I cannot afford the shipment fee. Could you cover it?',
+    'I need to find $200 before Friday. Can you help?',
+    'Please send me money.',
+    'Can you transfer $100?',
+    'Could you send me emergency money for hospital treatment?',
+  ]
+
+  it.each(STATEMENTS)('ALLOW (no ask): %s', (text) => {
+    const result = classifyContent(text)
+    expect(result.mutationDisposition).toBe('allow')
+    expect(result.reasonCodes).toEqual([])
+  })
+
+  it.each(ASKS)('DENY (directed ask): %s', (text) => {
+    expect(classifyContent(text).mutationDisposition).toBe('deny')
+  })
+
+  it('no text carrying a financial-solicitation reason code is ever only a warning', () => {
+    const everything = [...DENY.map((c) => c.text), ...ALLOW.map((c) => c.text), ...STATEMENTS, ...ASKS]
+    for (const text of everything) {
+      const result = classifyContent(text)
+      const financial = result.reasonCodes.some((code) => (FINANCIAL_SOLICITATION_REASON_CODES as readonly string[]).includes(code))
+      if (financial) expect(result.mutationDisposition, text).toBe('deny')
+    }
+  })
+})

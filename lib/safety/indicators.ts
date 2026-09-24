@@ -222,18 +222,12 @@ const LOAN_OR_BILL_PHRASE_PATTERN =
 const PHISHING_PHRASE_PATTERN = /\b(verify your account|confirm your payment|update your (?:billing|payment) (?:info|details))\b/i
 const MONEY_WORD_PATTERN = /\b(money|funds?|cash|payment)\b/i
 
-// "i need money/funds/cash" already carries its own financial object —
-// no verb-object locality question, it's self-contained.
-// "I need funds ... but I will get them from my bonus" / "I need cash for
-// the market, so I am stopping by the ATM" — the writer resolves their
-// own need in the same sentence; nothing is being asked of anyone.
-const NEED_SELF_RESOLVED_PATTERN =
-  /\b(?:but|so|and|then)\s+i(?:'ll|'m|\s+will|\s+am|\s+can|\s+have|\s+already|\s+got|\s+just)\b|\bfrom my (?:own )?(?:savings|bonus|salary|paycheck|pay|wages)\b|\b(?:atm|cash machine)\b/
-
-// "I need to save some money" / "I need to earn more cash" is a
-// self-directed goal, not a statement of lack — excluded up front.
-const NEED_MONEY_PATTERN =
-  /\bi need\b(?!\s+to\s+(?:save|earn|make|budget|spend|count|set aside|put aside|put away|manage|withdraw|check|track|cut|reduce|plan)\b).{0,15}\b(money|funds|cash)\b/i
+// A STATEMENT of need or hardship ("I need emergency money for surgery",
+// "I need money", "I cannot afford the fee") is deliberately NOT a directed
+// request: nothing is asked of the correspondent. It used to be treated as
+// one ("I need money" matched as self-contained), which made hardship talk
+// look like solicitation. Only an ask directed at the recipient counts —
+// either the verb-based paths below or the compositional Pattern Library.
 
 // send/give/lend/pay/buy/transfer/wire ALL have ordinary non-financial
 // senses ("send me a photo", "give me your opinion", "lend me that
@@ -280,7 +274,7 @@ const TRANSFER_VERB_TO_PATTERN = /\b(send|pay|transfer|wire)\b.{0,20}\bto\b/i
 // sentence, before the transfer phrase even started, can't count.
 const CRYPTO_TRANSFER_TARGET_WINDOW_CHARS = 50
 
-// Self-contained, like NEED_MONEY_PATTERN: "wallet"/"account" IS the
+// Self-contained: "wallet"/"account" IS the
 // financial object here, directly adjacent to "this/my/the" — no
 // separate local-window check needed regardless of verb class.
 const TRANSFER_TO_ACCOUNT_PATTERN =
@@ -432,11 +426,6 @@ function analyzeDirectedRequest(
 ): FinancialTerms & { isDirected: boolean } {
   let isDirected = false
   let terms = NO_TERMS
-
-  if (NEED_MONEY_PATTERN.test(canonicalSentence) && !NEED_SELF_RESOLVED_PATTERN.test(canonicalSentence)) {
-    isDirected = true
-    terms = mergeTerms(terms, { ...NO_TERMS, any: true })
-  }
 
   if (sentenceHasDirectedCryptoTransfer(displaySentence, canonicalSentence)) {
     isDirected = true

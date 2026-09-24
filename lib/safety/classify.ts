@@ -80,6 +80,11 @@ type Rule = {
 // would manufacture relationships between them that were never
 // actually there (see indicators.ts's own "LOCALITY PRINCIPLE" header
 // comment for the worked examples this guards against).
+// Locked policy: an ACTUAL request directed at the recipient to provide
+// money/value is denied — whichever detector path finds it (the
+// compositional Pattern Library below, or the older locality-bound
+// phrase paths). A statement of hardship with no ask is not a request
+// and never reaches these rules (see indicators.ts).
 const DENY: PolicyOverride = { disposition: 'deny' }
 
 const RULES: Rule[] = [
@@ -87,6 +92,7 @@ const RULES: Rule[] = [
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'meaningful',
     fires: (i) => i.hasDirectedMoneyRequest && !i.hasDirectedCryptoRequest && !i.hasDirectedGiftCardRequest,
+    policy: DENY,
   },
   {
     // A directed request WITH an explicit amount LOCALLY tied to it is
@@ -94,11 +100,13 @@ const RULES: Rule[] = [
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'high',
     fires: (i) => i.hasDirectedMoneyRequestWithAmount,
+    policy: DENY,
   },
   {
     reasonCode: 'LOAN_OR_BILL_REQUEST',
     band: 'meaningful',
     fires: (i) => i.hasLoanOrBillRequestPhrase,
+    policy: DENY,
   },
   {
     // A crypto keyword alone ("my Ethereum wallet address is 0x...")
@@ -109,6 +117,7 @@ const RULES: Rule[] = [
     reasonCode: 'CRYPTO_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasDirectedCryptoRequest,
+    policy: DENY,
   },
   {
     // An address being SOLICITED (tied to the SAME directed request) is
@@ -124,6 +133,7 @@ const RULES: Rule[] = [
     reasonCode: 'INVESTMENT_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasInvestmentPromiseLanguage,
+    policy: DENY,
   },
   {
     // Explicit pitch/proposition language ("forex opportunity", "show
@@ -134,11 +144,13 @@ const RULES: Rule[] = [
     reasonCode: 'INVESTMENT_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasInvestmentPitchContext,
+    policy: DENY,
   },
   {
     reasonCode: 'GIFT_CARD_REQUEST',
     band: 'meaningful',
     fires: (i) => i.hasDirectedGiftCardRequest,
+    policy: DENY,
   },
   {
     // "Buy a Steam gift card and send me the code" — a narrow, highly
@@ -165,6 +177,7 @@ const RULES: Rule[] = [
     reasonCode: 'PAYMENT_DETAILS',
     band: 'meaningful',
     fires: (i) => i.hasDirectedPaymentHandleRequest,
+    policy: DENY,
   },
   {
     // Emergency VOCABULARY plus an incidental amount ("My hospital
@@ -177,6 +190,7 @@ const RULES: Rule[] = [
     reasonCode: 'EMERGENCY_MONEY_REQUEST',
     band: 'high',
     fires: (i) => i.hasEmergencyFramedMoneyRequest,
+    policy: DENY,
   },
   // ---- CONFIRMED financial solicitation (Phase 1 locked policy) ----
   // Financial solicitation is not allowed on Tempa, whatever the
@@ -185,9 +199,9 @@ const RULES: Rule[] = [
   // need/value + a request directed at the recipient, not one magic
   // phrase. A confirmed solicitation is DENIED — there is no "send
   // anyway" — and the attempt is still recorded as evidence. The older
-  // phrase-shaped rules above stay as they were (warn-level) so
-  // ambiguous, lower-confidence shapes keep their existing gentler
-  // path; denial is reserved for what the library confirms.
+  // phrase-shaped rules above are ALSO denials (same policy, same DENY):
+  // any detector path that finds a genuine ask is a confirmed one. No
+  // financial solicitation falls back to a warning.
   {
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'meaningful',
@@ -253,6 +267,7 @@ const RULES: Rule[] = [
     reasonCode: 'OFF_PLATFORM_ESCALATION',
     band: 'high',
     fires: (i) => i.hasOffPlatformSolicitation,
+    policy: DENY,
   },
   {
     reasonCode: 'SUSPICIOUS_LINK',

@@ -180,7 +180,7 @@ describe('extractIndicators — locally-bound composites (do not combine unrelat
     expect(
       extractIndicators('Could you send me some money? My brother works at a hospital.').hasEmergencyFramedMoneyRequest
     ).toBe(false)
-    expect(extractIndicators('I need emergency money for hospital treatment.').hasEmergencyFramedMoneyRequest).toBe(true)
+    expect(extractIndicators('Could you send me emergency money for hospital treatment?').hasEmergencyFramedMoneyRequest).toBe(true)
   })
 
   it('binds a URL to the request only when they are in the same sentence', () => {
@@ -211,7 +211,7 @@ describe('extractIndicators — locally-bound composites (do not combine unrelat
       extractIndicators('Could you send me some money, my brother works at a hospital.').hasEmergencyFramedMoneyRequest
     ).toBe(false)
     expect(extractIndicators('Could you send me money for my hospital bill?').hasEmergencyFramedMoneyRequest).toBe(true)
-    expect(extractIndicators('I need emergency money for surgery.').hasEmergencyFramedMoneyRequest).toBe(true)
+    expect(extractIndicators('Could you send me emergency money for surgery?').hasEmergencyFramedMoneyRequest).toBe(true)
   })
 
   it('binds off-platform escalation to the solicitation within the same CLAUSE, not just the same sentence', () => {
@@ -242,7 +242,7 @@ describe('extractIndicators — locally-bound composites (do not combine unrelat
       extractIndicators("Could you send me some money and let's chat on WhatsApp later about football.")
         .hasOffPlatformSolicitation
     ).toBe(false)
-    expect(extractIndicators('I need money because I am in hospital.').hasEmergencyFramedMoneyRequest).toBe(true)
+    expect(extractIndicators('Please send me money because I am in hospital.').hasEmergencyFramedMoneyRequest).toBe(true)
     expect(
       extractIndicators("Send me the money and message me on WhatsApp once you've done it.").hasOffPlatformSolicitation
     ).toBe(true)
