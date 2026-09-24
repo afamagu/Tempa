@@ -18,7 +18,13 @@ import {
   EMPTY_LETTER_DOC,
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
-import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
+import {
+  getMyAccountStatus,
+  accountBlockedMessage,
+  ACCOUNT_ACTION_UNAVAILABLE_CODE,
+  ACCOUNT_RESTRICTED_MESSAGE,
+  type AccountStatus,
+} from '@/lib/account-status'
 import {
   evaluateSafety,
   SAFETY_CANNOT_SEND_MESSAGE,
@@ -244,7 +250,10 @@ export default function FirstContactResponse({
         // only fires from the caller's OWN already-known status, never
         // by decoding that shared message, so an unrelated failure
         // still shows the existing generic copy.
-        setReplyError(accountBlockedMessage(myStatus) ?? 'Could not send your reply. Please try again.')
+        setReplyError(
+          accountBlockedMessage(myStatus) ??
+            (error.code === ACCOUNT_ACTION_UNAVAILABLE_CODE ? ACCOUNT_RESTRICTED_MESSAGE : 'Could not send your reply. Please try again.')
+        )
         return
       }
 

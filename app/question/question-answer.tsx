@@ -27,6 +27,7 @@ import {
   SAFETY_FINANCIAL_REQUEST_COPY_KEY,
 } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import { ACCOUNT_ACTION_UNAVAILABLE_CODE, ACCOUNT_RESTRICTED_MESSAGE } from '@/lib/account-status'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
@@ -180,8 +181,10 @@ export default function QuestionAnswer({
         code: publishError.code,
       })
       setError(
-        'Could not save your answer. Please try again.' +
-          (process.env.NODE_ENV === 'development' ? ` (${publishError.message})` : '')
+        publishError.code === ACCOUNT_ACTION_UNAVAILABLE_CODE
+          ? ACCOUNT_RESTRICTED_MESSAGE
+          : 'Could not save your answer. Please try again.' +
+              (process.env.NODE_ENV === 'development' ? ` (${publishError.message})` : '')
       )
       return
     }

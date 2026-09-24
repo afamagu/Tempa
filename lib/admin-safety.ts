@@ -340,3 +340,100 @@ export async function applySafetyCaseIntervention(
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }
 }
+
+// ---------------------------------------------------------------------
+// Phase 1 — the attempt evidence behind a case
+// (docs/sql/2026-10-12-safety-phase1-enforcement.sql —
+// admin_get_safety_case_review; staff-gated and audited server-side).
+// ---------------------------------------------------------------------
+
+export type CaseReviewSummary = {
+  subjectPseudonym: string
+  accountCreatedAt: string | null
+  accountAgeDays: number | null
+  accountStatus: AccountStatus
+  /** status = 'restricted' set by the system (not a person) — awaiting a human decision. */
+  restrictionPendingReview: boolean
+  statusChangedAt: string | null
+  qualifyingAttempts72h: number
+  distinctContexts72h: number
+  qualifyingAttemptsTotal: number
+  firstQualifyingAttemptAt: string | null
+  lastQualifyingAttemptAt: string | null
+  firstContacts24h: number
+  distinctFirstContactRecipients24h: number
+  contactSharingEvaluations30d: number
+  /** reason code -> number of signals in the last 30 days. */
+  behavioralSignals30d: Record<string, number>
+}
+
+export type CaseReviewAttempt = {
+  evaluationId: string
+  createdAt: string
+  surface: string
+  /** An anonymous label ("Person A") — never an id or a name. */
+  recipientOrdinal: string
+  reasonCodes: string[]
+  riskBand: RiskBand
+  mutationDisposition: 'allow' | 'warn' | 'deny'
+  qualifying: boolean
+  /** false for a denied attempt that was never sent. */
+  sent: boolean
+  attemptedTitle: string | null
+  attemptedTopics: string[] | null
+  attemptedBody: string | null
+}
+
+export type CaseReview = { summary: CaseReviewSummary; attempts: CaseReviewAttempt[] }
+
+export async function getSafetyCaseReview(
+  supabase: SupabaseClient,
+  caseId: string
+): Promise<{ data: CaseReview | null; error: AdminError }> {
+  const { data, error } = await supabase.rpc('admin_get_safety_case_review', { p_case_id: caseId })
+  if (error) return { data: null, error: { message: error.message, code: error.code } }
+  const raw = data as
+    | {
+        summary: Record<string, unknown>
+        attempts: Array<Record<string, unknown>>
+      }
+    | null
+  if (!raw) return { data: null, error: null }
+  const s = raw.summary
+  return {
+    data: {
+      summary: {
+        subjectPseudonym: String(s.subject_pseudonym ?? ''),
+        accountCreatedAt: (s.account_created_at as string | null) ?? null,
+        accountAgeDays: s.account_age_days === null || s.account_age_days === undefined ? null : Number(s.account_age_days),
+        accountStatus: s.account_status as AccountStatus,
+        restrictionPendingReview: Boolean(s.restriction_pending_review),
+        statusChangedAt: (s.status_changed_at as string | null) ?? null,
+        qualifyingAttempts72h: Number(s.qualifying_attempts_72h ?? 0),
+        distinctContexts72h: Number(s.distinct_contexts_72h ?? 0),
+        qualifyingAttemptsTotal: Number(s.qualifying_attempts_total ?? 0),
+        firstQualifyingAttemptAt: (s.first_qualifying_attempt_at as string | null) ?? null,
+        lastQualifyingAttemptAt: (s.last_qualifying_attempt_at as string | null) ?? null,
+        firstContacts24h: Number(s.first_contacts_24h ?? 0),
+        distinctFirstContactRecipients24h: Number(s.distinct_first_contact_recipients_24h ?? 0),
+        contactSharingEvaluations30d: Number(s.contact_sharing_evaluations_30d ?? 0),
+        behavioralSignals30d: (s.behavioral_signals_30d as Record<string, number> | undefined) ?? {},
+      },
+      attempts: (raw.attempts ?? []).map((a) => ({
+        evaluationId: String(a.evaluation_id),
+        createdAt: String(a.created_at),
+        surface: String(a.surface),
+        recipientOrdinal: String(a.recipient_ordinal),
+        reasonCodes: (a.reason_codes as string[] | undefined) ?? [],
+        riskBand: a.risk_band as RiskBand,
+        mutationDisposition: a.mutation_disposition as 'allow' | 'warn' | 'deny',
+        qualifying: Boolean(a.qualifying),
+        sent: Boolean(a.sent),
+        attemptedTitle: (a.attempted_title as string | null) ?? null,
+        attemptedTopics: (a.attempted_topics as string[] | null) ?? null,
+        attemptedBody: (a.attempted_body as string | null) ?? null,
+      })),
+    },
+    error: null,
+  }
+}

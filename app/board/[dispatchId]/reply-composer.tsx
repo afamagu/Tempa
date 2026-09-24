@@ -12,6 +12,7 @@ import {
   SAFETY_FINANCIAL_REQUEST_COPY_KEY,
 } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import { ACCOUNT_ACTION_UNAVAILABLE_CODE, ACCOUNT_RESTRICTED_MESSAGE } from '@/lib/account-status'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
 const CHAR_WARNING_THRESHOLD = Math.round(REPLY_MAX_CHARS * 0.875)
@@ -144,7 +145,11 @@ export default function ReplyComposer({
     setBusy(false)
 
     if (createError) {
-      setError('Could not post this Reply. Please try again.')
+      setError(
+        createError.code === ACCOUNT_ACTION_UNAVAILABLE_CODE
+          ? ACCOUNT_RESTRICTED_MESSAGE
+          : 'Could not post this Reply. Please try again.'
+      )
       return
     }
 

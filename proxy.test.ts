@@ -51,3 +51,22 @@ describe('Adult Eligibility + Legal Acceptance Gate — proxy enforcement', () =
     }
   })
 })
+
+describe('permanent ban — proxy enforcement', () => {
+  it("reads the caller's OWN status via current_account_status and redirects a banned account to /account-unavailable", () => {
+    expect(source).toContain("supabase.rpc('current_account_status')")
+    const start = source.indexOf("accountStatus === 'banned'")
+    expect(start).toBeGreaterThan(-1)
+    expect(source.slice(start, start + 200)).toContain("new URL('/account-unavailable', request.url)")
+  })
+
+  it('runs before the account-entry redirects, so a banned account never reaches /begin or any member surface', () => {
+    expect(source.indexOf("accountStatus === 'banned'")).toBeLessThan(source.indexOf('resolveAccountEntryDestination('))
+  })
+
+  it('/account-unavailable is not a matched route — no possibility of a redirect loop', () => {
+    const matcherStart = source.indexOf('matcher: [')
+    const matcherBlock = source.slice(matcherStart, source.indexOf(']', matcherStart))
+    expect(matcherBlock).not.toContain('account-unavailable')
+  })
+})

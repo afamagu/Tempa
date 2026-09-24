@@ -37,7 +37,8 @@ import { readLetterDraft, clearLetterDraft } from '@/lib/letter-draft'
 import {
   getMyAccountStatus,
   accountBlockedMessage,
-  RESTRICTED_ATTACHMENT_MESSAGE,
+  ACCOUNT_ACTION_UNAVAILABLE_CODE,
+  ACCOUNT_RESTRICTED_MESSAGE,
   CORRESPONDENCE_CLOSED_MESSAGE,
   type AccountStatus,
 } from '@/lib/account-status'
@@ -703,21 +704,21 @@ export default function MomentsComposer({
         //     AND genuine not-found, so it can never be decoded to
         //     reveal WHICH — mapped to equally neutral TEMPA wording
         //     instead of the generic retry-implying fallback.
-        //  3. restricted blocks ONLY a Moment/Postcard attachment here
-        //     (see write_letter's own restricted-only checks), never
-        //     plain text — so this is the one status that must NOT use
-        //     accountBlockedMessage's "restricted from sending
-        //     letters" claim, which would be inaccurate for this
-        //     composer.
+        //  3. (Phase 1) restricted blocks EVERY authored write — plain
+        //     text included — via tempa_private.consume_safety_evaluation
+        //     (SQLSTATE 42501), so it now shares the suspended/banned
+        //     path above; the code check below covers a stale status.
         //  4. anything else keeps the existing generic fallback (with
         //     dev-only detail), unchanged.
         let enforcedMessage: string | null = null
-        if (myStatus === 'suspended' || myStatus === 'banned') {
+        if (myStatus === 'restricted' || myStatus === 'suspended' || myStatus === 'banned') {
+          // Phase 1 — restricted now blocks EVERY authored write (plain
+          // text included), so it shares the suspended/banned copy.
           enforcedMessage = accountBlockedMessage(myStatus)
         } else if (sendError.message === 'Correspondence not found.') {
           enforcedMessage = CORRESPONDENCE_CLOSED_MESSAGE
-        } else if (myStatus === 'restricted' && (momentDrafts.length > 0 || postcardPayload)) {
-          enforcedMessage = RESTRICTED_ATTACHMENT_MESSAGE
+        } else if (sendError.code === ACCOUNT_ACTION_UNAVAILABLE_CODE) {
+          enforcedMessage = ACCOUNT_RESTRICTED_MESSAGE
         }
 
         // The user-facing copy stays generic in production — same

@@ -50,6 +50,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signInUrl)
   }
 
+  // Permanent ban — a banned account cannot use any protected surface;
+  // it resolves to the account-unavailable notice instead. Read through
+  // the member's own session (current_account_status is client-safe and
+  // self-scoped) so this can never reveal anyone else's state. A failed
+  // read defaults to 'active' (the RPC's own fallback) — the database
+  // still refuses every write for a banned account regardless.
+  const { data: accountStatus } = await supabase.rpc('current_account_status')
+  if (accountStatus === 'banned') {
+    return NextResponse.redirect(new URL('/account-unavailable', request.url))
+  }
+
   // Adult Eligibility + Legal Acceptance Gate — an authenticated
   // account without confirmed eligibility or current legal acceptance
   // must not reach any protected route by direct navigation, exactly

@@ -14,6 +14,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type AccountStatus = 'active' | 'restricted' | 'suspended' | 'banned'
 
+/** Phase 1 — a restricted account (including RESTRICTED — PENDING REVIEW) can
+ * read but not write anywhere: the database refuses every authored write
+ * with this SQLSTATE (tempa_private.consume_safety_evaluation). */
+export const ACCOUNT_ACTION_UNAVAILABLE_CODE = '42501'
+
+export const ACCOUNT_RESTRICTED_MESSAGE =
+  "Your account is temporarily restricted, so you can't write, reply, publish or comment right now. You can still read your correspondence."
+
 /**
  * The CALLER's own status only. current_account_status() is documented
  * client-safe for exactly this — "a member's own client can read their
@@ -34,23 +42,15 @@ export async function getMyAccountStatus(supabase: SupabaseClient): Promise<Acco
  * contact letter, an established-correspondence letter while suspended
  * or banned, a Dispatch publish/edit while restricted/suspended/banned)
  * — never used for 'active', and never applied to a context the status
- * doesn't actually fully block (see callers — a restricted member's
- * plain Write Anytime letter still sends normally; only attaching a
- * Moment/Postcard is blocked for them there, which uses
- * accountRestrictedAttachmentMessage below instead).
+ * doesn't actually fully block. (Phase 1: restricted now blocks every
+ * authored write, so it is a full block like suspended/banned.)
  */
 export function accountBlockedMessage(status: AccountStatus): string | null {
-  if (status === 'restricted') return 'Your account is currently restricted from sending letters.'
+  if (status === 'restricted') return ACCOUNT_RESTRICTED_MESSAGE
   if (status === 'suspended') return 'Your account is currently suspended.'
   if (status === 'banned') return 'Your account has been banned and can no longer send letters.'
   return null
 }
-
-/** The narrower case: a restricted member's ordinary Write Anytime text
- * still sends, but attaching a Moment or Postcard does not — see
- * write_letter/reply_to_letter's own restricted-only checks. */
-export const RESTRICTED_ATTACHMENT_MESSAGE =
-  'Moments and postcards are not available while your account is restricted. You can still send this as a plain letter.'
 
 /** write_letter's own deliberately-ambiguous text for a blocked-pair
  * correspondence (shared, by design, with "not found" and with
