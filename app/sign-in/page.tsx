@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
-import TempaBrandLogo from '@/app/tempa-brand-logo'
+import TempaEmblem from '@/app/tempa-emblem'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
 
 /**
@@ -332,14 +332,23 @@ function SignInForm() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-6 p-8">
-      {/* Brand asset pass (2026-09-24) — /sign-in is the app's one real
-          logged-out landing surface (the root route always redirects
-          here or onward; there is no separate marketing page), so it is
-          where the full brand lockup actually has room to breathe. The
-          heading text inside the card below is unchanged — this is an
-          addition, not a replacement of any existing copy. */}
-      <TempaBrandLogo width={180} priority />
+    <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
+      {/* Brand asset correction (2026-09-24) — /sign-in is the app's one
+          real logged-out landing surface (the root route always
+          redirects here or onward; there is no separate marketing
+          page). The full poster-style master lockup read as a pasted-on
+          image with a visible outer canvas and a tagline too small to
+          matter; this compact emblem + live text wordmark + live
+          tagline reads as ONE composition with the auth card below it
+          (smaller emblem, tighter gap) rather than a marketing banner.
+          The heading text inside the card is unchanged. */}
+      <div className="flex flex-col items-center gap-2">
+        <TempaEmblem size={72} priority className="h-[60px] w-[60px] sm:h-[72px] sm:w-[72px]" />
+        <div className="text-center">
+          <p className="font-serif text-2xl italic text-foreground">Tempa</p>
+          <p className="mt-0.5 text-[12px] text-muted">A more human way to connect</p>
+        </div>
+      </div>
 
       <div className="max-w-sm w-full space-y-5 rounded-md border border-foreground/12 p-6">
         <h1 className="font-serif text-2xl font-medium">
