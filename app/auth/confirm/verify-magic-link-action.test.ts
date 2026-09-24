@@ -173,3 +173,88 @@ describe('verifyMagicLink — invalid/expired/malformed verification fails safel
     expect(mockProfileMaybeSingle).not.toHaveBeenCalled()
   })
 })
+
+// Independent audit correction — a Server Action is itself a reachable
+// server endpoint (a stable action id a client could invoke directly
+// with crafted arguments, entirely bypassing app/auth/confirm/page.tsx's
+// own parsing/allowlisting and its TypeScript types). These tests call
+// verifyMagicLink directly with values that page.tsx's own validation
+// would never actually produce — simulating exactly that direct,
+// bypassing invocation — and prove the action's OWN runtime checks
+// still hold regardless.
+describe('verifyMagicLink — defensive runtime validation for direct/bypassing Server Action invocation', () => {
+  it('an arbitrary type outside the allowlist (e.g. "recovery") never calls verifyOtp — redirects straight to link_expired', async () => {
+    const destination = await redirectPath(
+      verifyMagicLink('some-token', 'recovery' as unknown as Parameters<typeof verifyMagicLink>[1], null)
+    )
+
+    expect(destination).toBe('/sign-in?error=link_expired')
+    expect(mockVerifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('"signup" (a real EmailOtpType value, but never a Tempa magic-link sign-in) never calls verifyOtp', async () => {
+    const destination = await redirectPath(
+      verifyMagicLink('some-token', 'signup' as unknown as Parameters<typeof verifyMagicLink>[1], null)
+    )
+
+    expect(destination).toBe('/sign-in?error=link_expired')
+    expect(mockVerifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('an empty token never calls verifyOtp', async () => {
+    const destination = await redirectPath(verifyMagicLink('', 'magiclink', null))
+
+    expect(destination).toBe('/sign-in?error=link_expired')
+    expect(mockVerifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('a non-string token (a direct-invocation forgery, impossible via the real page) never calls verifyOtp', async () => {
+    const destination = await redirectPath(
+      verifyMagicLink(null as unknown as string, 'magiclink', null)
+    )
+
+    expect(destination).toBe('/sign-in?error=link_expired')
+    expect(mockVerifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('an external next (https://evil.example.com) is never honored — verifyOtp still runs (token/type were valid) but the destination falls back to /home, never the external URL', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+
+    const destination = await redirectPath(verifyMagicLink('tok', 'magiclink', 'https://evil.example.com'))
+
+    expect(destination).toBe('/home')
+    expect(destination).not.toContain('evil.example.com')
+  })
+
+  it('a protocol-relative next (//evil.example.com) is never honored either', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+
+    const destination = await redirectPath(verifyMagicLink('tok', 'magiclink', '//evil.example.com'))
+
+    expect(destination).toBe('/home')
+    expect(destination).not.toContain('evil.example.com')
+  })
+
+  it('a genuinely internal next (/letters) still works after re-sanitization', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+
+    const destination = await redirectPath(verifyMagicLink('tok', 'magiclink', '/letters'))
+
+    expect(destination).toBe('/letters')
+  })
+
+  it('both allowlisted types ("magiclink" and "email") still verify normally, unaffected by the new runtime checks', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: { id: 'user-1', onboarding_stage: 'complete' } })
+
+    await redirectPath(verifyMagicLink('tok-1', 'magiclink', null))
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'tok-1', type: 'magiclink' })
+
+    mockVerifyOtp.mockClear()
+    await redirectPath(verifyMagicLink('tok-2', 'email', null))
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'tok-2', type: 'email' })
+  })
+})
