@@ -15,7 +15,6 @@ const PEOPLE: LetterboxPerson[] = [
     activityAt: 1,
     unreadCount: 0,
     latestExcerpt: 'Hello there',
-    hasSentAny: false,
     lastLetterFromViewer: false,
   },
 ]

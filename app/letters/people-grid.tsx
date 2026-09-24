@@ -8,7 +8,6 @@ import {
   letterPreviewText,
   isRichBody,
   deriveLetterboxCardStatus,
-  type LetterboxFilter,
   type LetterboxPerson,
 } from '@/lib/letters'
 
@@ -51,13 +50,6 @@ function CardStatusLine({ person }: { person: LetterboxPerson }) {
   return <p className={metadataTextClass}>Last exchanged {formatDateShort(new Date(status.activityAt).toISOString())}</p>
 }
 
-function emptyStateCopy(filter: LetterboxFilter, hasAnyPeopleAtAll: boolean): string {
-  if (!hasAnyPeopleAtAll) return "You don't have any letters yet."
-  if (filter === 'new') return 'Nothing new right now.'
-  if (filter === 'sent') return "You haven't sent a letter yet."
-  return "You don't have any letters yet."
-}
-
 /**
  * Letterbox Level 1's entire visible surface: a responsive
  * correspondence-CARD grid, address-book style — the PERSON is the
@@ -86,19 +78,9 @@ function emptyStateCopy(filter: LetterboxFilter, hasAnyPeopleAtAll: boolean): st
  */
 export default function PeopleGrid({
   people,
-  hasAnyPeopleAtAll,
-  filter,
   mailInTransitPersonIds,
 }: {
-  /** Already filtered (see filterLetterboxPeople, lib/letters.ts) —
-   * this component only renders, it never decides what belongs in
-   * All/New/Sent. */
   people: LetterboxPerson[]
-  /** Whether the viewer's Letterbox has ANY visible correspondent at
-   * all, before this filter was applied — distinguishes "nothing here
-   * yet" from "nothing matches this filter" in the empty state. */
-  hasAnyPeopleAtAll: boolean
-  filter: LetterboxFilter
   /** Correspondent ids currently sending mail this viewer's way but
    * hasn't received yet — sourced from incoming_mail_in_transit
    * (lib/letters.ts), never from anything letters_for_participant
@@ -106,7 +88,7 @@ export default function PeopleGrid({
   mailInTransitPersonIds: Set<string>
 }) {
   if (people.length === 0) {
-    return <p className={helperTextClass}>{emptyStateCopy(filter, hasAnyPeopleAtAll)}</p>
+    return <p className={helperTextClass}>You don&apos;t have any letters yet.</p>
   }
 
   return (
