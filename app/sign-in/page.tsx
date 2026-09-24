@@ -77,6 +77,27 @@ export function getAuthErrorMessage(error: { message?: string; status?: number }
  * KNOWN error_code, with the same generic fallback as everywhere else
  * for anything unrecognized.
  */
+/**
+ * Cross-browser magic-link fix (2026-09-24) — extracted into its own
+ * pure function for direct testability, matching getAuthErrorMessage/
+ * getAuthErrorMessageFromFragment's own established pattern in this
+ * file. `link_expired` is set by app/auth/confirm/verify-magic-link-
+ * action.ts's own redirect when Supabase's verifyOtp itself rejects an
+ * expired/already-consumed/malformed token — deliberately the SAME
+ * restrained copy getAuthErrorMessageFromFragment already uses for
+ * GoTrue's own `otp_expired` fragment case (a different code path
+ * detecting the same underlying situation), never a raw provider error.
+ */
+export function getInitialErrorMessage(errorParam: string | null): string {
+  if (errorParam === 'link_expired') {
+    return 'This sign-in link is no longer valid. Request a new link and use the newest email.'
+  }
+  if (errorParam === 'auth_failed') {
+    return 'Something went wrong signing you in. Please try again.'
+  }
+  return ''
+}
+
 export function getAuthErrorMessageFromFragment(hash: string): string {
   if (!hash) return ''
 
@@ -100,11 +121,7 @@ function SignInForm() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(
     'idle'
   )
-  const [errorMessage, setErrorMessage] = useState(() =>
-    searchParams.get('error') === 'auth_failed'
-      ? 'Something went wrong signing you in. Please try again.'
-      : ''
-  )
+  const [errorMessage, setErrorMessage] = useState(() => getInitialErrorMessage(searchParams.get('error')))
   const [googleLoading, setGoogleLoading] = useState(false)
   const [joinIntent, setJoinIntent] = useState(() => searchParams.get('intent') === 'join')
 

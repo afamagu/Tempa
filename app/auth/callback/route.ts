@@ -1,9 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
-import { type OnboardingStage } from '@/lib/onboarding'
-import { resolveAccountEntryDestination, type EligibilityStatus } from '@/lib/account-entry'
-import { isLegalCurrent } from '@/lib/legal'
+import { resolvePostAuthDestination } from '@/lib/post-auth-destination'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -30,40 +28,17 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
-      const [{ data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
-        supabase.from('profiles').select('id, onboarding_stage').eq('id', data.user.id).maybeSingle(),
-        supabase.from('account_eligibility').select('status').eq('user_id', data.user.id).maybeSingle(),
-        supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', data.user.id),
-      ])
-
       // `next` is honored only after the complete durable account-entry
       // sequence: confirmed adult eligibility, current legal
       // acceptance, THEN the existing profile-onboarding sequence. A
       // profile row alone no longer proves completion, and neither does
-      // a profile stage of 'complete' on its own.
+      // a profile stage of 'complete' on its own. Shared with the email
+      // magic-link verification action (app/auth/confirm/verify-magic-
+      // link-action.ts) via lib/post-auth-destination.ts, so there is
+      // never a second, subtly different definition of where an
+      // authenticated member belongs.
       const requestedDestination = next ?? '/home'
-      const destination = resolveAccountEntryDestination(
-        {
-          authenticated: true,
-          eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
-          eligibleOn: null,
-          legalCurrent: isLegalCurrent(
-            (legalRows ?? []).map((r) => ({
-              documentType: r.document_type as 'terms_of_service' | 'community_guidelines',
-              documentVersion: r.document_version as string,
-            }))
-          ),
-          hasProfile: Boolean(profile),
-          onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
-        },
-        requestedDestination
-      )
-
-      if (destination === '/begin') {
-        const beginUrl = new URL('/begin', origin)
-        beginUrl.searchParams.set('next', requestedDestination)
-        return NextResponse.redirect(beginUrl.toString())
-      }
+      const destination = await resolvePostAuthDestination(supabase, data.user.id, requestedDestination)
 
       return NextResponse.redirect(`${origin}${destination}`)
     }
