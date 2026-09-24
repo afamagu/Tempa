@@ -31,7 +31,7 @@ describe('LetterboxSearch', () => {
 
   it('renders the search field with an accessible label', () => {
     const html = renderToStaticMarkup(<LetterboxSearch people={PEOPLE} mailInTransitPersonIds={new Set()} />)
-    expect(html).toContain('aria-label="Search your Letterbox"')
+    expect(html).toContain('aria-label="Search your pen pals"')
   })
 
   it('the empty-state people grid still shows its own genuinely-empty message when there are no people at all', () => {

@@ -20,8 +20,14 @@ import {
 } from '@/lib/questions'
 import { insertAtCursor } from '@/lib/textarea-insert'
 import EmojiPicker from '@/app/letters/emoji-picker'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
@@ -68,7 +74,10 @@ export default function QuestionAnswer({
   const [confirmation, setConfirmation] = useState<string | null>(null)
   // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
   // pendingWarning split exactly (see that file's own doc comment).
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
 
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
@@ -121,12 +130,13 @@ export default function QuestionAnswer({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setSaving(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setSaving(false)
       return
     }
@@ -281,12 +291,14 @@ export default function QuestionAnswer({
 
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={saving}
         actionLabel="Save anyway"
         sendingLabel="Saving…"
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </main>
   )
 }

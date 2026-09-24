@@ -19,8 +19,14 @@ import {
   type LetterDocJSON,
 } from '@/lib/letter-editor-doc'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
 import SourceLetterPanel from './source-letter-panel'
@@ -79,7 +85,10 @@ export default function FirstContactResponse({
   const [showSourceLetter, setShowSourceLetter] = useState(false)
   // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
   // identical field for the full explanation.
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
 
   const [reason, setReason] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
@@ -180,12 +189,13 @@ export default function FirstContactResponse({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setReplyError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setReplyError(SAFETY_CANNOT_SEND_MESSAGE)
       setSendingReply(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setSendingReply(false)
       return
     }
@@ -361,10 +371,12 @@ export default function FirstContactResponse({
       />
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={sendingReply}
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </>
   )
 }

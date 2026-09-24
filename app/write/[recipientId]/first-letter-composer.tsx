@@ -23,8 +23,14 @@ import {
   clearFirstContactDraft,
 } from '@/lib/letter-editor-draft'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
 // Length-policy audit (2026-09-05): was a locally hard-coded 4000,
 // independent of the Question-answer cap — now the SAME canonical
@@ -75,7 +81,10 @@ export default function FirstLetterComposer({
   // disposition is waiting on the member's own explicit choice
   // (SafetyWarningDialog below). Never set for `allow` (proceeds
   // immediately) or `cannot_send` (blocks inline, no dialog at all).
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
   // Account enforcement messaging (pre-beta UX polish batch 1) — the
   // CALLER's own status only (see getMyAccountStatus's own doc
   // comment), fetched once on mount purely so a blocked send can show
@@ -161,12 +170,13 @@ export default function FirstLetterComposer({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setSending(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setSending(false)
       return
     }
@@ -315,10 +325,12 @@ export default function FirstLetterComposer({
       </div>
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={sending}
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </main>
   )
 }

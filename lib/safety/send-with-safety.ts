@@ -44,8 +44,8 @@ export type EvaluatePayload =
 
 export type EvaluateOutcome =
   | { status: 'allow'; evaluationId: string }
-  | { status: 'warning_required'; evaluationId: string }
-  | { status: 'cannot_send' }
+  | { status: 'warning_required'; evaluationId: string; copyKey?: string }
+  | { status: 'cannot_send'; copyKey?: string }
   | { status: 'error' }
 
 /** Calls /api/safety/evaluate and narrows its response to exactly what
@@ -78,11 +78,16 @@ export async function evaluateSafety(payload: EvaluatePayload): Promise<Evaluate
   }
 
   if (typeof data !== 'object' || data === null) return { status: 'error' }
-  const body = data as { evaluationId?: unknown; disposition?: unknown }
+  const body = data as { evaluationId?: unknown; disposition?: unknown; warningCopyKey?: unknown }
+  const copyKey = typeof body.warningCopyKey === 'string' ? body.warningCopyKey : undefined
   if (typeof body.evaluationId !== 'string') return { status: 'error' }
 
-  if (body.disposition === 'cannot_send') return { status: 'cannot_send' }
-  if (body.disposition === 'warning_required') return { status: 'warning_required', evaluationId: body.evaluationId }
+  if (body.disposition === 'cannot_send') return copyKey ? { status: 'cannot_send', copyKey } : { status: 'cannot_send' }
+  if (body.disposition === 'warning_required') {
+    return copyKey
+      ? { status: 'warning_required', evaluationId: body.evaluationId, copyKey }
+      : { status: 'warning_required', evaluationId: body.evaluationId }
+  }
   if (body.disposition === 'allow') return { status: 'allow', evaluationId: body.evaluationId }
   return { status: 'error' }
 }
@@ -109,3 +114,34 @@ export const SAFETY_CANNOT_SEND_MESSAGE = "This can't be sent as written. Please
  * in a warning or a `cannot_send`, which have their own copy above. */
 export const SAFETY_CHECK_FAILED_MESSAGE =
   'We couldn’t complete the safety check right now. Please try again in a moment.'
+
+/** Phase 1 — reason-specific member copy. The server picks ONE opaque
+ * copy key per evaluation (lib/safety/route-contract.ts's copyKeyFor);
+ * the browser never learns a band or a reason code, only which calm
+ * wording to show. */
+export const SAFETY_FINANCIAL_REQUEST_COPY_KEY = 'safety_financial_request'
+export const SAFETY_CONTACT_SHARING_COPY_KEY = 'safety_contact_sharing'
+
+export const SAFETY_NOTE_TITLE = 'A quick note from Tempa'
+
+/** Confirmed financial solicitation — not sendable, no override. */
+export const SAFETY_FINANCIAL_BODY = [
+  'This message appears to ask another member for money or financial help. Financial requests are not allowed on Tempa.',
+  'Please remove the request before continuing. Tempa records safety signals like this so repeated patterns can be recognised and reviewed.',
+]
+export const SAFETY_FINANCIAL_ACTION = 'Return to my letter'
+
+/** Personal contact / off-platform sharing — the sender may still send. */
+export const SAFETY_CONTACT_BODY = [
+  'This message includes personal contact details or an invitation to continue your conversation elsewhere.',
+  'You can still send it. If you continue, your pen pal will see a short privacy reminder before deciding what they want to share.',
+]
+export const SAFETY_CONTACT_REVIEW_ACTION = 'Review my letter'
+export const SAFETY_CONTACT_SEND_ACTION = 'Send anyway'
+
+/** The short, non-accusatory note attached to a DELIVERED letter whose
+ * sender shared personal contact details (shown to the recipient). */
+export const RECIPIENT_CONTACT_NOTE_BODY = [
+  "You don't need to share your phone number, email address, home address, or move to another app to keep writing here.",
+  "If you choose to connect elsewhere, remember that Tempa can't protect conversations that happen outside the platform. Share personal details only when you feel comfortable doing so.",
+]

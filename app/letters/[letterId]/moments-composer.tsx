@@ -41,8 +41,14 @@ import {
   CORRESPONDENCE_CLOSED_MESSAGE,
   type AccountStatus,
 } from '@/lib/account-status'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import { baseWritingExtensions } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { PhotoMoment } from './photo-moment-node'
@@ -183,7 +189,10 @@ export default function MomentsComposer({
   const [error, setError] = useState<string | null>(null)
   // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
   // identical field for the full explanation.
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
   // Account enforcement messaging (pre-beta UX polish batch 1) — see
   // lib/account-status.ts's own doc comment. Fetched once on mount,
   // purely to pick a calmer message when a send this status actually
@@ -616,12 +625,13 @@ export default function MomentsComposer({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setSending(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setSending(false)
       return
     }
@@ -961,10 +971,12 @@ export default function MomentsComposer({
 
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={sending}
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </div>
   )
 }

@@ -49,7 +49,7 @@ export default async function LettersPage() {
             (a "collections/people" surface, per this pass's own
             content-width guidance — wider than a reading measure). */}
         <div className="w-full max-w-5xl">
-          <h1 className={`mb-6 ${pageTitleClass}`}>Letterbox</h1>
+          <h1 className={`mb-6 ${pageTitleClass}`}>Pen pals</h1>
           <LetterboxSearch people={people} mailInTransitPersonIds={mailInTransitPersonIds} />
         </div>
       </main>

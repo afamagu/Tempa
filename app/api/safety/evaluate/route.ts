@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { classifyContent, combineClassifications } from '@/lib/safety'
 import { buildEvaluateResponse, parseEvaluateRequest, type ParsedPostcard } from '@/lib/safety/route-contract'
 
+const PRIVATE_LETTER_SURFACES = new Set<string>(['first_letter', 'reply', 'write_anytime'])
+
 /** The EXACT jsonb shape write_letter/reply_to_letter's own p_postcard
  * accepts (postcard_key/reveal_line/back_message) — see route-
  * contract.ts's own ParsedPostcard doc comment. Snake_case only at this
@@ -172,20 +174,25 @@ export async function POST(request: NextRequest) {
   // doesn't have them (first_letter/reply/write_anytime/question_
   // answer/dispatch_reply), so this naturally degrades to the existing
   // body(+postcard) classification for those surfaces.
-  const classifications = [classifyContent(parsed.request.body)]
+  // Personal-contact / off-platform sharing is a privacy reminder that
+  // only makes sense in a PRIVATE letter (first letter, reply, write-
+  // anytime) — never on a public surface.
+  const privateLetter = PRIVATE_LETTER_SURFACES.has(parsed.request.surface)
+  const classify = (text: string) => classifyContent(text, { privateLetter })
+  const classifications = [classify(parsed.request.body)]
   if (parsed.request.title) {
-    classifications.push(classifyContent(parsed.request.title))
+    classifications.push(classify(parsed.request.title))
   }
   if (parsed.request.topics) {
     for (const topic of parsed.request.topics) {
-      classifications.push(classifyContent(topic))
+      classifications.push(classify(topic))
     }
   }
   if (parsed.request.postcard?.revealLine) {
-    classifications.push(classifyContent(parsed.request.postcard.revealLine))
+    classifications.push(classify(parsed.request.postcard.revealLine))
   }
   if (parsed.request.postcard?.backMessage) {
-    classifications.push(classifyContent(parsed.request.postcard.backMessage))
+    classifications.push(classify(parsed.request.postcard.backMessage))
   }
   const classification = combineClassifications(classifications)
 
@@ -217,5 +224,7 @@ export async function POST(request: NextRequest) {
   }
 
   const row = data as { evaluation_id: string; expires_at: string; is_new: boolean }
-  return NextResponse.json(buildEvaluateResponse(row.evaluation_id, classification.mutationDisposition))
+  return NextResponse.json(
+    buildEvaluateResponse(row.evaluation_id, classification.mutationDisposition, classification.reasonCodes)
+  )
 }

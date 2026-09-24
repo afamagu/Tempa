@@ -97,7 +97,7 @@ export default async function LetterArchiveWithUserPage({
         <div className="w-full max-w-2xl">
           <Link
             href="/letters"
-            aria-label="Back to Letterbox"
+            aria-label="Back to Pen pals"
             className="mb-4 inline-flex items-center gap-1 text-[13px] text-muted transition-colors hover:text-foreground"
           >
             <BackChevronIcon />

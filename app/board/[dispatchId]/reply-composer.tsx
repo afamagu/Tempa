@@ -5,8 +5,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { createReply, replyBodyError, REPLY_MAX_CHARS } from '@/lib/replies'
 import { helperTextClass, inputClass, secondaryButtonClass, primaryButtonClass, tertiaryButtonClass } from '@/app/profile/ui'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
 const CHAR_WARNING_THRESHOLD = Math.round(REPLY_MAX_CHARS * 0.875)
 
@@ -52,7 +58,10 @@ export default function ReplyComposer({
   const [error, setError] = useState<string | null>(null)
   // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
   // pendingWarning split exactly (see that file's own doc comment).
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
 
   function reset() {
     setOpen(false)
@@ -92,12 +101,13 @@ export default function ReplyComposer({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setBusy(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setBusy(false)
       return
     }
@@ -183,12 +193,14 @@ export default function ReplyComposer({
 
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={busy}
         actionLabel="Post anyway"
         sendingLabel="Posting…"
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </div>
   )
 }

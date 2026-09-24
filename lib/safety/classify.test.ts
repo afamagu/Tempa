@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { classifyContent, combineClassifications } from './classify'
-import type { RiskBand } from './reason-codes'
+import { FINANCIAL_SOLICITATION_REASON_CODES, type RiskBand } from './reason-codes'
 
 // ============================================================
 // §21 — benign corpus. None of these may ever warn or deny.
@@ -337,15 +337,18 @@ describe('risk, enforcement, and case escalation are independent axes', () => {
     expect(result.escalateCase).toBe(true)
   })
 
-  it('a meaningful-risk bill request warns without escalating a case', () => {
+  it('a meaningful-risk bill request is denied (Phase 1 policy: financial solicitation is not allowed) without escalating a case', () => {
     // Deliberately has no transfer-verb match (no send/pay/transfer/
-    // wire/lend/give), so only LOAN_OR_BILL_REQUEST fires — a single
+    // wire/lend/give), so only the bill/loan shape fires — a single
     // meaningful signal, not a compounded pair (contrast "Please pay
     // my electricity bill.", which also matches the "please...pay"
-    // transfer verb and compounds to 'high').
+    // transfer verb and compounds to 'high'). Before Phase 1 this only
+    // warned; asking another member to cover a bill is a confirmed
+    // financial solicitation and now cannot be sent.
     const result = classifyContent('Could you help me with my electricity bill this month?')
     expect(result.riskBand).toBe('meaningful')
-    expect(result.mutationDisposition).toBe('warn')
+    expect(result.mutationDisposition).toBe('deny')
+    expect(result.reasonCodes).toContain('LOAN_OR_BILL_REQUEST')
     expect(result.escalateCase).toBe(false)
   })
 
@@ -556,7 +559,10 @@ describe('compounding', () => {
       expect.arrayContaining(['LOAN_OR_BILL_REQUEST', 'OFF_PLATFORM_ESCALATION', 'SUSPICIOUS_LINK'])
     )
     expect(result.riskBand).toBe('meaningful')
-    expect(result.mutationDisposition).toBe('warn')
+    // The weak-only codes still must not inflate the BAND (still
+    // 'meaningful', not high/severe); the tuition ask itself is a
+    // confirmed financial solicitation, so it is denied.
+    expect(result.mutationDisposition).toBe('deny')
   })
 })
 
@@ -608,7 +614,7 @@ describe('structural invariants', () => {
     }
   })
 
-  it('mutationDisposition "deny" only ever occurs at "severe" risk', () => {
+  it('mutationDisposition "deny" only ever occurs at "severe" risk OR for a confirmed financial solicitation', () => {
     const texts = [
       'Food is expensive here.',
       'Can you send me $300?',
@@ -618,7 +624,10 @@ describe('structural invariants', () => {
     for (const text of texts) {
       const result = classifyContent(text)
       if (result.mutationDisposition === 'deny') {
-        expect(result.riskBand).toBe('severe')
+        const confirmedSolicitation = result.reasonCodes.some((code) =>
+          (FINANCIAL_SOLICITATION_REASON_CODES as readonly string[]).includes(code)
+        )
+        expect(result.riskBand === 'severe' || confirmedSolicitation).toBe(true)
       }
     }
   })
@@ -644,7 +653,10 @@ describe('locality — unrelated facts elsewhere in the letter must not combine'
     expect(result.reasonCodes).toContain('DIRECT_MONEY_REQUEST')
     expect(result.reasonCodes).not.toContain('CRYPTO_SOLICITATION')
     expect(result.riskBand).not.toBe('severe')
-    expect(result.mutationDisposition).not.toBe('deny')
+    // Still denied — but because the money request itself is a confirmed
+    // financial solicitation, not because the unrelated crypto example
+    // upgraded anything.
+    expect(result.mutationDisposition).toBe('deny')
   })
 
   it('a money request and an unrelated mention that a relative works at a hospital is not EMERGENCY_MONEY_REQUEST', () => {

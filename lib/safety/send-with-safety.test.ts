@@ -26,7 +26,29 @@ describe('evaluateSafety — fail-closed client gate (Checkpoint 3)', () => {
     }) as unknown as typeof fetch
 
     const result = await evaluateSafety({ surface: 'reply', letterId: 'letter-1', body: 'hi' })
-    expect(result).toEqual({ status: 'warning_required', evaluationId: 'eval-2' })
+    expect(result).toEqual({ status: 'warning_required', evaluationId: 'eval-2', copyKey: 'safety_warning_generic' })
+  })
+
+  it('carries the server-chosen copy key so the composer can show the contact-sharing note', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ evaluationId: 'eval-c', disposition: 'warning_required', warningCopyKey: 'safety_contact_sharing' }),
+    }) as unknown as typeof fetch
+    expect(await evaluateSafety({ surface: 'reply', letterId: 'letter-1', body: 'hi' })).toEqual({
+      status: 'warning_required',
+      evaluationId: 'eval-c',
+      copyKey: 'safety_contact_sharing',
+    })
+  })
+
+  it('a financial-request cannot_send carries its copy key and still no evaluationId (nothing to consume, no override)', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ evaluationId: 'eval-f', disposition: 'cannot_send', warningCopyKey: 'safety_financial_request' }),
+    }) as unknown as typeof fetch
+    const result = await evaluateSafety({ surface: 'reply', letterId: 'letter-1', body: 'hi' })
+    expect(result).toEqual({ status: 'cannot_send', copyKey: 'safety_financial_request' })
+    expect(result).not.toHaveProperty('evaluationId')
   })
 
   it('maps disposition: cannot_send to status: cannot_send, with no evaluationId carried (nothing to consume)', async () => {

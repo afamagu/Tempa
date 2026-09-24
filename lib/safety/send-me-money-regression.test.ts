@@ -33,11 +33,14 @@ describe('layer 1+2 — indicators and classifier (current canonical policy)', (
     expect(extractIndicators(PHRASE).hasDirectedMoneyRequest).toBe(true)
   })
 
-  it('classifies it DIRECT_MONEY_REQUEST / meaningful / warn — the existing approved policy, not a system error', () => {
+  it('classifies it DIRECT_MONEY_REQUEST / meaningful / DENY — Phase 1 locked policy: financial solicitation cannot be sent', () => {
+    // Before Phase 1 this was a warn ("Send anyway" was possible). The
+    // locked policy is that a confirmed request for money is not
+    // allowed on Tempa regardless of relationship, so it is denied.
     const result = classifyContent(PHRASE)
     expect(result.reasonCodes).toEqual(['DIRECT_MONEY_REQUEST'])
     expect(result.riskBand).toBe('meaningful')
-    expect(result.mutationDisposition).toBe('warn')
+    expect(result.mutationDisposition).toBe('deny')
     expect(result.escalateCase).toBe(false)
   })
 
@@ -51,10 +54,10 @@ describe('layer 1+2 — indicators and classifier (current canonical policy)', (
 })
 
 describe('layer 3 — the route response for that classification', () => {
-  it('a warn disposition is a SUCCESSFUL evaluation response carrying warning_required, never an error shape', () => {
-    const { mutationDisposition } = classifyContent(PHRASE)
-    const body = buildEvaluateResponse('eval-1', mutationDisposition)
-    expect(body).toMatchObject({ evaluationId: 'eval-1', disposition: 'warning_required' })
+  it('a deny disposition is a SUCCESSFUL evaluation response carrying cannot_send + the financial copy key, never an error shape', () => {
+    const { mutationDisposition, reasonCodes } = classifyContent(PHRASE)
+    const body = buildEvaluateResponse('eval-1', mutationDisposition, reasonCodes)
+    expect(body).toMatchObject({ evaluationId: 'eval-1', disposition: 'cannot_send', warningCopyKey: 'safety_financial_request' })
     expect(JSON.stringify(body)).not.toMatch(/error|DIRECT_MONEY_REQUEST|meaningful|scam|fraud/i)
   })
 })
@@ -78,14 +81,15 @@ describe('layer 5 — evaluateSafety keeps three genuinely different outcomes', 
     vi.restoreAllMocks()
   })
 
-  it('the phrase, evaluated successfully as warning_required, is NEVER status: error', async () => {
+  it('the phrase, evaluated successfully as cannot_send (financial), is NEVER status: error', async () => {
+    const classification = classifyContent(PHRASE)
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => buildEvaluateResponse('eval-9', classifyContent(PHRASE).mutationDisposition),
+      json: async () => buildEvaluateResponse('eval-9', classification.mutationDisposition, classification.reasonCodes),
     }) as unknown as typeof fetch
 
     const result = await evaluateSafety({ surface: 'reply', letterId: 'l-1', body: PHRASE })
-    expect(result).toEqual({ status: 'warning_required', evaluationId: 'eval-9' })
+    expect(result).toEqual({ status: 'cannot_send', copyKey: 'safety_financial_request' })
   })
 
   it('C — a genuine evaluate API failure (HTTP 500) is status: error, so the composer never sends', async () => {

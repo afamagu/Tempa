@@ -15,7 +15,12 @@
 // app/board/[dispatchId]/reply-composer.tsx) — same discipline, never a
 // generic surface.
 
-import type { ContentReasonCode, MutationDisposition } from './reason-codes'
+import {
+  FINANCIAL_SOLICITATION_REASON_CODES,
+  type ContentReasonCode,
+  type MutationDisposition,
+  type ReasonCode,
+} from './reason-codes'
 import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'
 import { TITLE_MAX_CHARS, TOPIC_MAX_CHARS, TOPIC_MAX_COUNT, normalizeTopics } from '@/lib/dispatches'
 import { REPLY_MAX_CHARS } from '@/lib/replies'
@@ -526,18 +531,53 @@ export function toMemberFacingDisposition(mutationDisposition: MutationDispositi
  * UI (Checkpoint 3) needs to say something more specific. */
 export const GENERIC_WARNING_COPY_KEY = 'safety_warning_generic'
 
+/** Phase 1 — reason-specific member copy, still WITHOUT exposing bands or
+ * reason codes: the browser only ever receives one of these opaque copy
+ * keys, chosen server-side from the classification.
+ *  - safety_financial_request: a confirmed financial solicitation
+ *    (cannot_send, no override).
+ *  - safety_contact_sharing: only personal-contact/off-platform sharing
+ *    was noticed (warning_required; the member may still send).
+ *  - safety_warning_generic: everything else (warn or deny). */
+export const FINANCIAL_REQUEST_COPY_KEY = 'safety_financial_request'
+export const CONTACT_SHARING_COPY_KEY = 'safety_contact_sharing'
+
+/** Codes that never, on their own, make a warning about anything other
+ * than contact sharing. */
+const CONTACT_ONLY_COMPANION_CODES: readonly ReasonCode[] = ['PERSONAL_CONTACT_SHARING', 'OFF_PLATFORM_ESCALATION']
+
+export function copyKeyFor(mutationDisposition: MutationDisposition, reasonCodes: readonly ReasonCode[] = []): string {
+  if (mutationDisposition === 'deny') {
+    return reasonCodes.some((code) => (FINANCIAL_SOLICITATION_REASON_CODES as readonly ReasonCode[]).includes(code))
+      ? FINANCIAL_REQUEST_COPY_KEY
+      : GENERIC_WARNING_COPY_KEY
+  }
+  if (
+    mutationDisposition === 'warn' &&
+    reasonCodes.includes('PERSONAL_CONTACT_SHARING') &&
+    reasonCodes.every((code) => CONTACT_ONLY_COMPANION_CODES.includes(code))
+  ) {
+    return CONTACT_SHARING_COPY_KEY
+  }
+  return GENERIC_WARNING_COPY_KEY
+}
+
 export type EvaluateResponseBody = {
   evaluationId: string
   disposition: MemberFacingDisposition
   warningCopyKey?: string
 }
 
-export function buildEvaluateResponse(evaluationId: string, mutationDisposition: MutationDisposition): EvaluateResponseBody {
+export function buildEvaluateResponse(
+  evaluationId: string,
+  mutationDisposition: MutationDisposition,
+  reasonCodes: readonly ReasonCode[] = []
+): EvaluateResponseBody {
   const disposition = toMemberFacingDisposition(mutationDisposition)
   if (disposition === 'allow') {
     return { evaluationId, disposition }
   }
-  return { evaluationId, disposition, warningCopyKey: GENERIC_WARNING_COPY_KEY }
+  return { evaluationId, disposition, warningCopyKey: copyKeyFor(mutationDisposition, reasonCodes) }
 }
 
 // Re-exported only so route.ts has one import source for the request-
