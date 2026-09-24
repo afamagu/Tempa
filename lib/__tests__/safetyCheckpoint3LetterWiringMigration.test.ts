@@ -216,6 +216,23 @@ describe('tempa_private.consume_safety_evaluation is never directly callable by 
 })
 
 describe('verification SQL', () => {
+  it('checks consume_safety_evaluation against its CURRENT 12-argument signature, never the stale 9-argument one (Checkpoint 10B live-verification correction)', () => {
+    // This checkpoint's own migration never redefines consume_safety_
+    // evaluation — only calls it — so its verifier must check the
+    // signature docs/sql/2026-10-03-safety-persistence.sql actually
+    // defines today (widened in place by Checkpoint 4/5), not an
+    // obsolete snapshot that no longer resolves to anything in
+    // production.
+    expect(verifySql).not.toContain(
+      'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)'
+    )
+    const currentSignature =
+      'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid)'
+    const occurrences = verifySql.split(currentSignature).length - 1
+    // Present/authenticated/anon/service_role checks — at least 4 uses.
+    expect(occurrences).toBeGreaterThanOrEqual(4)
+  })
+
   it('exists, is read-only, and checks the old-gone/new-present/grants/wiring for all three mutation RPCs', () => {
     const codeOnlyVerify = stripLineComments(verifySql)
     expect(codeOnlyVerify.toLowerCase()).not.toMatch(/\binsert\s+into\b/)

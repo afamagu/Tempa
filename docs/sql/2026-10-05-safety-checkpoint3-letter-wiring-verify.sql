@@ -32,11 +32,18 @@ grant_check as (
     not has_function_privilege('anon', 'public.reply_to_letter(uuid, text, uuid, jsonb, jsonb, boolean)', 'EXECUTE') as anon_cannot_reply_to_letter
 ),
 consume_function_check as (
+  -- Checkpoint 10B live-verification correction: this checkpoint's own
+  -- migration never redefines consume_safety_evaluation itself — it only
+  -- calls it — so its real signature is whatever docs/sql/2026-10-03-
+  -- safety-persistence.sql currently defines (12 arguments, widened by
+  -- Checkpoint 4/5's own additions folded into that file in place). The
+  -- stale 9-argument form below predates those widenings and no longer
+  -- resolves to anything in production.
   select
-    to_regprocedure('tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)') is not null as consume_function_present,
-    not has_function_privilege('authenticated', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)', 'EXECUTE') as authenticated_cannot_call_consume,
-    not has_function_privilege('anon', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)', 'EXECUTE') as anon_cannot_call_consume,
-    not has_function_privilege('service_role', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, jsonb, text, boolean, uuid)', 'EXECUTE') as service_role_not_specifically_granted_consume
+    to_regprocedure('tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid)') is not null as consume_function_present,
+    not has_function_privilege('authenticated', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid)', 'EXECUTE') as authenticated_cannot_call_consume,
+    not has_function_privilege('anon', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid)', 'EXECUTE') as anon_cannot_call_consume,
+    not has_function_privilege('service_role', 'tempa_private.consume_safety_evaluation(uuid, uuid, text, uuid, uuid, uuid, text, text[], jsonb, text, boolean, uuid)', 'EXECUTE') as service_role_not_specifically_granted_consume
 ),
 wiring_semantics_check as (
   select
