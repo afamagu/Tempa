@@ -65,6 +65,17 @@
 --      and dedicated testing — backlogged explicitly rather than
 --      shipping a broken or falsely-reassuring CSP under launch
 --      deadline pressure.
+--   6. Checkpoint 10A production preflight found `authenticated` still
+--      holding TRUNCATE, TRIGGER, and REFERENCES — historical broad
+--      Supabase default grants, never revoked — on five old Dispatch
+--      tables (dispatches, dispatch_topics, dispatch_moments,
+--      dispatch_views, dispatch_replies). None of the three is RLS-
+--      scoped (TRUNCATE in particular empties the table regardless of
+--      row-level policy); the same privilege class was already stripped
+--      from profiles/question_answers by the Safety foundation migration
+--      but these five tables were missed at the time. Revoked below
+--      (Part 4B), touching only those three privileges — every actual
+--      CRUD privilege these tables need is untouched.
 --
 --   AUDITED, NO FIX NEEDED (confirmed by direct inspection, not
 --   assumed):
@@ -777,6 +788,48 @@ revoke all on public.dispatch_views from anon;
 revoke all on public.kept_minds from anon;
 revoke all on public.dispatch_shares from anon;
 revoke all on public.dispatch_replies from anon;
+
+
+-- ============================================================
+-- PART 4B — GRANT-HYGIENE: REVOKE TRUNCATE/TRIGGER/REFERENCES FROM
+-- AUTHENTICATED ON FIVE OLD DISPATCH TABLES (Checkpoint 10A production
+-- preflight correction)
+-- ============================================================
+-- Production privilege inspection (Checkpoint 10A) found `authenticated`
+-- still holding TRUNCATE, TRIGGER, and REFERENCES on these five tables —
+-- historical broad Supabase default grants, never revoked by any earlier
+-- migration. None of these three privileges is RLS-scoped: TRUNCATE in
+-- particular empties the whole table regardless of any row-level policy,
+-- and TRIGGER/REFERENCES have no legitimate ordinary-member use case
+-- either. This is the exact same privilege class already explicitly
+-- stripped from `profiles`/`question_answers` by the Safety foundation
+-- (docs/sql/2026-09-11-safety-blocking-foundation.sql) — these five
+-- tables were simply missed at the time. Only TRUNCATE/TRIGGER/
+-- REFERENCES are touched here: SELECT/INSERT/UPDATE/DELETE privileges
+-- these tables actually need (including dispatch_views' own legitimate
+-- INSERT/UPDATE for view-tracking, and the ordinary SELECT every one of
+-- these tables already grants) are completely untouched — the known raw
+-- mutation bypasses on dispatches/dispatch_topics/dispatch_moments are
+-- already closed by Part 1 above and by Checkpoint 4, not by this part.
+revoke truncate, trigger, references
+  on public.dispatches
+  from authenticated;
+
+revoke truncate, trigger, references
+  on public.dispatch_topics
+  from authenticated;
+
+revoke truncate, trigger, references
+  on public.dispatch_moments
+  from authenticated;
+
+revoke truncate, trigger, references
+  on public.dispatch_views
+  from authenticated;
+
+revoke truncate, trigger, references
+  on public.dispatch_replies
+  from authenticated;
 
 
 -- ============================================================

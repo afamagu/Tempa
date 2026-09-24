@@ -209,6 +209,30 @@ describe('Part 4 — anon-grant hygiene batch', () => {
   })
 })
 
+describe('Part 4B — privilege hygiene: TRUNCATE/TRIGGER/REFERENCES revoked from authenticated (Checkpoint 10A preflight correction)', () => {
+  it('revokes exactly truncate/trigger/references from authenticated on the five affected old Dispatch tables', () => {
+    for (const table of [
+      'dispatches', 'dispatch_topics', 'dispatch_moments', 'dispatch_views', 'dispatch_replies',
+    ]) {
+      expect(codeOnly).toMatch(
+        new RegExp(`revoke truncate,\\s*trigger,\\s*references\\s+on\\s+public\\.${table}\\s+from\\s+authenticated;`)
+      )
+    }
+  })
+
+  it('does not touch SELECT/INSERT/UPDATE/DELETE privileges on those five tables — only truncate/trigger/references named', () => {
+    const revokeStatements = codeOnly.match(/revoke\s+truncate,\s*trigger,\s*references[\s\S]*?from\s+authenticated;/g) ?? []
+    expect(revokeStatements.length).toBe(5)
+    for (const statement of revokeStatements) {
+      expect(statement.toLowerCase()).not.toMatch(/\b(select|insert|update|delete)\b/)
+    }
+  })
+
+  it('never revokes truncate/trigger/references from dispatches/dispatch_topics/dispatch_moments SELECT-needing consumers or from anon (Part 4 already covers anon)', () => {
+    expect(codeOnly).not.toMatch(/revoke truncate,\s*trigger,\s*references[\s\S]*?from\s+anon;/)
+  })
+})
+
 describe('Part 5 — storage bucket hardening', () => {
   it('sets a file_size_limit and allowed_mime_types on both private Photo Moment buckets', () => {
     expect(codeOnly).toMatch(/update storage\.buckets[\s\S]*?where id = 'letter-photos'/)
@@ -241,6 +265,13 @@ describe('verification SQL', () => {
       'check_rate_limit_present',
       'report_content_checks_rate_limit',
       'letter_photos_size_limit_set',
+      'authenticated_cannot_truncate_dispatches',
+      'authenticated_cannot_trigger_dispatch_topics',
+      'authenticated_cannot_references_dispatch_moments',
+      'authenticated_cannot_truncate_dispatch_views',
+      'authenticated_cannot_truncate_dispatch_replies',
+      'authenticated_can_still_select_dispatch_views',
+      'authenticated_can_still_select_dispatch_replies',
     ]) {
       expect(verifySql).toContain(name)
     }

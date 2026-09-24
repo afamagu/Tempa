@@ -74,6 +74,27 @@ anon_hygiene_check as (
     not has_table_privilege('anon', 'public.dispatch_shares', 'SELECT') as anon_cannot_select_dispatch_shares,
     not has_table_privilege('anon', 'public.dispatch_replies', 'SELECT') as anon_cannot_select_dispatch_replies
 ),
+privilege_hygiene_check as (
+  select
+    not has_table_privilege('authenticated', 'public.dispatches', 'TRUNCATE') as authenticated_cannot_truncate_dispatches,
+    not has_table_privilege('authenticated', 'public.dispatches', 'TRIGGER') as authenticated_cannot_trigger_dispatches,
+    not has_table_privilege('authenticated', 'public.dispatches', 'REFERENCES') as authenticated_cannot_references_dispatches,
+    not has_table_privilege('authenticated', 'public.dispatch_topics', 'TRUNCATE') as authenticated_cannot_truncate_dispatch_topics,
+    not has_table_privilege('authenticated', 'public.dispatch_topics', 'TRIGGER') as authenticated_cannot_trigger_dispatch_topics,
+    not has_table_privilege('authenticated', 'public.dispatch_topics', 'REFERENCES') as authenticated_cannot_references_dispatch_topics,
+    not has_table_privilege('authenticated', 'public.dispatch_moments', 'TRUNCATE') as authenticated_cannot_truncate_dispatch_moments,
+    not has_table_privilege('authenticated', 'public.dispatch_moments', 'TRIGGER') as authenticated_cannot_trigger_dispatch_moments,
+    not has_table_privilege('authenticated', 'public.dispatch_moments', 'REFERENCES') as authenticated_cannot_references_dispatch_moments,
+    not has_table_privilege('authenticated', 'public.dispatch_views', 'TRUNCATE') as authenticated_cannot_truncate_dispatch_views,
+    not has_table_privilege('authenticated', 'public.dispatch_views', 'TRIGGER') as authenticated_cannot_trigger_dispatch_views,
+    not has_table_privilege('authenticated', 'public.dispatch_views', 'REFERENCES') as authenticated_cannot_references_dispatch_views,
+    not has_table_privilege('authenticated', 'public.dispatch_replies', 'TRUNCATE') as authenticated_cannot_truncate_dispatch_replies,
+    not has_table_privilege('authenticated', 'public.dispatch_replies', 'TRIGGER') as authenticated_cannot_trigger_dispatch_replies,
+    not has_table_privilege('authenticated', 'public.dispatch_replies', 'REFERENCES') as authenticated_cannot_references_dispatch_replies,
+    -- Legitimate CRUD must remain untouched by this narrow revoke.
+    has_table_privilege('authenticated', 'public.dispatch_views', 'SELECT') as authenticated_can_still_select_dispatch_views,
+    has_table_privilege('authenticated', 'public.dispatch_replies', 'SELECT') as authenticated_can_still_select_dispatch_replies
+),
 storage_bucket_check as (
   select
     (select file_size_limit from storage.buckets where id = 'letter-photos') = 5242880 as letter_photos_size_limit_set,
@@ -90,6 +111,12 @@ select
   rlw.report_content_checks_rate_limit, rlw.block_user_checks_rate_limit, rlw.unblock_user_checks_rate_limit,
   ah.anon_cannot_select_dispatches, ah.anon_cannot_select_dispatch_topics, ah.anon_cannot_select_dispatch_moments,
   ah.anon_cannot_select_dispatch_views, ah.anon_cannot_select_kept_minds, ah.anon_cannot_select_dispatch_shares, ah.anon_cannot_select_dispatch_replies,
+  ph.authenticated_cannot_truncate_dispatches, ph.authenticated_cannot_trigger_dispatches, ph.authenticated_cannot_references_dispatches,
+  ph.authenticated_cannot_truncate_dispatch_topics, ph.authenticated_cannot_trigger_dispatch_topics, ph.authenticated_cannot_references_dispatch_topics,
+  ph.authenticated_cannot_truncate_dispatch_moments, ph.authenticated_cannot_trigger_dispatch_moments, ph.authenticated_cannot_references_dispatch_moments,
+  ph.authenticated_cannot_truncate_dispatch_views, ph.authenticated_cannot_trigger_dispatch_views, ph.authenticated_cannot_references_dispatch_views,
+  ph.authenticated_cannot_truncate_dispatch_replies, ph.authenticated_cannot_trigger_dispatch_replies, ph.authenticated_cannot_references_dispatch_replies,
+  ph.authenticated_can_still_select_dispatch_views, ph.authenticated_can_still_select_dispatch_replies,
   sb.letter_photos_size_limit_set, sb.letter_photos_mime_restricted, sb.dispatch_photos_size_limit_set, sb.dispatch_photos_mime_restricted,
   (
     bc.authenticated_cannot_insert_dispatch_moments and bc.dispatch_moments_insert_own_policy_gone and bc.authenticated_can_still_read_dispatch_moments
@@ -102,7 +129,13 @@ select
     and rlw.report_content_checks_rate_limit and rlw.block_user_checks_rate_limit and rlw.unblock_user_checks_rate_limit
     and ah.anon_cannot_select_dispatches and ah.anon_cannot_select_dispatch_topics and ah.anon_cannot_select_dispatch_moments
     and ah.anon_cannot_select_dispatch_views and ah.anon_cannot_select_kept_minds and ah.anon_cannot_select_dispatch_shares and ah.anon_cannot_select_dispatch_replies
+    and ph.authenticated_cannot_truncate_dispatches and ph.authenticated_cannot_trigger_dispatches and ph.authenticated_cannot_references_dispatches
+    and ph.authenticated_cannot_truncate_dispatch_topics and ph.authenticated_cannot_trigger_dispatch_topics and ph.authenticated_cannot_references_dispatch_topics
+    and ph.authenticated_cannot_truncate_dispatch_moments and ph.authenticated_cannot_trigger_dispatch_moments and ph.authenticated_cannot_references_dispatch_moments
+    and ph.authenticated_cannot_truncate_dispatch_views and ph.authenticated_cannot_trigger_dispatch_views and ph.authenticated_cannot_references_dispatch_views
+    and ph.authenticated_cannot_truncate_dispatch_replies and ph.authenticated_cannot_trigger_dispatch_replies and ph.authenticated_cannot_references_dispatch_replies
+    and ph.authenticated_can_still_select_dispatch_views and ph.authenticated_can_still_select_dispatch_replies
     and sb.letter_photos_size_limit_set and sb.letter_photos_mime_restricted and sb.dispatch_photos_size_limit_set and sb.dispatch_photos_mime_restricted
   ) as overall_pass
 from bypass_closure_check bc, status_reason_privacy_check sr, rate_limit_signatures_check rls,
-     rate_limit_grant_check rlg, rate_limit_wiring_check rlw, anon_hygiene_check ah, storage_bucket_check sb;
+     rate_limit_grant_check rlg, rate_limit_wiring_check rlw, anon_hygiene_check ah, privilege_hygiene_check ph, storage_bucket_check sb;
