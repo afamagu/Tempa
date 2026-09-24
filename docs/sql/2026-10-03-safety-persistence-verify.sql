@@ -340,7 +340,22 @@ consume_function_warning_semantics_check as (
   -- is actually 'warn' AND explicitly true.
   select
     coalesce(pg_get_functiondef(p.oid) ilike '%p_warning_acknowledged is not true%', false) as rejects_null_and_false_uniformly,
-    not coalesce(pg_get_functiondef(p.oid) ilike '%and not p_warning_acknowledged%', false) as never_uses_null_unsafe_not,
+    -- A blanket ILIKE substring search here is a false-positive trap:
+    -- pg_get_functiondef() reproduces this function's own source text
+    -- VERBATIM, including its own explanatory comments — and this
+    -- function's header comment literally quotes the unsafe pattern
+    -- ("`and not p_warning_acknowledged` silently fails...") to explain
+    -- why it is avoided. A plain '%and not p_warning_acknowledged%'
+    -- search matches that comment text, not just executable code
+    -- (independent audit correction). Require the actual unsafe
+    -- EXECUTABLE shape instead — an `if ... = 'warn' and not
+    -- p_warning_acknowledged then` statement — via a case-insensitive,
+    -- whitespace-tolerant regex anchored on the surrounding IF/THEN
+    -- syntax, which no comment can incidentally satisfy.
+    not coalesce(
+      pg_get_functiondef(p.oid) ~* 'if\s+v_eval\.mutation_disposition\s*=\s*''warn''\s+and\s+not\s+p_warning_acknowledged\s+then',
+      false
+    ) as never_uses_null_unsafe_not,
     coalesce(
       pg_get_functiondef(p.oid) ilike '%v_eval.mutation_disposition = ''warn'' and p_warning_acknowledged is true%',
       false

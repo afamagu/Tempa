@@ -670,4 +670,38 @@ describe('verification SQL', () => {
     expect(verifySql).toContain('cleanup_expired_safety_evaluations')
     expect(verifySql).toContain('overall_pass')
   })
+
+  it('checks for the null-unsafe warning-acknowledgement pattern with a structural IF/THEN regex, not a blanket comment-catching substring search (Checkpoint 10B live-verification correction)', () => {
+    // The old '%and not p_warning_acknowledged%' ILIKE search is gone —
+    // pg_get_functiondef() reproduces the live function's own source
+    // VERBATIM, including this function's own header comment, which
+    // literally quotes that exact substring to explain why it's unsafe.
+    // Production ran this verifier and got a false overall_pass=false
+    // from exactly that trap.
+    expect(verifySql).not.toContain("ilike '%and not p_warning_acknowledged%'")
+
+    const checkMatch = verifySql.match(/pg_get_functiondef\(p\.oid\)\s*~\*\s*'([^']*(?:''[^']*)*)'/)
+    expect(checkMatch, 'expected a ~* regex check for never_uses_null_unsafe_not').not.toBeNull()
+    // Un-escape SQL's doubled '' (a literal single quote inside a
+    // single-quoted string literal) back to a plain ' before building
+    // the equivalent JS RegExp below.
+    const pgPattern = checkMatch![1].replace(/''/g, "'")
+
+    // Translate the Postgres regex literal to an equivalent JS RegExp
+    // (both use \s/\. the same way here) and prove it distinguishes the
+    // two real strings this exact function's tracked source contains:
+    // the safe executable line must never match, and the explanatory
+    // comment quoting the unsafe pattern must never match either — only
+    // the actual unsafe EXECUTABLE shape would.
+    const jsPattern = new RegExp(pgPattern, 'i')
+
+    const realSafeExecutableLine = "if v_eval.mutation_disposition = 'warn' and p_warning_acknowledged is not true then"
+    const realExplanatoryComment =
+      "so `and not p_warning_acknowledged` silently fails to raise when p_warning_acknowledged is NULL"
+    const hypotheticalUnsafeLine = "if v_eval.mutation_disposition = 'warn'\n   and not p_warning_acknowledged then"
+
+    expect(jsPattern.test(realSafeExecutableLine)).toBe(false)
+    expect(jsPattern.test(realExplanatoryComment)).toBe(false)
+    expect(jsPattern.test(hypotheticalUnsafeLine)).toBe(true)
+  })
 })
