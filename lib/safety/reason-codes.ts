@@ -28,7 +28,33 @@ export const CONTENT_REASON_CODES = [
   'OFF_PLATFORM_ESCALATION',
   'SUSPICIOUS_LINK',
   'PHISHING_SIGNAL',
+  // Phase 1 (Trust & Safety completion). MONEY_INTERMEDIARY_REQUEST is a
+  // financial-solicitation subtype (asking a member to receive/hold/
+  // forward money or lend their account — the money-mule shape) and
+  // counts as a qualifying attempt. PERSONAL_CONTACT_SHARING is NOT a
+  // solicitation code: sharing a phone number/email/address or inviting
+  // someone to another app is allowed (a privacy reminder, never a
+  // strike), so it is deliberately absent from the database's
+  // solicitation_reason_codes() and never counts toward restriction.
+  'MONEY_INTERMEDIARY_REQUEST',
+  'PERSONAL_CONTACT_SHARING',
 ] as const
+
+/** The codes that make an evaluation a financial-solicitation ATTEMPT
+ * (mirrors tempa_private.solicitation_reason_codes() in SQL — keep in
+ * sync; a static test compares the two). OFF_PLATFORM_ESCALATION,
+ * SUSPICIOUS_LINK, PHISHING_SIGNAL and PERSONAL_CONTACT_SHARING are
+ * intentionally NOT here. */
+export const FINANCIAL_SOLICITATION_REASON_CODES: readonly ContentReasonCode[] = [
+  'DIRECT_MONEY_REQUEST',
+  'LOAN_OR_BILL_REQUEST',
+  'PAYMENT_DETAILS',
+  'CRYPTO_SOLICITATION',
+  'INVESTMENT_SOLICITATION',
+  'GIFT_CARD_REQUEST',
+  'EMERGENCY_MONEY_REQUEST',
+  'MONEY_INTERMEDIARY_REQUEST',
+]
 
 /** Codes reserved for the behavioral engine (Checkpoint 5) — account-
  * and correspondence-level aggregates, never derivable from one

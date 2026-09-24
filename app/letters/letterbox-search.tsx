@@ -172,8 +172,8 @@ export default function LetterboxSearch({
         value={query}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Search your Letterbox…"
-        aria-label="Search your Letterbox"
+        placeholder="Search your pen pals…"
+        aria-label="Search your pen pals"
         className={inputClass}
       />
 

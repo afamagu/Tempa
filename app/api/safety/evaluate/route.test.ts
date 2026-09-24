@@ -312,7 +312,7 @@ describe('POST /api/safety/evaluate', () => {
     expect(json).not.toHaveProperty('indicators')
   })
 
-  it('"Please send me money. I love you." is a SUCCESSFUL warning_required evaluation (HTTP 200), never the failure path — and it is a signal-creating (meaningful) evaluation', async () => {
+  it('"Please send me money. I love you." is a SUCCESSFUL cannot_send evaluation (HTTP 200, financial copy key), never the failure path — and it is still a signal-creating (meaningful) evaluation, recorded as evidence', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
     rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-money', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
     const { POST } = await import('./route')
@@ -323,7 +323,7 @@ describe('POST /api/safety/evaluate', () => {
 
     expect(response.status).toBe(200)
     const json = await response.json()
-    expect(json).toMatchObject({ evaluationId: 'eval-money', disposition: 'warning_required' })
+    expect(json).toMatchObject({ evaluationId: 'eval-money', disposition: 'cannot_send', warningCopyKey: 'safety_financial_request' })
     expect(json).not.toHaveProperty('riskBand')
     expect(json).not.toHaveProperty('reasonCodes')
     // meaningful+ evaluations are the ones record_safety_evaluation must
@@ -331,7 +331,40 @@ describe('POST /api/safety/evaluate', () => {
     // production when that SQL function itself is broken (see
     // lib/safety/send-me-money-regression.test.ts's header).
     const [, params] = recordingRpc.mock.calls.find(([name]) => name === 'record_safety_evaluation')!
-    expect(params).toMatchObject({ p_risk_band: 'meaningful', p_mutation_disposition: 'warn', p_reason_codes: ['DIRECT_MONEY_REQUEST'] })
+    expect(params).toMatchObject({ p_risk_band: 'meaningful', p_mutation_disposition: 'deny', p_reason_codes: ['DIRECT_MONEY_REQUEST'] })
+  })
+
+  it('a non-financial (phishing) warn shape is still a SUCCESSFUL warning_required evaluation with the generic copy key', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-warn', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+    const { POST } = await import('./route')
+
+    const response = await POST(
+      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Please verify your account at https://example.com/login to continue.' })
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ evaluationId: 'eval-warn', disposition: 'warning_required', warningCopyKey: 'safety_warning_generic' })
+    const [, params] = recordingRpc.mock.calls.find(([name]) => name === 'record_safety_evaluation')!
+    expect(params).toMatchObject({ p_mutation_disposition: 'warn' })
+  })
+
+  it('personal contact sharing in a PRIVATE letter is a warning_required evaluation with the contact copy key — and never on a public surface', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-contact', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+    const { POST } = await import('./route')
+
+    const priv = await POST(
+      request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Lovely to meet you. Message me on WhatsApp.' })
+    )
+    expect(await priv.json()).toMatchObject({ disposition: 'warning_required', warningCopyKey: 'safety_contact_sharing' })
+    const [, privParams] = recordingRpc.mock.calls.filter(([name]) => name === 'record_safety_evaluation').at(-1)!
+    // A weak, allowed-to-send advisory: never a solicitation code, never a case.
+    expect(privParams).toMatchObject({ p_risk_band: 'weak', p_mutation_disposition: 'warn', p_escalate_case: false })
+    expect(privParams.p_reason_codes).toContain('PERSONAL_CONTACT_SHARING')
+
+    const pub = await POST(request({ surface: 'question_answer', questionId: RECIPIENT_ID, body: 'Message me on WhatsApp.' }))
+    expect(await pub.json()).toMatchObject({ disposition: 'allow' })
   })
 
   it('a record_safety_evaluation failure on a signal-creating (warn) evaluation is a fail-closed HTTP 500 with a generic body, logged distinctly from an intervention', async () => {

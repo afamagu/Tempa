@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getSafetyCase, listCaseSignals } from '@/lib/admin-safety'
+import { getSafetyCase, listCaseSignals, getSafetyCaseReview } from '@/lib/admin-safety'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { sectionTitleClass, sectionLabelClass, helperTextClass, metadataTextClass } from '@/app/profile/ui'
 import CaseTransitionActions from '../case-transition-actions'
 import CaseAccountInterventionActions from '../case-account-intervention-actions'
 import SignalEvidence from '../signal-evidence'
+import CaseReviewEvidence from '../case-review-evidence'
 import { reasonCodeLabel, caseStatusLabel, riskBandLabel, surfaceLabel } from '../reason-labels'
 
 const INTERVENTION_STATUSES = new Set(['restricted', 'suspended', 'banned'])
@@ -36,6 +37,8 @@ export default async function NeedsAttentionCaseDetailPage({ params }: { params:
   }
 
   const { data: signals } = await listCaseSignals(supabase, id)
+  // Phase 1 — the attempts that caused this case (audited server-side).
+  const { data: review } = await getSafetyCaseReview(supabase, id)
 
   return (
     <div className="space-y-6">
@@ -113,6 +116,8 @@ export default async function NeedsAttentionCaseDetailPage({ params }: { params:
           <p className={helperTextClass}>No account action was taken on this case.</p>
         )}
       </div>
+
+      {review && <CaseReviewEvidence review={review} />}
 
       <div className="space-y-3">
         <p className={sectionLabelClass}>Signals</p>

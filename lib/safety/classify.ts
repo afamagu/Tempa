@@ -23,6 +23,7 @@
 // requests, shared bank details).
 
 import { extractIndicators, type ExtractedIndicators } from './indicators'
+import { detectContactSharing } from './patterns'
 import {
   maxRiskBand,
   riskBandAtLeast,
@@ -79,11 +80,19 @@ type Rule = {
 // would manufacture relationships between them that were never
 // actually there (see indicators.ts's own "LOCALITY PRINCIPLE" header
 // comment for the worked examples this guards against).
+// Locked policy: an ACTUAL request directed at the recipient to provide
+// money/value is denied — whichever detector path finds it (the
+// compositional Pattern Library below, or the older locality-bound
+// phrase paths). A statement of hardship with no ask is not a request
+// and never reaches these rules (see indicators.ts).
+const DENY: PolicyOverride = { disposition: 'deny' }
+
 const RULES: Rule[] = [
   {
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'meaningful',
     fires: (i) => i.hasDirectedMoneyRequest && !i.hasDirectedCryptoRequest && !i.hasDirectedGiftCardRequest,
+    policy: DENY,
   },
   {
     // A directed request WITH an explicit amount LOCALLY tied to it is
@@ -91,11 +100,13 @@ const RULES: Rule[] = [
     reasonCode: 'DIRECT_MONEY_REQUEST',
     band: 'high',
     fires: (i) => i.hasDirectedMoneyRequestWithAmount,
+    policy: DENY,
   },
   {
     reasonCode: 'LOAN_OR_BILL_REQUEST',
     band: 'meaningful',
     fires: (i) => i.hasLoanOrBillRequestPhrase,
+    policy: DENY,
   },
   {
     // A crypto keyword alone ("my Ethereum wallet address is 0x...")
@@ -106,6 +117,7 @@ const RULES: Rule[] = [
     reasonCode: 'CRYPTO_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasDirectedCryptoRequest,
+    policy: DENY,
   },
   {
     // An address being SOLICITED (tied to the SAME directed request) is
@@ -121,6 +133,7 @@ const RULES: Rule[] = [
     reasonCode: 'INVESTMENT_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasInvestmentPromiseLanguage,
+    policy: DENY,
   },
   {
     // Explicit pitch/proposition language ("forex opportunity", "show
@@ -131,11 +144,13 @@ const RULES: Rule[] = [
     reasonCode: 'INVESTMENT_SOLICITATION',
     band: 'high',
     fires: (i) => i.hasInvestmentPitchContext,
+    policy: DENY,
   },
   {
     reasonCode: 'GIFT_CARD_REQUEST',
     band: 'meaningful',
     fires: (i) => i.hasDirectedGiftCardRequest,
+    policy: DENY,
   },
   {
     // "Buy a Steam gift card and send me the code" — a narrow, highly
@@ -162,6 +177,7 @@ const RULES: Rule[] = [
     reasonCode: 'PAYMENT_DETAILS',
     band: 'meaningful',
     fires: (i) => i.hasDirectedPaymentHandleRequest,
+    policy: DENY,
   },
   {
     // Emergency VOCABULARY plus an incidental amount ("My hospital
@@ -174,6 +190,67 @@ const RULES: Rule[] = [
     reasonCode: 'EMERGENCY_MONEY_REQUEST',
     band: 'high',
     fires: (i) => i.hasEmergencyFramedMoneyRequest,
+    policy: DENY,
+  },
+  // ---- CONFIRMED financial solicitation (Phase 1 locked policy) ----
+  // Financial solicitation is not allowed on Tempa, whatever the
+  // relationship or claim. These rules are fed by the COMPOSITIONAL
+  // Pattern Library (lib/safety/patterns/solicitation.ts): financial
+  // need/value + a request directed at the recipient, not one magic
+  // phrase. A confirmed solicitation is DENIED — there is no "send
+  // anyway" — and the attempt is still recorded as evidence. The older
+  // phrase-shaped rules above are ALSO denials (same policy, same DENY):
+  // any detector path that finds a genuine ask is a confirmed one. No
+  // financial solicitation falls back to a warning.
+  {
+    reasonCode: 'DIRECT_MONEY_REQUEST',
+    band: 'meaningful',
+    fires: (i) => i.solicitedMoney && !i.solicitedWithAmount,
+    policy: DENY,
+  },
+  {
+    // An amount tied to a confirmed ask is more concrete — 'high'
+    // (which also opens/updates a review case).
+    reasonCode: 'DIRECT_MONEY_REQUEST',
+    band: 'high',
+    fires: (i) => i.solicitedMoney && i.solicitedWithAmount,
+    policy: DENY,
+  },
+  {
+    reasonCode: 'LOAN_OR_BILL_REQUEST',
+    band: 'meaningful',
+    fires: (i) => i.solicitedBillOrLoan,
+    policy: DENY,
+  },
+  {
+    reasonCode: 'GIFT_CARD_REQUEST',
+    band: 'high',
+    fires: (i) => i.solicitedGiftCard,
+    policy: DENY,
+  },
+  {
+    reasonCode: 'CRYPTO_SOLICITATION',
+    band: 'high',
+    fires: (i) => i.solicitedCrypto,
+    policy: DENY,
+  },
+  {
+    reasonCode: 'PAYMENT_DETAILS',
+    band: 'meaningful',
+    fires: (i) => i.solicitedPaymentMethod,
+    policy: DENY,
+  },
+  {
+    reasonCode: 'MONEY_INTERMEDIARY_REQUEST',
+    band: 'high',
+    fires: (i) => i.solicitedIntermediary,
+    policy: DENY,
+  },
+  {
+    reasonCode: 'INVESTMENT_SOLICITATION',
+    band: 'high',
+    fires: (i) => i.solicitedInvestment,
+    policy: DENY,
   },
   {
     reasonCode: 'OFF_PLATFORM_ESCALATION',
@@ -190,6 +267,7 @@ const RULES: Rule[] = [
     reasonCode: 'OFF_PLATFORM_ESCALATION',
     band: 'high',
     fires: (i) => i.hasOffPlatformSolicitation,
+    policy: DENY,
   },
   {
     reasonCode: 'SUSPICIOUS_LINK',
@@ -271,7 +349,15 @@ function defaultEscalateForBand(band: RiskBand): boolean {
   return riskBandAtLeast(band, 'high')
 }
 
-export function classifyContent(rawText: string): ClassificationResult {
+export type ClassifyOptions = {
+  /** The text is being written into a PRIVATE letter (first letter,
+   * reply, write-anytime). Only then does personal-contact / off-
+   * platform sharing produce a privacy-reminder interruption — on a
+   * public surface it is neither expected nor this policy's concern. */
+  privateLetter?: boolean
+}
+
+export function classifyContent(rawText: string, options: ClassifyOptions = {}): ClassificationResult {
   const indicators = extractIndicators(rawText)
 
   let band: RiskBand = 'none'
@@ -315,6 +401,18 @@ export function classifyContent(rawText: string): ClassificationResult {
   if (band !== bandBeforeCompounding) {
     disposition = moreRestrictiveDisposition(disposition, defaultDispositionForBand(band))
     escalateCase = escalateCase || defaultEscalateForBand(band)
+  }
+
+  // Personal contact / off-platform sharing — a DIFFERENT policy from
+  // financial solicitation (see lib/safety/patterns/contact.ts). Allowed,
+  // never a strike; on private letters it raises a 'warn' so the sender
+  // gets a privacy heads-up (they can still send) and the recipient later
+  // sees a short note. Added AFTER compounding on purpose: it is a weak
+  // band and must never inflate the compounding count or open a case.
+  if (options.privateLetter && detectContactSharing(rawText).kinds.length > 0) {
+    reasonCodeSet.add('PERSONAL_CONTACT_SHARING')
+    band = maxRiskBand(band, 'weak')
+    disposition = moreRestrictiveDisposition(disposition, 'warn')
   }
 
   return {

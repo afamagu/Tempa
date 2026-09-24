@@ -51,8 +51,14 @@ import {
 import { processImageForUpload } from '@/lib/image-processing'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
 import { getActivePostcards, type PostcardCatalogEntry } from '@/lib/postcards'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import FeatureIntroduction from '@/app/feature-introduction'
 import type { LetterPostcardDraft } from '@/lib/moments'
 import { DispatchPhotoMoment } from './dispatch-photo-moment-node'
@@ -222,7 +228,10 @@ export default function DispatchComposer({
   // exactly: null means no warning is pending (the ordinary case);
   // set only when /api/safety/evaluate returns warning_required, and
   // cleared on cancel or on a successful publish/save.
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
   // Account enforcement messaging (pre-beta UX polish batch 1) — see
   // lib/account-status.ts. publish_dispatch fully blocks restricted,
   // suspended, and banned alike (all three share one generic RPC
@@ -564,12 +573,13 @@ export default function DispatchComposer({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setPublishing(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setPublishing(false)
       return
     }
@@ -941,12 +951,14 @@ export default function DispatchComposer({
           changes," or create mode's Preview "Publish"). */}
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={publishing}
         actionLabel={isEdit ? 'Save anyway' : 'Publish anyway'}
         sendingLabel={isEdit ? 'Saving…' : 'Publishing…'}
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </main>
   )
 }

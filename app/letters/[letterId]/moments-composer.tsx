@@ -37,12 +37,19 @@ import { readLetterDraft, clearLetterDraft } from '@/lib/letter-draft'
 import {
   getMyAccountStatus,
   accountBlockedMessage,
-  RESTRICTED_ATTACHMENT_MESSAGE,
+  ACCOUNT_ACTION_UNAVAILABLE_CODE,
+  ACCOUNT_RESTRICTED_MESSAGE,
   CORRESPONDENCE_CLOSED_MESSAGE,
   type AccountStatus,
 } from '@/lib/account-status'
-import { evaluateSafety, SAFETY_CANNOT_SEND_MESSAGE, SAFETY_CHECK_FAILED_MESSAGE } from '@/lib/safety/send-with-safety'
+import {
+  evaluateSafety,
+  SAFETY_CANNOT_SEND_MESSAGE,
+  SAFETY_CHECK_FAILED_MESSAGE,
+  SAFETY_FINANCIAL_REQUEST_COPY_KEY,
+} from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import { baseWritingExtensions } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { PhotoMoment } from './photo-moment-node'
@@ -183,7 +190,10 @@ export default function MomentsComposer({
   const [error, setError] = useState<string | null>(null)
   // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
   // identical field for the full explanation.
-  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string } | null>(null)
+  const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
+  // Phase 1 — a confirmed financial solicitation is not sendable and has
+  // no override; this only ever opens the calm SafetyBlockedDialog.
+  const [financialBlocked, setFinancialBlocked] = useState(false)
   // Account enforcement messaging (pre-beta UX polish batch 1) — see
   // lib/account-status.ts's own doc comment. Fetched once on mount,
   // purely to pick a calmer message when a send this status actually
@@ -616,12 +626,13 @@ export default function MomentsComposer({
       return
     }
     if (outcome.status === 'cannot_send') {
-      setError(SAFETY_CANNOT_SEND_MESSAGE)
+      if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
+      else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setSending(false)
       return
     }
     if (outcome.status === 'warning_required') {
-      setPendingWarning({ evaluationId: outcome.evaluationId })
+      setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setSending(false)
       return
     }
@@ -693,21 +704,21 @@ export default function MomentsComposer({
         //     AND genuine not-found, so it can never be decoded to
         //     reveal WHICH — mapped to equally neutral TEMPA wording
         //     instead of the generic retry-implying fallback.
-        //  3. restricted blocks ONLY a Moment/Postcard attachment here
-        //     (see write_letter's own restricted-only checks), never
-        //     plain text — so this is the one status that must NOT use
-        //     accountBlockedMessage's "restricted from sending
-        //     letters" claim, which would be inaccurate for this
-        //     composer.
+        //  3. (Phase 1) restricted blocks EVERY authored write — plain
+        //     text included — via tempa_private.consume_safety_evaluation
+        //     (SQLSTATE 42501), so it now shares the suspended/banned
+        //     path above; the code check below covers a stale status.
         //  4. anything else keeps the existing generic fallback (with
         //     dev-only detail), unchanged.
         let enforcedMessage: string | null = null
-        if (myStatus === 'suspended' || myStatus === 'banned') {
+        if (myStatus === 'restricted' || myStatus === 'suspended' || myStatus === 'banned') {
+          // Phase 1 — restricted now blocks EVERY authored write (plain
+          // text included), so it shares the suspended/banned copy.
           enforcedMessage = accountBlockedMessage(myStatus)
         } else if (sendError.message === 'Correspondence not found.') {
           enforcedMessage = CORRESPONDENCE_CLOSED_MESSAGE
-        } else if (myStatus === 'restricted' && (momentDrafts.length > 0 || postcardPayload)) {
-          enforcedMessage = RESTRICTED_ATTACHMENT_MESSAGE
+        } else if (sendError.code === ACCOUNT_ACTION_UNAVAILABLE_CODE) {
+          enforcedMessage = ACCOUNT_RESTRICTED_MESSAGE
         }
 
         // The user-facing copy stays generic in production — same
@@ -961,10 +972,12 @@ export default function MomentsComposer({
 
       <SafetyWarningDialog
         open={pendingWarning !== null}
+        copyKey={pendingWarning?.copyKey}
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={sending}
       />
+      <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </div>
   )
 }

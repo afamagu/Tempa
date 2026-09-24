@@ -21,6 +21,7 @@
 // relationship between two facts.
 
 import { toDisplayText, toCanonicalText, toNumericText } from './normalize'
+import { analyzeSolicitations, isNotARequest, stripReportedQuotes, type SolicitationHit } from './patterns'
 
 export type MoneyAmount = { raw: string; value: number | null; currencyHint: string | null }
 
@@ -133,6 +134,23 @@ export type ExtractedIndicators = {
   hasLoanOrBillRequestPhrase: boolean
   hasSuspiciousLinkShortener: boolean
   hasPhishingPhrase: boolean
+  /** The COMPOSITIONAL Pattern Library's own findings (lib/safety/
+   * patterns/solicitation.ts) — financial need/value + a request
+   * DIRECTED at the recipient (+ optional urgency/payment-method/story
+   * context, with a bare final ask inheriting only the immediately
+   * preceding sentences' financial context). These, not the older
+   * phrase-shaped indicators above, are what make a solicitation
+   * CONFIRMED (and therefore not sendable) — see classify.ts. Each is
+   * bound to the ONE sentence that carried the ask, never message-wide. */
+  solicitedMoney: boolean
+  solicitedBillOrLoan: boolean
+  solicitedGiftCard: boolean
+  solicitedCrypto: boolean
+  solicitedPaymentMethod: boolean
+  solicitedIntermediary: boolean
+  solicitedInvestment: boolean
+  /** Some confirmed solicitation carried a concrete amount. */
+  solicitedWithAmount: boolean
 }
 
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+\.[a-z]{2,}[^\s<>"']*/gi
@@ -197,13 +215,19 @@ const OFF_PLATFORM_KEYWORD_PATTERN =
 const EMERGENCY_KEYWORD_PATTERN = /\b(emergency|urgent(?:ly)?|hospital(?:ized)?|surgery|accident|stranded|deported)\b/i
 const URGENCY_LANGUAGE_PATTERN = /\b(right away|immediately|as soon as possible|asap|before it'?s too late|today only)\b/i
 const LOAN_OR_BILL_PHRASE_PATTERN =
-  /\b(help (?:me )?(?:pay|with|cover)|pay (?:for )?my)\b.{0,25}\b(rent|bill|bills|electricity|tuition|fees|loan|debt)\b/i
+  // "pay my <bill>" only counts in a request frame (an imperative or a
+  // second-person ask) — "I need to pay my electricity bill tomorrow" is
+  // the writer paying their own bill, not asking anyone else to.
+  /\b(help (?:me )?(?:pay|with|cover))\b.{0,25}\b(rent|bill|bills|electricity|tuition|fees|loan|debt)\b|(?:(?:^|[.!?]\s+)(?:please\s+)?|\b(?:please|kindly|can you|could you|would you|will you|you can|you could|you should|you must|you need to|just)\s+)pay (?:for )?my\b.{0,25}\b(rent|bill|bills|electricity|tuition|fees|loan|debt)\b/i
 const PHISHING_PHRASE_PATTERN = /\b(verify your account|confirm your payment|update your (?:billing|payment) (?:info|details))\b/i
 const MONEY_WORD_PATTERN = /\b(money|funds?|cash|payment)\b/i
 
-// "i need money/funds/cash" already carries its own financial object —
-// no verb-object locality question, it's self-contained.
-const NEED_MONEY_PATTERN = /\bi need\b.{0,15}\b(money|funds|cash)\b/i
+// A STATEMENT of need or hardship ("I need emergency money for surgery",
+// "I need money", "I cannot afford the fee") is deliberately NOT a directed
+// request: nothing is asked of the correspondent. It used to be treated as
+// one ("I need money" matched as self-contained), which made hardship talk
+// look like solicitation. Only an ask directed at the recipient counts —
+// either the verb-based paths below or the compositional Pattern Library.
 
 // send/give/lend/pay/buy/transfer/wire ALL have ordinary non-financial
 // senses ("send me a photo", "give me your opinion", "lend me that
@@ -250,7 +274,7 @@ const TRANSFER_VERB_TO_PATTERN = /\b(send|pay|transfer|wire)\b.{0,20}\bto\b/i
 // sentence, before the transfer phrase even started, can't count.
 const CRYPTO_TRANSFER_TARGET_WINDOW_CHARS = 50
 
-// Self-contained, like NEED_MONEY_PATTERN: "wallet"/"account" IS the
+// Self-contained: "wallet"/"account" IS the
 // financial object here, directly adjacent to "this/my/the" — no
 // separate local-window check needed regardless of verb class.
 const TRANSFER_TO_ACCOUNT_PATTERN =
@@ -403,11 +427,6 @@ function analyzeDirectedRequest(
   let isDirected = false
   let terms = NO_TERMS
 
-  if (NEED_MONEY_PATTERN.test(canonicalSentence)) {
-    isDirected = true
-    terms = mergeTerms(terms, { ...NO_TERMS, any: true })
-  }
-
   if (sentenceHasDirectedCryptoTransfer(displaySentence, canonicalSentence)) {
     isDirected = true
     terms = mergeTerms(terms, { any: true, hasAmount: false, hasCryptoTerm: true, hasCryptoAddress: true, hasGiftCardTerm: false, hasPaymentHandleTerm: false })
@@ -490,7 +509,10 @@ function analyzeSentence(displaySentence: string): SentenceAnalysis {
   const directed = analyzeDirectedRequest(displaySentence, canonicalSentence, numericSentence)
 
   return {
-    isDirectedMoneyRequest: directed.isDirected,
+    // Reported speech / negation BEFORE the asking verb ("I told him
+    // not to send me money", "Someone asked me for money") describes a
+    // request rather than making one.
+    isDirectedMoneyRequest: directed.isDirected && !isNotARequest(canonicalSentence),
     hasAmount: directed.hasAmount,
     hasCryptoTerm: directed.hasCryptoTerm,
     hasCryptoAddress: directed.hasCryptoAddress,
@@ -543,12 +565,30 @@ function extractMoneyAmounts(displayText: string, numericText: string): MoneyAmo
   })
 }
 
+/** One primary category per confirmed hit, so a single detection is
+ * never double-counted as two reason codes (see reason-codes.ts's own
+ * note on compounding). Most specific first. */
+function primaryCategory(hit: SolicitationHit): 'intermediary' | 'investment' | 'gift_card' | 'crypto' | 'payment' | 'bill' | 'money' {
+  if (hit.ask === 'intermediary') return 'intermediary'
+  if (hit.ask === 'invest') return 'investment'
+  if (hit.kinds.includes('gift_card')) return 'gift_card'
+  if (hit.kinds.includes('crypto')) return 'crypto'
+  if (hit.kinds.some((k) => k === 'payment_handle' || k === 'bank' || k === 'account')) return 'payment'
+  if (hit.kinds.includes('bill') && !hit.kinds.includes('money') && !hit.kinds.includes('amount')) return 'bill'
+  return 'money'
+}
+
 export function extractIndicators(rawText: string): ExtractedIndicators {
+  const solicitation = analyzeSolicitations(rawText)
+  const categories = solicitation.hits.map(primaryCategory)
   const displayText = toDisplayText(rawText)
   const canonicalText = toCanonicalText(rawText)
   const numericText = toNumericText(rawText)
 
-  const sentences = splitIntoSentences(displayText)
+  // A quotation introduced by a reporting verb ("She said, 'Can you send
+  // me money?'") is a report of a request, not a request.
+  const spokenText = stripReportedQuotes(displayText)
+  const sentences = splitIntoSentences(spokenText)
   const analyses = sentences.map((sentence) => analyzeSentence(sentence))
 
   // Finer-grained than sentence-level: emergency framing, off-platform
@@ -557,7 +597,7 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
   // unrelated facts with a comma ("Could you send me some money, my
   // brother works at a hospital." — one sentence, two clauses). See
   // splitIntoClauses's own doc comment.
-  const clauses = splitIntoClauses(displayText)
+  const clauses = splitIntoClauses(spokenText)
   const clauseAnalyses = clauses.map((clause) => analyzeSentence(clause))
 
   const hasDirectedMoneyRequest = analyses.some((s) => s.isDirectedMoneyRequest)
@@ -624,5 +664,13 @@ export function extractIndicators(rawText: string): ExtractedIndicators {
     hasLoanOrBillRequestPhrase: LOAN_OR_BILL_PHRASE_PATTERN.test(canonicalText),
     hasSuspiciousLinkShortener: LINK_SHORTENER_PATTERN.test(displayText),
     hasPhishingPhrase: PHISHING_PHRASE_PATTERN.test(canonicalText),
+    solicitedMoney: categories.includes('money'),
+    solicitedBillOrLoan: categories.includes('bill'),
+    solicitedGiftCard: categories.includes('gift_card'),
+    solicitedCrypto: categories.includes('crypto'),
+    solicitedPaymentMethod: categories.includes('payment'),
+    solicitedIntermediary: categories.includes('intermediary'),
+    solicitedInvestment: categories.includes('investment'),
+    solicitedWithAmount: solicitation.hits.some((h) => h.hasAmount),
   }
 }

@@ -26,6 +26,7 @@ import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
 import { sectionLabelClass, pageTitleClass, helperTextClass, quietLinkClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
+import MemberNotices from '@/app/member-notices'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
 import QuestionIncompleteNotice from '@/app/minds/question-incomplete-notice'
@@ -221,6 +222,7 @@ export default async function HomePage() {
               stays in a comfortable narrow reading column, regardless of
               how wide the editorial Board surface below gets to be. */}
           <div className="mx-auto w-full max-w-md">
+            <MemberNotices />
             <div className="space-y-6">
               <h1 className={pageTitleClass}>Arrivals</h1>
 

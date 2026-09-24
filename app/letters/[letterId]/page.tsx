@@ -33,6 +33,7 @@ import LetterReader from './letter-reader'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import FirstContactResponse from './first-contact-response'
 import ClosureStatusNotice from './closure-status-notice'
+import ContactSharingNote from './contact-sharing-note'
 import ClosureRecommendations from '@/app/letters/closure-recommendations'
 import WriteQuillButton from '@/app/letters/with/[userId]/write-quill-button'
 
@@ -111,6 +112,7 @@ export default async function LetterPage({
     letterPostcardsByLetterId,
     lockedElsewhere,
     otherPartyBlockScope,
+    { data: contactNote },
   ] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, mark_id').in('id', [user.id, otherPartyId]),
     getCorrespondence(supabase, target.correspondenceId),
@@ -123,6 +125,11 @@ export default async function LetterPage({
     getLetterPostcardsForLetters(supabase, [target.id]),
     getFirstLockedPhotoLetterMoment(supabase, target.correspondenceId),
     getBlockScope(supabase, otherPartyId),
+    // Phase 1 — the recipient-only contact-sharing reminder for THIS
+    // letter (letter_safety_notices' own RLS also enforces recipient-only).
+    isRecipientOfTarget
+      ? supabase.from('letter_safety_notices').select('kind').eq('letter_id', target.id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
   const letterPostcard = letterPostcardsByLetterId.get(target.id) ?? null
 
@@ -387,6 +394,10 @@ export default async function LetterPage({
                 photoConsent={targetPhotoConsent}
               />
             </div>
+
+            {isRecipientOfTarget && contactNote?.kind === 'contact_sharing' && (
+              <ContactSharingNote className="mt-6 max-w-[68ch]" />
+            )}
           </div>
 
           <div className="mt-6">

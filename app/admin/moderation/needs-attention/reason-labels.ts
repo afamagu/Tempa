@@ -14,6 +14,8 @@ export const REASON_CODE_LABELS: Record<string, string> = {
   INVESTMENT_SOLICITATION: 'Investment pitch',
   GIFT_CARD_REQUEST: 'Gift card request',
   EMERGENCY_MONEY_REQUEST: 'Emergency money request',
+  MONEY_INTERMEDIARY_REQUEST: 'Asked to receive/forward money',
+  PERSONAL_CONTACT_SHARING: 'Shared personal contact details',
   OFF_PLATFORM_ESCALATION: 'Off-platform contact',
   SUSPICIOUS_LINK: 'Suspicious link',
   PHISHING_SIGNAL: 'Phishing pattern',
