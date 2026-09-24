@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import AuthConfirmPage, { dynamic, metadata } from './page'
+
+const pageSource = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8')
 
 const SUPABASE_URL = 'https://abcdefghijklmnop.supabase.co'
 const ORIGINAL_ENV = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -27,7 +31,10 @@ const VALID_CONFIRMATION_URL = `${SUPABASE_URL}/auth/v1/verify?token=abc123&type
 // rendering it can never itself perform auth verification, a token
 // exchange, or any automatic navigation — that's a structural
 // guarantee, not just a behavioral one, since there is no effect/timer
-// anywhere in this file at all to audit.
+// anywhere in this file at all to audit. Parsing the already-validated
+// URL (extractMagicLinkVerificationParams/extractSanitizedNext...) is
+// pure string parsing — no network call, no Supabase contact, no
+// token consumption.
 describe('AuthConfirmPage — never contacts/verifies Supabase, never auto-redirects', () => {
   it('renders successfully with only a search param — no exception, no network call attempted', async () => {
     const html = await render(VALID_CONFIRMATION_URL)
@@ -39,35 +46,46 @@ describe('AuthConfirmPage — never contacts/verifies Supabase, never auto-redir
     expect(html).not.toMatch(/<meta[^>]*http-equiv=["']refresh["']/i)
   })
 
-  it('contains no inline script and no useEffect-driven auto-navigation — the file itself has no client directive', async () => {
+  it('the page itself has no client directive and defines no effect/timer of its own — the only script present is React 19\'s own generic form-action progressive-enhancement listener, which merely intercepts a REAL browser submit event, never auto-triggers one', async () => {
+    expect(pageSource).not.toContain("'use client'")
+    // Checking for the actual call shape (with the opening paren) avoids
+    // a false positive on this file's own doc comments, which
+    // deliberately discuss useEffect/meta-refresh/timers in prose to
+    // explain why none of them are used.
+    expect(pageSource).not.toContain('useEffect(')
+    expect(pageSource).not.toContain('setTimeout(')
+    expect(pageSource).not.toContain('setInterval(')
+
     const html = await render(VALID_CONFIRMATION_URL)
-    expect(html).not.toContain('<script')
+    // React's own injected script (present because the form uses a
+    // function `action`) only ever runs in response to a genuine
+    // `submit` event — it contains no auto-invocation of any kind.
+    expect(html).not.toMatch(/window\.onload|DOMContentLoaded|autofocus|requestSubmit\(\)/i)
   })
 })
 
 describe('AuthConfirmPage — a valid Supabase ConfirmationURL produces a human-click control', () => {
-  // React's own SSR renderer HTML-escapes `&` to `&amp;` inside an
-  // attribute value (correct, standard HTML) — the assertions below
-  // match that escaped form, and separately confirm (via URL parsing)
-  // that the DECODED href is the exact, unmodified validated URL.
-  const ESCAPED_HREF = `href="${VALID_CONFIRMATION_URL.replace(/&/g, '&amp;')}"`
-
-  it('shows "Sign in to TEMPA" as a plain anchor pointing at the exact validated URL', async () => {
+  it('shows "Sign in to TEMPA" as an explicit submit button inside a <form>, never a plain link to the raw Supabase URL', async () => {
     const html = await render(VALID_CONFIRMATION_URL)
     expect(html).toContain('Sign in to TEMPA')
-    expect(html).toContain(ESCAPED_HREF)
+    expect(html).toContain('type="submit"')
+    // The raw Supabase ConfirmationURL is never rendered anywhere in the
+    // page's own HTML — the browser is never navigated there.
+    expect(html).not.toContain(SUPABASE_URL)
+    expect(html).not.toContain('auth/v1/verify')
   })
 
-  it('the confirmation link is a plain <a>, never a Next.js <Link> (which could prefetch it)', async () => {
+  it('the submit control lives inside a real <form>, not a bare <button> with an onClick handler (there is no client script here to attach one)', async () => {
     const html = await render(VALID_CONFIRMATION_URL)
-    const anchorIndex = html.indexOf('Sign in to TEMPA')
-    const tagStart = html.lastIndexOf('<a ', anchorIndex)
-    expect(tagStart).toBeGreaterThan(-1)
-    // A real <a> element, not a Next <Link> render (which also emits an
-    // <a>, but this proves the href is the raw external URL, not an
-    // internal Next route — no leading "/" and no next/link-only
-    // attributes like data-... prefetch markers would apply here).
-    expect(html.slice(tagStart, anchorIndex)).toContain(ESCAPED_HREF)
+    const formIndex = html.indexOf('<form')
+    const buttonIndex = html.indexOf('Sign in to TEMPA')
+    expect(formIndex).toBeGreaterThan(-1)
+    expect(buttonIndex).toBeGreaterThan(formIndex)
+  })
+
+  it('never renders an <a> tag pointing at the Supabase host at all', async () => {
+    const html = await render(VALID_CONFIRMATION_URL)
+    expect(html).not.toMatch(new RegExp(`<a[^>]*href="${SUPABASE_URL}`))
   })
 
   it('never renders the "isn\'t valid" fallback copy when the URL is valid', async () => {
@@ -76,16 +94,7 @@ describe('AuthConfirmPage — a valid Supabase ConfirmationURL produces a human-
   })
 })
 
-describe('AuthConfirmPage — final hardening pass: referrer, indexing, caching', () => {
-  it('the human-click link carries referrerPolicy="no-referrer", so this page\'s own URL (which itself carries the confirmation_url query value) is never sent to Supabase as a Referer header', async () => {
-    const html = await render(VALID_CONFIRMATION_URL)
-    const ESCAPED_HREF = `href="${VALID_CONFIRMATION_URL.replace(/&/g, '&amp;')}"`
-    const anchorIndex = html.indexOf(ESCAPED_HREF)
-    expect(anchorIndex).toBeGreaterThan(-1)
-    const tagEnd = html.indexOf('>', anchorIndex)
-    expect(html.slice(anchorIndex, tagEnd).toLowerCase()).toContain('referrerpolicy="no-referrer"')
-  })
-
+describe('AuthConfirmPage — final hardening pass: indexing, caching', () => {
   it('the route is marked noindex, nofollow — a credential-bearing URL must never be a crawlable/indexable product page', () => {
     expect(metadata.robots).toMatchObject({ index: false, follow: false })
   })
@@ -102,11 +111,11 @@ describe('AuthConfirmPage — final hardening pass: referrer, indexing, caching'
   })
 })
 
-describe('AuthConfirmPage — rejects unsafe/invalid confirmation_url values', () => {
-  it('an arbitrary external URL is rejected — no link is ever rendered to it', async () => {
-    const evil = 'https://evil.example.com/auth/v1/verify?token=x'
+describe('AuthConfirmPage — rejects unsafe/invalid confirmation_url values, and unverifiable token/type shapes', () => {
+  it('an arbitrary external URL is rejected — no form is ever rendered for it', async () => {
+    const evil = 'https://evil.example.com/auth/v1/verify?token=x&type=magiclink'
     const html = await render(evil)
-    expect(html).not.toContain(`href="${evil}"`)
+    expect(html).not.toContain('Sign in to TEMPA')
     expect(html).toContain("isn&#x27;t valid")
   })
 
@@ -125,11 +134,25 @@ describe('AuthConfirmPage — rejects unsafe/invalid confirmation_url values', (
   it('the correct Supabase host but the wrong path is rejected', async () => {
     const wrongPath = `${SUPABASE_URL}/some-other-endpoint?token=x`
     const html = await render(wrongPath)
-    expect(html).not.toContain(`href="${wrongPath}"`)
+    expect(html).not.toContain('Sign in to TEMPA')
     expect(html).toContain("isn&#x27;t valid")
   })
 
-  it('no confirmation_url at all also shows the honest fallback, never a broken/empty link', async () => {
+  it('a same-origin/same-path URL missing a token is rejected — no form is rendered', async () => {
+    const url = `${SUPABASE_URL}/auth/v1/verify?type=magiclink`
+    const html = await render(url)
+    expect(html).not.toContain('Sign in to TEMPA')
+    expect(html).toContain("isn&#x27;t valid")
+  })
+
+  it('a same-origin/same-path URL with an unsupported type (e.g. recovery) is rejected — no form is rendered', async () => {
+    const url = `${SUPABASE_URL}/auth/v1/verify?token=abc123&type=recovery`
+    const html = await render(url)
+    expect(html).not.toContain('Sign in to TEMPA')
+    expect(html).toContain("isn&#x27;t valid")
+  })
+
+  it('no confirmation_url at all also shows the honest fallback, never a broken/empty form', async () => {
     const html = await render(undefined)
     expect(html).toContain("isn&#x27;t valid")
     expect(html).not.toContain('Sign in to TEMPA')

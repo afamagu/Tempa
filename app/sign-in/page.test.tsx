@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import SignInPage, { getAuthErrorMessage, getAuthErrorMessageFromFragment } from './page'
+import SignInPage, { getAuthErrorMessage, getAuthErrorMessageFromFragment, getInitialErrorMessage } from './page'
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -95,6 +95,28 @@ describe('getAuthErrorMessageFromFragment — reads GoTrue\'s fragment-only erro
   it('an empty or absent fragment returns an empty string — never fabricates an error', () => {
     expect(getAuthErrorMessageFromFragment('')).toBe('')
     expect(getAuthErrorMessageFromFragment('#')).toBe('')
+  })
+})
+
+// Cross-browser magic-link fix (2026-09-24) — `link_expired` is set by
+// app/auth/confirm/verify-magic-link-action.ts's own redirect when
+// Supabase's verifyOtp rejects an expired/already-consumed/malformed
+// token — a DIFFERENT code path than GoTrue's own fragment-based
+// otp_expired above, but deliberately the exact same restrained copy.
+describe('getInitialErrorMessage — the initial ?error= query param, read at first render', () => {
+  it('link_expired gets the same specific, calm, actionable message as the fragment-based otp_expired case', () => {
+    expect(getInitialErrorMessage('link_expired')).toBe(
+      'This sign-in link is no longer valid. Request a new link and use the newest email.'
+    )
+  })
+
+  it('auth_failed keeps its existing generic message, unchanged', () => {
+    expect(getInitialErrorMessage('auth_failed')).toBe('Something went wrong signing you in. Please try again.')
+  })
+
+  it('an unrecognized or absent error param returns an empty string', () => {
+    expect(getInitialErrorMessage('something_else')).toBe('')
+    expect(getInitialErrorMessage(null)).toBe('')
   })
 })
 

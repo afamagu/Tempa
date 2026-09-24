@@ -1,6 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { validateConfirmationUrl } from '@/lib/auth-confirm'
+import {
+  validateConfirmationUrl,
+  extractMagicLinkVerificationParams,
+  extractSanitizedNextFromConfirmationUrl,
+} from '@/lib/auth-confirm'
+import { verifyMagicLink } from './verify-magic-link-action'
 
 // Final hardening pass — this route's URL carries a one-time,
 // credential-bearing ConfirmationURL as a query param, so it must never
@@ -33,19 +38,30 @@ export const metadata: Metadata = {
  * without a genuine human click. An email security scanner/prefetcher
  * can GET this route as many times as it wants — rendering it performs
  * NO auth verification and NO token exchange, so nothing here can ever
- * consume the single-use magic-link token.
+ * consume the single-use magic-link token: extracting tokenHash/type/
+ * next from the already-validated URL is pure parsing, never a network
+ * call, and never touches Supabase.
  *
- * Only the visible "Sign in to TEMPA" button — a plain `<a href>`,
- * deliberately never a Next.js `<Link>` (which can prefetch) —
- * navigates to the real, validated ConfirmationURL, and only when a
- * human actually clicks it.
+ * Cross-browser magic-link fix (2026-09-24): the visible "Sign in to
+ * TEMPA" control is now a `<form action={verifyMagicLink.bind(...)}>`,
+ * never a plain `<a href>` pointing at the raw Supabase ConfirmationURL
+ * — the browser is never navigated to Supabase's own `/auth/v1/verify`
+ * endpoint at all (see lib/auth-confirm.ts's own header for why that
+ * was the actual cross-browser bug: GoTrue's own redirect back to
+ * /auth/callback carried a PKCE code exchangeable only in the browser
+ * that originally called signInWithOtp). Only an explicit human submit
+ * of this form calls the server action, which calls Supabase's
+ * verifyOtp itself, server-side, in the browser/device that is actually
+ * viewing this page — no same-browser assumption anywhere.
  *
  * The email template (Section G of this checkpoint) points here with
  * `?confirmation_url=<the real Supabase ConfirmationURL>` rather than
- * linking `{{ .ConfirmationURL }}` directly. validateConfirmationUrl
- * (lib/auth-confirm.ts) is the actual security boundary — this page
- * never renders a link to anything that fails that check, so it can
- * never become an open redirect to an attacker-controlled host.
+ * linking `{{ .ConfirmationURL }}` directly — UNCHANGED by the
+ * cross-browser fix; the existing template already supplies everything
+ * verifyOtp needs. validateConfirmationUrl (lib/auth-confirm.ts) is the
+ * actual security boundary — this page never acts on a confirmation_url
+ * that fails that check, so it can never become an open redirect or a
+ * forged-verification vector.
  */
 export default async function AuthConfirmPage({
   searchParams,
@@ -54,25 +70,28 @@ export default async function AuthConfirmPage({
 }) {
   const { confirmation_url } = await searchParams
   const validatedUrl = validateConfirmationUrl(confirmation_url, process.env.NEXT_PUBLIC_SUPABASE_URL)
+  const verification = validatedUrl ? extractMagicLinkVerificationParams(validatedUrl) : null
+  const next = validatedUrl ? extractSanitizedNextFromConfirmationUrl(validatedUrl) : null
 
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-sm w-full space-y-4 rounded-md border border-foreground/12 p-6 text-center">
         <p className="font-serif text-2xl font-medium">TEMPA</p>
 
-        {validatedUrl ? (
+        {verification ? (
           <>
             <p className="text-sm">Your sign-in is ready.</p>
             <p className="text-sm text-muted">
               For your security, sign-in links are only opened after you choose to continue.
             </p>
-            <a
-              href={validatedUrl}
-              referrerPolicy="no-referrer"
-              className="block w-full rounded-md bg-accent text-accent-foreground px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent/90"
-            >
-              Sign in to TEMPA
-            </a>
+            <form action={verifyMagicLink.bind(null, verification.tokenHash, verification.type, next)}>
+              <button
+                type="submit"
+                className="block w-full rounded-md bg-accent text-accent-foreground px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent/90"
+              >
+                Sign in to TEMPA
+              </button>
+            </form>
             <p className="text-xs text-muted">If you didn&apos;t request this email, you can close this page.</p>
           </>
         ) : (
