@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { classifyContent, combineClassifications } from '@/lib/safety'
+import { combineClassifications } from '@/lib/safety'
+import { analyzeText } from '@/lib/safety/analysis-boundary'
 import { buildEvaluateResponse, parseEvaluateRequest, type ParsedPostcard } from '@/lib/safety/route-contract'
 
 const PRIVATE_LETTER_SURFACES = new Set<string>(['first_letter', 'reply', 'write_anytime'])
@@ -178,7 +179,11 @@ export async function POST(request: NextRequest) {
   // only makes sense in a PRIVATE letter (first letter, reply, write-
   // anytime) — never on a public surface.
   const privateLetter = PRIVATE_LETTER_SURFACES.has(parsed.request.surface)
-  const classify = (text: string) => classifyContent(text, { privateLetter })
+  // Phase 1 has no translation provider: analyzeText analyses the original
+  // text only (lib/safety/analysis-boundary.ts — the one place a later,
+  // privacy-safe translated representation can be added, and where
+  // "translation unavailable" can never mean "safe").
+  const classify = (text: string) => analyzeText(text, { privateLetter }).classification
   const classifications = [classify(parsed.request.body)]
   if (parsed.request.title) {
     classifications.push(classify(parsed.request.title))
