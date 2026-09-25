@@ -13,6 +13,7 @@ import {
   primaryButtonClass,
 } from '@/app/profile/ui'
 import { dispatchPostcardToBaseContent, type SharedDispatch } from '@/lib/dispatches'
+import DispatchIdentityLabel, { SponsorCta } from '@/app/board/dispatch-identity-label'
 
 /**
  * The external reader's actual content — factored out from the async
@@ -74,16 +75,26 @@ export default function SharedDispatchView({
         <p className="font-serif text-lg italic text-foreground">Tempa</p>
 
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Mindform identifier={dispatch.id} size="md" />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
-                <CountryFlag country={dispatch.authorCountry} />
+          {dispatch.identity.kind === 'member' ? (
+            <div className="flex items-center gap-3">
+              <Mindform identifier={dispatch.id} size="md" />
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
+                  <CountryFlag country={dispatch.authorCountry} />
+                </div>
+                <p className={metadataTextClass}>{formatDatePlain(dispatch.publishedAt)}</p>
               </div>
+            </div>
+          ) : (
+            // Official/Sponsored: Tempa emblem + "Tempa", or "Sponsored" +
+            // sponsor. get_shared_dispatch never returns the creating
+            // admin's identity for these rows, and none is shown.
+            <div className="space-y-1">
+              <DispatchIdentityLabel identity={dispatch.identity} size="md" linkable={false} />
               <p className={metadataTextClass}>{formatDatePlain(dispatch.publishedAt)}</p>
             </div>
-          </div>
+          )}
 
           <h1 className={proseHeadingClass}>{dispatch.title}</h1>
 
@@ -115,6 +126,12 @@ export default function SharedDispatchView({
           <div className="rounded-md bg-surface-shell p-4 sm:p-6">
             <DispatchBody body={dispatch.body} moments={dispatch.moments} />
           </div>
+
+          {dispatch.identity.kind === 'sponsored' && dispatch.identity.sponsor.ctaUrl && (
+            <div className="flex justify-end">
+              <SponsorCta identity={dispatch.identity} />
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 border-t border-foreground/10 pt-6 text-center">

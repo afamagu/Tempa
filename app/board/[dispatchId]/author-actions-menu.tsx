@@ -58,6 +58,8 @@ export default function AuthorActionsMenu({
   initialIsPinned,
   momentImagePaths,
   editable,
+  allowPin = true,
+  editHref,
 }: {
   dispatchId: string
   initialShareToken: string | null
@@ -78,6 +80,12 @@ export default function AuthorActionsMenu({
    * it never means an ineligible edit can succeed.
    */
   editable: boolean
+  /** Official/Sponsored Dispatches — false: a Tempa or Sponsored
+   * Dispatch is never pinned to the creating admin's own profile. */
+  allowPin?: boolean
+  /** Official/Sponsored Dispatches edit through Admin Content (staff-only
+   * update_official_dispatch), never the member edit path. */
+  editHref?: string
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -214,16 +222,18 @@ export default function AuthorActionsMenu({
               <div className="flex flex-col gap-1.5">
                 {editable && (
                   <Link
-                    href={`/board/${dispatchId}/edit`}
+                    href={editHref ?? `/board/${dispatchId}/edit`}
                     className={secondaryButtonClass}
                     onClick={closeMenu}
                   >
                     Edit Dispatch
                   </Link>
                 )}
-                <button type="button" onClick={handleTogglePin} disabled={busy} className={secondaryButtonClass}>
-                  {isPinned ? 'Unpin from profile' : 'Pin to profile'}
-                </button>
+                {allowPin && (
+                  <button type="button" onClick={handleTogglePin} disabled={busy} className={secondaryButtonClass}>
+                    {isPinned ? 'Unpin from profile' : 'Pin to profile'}
+                  </button>
+                )}
                 {shareToken ? (
                   <button type="button" onClick={handleStopSharing} disabled={busy} className={secondaryButtonClass}>
                     Stop sharing externally

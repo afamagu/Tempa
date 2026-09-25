@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import DispatchAuthorLink from '@/app/board/dispatch-author-link'
+import DispatchIdentityLabel from '@/app/board/dispatch-identity-label'
 import { formatDatePlain } from '@/lib/format-date'
 import { metadataTextClass } from '@/app/profile/ui'
 import type { BoardFeedItem } from '@/lib/dispatches'
@@ -27,12 +27,7 @@ export default function KeptDispatchShelf({
           }`}
         >
           <div className="flex min-w-0 items-center gap-1.5">
-            <DispatchAuthorLink
-              authorId={dispatch.authorId}
-              authorPseudonym={dispatch.authorPseudonym}
-              authorCountry={dispatch.authorCountry}
-              authorMarkUrl={dispatch.authorMarkUrl ?? null}
-            />
+            <DispatchIdentityLabel identity={dispatch.identity} />
             <span className={`shrink-0 ${metadataTextClass}`}>· {formatDatePlain(dispatch.publishedAt)}</span>
           </div>
           <Link

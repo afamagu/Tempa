@@ -133,7 +133,7 @@ export default function BoardFeed({
           dispatch={dispatch}
           trailQuery={readingTrailSearchParams({ sessionStartedAt, seed }, dispatch).toString()}
           keepSlot={
-            dispatch.authorId !== viewerId ? (
+            dispatch.identity.kind === 'member' && dispatch.authorId !== viewerId ? (
               <KeepButton
                 viewerId={viewerId}
                 keptUserId={dispatch.authorId}

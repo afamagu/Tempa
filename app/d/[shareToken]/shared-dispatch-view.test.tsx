@@ -3,9 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import SharedDispatchView from './shared-dispatch-view'
 import DispatchUnavailable from './dispatch-unavailable'
 import type { SharedDispatch } from '@/lib/dispatches'
+import { resolveDispatchIdentity } from '@/lib/dispatch-identity'
 
 function dispatch(overrides: Partial<SharedDispatch> = {}): SharedDispatch {
-  return {
+  const merged: Omit<SharedDispatch, 'identity'> = {
     id: 'd-1',
     title: 'A quiet morning ritual',
     body: 'First paragraph.\n\nSecond paragraph.',
@@ -16,6 +17,12 @@ function dispatch(overrides: Partial<SharedDispatch> = {}): SharedDispatch {
     moments: [],
     postcard: null,
     ...overrides,
+  }
+  return {
+    ...merged,
+    identity:
+      overrides.identity ??
+      resolveDispatchIdentity({ publishedAs: 'member', authorId: '', authorPseudonym: merged.authorPseudonym, authorCountry: merged.authorCountry }),
   }
 }
 

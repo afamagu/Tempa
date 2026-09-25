@@ -141,7 +141,7 @@ export default async function BoardPage({
                   key={dispatch.id}
                   dispatch={dispatch}
                   keepSlot={
-                    dispatch.authorId !== user.id ? (
+                    dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
                       <KeepButton
                         viewerId={user.id}
                         keptUserId={dispatch.authorId}

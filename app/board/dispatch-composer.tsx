@@ -42,7 +42,11 @@ import {
   normalizeTopics,
   publishDispatch,
   updateDispatch,
+  publishOfficialDispatch,
+  updateOfficialDispatch,
   dispatchPostcardToBaseContent,
+  type OfficialPublishedAs,
+  type SponsorFields,
   type DispatchMoment,
   type DispatchMomentDraft,
   type DispatchPostcard,
@@ -58,6 +62,7 @@ import {
   SAFETY_FINANCIAL_REQUEST_COPY_KEY,
 } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
+import { resolveDispatchIdentity, safeSponsorUrl, TEMPA_IDENTITY_NAME } from '@/lib/dispatch-identity'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import FeatureIntroduction from '@/app/feature-introduction'
 import type { LetterPostcardDraft } from '@/lib/moments'
@@ -191,7 +196,15 @@ export default function DispatchComposer({
   existingDispatch,
   showComposerIntro = false,
   showPostcardIntro = false,
+  publication,
 }: {
+  /** Official/Sponsored Dispatches (Admin Content only) — the SAME
+   * composer, publishing through the staff-only publish_official_
+   * dispatch / update_official_dispatch RPCs, which re-check
+   * is_staff('admin') server-side. Omitted for every member. A client
+   * prop can never grant this identity: a non-staff caller is refused by
+   * the database regardless of what this component renders. */
+  publication?: { publishedAs: OfficialPublishedAs; initialSponsor?: SponsorFields | null }
   authorId: string
   /** Dispatch Postcards Checkpoint 2 — the author's CURRENT pseudonym,
    * resolved server-side by the caller (app/board/write/page.tsx,
@@ -214,6 +227,13 @@ export default function DispatchComposer({
   showPostcardIntro?: boolean
 }) {
   const isEdit = mode === 'edit' && Boolean(existingDispatch)
+  const official = publication ?? null
+  const isSponsored = official?.publishedAs === 'sponsored'
+  // Official drafts never collide with the admin's own member draft.
+  const draftKey = official ? `${authorId}:${official.publishedAs}` : authorId
+  const [sponsor, setSponsor] = useState<SponsorFields>(
+    official?.initialSponsor ?? { sponsorName: '', ctaLabel: '', ctaUrl: '' }
+  )
   const router = useRouter()
   const libraryInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
@@ -304,17 +324,17 @@ export default function DispatchComposer({
   // reasoning as moments-composer.tsx's matching effect.
   useEffect(() => {
     if (isEdit) return
-    const restored = readDispatchPostcardDraft(authorId)
+    const restored = readDispatchPostcardDraft(draftKey)
     queueMicrotask(() => setPostcardDraft(restored))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, authorId])
+  }, [isEdit, draftKey])
 
   // The ONE place a Postcard edit is both applied to state AND
   // persisted — see moments-composer.tsx's matching function for why
   // this is deliberately not a useEffect keyed on postcardDraft changing.
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
     setPostcardDraft(next)
-    writeDispatchPostcardDraft(authorId, next)
+    writeDispatchPostcardDraft(draftKey, next)
   }
 
   function choosePostcard(postcardKey: string) {
@@ -373,7 +393,7 @@ export default function DispatchComposer({
     },
     onUpdate({ editor: current }) {
       if (isEdit) return
-      writeDispatchDraft(authorId, { title, doc: current.getJSON() as LetterDocJSON, topics })
+      writeDispatchDraft(draftKey, { title, doc: current.getJSON() as LetterDocJSON, topics })
     },
   })
 
@@ -392,7 +412,7 @@ export default function DispatchComposer({
   // doc comment for why editing has no draft at all.
   useEffect(() => {
     if (!editor || isEdit) return
-    const draft = readDispatchDraft(authorId)
+    const draft = readDispatchDraft(draftKey)
     if (draft) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time restore from localStorage, see comment above
       setTitle(draft.title)
@@ -400,11 +420,11 @@ export default function DispatchComposer({
       editor.commands.setContent(draft.doc)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, authorId])
+  }, [editor, draftKey])
 
   function persistDraft(nextTitle: string, nextTopics: string[]) {
     if (!editor || isEdit) return
-    writeDispatchDraft(authorId, { title: nextTitle, doc: editor.getJSON() as LetterDocJSON, topics: nextTopics })
+    writeDispatchDraft(draftKey, { title: nextTitle, doc: editor.getJSON() as LetterDocJSON, topics: nextTopics })
   }
 
   function handleTitleChange(value: string) {
@@ -463,8 +483,46 @@ export default function DispatchComposer({
   // create mode, or directly by "Save changes" in edit mode) — the ONE
   // place the Postcard back-message gate now lives, always paired with a
   // visible reason (DispatchPreview's own publishBlockedReason prop).
+  // Sponsored — the same constraints the database enforces, surfaced
+  // early (the RPC remains the authority).
+  const sponsorError: string | null = !isSponsored
+    ? null
+    : sponsor.sponsorName.trim().length === 0
+      ? 'Add the sponsor’s name.'
+      : sponsor.sponsorName.trim().length > 80
+        ? 'Sponsor name is too long.'
+        : sponsor.ctaUrl.trim().length > 0 && !safeSponsorUrl(sponsor.ctaUrl)
+          ? 'The link must be a full https:// address.'
+          : sponsor.ctaLabel.trim().length > 0 && sponsor.ctaUrl.trim().length === 0
+            ? 'Add a link for this label, or clear the label.'
+            : sponsor.ctaLabel.trim().length > 40
+              ? 'Link label is too long.'
+              : null
+
   const publishBlockedReason: string | null =
-    !isEdit && postcardNeedsMessage ? 'Write something on the back of your postcard before publishing.' : null
+    !isEdit && postcardNeedsMessage
+      ? 'Write something on the back of your postcard before publishing.'
+      : !isEdit && sponsorError
+        ? sponsorError
+        : null
+
+  // Public identity this Dispatch will carry — shown in Preview and used
+  // as the Postcard sender: 'Tempa', the sponsor, or the member.
+  const publicIdentity = resolveDispatchIdentity({
+    publishedAs: official?.publishedAs ?? 'member',
+    authorId,
+    authorPseudonym,
+    authorCountry: null,
+    authorMarkUrl,
+    sponsorName: sponsor.sponsorName,
+    sponsorCtaLabel: sponsor.ctaLabel,
+    sponsorCtaUrl: sponsor.ctaUrl,
+  })
+  const postcardSenderName = official
+    ? official.publishedAs === 'tempa'
+      ? TEMPA_IDENTITY_NAME
+      : sponsor.sponsorName.trim() || 'Sponsor'
+    : authorPseudonym
 
   function insertPhotoMomentAtParagraphEnd(paragraphIndex: number, attrs: { imagePath: string; previewUrl: string }) {
     if (!editor) return
@@ -541,10 +599,18 @@ export default function DispatchComposer({
   // publish — see lib/safety/send-with-safety.ts's own doc comment on
   // why evaluateSafety is fail-closed by construction.
   async function handleSubmit() {
-    const canPublish = isEdit ? canSubmit : canPreview && !publishBlockedReason
+    const canPublish = isEdit ? canSubmit && !sponsorError : canPreview && !publishBlockedReason
     if (!editor || !canPublish) return
     setPublishing(true)
     setError(null)
+
+    // Official/Sponsored — a staff-authorized content action, never
+    // screened as member-to-member writing; the staff-only RPC itself is
+    // the authority (and refuses any non-staff caller).
+    if (official) {
+      await performSubmit(null, false)
+      return
+    }
 
     const finalDoc = editor.getJSON() as LetterDocJSON
     const body = docToPlainBody(finalDoc)
@@ -596,7 +662,7 @@ export default function DispatchComposer({
     await performSubmit(pendingWarning.evaluationId, true)
   }
 
-  async function performSubmit(safetyEvaluationId: string, warningAcknowledged: boolean) {
+  async function performSubmit(safetyEvaluationId: string | null, warningAcknowledged: boolean) {
     if (!editor) return
     setPublishing(true)
     setError(null)
@@ -646,8 +712,28 @@ export default function DispatchComposer({
       // postcard parameter at all (update_dispatch has no such RPC
       // argument), so an edit-mode submission cannot touch it even by
       // accident.
-      const { data, error: submitError } =
-        isEdit && existingDispatch
+      const { data, error: submitError } = official
+        ? isEdit && existingDispatch
+          ? await updateOfficialDispatch(createClient(), existingDispatch.id, {
+              publishedAs: official.publishedAs,
+              title,
+              body,
+              topics,
+              moments,
+              sponsor,
+            })
+          : await publishOfficialDispatch(createClient(), {
+              publishedAs: official.publishedAs,
+              title,
+              body,
+              topics,
+              moments,
+              postcard: postcardDraft,
+              sponsor,
+            })
+        : safetyEvaluationId === null
+          ? { data: null, error: { message: 'A Safety evaluation is required.' } }
+          : isEdit && existingDispatch
           ? await updateDispatch(createClient(), existingDispatch.id, {
               title,
               body,
@@ -702,8 +788,8 @@ export default function DispatchComposer({
       }
 
       if (!isEdit) {
-        clearDispatchDraft(authorId)
-        clearDispatchPostcardDraft(authorId)
+        clearDispatchDraft(draftKey)
+        clearDispatchPostcardDraft(draftKey)
       }
       setPendingWarning(null)
       router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
@@ -744,7 +830,11 @@ export default function DispatchComposer({
     }
   }
 
-  const backHref = isEdit && existingDispatch ? `/board/${existingDispatch.id}` : '/board'
+  const backHref = isEdit && existingDispatch
+    ? `/board/${existingDispatch.id}`
+    : official
+      ? `/admin/content/${official.publishedAs === 'tempa' ? 'dispatches' : 'sponsored'}`
+      : '/board'
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
@@ -752,11 +842,61 @@ export default function DispatchComposer({
 
       <div className="w-full max-w-2xl space-y-6 py-10">
         <div className="space-y-1">
-          <p className={sectionLabelClass}>{isEdit ? 'Edit Dispatch' : 'Dispatch'}</p>
+          <p className={sectionLabelClass}>
+            {official
+              ? `${isEdit ? 'Edit ' : ''}${official.publishedAs === 'tempa' ? 'Tempa Dispatch' : 'Sponsored Dispatch'}`
+              : isEdit
+                ? 'Edit Dispatch'
+                : 'Dispatch'}
+          </p>
           <p className={helperTextClass}>
-            Writing offered to the wider Tempa community — not addressed to anyone in particular.
+            {official?.publishedAs === 'tempa'
+              ? 'Published by Tempa, shown with the Tempa emblem. Your own name, Mark and profile are never shown.'
+              : official?.publishedAs === 'sponsored'
+                ? 'Shown with a Sponsored label and the sponsor’s name — never as Tempa, and never as you.'
+                : 'Writing offered to the wider Tempa community — not addressed to anyone in particular.'}
           </p>
         </div>
+
+        {isSponsored && (
+          <fieldset className="space-y-3 rounded-md border border-foreground/10 p-4" aria-label="Sponsor">
+            <label className="block space-y-1">
+              <span className={sectionLabelClass}>Sponsor name</span>
+              <input
+                className={inputClass}
+                value={sponsor.sponsorName}
+                maxLength={80}
+                onChange={(e) => setSponsor({ ...sponsor, sponsorName: e.target.value })}
+                placeholder="e.g. Acme Paper Co."
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
+              <label className="block space-y-1">
+                <span className={sectionLabelClass}>Link label (optional)</span>
+                <input
+                  className={inputClass}
+                  value={sponsor.ctaLabel}
+                  maxLength={40}
+                  onChange={(e) => setSponsor({ ...sponsor, ctaLabel: e.target.value })}
+                  placeholder="Learn more"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className={sectionLabelClass}>Link (optional, https://)</span>
+                <input
+                  className={inputClass}
+                  type="url"
+                  inputMode="url"
+                  value={sponsor.ctaUrl}
+                  maxLength={500}
+                  onChange={(e) => setSponsor({ ...sponsor, ctaUrl: e.target.value })}
+                  placeholder="https://"
+                />
+              </label>
+            </div>
+            {sponsorError && <p className={helperTextClass}>{sponsorError}</p>}
+          </fieldset>
+        )}
 
         {/* Onboarding & First-Use checkpoint — shown once, the first
             time this member attempts to write a Dispatch (create mode
@@ -875,7 +1015,7 @@ export default function DispatchComposer({
           <PostcardEditor
             draft={postcardDraft}
             catalogEntry={postcardCatalogEntry}
-            senderPseudonym={authorPseudonym}
+            senderPseudonym={postcardSenderName}
             onChange={setPostcardDraftAndPersist}
             onChangePostcard={() => {
               setPostcardEditorOpen(false)
@@ -928,8 +1068,9 @@ export default function DispatchComposer({
           as they were underneath — this is purely an overlay. */}
       {!isEdit && previewMoments && (
         <DispatchPreview
+          identity={publicIdentity}
           authorId={authorId}
-          authorPseudonym={authorPseudonym}
+          authorPseudonym={postcardSenderName}
           authorMarkUrl={authorMarkUrl}
           title={title}
           body={docToPlainBody(docJSON)}

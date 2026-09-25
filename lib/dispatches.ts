@@ -2,6 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { letterPreviewText, isRichBody } from './letters'
 import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 import { publicProfileMarkUrl } from './profile-marks'
+import {
+  resolveDispatchIdentity,
+  toPublishedAs,
+  type DispatchIdentity,
+  type PublishedAs,
+} from './dispatch-identity'
 
 const PHOTO_SIGNED_URL_TTL_SECONDS = 60 * 10
 
@@ -35,6 +41,12 @@ export type Dispatch = {
    * single-Dispatch reader can render the calm "Hidden by TEMPA" state
    * instead of the normal one. */
   moderationStatus: ModerationStatus
+  /** Official/Sponsored Dispatches (docs/sql/2026-10-15-official-
+   * sponsored-dispatches.sql) — the canonical publication identity.
+   * 'member' for every ordinary Dispatch. Display always goes through
+   * DispatchListItem.identity (lib/dispatch-identity.ts), never
+   * authorId, for anything but 'member'. */
+  publishedAs: PublishedAs
 }
 
 export type DispatchMoment = {
@@ -55,10 +67,14 @@ export type DispatchMoment = {
  * flag can be shown beside the author's identity; never city, region,
  * coordinates, or anything auth-provider-derived. */
 export type DispatchListItem = Dispatch & {
+  /** For tempa/sponsored rows these hold the PUBLIC identity ('Tempa' /
+   * the sponsor name, no country, no Mark) — never the creating admin's
+   * profile. Prefer `identity`, which also says which kind it is. */
   authorPseudonym: string
   authorCountry: string | null
   authorMarkUrl?: string | null
   topics: string[]
+  identity: DispatchIdentity
 }
 
 /** One Board row, with the per-viewer signal Board ordering needs.
@@ -76,6 +92,7 @@ type DispatchRow = {
   body: string
   published_at: string
   moderation_status: ModerationStatus
+  published_as?: string | null
 }
 
 function toDispatch(row: DispatchRow): Dispatch {
@@ -86,6 +103,7 @@ function toDispatch(row: DispatchRow): Dispatch {
     body: row.body,
     publishedAt: row.published_at,
     moderationStatus: row.moderation_status,
+    publishedAs: toPublishedAs(row.published_as),
   }
 }
 
@@ -226,10 +244,26 @@ async function attachTopicsAndAuthors(
   const dispatchIds = rows.map((r) => r.id)
   const authorIds = [...new Set(rows.map((r) => r.author_id))]
 
-  const [{ data: profiles }, { data: topicRows }] = await Promise.all([
+  // Publication identity is read in the SAME parallel round (one batched
+  // query, never per row) so board_feed_page/search_dispatches keep their
+  // existing return shapes. Unreadable -> every row stays 'member'.
+  const [{ data: profiles }, { data: topicRows }, { data: identityRows }] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, country, mark_id').in('id', authorIds),
     supabase.from('dispatch_topics').select('dispatch_id, topic').in('dispatch_id', dispatchIds),
+    supabase
+      .from('dispatches')
+      .select('id, published_as, sponsor_name, sponsor_cta_label, sponsor_cta_url')
+      .in('id', dispatchIds),
   ])
+  const identityById = new Map(
+    ((identityRows ?? []) as {
+      id: string
+      published_as: string | null
+      sponsor_name: string | null
+      sponsor_cta_label: string | null
+      sponsor_cta_url: string | null
+    }[]).map((r) => [r.id, r])
+  )
 
   const profileById = new Map(
     (profiles ?? []).map((p) => [p.id, p as { id: string; pseudonym: string; country: string | null; mark_id: string | null }])
@@ -241,15 +275,30 @@ async function attachTopicsAndAuthors(
     topicsByDispatchId.set(row.dispatch_id, arr)
   }
 
-  return rows.map((row) => ({
-    ...toDispatch(row),
-    authorPseudonym: profileById.get(row.author_id)?.pseudonym ?? 'A member',
-    authorCountry: profileById.get(row.author_id)?.country ?? null,
-    authorMarkUrl: profileById.get(row.author_id)?.mark_id
-      ? publicProfileMarkUrl(supabase, `${profileById.get(row.author_id)!.mark_id}.png`)
-      : null,
-    topics: topicsByDispatchId.get(row.id) ?? [],
-  }))
+  return rows.map((row) => {
+    const ident = identityById.get(row.id)
+    const publishedAs = toPublishedAs(ident?.published_as ?? row.published_as)
+    const profile = publishedAs === 'member' ? profileById.get(row.author_id) : undefined
+    const identity = resolveDispatchIdentity({
+      publishedAs,
+      authorId: row.author_id,
+      authorPseudonym: profile?.pseudonym,
+      authorCountry: profile?.country,
+      authorMarkUrl: profile?.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null,
+      sponsorName: ident?.sponsor_name,
+      sponsorCtaLabel: ident?.sponsor_cta_label,
+      sponsorCtaUrl: ident?.sponsor_cta_url,
+    })
+    return {
+      ...toDispatch(row),
+      publishedAs,
+      authorPseudonym: identity.name,
+      authorCountry: identity.kind === 'member' ? identity.country : null,
+      authorMarkUrl: identity.kind === 'member' ? identity.markUrl : null,
+      topics: topicsByDispatchId.get(row.id) ?? [],
+      identity,
+    }
+  })
 }
 
 /**
@@ -356,7 +405,11 @@ const HOME_SERENDIPITY_MAX = 3
  * never a claim about being "outside the member's interests," which
  * don't exist yet).
  */
-export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
+export function partitionHomeSections(allItems: BoardFeedItem[]): HomeSections {
+  // Sponsored Dispatches never appear in Home's editorial sections (they
+  // may appear on The Board). Tempa Dispatches may, but never under
+  // "From Minds You Keep" — Tempa is not a Mind anyone keeps.
+  const items = allItems.filter((item) => item.publishedAs !== 'sponsored')
   const used = new Set<string>()
 
   const featured = items.slice(0, HOME_FEATURED_COUNT)
@@ -369,7 +422,7 @@ export function partitionHomeSections(items: BoardFeedItem[]): HomeSections {
   const fromMindsYouKeep: BoardFeedItem[] = []
   for (const item of items) {
     if (fromMindsYouKeep.length >= HOME_KEEP_SECTION_MAX) break
-    if (used.has(item.id) || !item.isKept) continue
+    if (used.has(item.id) || !item.isKept || item.publishedAs !== 'member') continue
     fromMindsYouKeep.push(item)
     used.add(item.id)
   }
@@ -667,6 +720,9 @@ export async function getPublishedDispatchesByAuthor(
     .from('dispatches')
     .select(LIST_COLUMNS)
     .eq('author_id', authorId)
+    // Tempa/Sponsored Dispatches are never "by this member", even though
+    // author_id records the admin who created them.
+    .eq('published_as', 'member')
     .eq('status', 'published')
     .eq('moderation_status', 'visible')
     .order('published_at', { ascending: false })
@@ -1113,6 +1169,135 @@ export async function updateDispatch(
   return { data: toDispatch(data as DispatchRow), error: null }
 }
 
+// ============================================================
+// OFFICIAL (Tempa) + SPONSORED DISPATCHES — staff only
+// ============================================================
+// publish_official_dispatch / update_official_dispatch re-check
+// is_staff('admin') themselves (never trusting the /admin route guard or
+// any client prop) and never consume a member Safety evaluation — see
+// docs/sql/2026-10-15-official-sponsored-dispatches.sql. Members keep
+// using publishDispatch/updateDispatch above, unchanged.
+
+export type OfficialPublishedAs = Exclude<PublishedAs, 'member'>
+
+export type SponsorFields = { sponsorName: string; ctaLabel: string; ctaUrl: string }
+
+function sponsorRpcArgs(publishedAs: OfficialPublishedAs, sponsor: SponsorFields | null | undefined) {
+  if (publishedAs !== 'sponsored' || !sponsor) {
+    return { p_sponsor_name: null, p_sponsor_cta_label: null, p_sponsor_cta_url: null }
+  }
+  return {
+    p_sponsor_name: sponsor.sponsorName.trim() || null,
+    p_sponsor_cta_label: sponsor.ctaLabel.trim() || null,
+    p_sponsor_cta_url: sponsor.ctaUrl.trim() || null,
+  }
+}
+
+export async function publishOfficialDispatch(
+  supabase: SupabaseClient,
+  input: {
+    publishedAs: OfficialPublishedAs
+    title: string
+    body: string
+    topics: string[]
+    moments?: DispatchMomentDraft[]
+    postcard?: LetterPostcardDraft | null
+    sponsor?: SponsorFields | null
+  }
+): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
+  const { data, error } = await supabase.rpc('publish_official_dispatch', {
+    p_published_as: input.publishedAs,
+    p_title: input.title,
+    p_body: input.body,
+    p_topics: normalizeTopics(input.topics),
+    p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
+    p_postcard: input.postcard
+      ? {
+          postcard_key: input.postcard.postcardKey,
+          reveal_line: input.postcard.revealLine.trim().length > 0 ? input.postcard.revealLine : null,
+          back_message: input.postcard.backMessage.trim().length > 0 ? input.postcard.backMessage : null,
+        }
+      : null,
+    ...sponsorRpcArgs(input.publishedAs, input.sponsor),
+  })
+  if (error) {
+    return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
+  }
+  return { data: toDispatch(data as DispatchRow), error: null }
+}
+
+export async function updateOfficialDispatch(
+  supabase: SupabaseClient,
+  dispatchId: string,
+  input: {
+    publishedAs: OfficialPublishedAs
+    title: string
+    body: string
+    topics: string[]
+    moments?: DispatchMomentDraft[]
+    sponsor?: SponsorFields | null
+  }
+): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
+  const { data, error } = await supabase.rpc('update_official_dispatch', {
+    p_dispatch_id: dispatchId,
+    p_title: input.title,
+    p_body: input.body,
+    p_topics: normalizeTopics(input.topics),
+    p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
+    ...sponsorRpcArgs(input.publishedAs, input.sponsor),
+  })
+  if (error) {
+    return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
+  }
+  return { data: toDispatch(data as DispatchRow), error: null }
+}
+
+export type OfficialDispatchRow = {
+  id: string
+  title: string
+  publishedAt: string
+  authorId: string
+  moderationStatus: ModerationStatus
+  sponsorName: string | null
+  sponsorCtaLabel: string | null
+  sponsorCtaUrl: string | null
+}
+
+/** Admin Content lists — newest first, bounded. Read under the admin's
+ * own session (dispatches RLS); no service role. */
+export async function getOfficialDispatches(
+  supabase: SupabaseClient,
+  publishedAs: OfficialPublishedAs,
+  limit = 100
+): Promise<OfficialDispatchRow[]> {
+  const { data } = await supabase
+    .from('dispatches')
+    .select('id, title, published_at, author_id, moderation_status, sponsor_name, sponsor_cta_label, sponsor_cta_url')
+    .eq('published_as', publishedAs)
+    .eq('status', 'published')
+    .order('published_at', { ascending: false })
+    .limit(limit)
+  return ((data ?? []) as {
+    id: string
+    title: string
+    published_at: string
+    author_id: string
+    moderation_status: ModerationStatus
+    sponsor_name: string | null
+    sponsor_cta_label: string | null
+    sponsor_cta_url: string | null
+  }[]).map((r) => ({
+    id: r.id,
+    title: r.title,
+    publishedAt: r.published_at,
+    authorId: r.author_id,
+    moderationStatus: r.moderation_status,
+    sponsorName: r.sponsor_name,
+    sponsorCtaLabel: r.sponsor_cta_label,
+    sponsorCtaUrl: r.sponsor_cta_url,
+  }))
+}
+
 export type DeleteDispatchError = { message: string; code?: string } | null
 
 /**
@@ -1385,6 +1570,9 @@ export type SharedDispatch = {
    * postcard_catalog/postcard_versions touched directly by an anon
    * client) — null when this Dispatch carries no Postcard. */
   postcard: DispatchPostcard | null
+  /** Official/Sponsored — resolved from get_shared_dispatch's
+   * published_as/sponsor columns; never the creating admin. */
+  identity: DispatchIdentity
 }
 
 type SharedDispatchPostcardJson = {
@@ -1419,6 +1607,10 @@ type SharedDispatchRpcRow = {
    * Optional here for the same reason author_country is: an older RPC
    * row (before this migration) simply won't carry the key. */
   postcard?: SharedDispatchPostcardJson
+  published_as?: string | null
+  sponsor_name?: string | null
+  sponsor_cta_label?: string | null
+  sponsor_cta_url?: string | null
 }
 
 /**
@@ -1554,10 +1746,21 @@ export async function getSharedDispatch(
     body: row.body,
     publishedAt: row.published_at,
     authorPseudonym: row.author_pseudonym,
-    authorCountry: row.author_country ?? null,
+    authorCountry: toPublishedAs(row.published_as) === 'member' ? (row.author_country ?? null) : null,
     topics: row.topics,
     moments: mappedMoments,
     postcard,
+    identity: resolveDispatchIdentity({
+      publishedAs: toPublishedAs(row.published_as),
+      // The anonymous reader never receives author_id; member identity
+      // here is display-only (no profile link is rendered for anon).
+      authorId: '',
+      authorPseudonym: row.author_pseudonym,
+      authorCountry: row.author_country ?? null,
+      sponsorName: row.sponsor_name ?? row.author_pseudonym,
+      sponsorCtaLabel: row.sponsor_cta_label,
+      sponsorCtaUrl: row.sponsor_cta_url,
+    }),
   }
 }
 
@@ -1621,6 +1824,6 @@ export async function getPinnedDispatch(
   if (!pinnedId) return null
 
   const dispatch = await getDispatchById(supabase, pinnedId)
-  if (!dispatch || dispatch.moderationStatus === 'hidden') return null
+  if (!dispatch || dispatch.moderationStatus === 'hidden' || dispatch.publishedAs !== 'member') return null
   return dispatch
 }

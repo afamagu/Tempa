@@ -57,6 +57,11 @@ export default async function EditDispatchPage({
     redirect(`/board/${dispatch.id}`)
   }
 
+  // Official/Sponsored Dispatches are edited only through Admin Content
+  // (staff-only update_official_dispatch) — never the member edit path.
+  if (dispatch.publishedAs === 'tempa') redirect(`/admin/content/dispatches/${dispatch.id}/edit`)
+  if (dispatch.publishedAs === 'sponsored') redirect(`/admin/content/sponsored/${dispatch.id}/edit`)
+
   const replies = await getDispatchReplies(supabase, dispatch.id)
   const editable = canEditDispatch({
     isAuthor: true,

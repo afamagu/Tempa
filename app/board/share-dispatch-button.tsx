@@ -53,10 +53,14 @@ export default function ShareDispatchButton({
   dispatchId,
   title,
   authorPseudonym,
+  shareText,
 }: {
   dispatchId: string
   title: string
   authorPseudonym: string
+  /** Identity-aware share-sheet text (lib/dispatch-identity.ts's
+   * dispatchShareText) — "from Tempa" / "Sponsored by …" / "by {member}". */
+  shareText?: string
 }) {
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -78,7 +82,7 @@ export default function ShareDispatchButton({
 
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
         try {
-          await navigator.share({ title, text: `${title} — by ${authorPseudonym} on Tempa`, url })
+          await navigator.share({ title, text: shareText ?? `${title} — by ${authorPseudonym} on Tempa`, url })
         } catch {
           // Cancelling the native share sheet (or the platform
           // rejecting it) is a normal outcome, not a failure — nothing
