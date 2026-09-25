@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  dispatchShareContextLine,
+  dispatchShareDescription,
   dispatchShareText,
   dispatchShareTitle,
   hasMemberIdentity,
@@ -88,5 +90,22 @@ describe('share metadata / share-sheet text', () => {
   it('Sponsored keeps its sponsor disclosure', () => {
     expect(dispatchShareTitle('Paper', sponsored)).toBe('Paper — Sponsored by Acme · Tempa')
     expect(dispatchShareText('Paper', sponsored)).toContain('Sponsored by Acme')
+  })
+})
+
+describe('link-preview description / image context', () => {
+  const id = (publishedAs: 'member' | 'tempa' | 'sponsored') =>
+    resolveDispatchIdentity({ ...base, publishedAs, sponsorName: 'Acme' })
+
+  it('never the body; publication-aware and short', () => {
+    expect(dispatchShareDescription(id('tempa'))).toBe('A Dispatch from Tempa.')
+    expect(dispatchShareDescription(id('member'))).toBe('A Dispatch shared on Tempa.')
+    expect(dispatchShareDescription(id('sponsored'))).toBe('Sponsored Dispatch from Acme on Tempa.')
+  })
+
+  it('image context line never names the creating admin for official rows', () => {
+    expect(dispatchShareContextLine(id('tempa'))).toBe('A Dispatch from Tempa')
+    expect(dispatchShareContextLine(id('sponsored'))).toBe('Sponsored · Acme')
+    expect(dispatchShareContextLine(id('tempa'))).not.toContain('Afam')
   })
 })

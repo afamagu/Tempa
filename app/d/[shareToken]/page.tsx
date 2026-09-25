@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getSharedDispatch } from '@/lib/dispatches'
-import { dispatchShareTitle } from '@/lib/dispatch-identity'
+import { dispatchShareDescription, dispatchShareTitle } from '@/lib/dispatch-identity'
+import { SITE_NAME } from '@/lib/site'
 import SharedDispatchView from './shared-dispatch-view'
 import DispatchUnavailable from './dispatch-unavailable'
 
@@ -21,15 +22,32 @@ export async function generateMetadata({
   const { shareToken } = await params
   const dispatch = await loadSharedDispatch(shareToken)
 
+  // Shareable-but-unguessable token URLs are for people, not search
+  // engines: noindex/nofollow. Link-preview crawlers (WhatsApp, iMessage,
+  // Slack, Facebook, LinkedIn, Discord, X) still read the Open Graph and
+  // Twitter tags below. The share image itself comes from this segment's
+  // opengraph-image.tsx / twitter-image.tsx.
+  const robots = { index: false, follow: false, googleBot: { index: false, follow: false } }
+
   if (!dispatch) {
-    return { title: 'Dispatch unavailable — Tempa' }
+    return { title: 'Dispatch unavailable — Tempa', robots }
   }
 
   // Title + public identity only — never the body, never any private
-  // profile data. Official: "{title} — Tempa" (never "by Tempa · Tempa");
+  // profile data, never the creating admin of an official/Sponsored
+  // Dispatch. Official: "{title} — Tempa" (never "by Tempa · Tempa");
   // Sponsored keeps its sponsor disclosure; member unchanged.
   const title = dispatchShareTitle(dispatch.title, dispatch.identity)
-  return { title, openGraph: { title, siteName: 'Tempa', type: 'article' } }
+  const description = dispatchShareDescription(dispatch.identity)
+  const url = `/d/${shareToken}`
+  return {
+    title,
+    description,
+    robots,
+    alternates: { canonical: url },
+    openGraph: { type: 'article', siteName: SITE_NAME, title, description, url },
+    twitter: { card: 'summary_large_image', title, description },
+  }
 }
 
 /**
