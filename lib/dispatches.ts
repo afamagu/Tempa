@@ -1652,6 +1652,34 @@ function logStage(stage: string, detail: unknown) {
   console.log(`[getSharedDispatch] ${stage}:`, detail)
 }
 
+/**
+ * Link-preview data for /d/[shareToken]'s generated share image: title
+ * and publication identity only, through the SAME get_shared_dispatch
+ * trust boundary (same share-token gate; revoked/unknown/unpublished ->
+ * null). Skips Moment URL signing and Postcard shaping, which a preview
+ * image never needs. Never returns author_id or the Dispatch body.
+ */
+export async function getSharedDispatchPreview(
+  supabase: SupabaseClient,
+  shareToken: string
+): Promise<{ title: string; identity: DispatchIdentity } | null> {
+  const { data, error } = await supabase.rpc('get_shared_dispatch', { p_token: shareToken })
+  const row = error ? undefined : ((data ?? []) as SharedDispatchRpcRow[])[0]
+  if (!row) return null
+  return {
+    title: row.title,
+    identity: resolveDispatchIdentity({
+      publishedAs: toPublishedAs(row.published_as),
+      authorId: '',
+      authorPseudonym: row.author_pseudonym,
+      authorCountry: row.author_country ?? null,
+      sponsorName: row.sponsor_name ?? row.author_pseudonym,
+      sponsorCtaLabel: row.sponsor_cta_label,
+      sponsorCtaUrl: row.sponsor_cta_url,
+    }),
+  }
+}
+
 export async function getSharedDispatch(
   supabase: SupabaseClient,
   shareToken: string

@@ -93,6 +93,20 @@ export function dispatchShareTitle(title: string, identity: DispatchIdentity): s
   return `${title} — by ${identity.name} · Tempa`
 }
 
+/** Link-preview description — deliberately never the Dispatch body. */
+export function dispatchShareDescription(identity: DispatchIdentity): string {
+  if (identity.kind === 'tempa') return 'A Dispatch from Tempa.'
+  if (identity.kind === 'sponsored') return `Sponsored Dispatch from ${identity.name} on Tempa.`
+  return 'A Dispatch shared on Tempa.'
+}
+
+/** The small context line on the generated share image. */
+export function dispatchShareContextLine(identity: DispatchIdentity): string {
+  if (identity.kind === 'tempa') return 'A Dispatch from Tempa'
+  if (identity.kind === 'sponsored') return `Sponsored · ${identity.name}`
+  return 'A Dispatch shared on Tempa'
+}
+
 export function dispatchShareText(title: string, identity: DispatchIdentity): string {
   if (identity.kind === 'tempa') return `${title} — from Tempa`
   if (identity.kind === 'sponsored') return `${title} — Sponsored by ${identity.name}, on Tempa`
