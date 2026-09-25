@@ -177,3 +177,26 @@ describe('Home premium composition — visual competition removed', () => {
     expect(source).not.toContain('thumbnailUrl=')
   })
 })
+
+describe('Home Recommended minds — bounded discovery (pre-launch performance)', () => {
+  it('reuses the People discovery primitive, first batch, capped at six', () => {
+    expect(source).toContain('const RECOMMENDED_COUNT = 6')
+    expect(source).toContain('getDiscoveryPage(supabase, { offset: 0, limit: RECOMMENDED_COUNT })')
+    expect(source).toContain('recommendedPage.candidates.slice(0, RECOMMENDED_COUNT)')
+  })
+
+  it('never loads the answer/member population into Next.js', () => {
+    expect(source).not.toContain(".from('question_answers')")
+    expect(source).not.toContain('eligibleUserIds')
+    expect(source).not.toContain('hashPair')
+  })
+
+  it('fetches the recommendation page and the announcement in the main parallel round', () => {
+    const roundStart = source.indexOf('await Promise.all([')
+    const roundEnd = source.indexOf('])', roundStart)
+    const round = source.slice(roundStart, roundEnd)
+    expect(round).toContain('getActiveAnnouncement(supabase)')
+    expect(round).toContain('getDiscoveryPage(')
+    expect(round).toContain(".from('profiles').select('pseudonym')")
+  })
+})

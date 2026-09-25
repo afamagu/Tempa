@@ -3,11 +3,15 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const source = readFileSync(path.join(__dirname, 'proxy.ts'), 'utf8')
+// The account-entry READ moved into one module (one self-scoped RPC +
+// a legacy fallback); proxy.ts keeps the routing.
+const entrySource = readFileSync(path.join(__dirname, 'lib', 'account-entry-state.ts'), 'utf8')
 
 describe('central onboarding enforcement', () => {
   it('uses the shared account-entry resolver and reads the private onboarding stage', () => {
     expect(source).toContain('resolveAccountEntryDestination')
-    expect(source).toContain("select('id, onboarding_stage')")
+    expect(source).toContain('readProxyAccountEntry(supabase, user.id)')
+    expect(entrySource).toContain("select('id, onboarding_stage')")
   })
 
   it('covers authenticated member surfaces, including direct navigation around onboarding', () => {
@@ -19,11 +23,15 @@ describe('central onboarding enforcement', () => {
 
 describe('Adult Eligibility + Legal Acceptance Gate — proxy enforcement', () => {
   it('reads the account-level eligibility and legal-acceptance state alongside profile state', () => {
-    expect(source).toContain("from('account_eligibility')")
-    expect(source).toContain("select('status')")
-    expect(source).toContain("from('legal_acceptances')")
-    expect(source).toContain("select('document_type, document_version')")
-    expect(source).toContain('isLegalCurrent(')
+    expect(entrySource).toContain("supabase.rpc('current_account_entry_state'")
+    expect(entrySource).toContain('p_terms_version: CURRENT_TERMS_VERSION')
+    expect(entrySource).toContain('p_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION')
+    // legacy fallback (RPC unavailable) keeps the original reads
+    expect(entrySource).toContain("from('account_eligibility')")
+    expect(entrySource).toContain("select('status')")
+    expect(entrySource).toContain("from('legal_acceptances')")
+    expect(entrySource).toContain("select('document_type, document_version')")
+    expect(entrySource).toContain('isLegalCurrent(')
   })
 
   it('redirects an authenticated-but-incomplete account to /begin with the original destination preserved as `next`', () => {
@@ -53,8 +61,8 @@ describe('Adult Eligibility + Legal Acceptance Gate — proxy enforcement', () =
 })
 
 describe('permanent ban — proxy enforcement', () => {
-  it("reads the caller's OWN status via current_account_status and redirects a banned account to /account-unavailable", () => {
-    expect(source).toContain("supabase.rpc('current_account_status')")
+  it("reads the caller's OWN status (current_account_entry_state, legacy current_account_status) and redirects a banned account to /account-unavailable", () => {
+    expect(entrySource).toContain("supabase.rpc('current_account_status')")
     const start = source.indexOf("accountStatus === 'banned'")
     expect(start).toBeGreaterThan(-1)
     expect(source.slice(start, start + 200)).toContain("new URL('/account-unavailable', request.url)")
