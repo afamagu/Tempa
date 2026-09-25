@@ -3,7 +3,7 @@ import { metadataTextClass } from '@/app/profile/ui'
 import { formatDatePlain } from '@/lib/format-date'
 import FormattedText from '@/app/letters/formatted-text'
 import { dispatchExcerpt, dispatchIsRich, type DispatchListItem } from '@/lib/dispatches'
-import DispatchAuthorLink from './dispatch-author-link'
+import DispatchIdentityLabel from './dispatch-identity-label'
 import TopicChips from './topic-chips'
 
 /**
@@ -55,12 +55,9 @@ export default function DispatchCard({
     <div className="rounded-md border border-foreground/10 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
-          <DispatchAuthorLink
-            authorId={dispatch.authorId}
-            authorPseudonym={dispatch.authorPseudonym}
-            authorCountry={dispatch.authorCountry}
-            authorMarkUrl={dispatch.authorMarkUrl ?? null}
-          />
+          {/* member -> profile link (unchanged); Tempa -> emblem + "Tempa";
+              Sponsored -> "Sponsored" + sponsor (lib/dispatch-identity.ts) */}
+          <DispatchIdentityLabel identity={dispatch.identity} />
           <p className={`shrink-0 ${metadataTextClass}`}>· {formatDatePlain(dispatch.publishedAt)}</p>
         </div>
         {keepSlot && <div className="shrink-0">{keepSlot}</div>}

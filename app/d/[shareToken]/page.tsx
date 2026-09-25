@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getSharedDispatch } from '@/lib/dispatches'
+import { dispatchShareTitle } from '@/lib/dispatch-identity'
 import SharedDispatchView from './shared-dispatch-view'
 import DispatchUnavailable from './dispatch-unavailable'
 
@@ -24,9 +25,11 @@ export async function generateMetadata({
     return { title: 'Dispatch unavailable — Tempa' }
   }
 
-  // Title + author only — never the body, never any private profile
-  // data, in the page's own social-preview metadata.
-  return { title: `${dispatch.title} — by ${dispatch.authorPseudonym} · Tempa` }
+  // Title + public identity only — never the body, never any private
+  // profile data. Official: "{title} — Tempa" (never "by Tempa · Tempa");
+  // Sponsored keeps its sponsor disclosure; member unchanged.
+  const title = dispatchShareTitle(dispatch.title, dispatch.identity)
+  return { title, openGraph: { title, siteName: 'Tempa', type: 'article' } }
 }
 
 /**

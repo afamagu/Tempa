@@ -46,6 +46,8 @@ import RepliesSection from './replies-section'
 import WorthReadingButton from './worth-reading-button'
 import BoardShelfCard from '@/app/home/board-shelf-card'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
+import DispatchIdentityLabel, { SponsorCta } from '../dispatch-identity-label'
+import { dispatchShareText } from '@/lib/dispatch-identity'
 
 function FlagIcon() {
   return (
@@ -117,6 +119,17 @@ export default async function DispatchPage({
   }
 
   const isAuthor = dispatch.authorId === user.id
+  // Official/Sponsored Dispatches (lib/dispatch-identity.ts): author_id is
+  // the creating admin, so every member-identity lookup/action (Keep in
+  // Mind, Write to this mind, profile link, Pin) is skipped for them —
+  // none may ever target that admin's personal account.
+  const isMemberDispatch = dispatch.identity.kind === 'member'
+  const officialEditHref =
+    dispatch.publishedAs === 'tempa'
+      ? `/admin/content/dispatches/${dispatch.id}/edit`
+      : dispatch.publishedAs === 'sponsored'
+        ? `/admin/content/sponsored/${dispatch.id}/edit`
+        : undefined
 
   // Admin Command Center Phase 2A-1 — a hidden Dispatch's row only ever
   // reaches this point for its own author (dispatches_select_published's
@@ -173,7 +186,7 @@ export default async function DispatchPage({
     getWaitingLetterCount(supabase, user.id),
     getDispatchMoments(supabase, dispatch.id),
     getDispatchViewState(supabase, user.id, dispatch.id),
-    isAuthor ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
+    isAuthor || !isMemberDispatch ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
     // Only the author can SELECT dispatch_shares at all (RLS); a
     // non-author's Share button simply starts from "not yet known" and
     // still works correctly via share_dispatch's own get-or-create.
@@ -181,7 +194,7 @@ export default async function DispatchPage({
     // Needed only so Delete can clean up this Dispatch's own storage
     // objects afterward — see author-actions-menu.tsx.
     isAuthor ? getDispatchMomentsForEditing(supabase, dispatch.id) : Promise.resolve([]),
-    isAuthor
+    isAuthor && isMemberDispatch
       ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
       : Promise.resolve({ data: null }),
     getDispatchReplies(supabase, dispatch.id),
@@ -204,9 +217,9 @@ export default async function DispatchPage({
     // this is a pure reuse of the existing correspondence contract (see
     // canWriteToMind below). The author's own view never needs any of
     // this — "write to yourself" is nonsensical and always suppressed.
-    isAuthor ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
-    isAuthor ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
-    isAuthor ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id),
+    isAuthor || !isMemberDispatch ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
+    isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
+    isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id),
     // Post-onboarding corrections checkpoint (Q2) — the first-read
     // Dispatch introduction, same account-persisted guide_completions
     // gate every other FeatureIntroduction in this codebase uses. This
@@ -260,11 +273,11 @@ export default async function DispatchPage({
   // always resolves to showWriteToMind=false, alreadyCorresponding=false
   // — never a self-correspondence affordance.
   const authorPrimaryAnswer = authorAnswers.find((a) => a.isPrimary) ?? null
-  const alreadyCorrespondingWithAuthor = activePartnerIds.has(dispatch.authorId)
+  const alreadyCorrespondingWithAuthor = isMemberDispatch && activePartnerIds.has(dispatch.authorId)
   const authorPrimaryAnswerAlreadyContacted = authorPrimaryAnswer
     ? contactedAnswerIds.has(authorPrimaryAnswer.id)
     : false
-  const showWriteToAuthor = canWriteToMind({
+  const showWriteToAuthor = isMemberDispatch && canWriteToMind({
     isSelf: isAuthor,
     alreadyCorresponding: alreadyCorrespondingWithAuthor,
     hasCurrentAnswer: authorPrimaryAnswer !== null,
@@ -289,29 +302,39 @@ export default async function DispatchPage({
 
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-3">
-              <Link
-                href={`/minds/${dispatch.authorId}`}
-                className="flex min-w-0 items-center gap-3 hover:opacity-80"
-              >
-                <ProfileIdentityMark
-                  identifier={dispatch.authorId}
-                  markUrl={dispatch.authorMarkUrl ?? null}
-                  label={dispatch.authorMarkUrl ? `${dispatch.authorPseudonym}'s Mark` : undefined}
-                  size="md"
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
-                    {dispatch.authorCountry && <span className="truncate text-[13px] text-muted">· {dispatch.authorCountry}</span>}
+              {isMemberDispatch ? (
+                <Link
+                  href={`/minds/${dispatch.authorId}`}
+                  className="flex min-w-0 items-center gap-3 hover:opacity-80"
+                >
+                  <ProfileIdentityMark
+                    identifier={dispatch.authorId}
+                    markUrl={dispatch.authorMarkUrl ?? null}
+                    label={dispatch.authorMarkUrl ? `${dispatch.authorPseudonym}'s Mark` : undefined}
+                    size="md"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
+                      {dispatch.authorCountry && <span className="truncate text-[13px] text-muted">· {dispatch.authorCountry}</span>}
+                    </div>
+                    <p className={metadataTextClass}>{formatDateTimeFull(dispatch.publishedAt)}</p>
                   </div>
+                </Link>
+              ) : (
+                // Tempa: emblem + "Tempa". Sponsored: "Sponsored" + sponsor.
+                // Never the creating admin's Mark/pseudonym/country/profile.
+                <div className="min-w-0 space-y-1">
+                  <DispatchIdentityLabel identity={dispatch.identity} size="md" />
                   <p className={metadataTextClass}>{formatDateTimeFull(dispatch.publishedAt)}</p>
                 </div>
-              </Link>
+              )}
               <div className="flex shrink-0 items-start gap-1">
                 <ShareDispatchButton
                   dispatchId={dispatch.id}
                   title={dispatch.title}
                   authorPseudonym={dispatch.authorPseudonym}
+                  shareText={dispatchShareText(dispatch.title, dispatch.identity)}
                 />
                 {isAuthor ? (
                   <AuthorActionsMenu
@@ -320,15 +343,19 @@ export default async function DispatchPage({
                     initialIsPinned={isPinned}
                     momentImagePaths={editableMoments.map((m) => m.imagePath)}
                     editable={dispatchEditable}
+                    allowPin={isMemberDispatch}
+                    editHref={officialEditHref}
                   />
                 ) : (
                   <>
-                    <KeepButton
-                      viewerId={user.id}
-                      keptUserId={dispatch.authorId}
-                      keptPseudonym={dispatch.authorPseudonym}
-                      initiallyKept={kept}
-                    />
+                    {isMemberDispatch && (
+                      <KeepButton
+                        viewerId={user.id}
+                        keptUserId={dispatch.authorId}
+                        keptPseudonym={dispatch.authorPseudonym}
+                        initiallyKept={kept}
+                      />
+                    )}
                     <div className="relative">
                       <ReportButton
                         targetType="dispatch"
@@ -395,6 +422,13 @@ export default async function DispatchPage({
                 initialPosition={initialPosition}
               />
             </div>
+
+            {/* Sponsored Dispatches may carry one restrained external link. */}
+            {dispatch.identity.kind === 'sponsored' && dispatch.identity.sponsor.ctaUrl && (
+              <div className="flex justify-end">
+                <SponsorCta identity={dispatch.identity} />
+              </div>
+            )}
 
             {/* Dispatch/author actions row (Small Dispatch Reader Layout
                 Correction) — Worth Reading and the correspondence entry

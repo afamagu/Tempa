@@ -9,6 +9,8 @@ import {
   secondaryButtonClass,
 } from '@/app/profile/ui'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import type { DispatchIdentity } from '@/lib/dispatch-identity'
+import DispatchIdentityLabel from './dispatch-identity-label'
 import TopicChips from './topic-chips'
 import DispatchBody from './dispatch-body'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
@@ -57,7 +59,11 @@ export default function DispatchPreview({
   publishBlockedReason,
   onEditPostcard,
   error,
+  identity,
 }: {
+  /** Official/Sponsored Dispatches — previews the PUBLIC identity (Tempa
+   * emblem, or Sponsored + sponsor) instead of the admin's own Mark. */
+  identity?: DispatchIdentity
   authorId: string
   authorPseudonym: string
   authorMarkUrl?: string | null
@@ -122,15 +128,19 @@ export default function DispatchPreview({
 
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto w-full max-w-xl space-y-4">
-          <div className="flex items-center gap-3">
-            <ProfileIdentityMark
-              identifier={authorId}
-              markUrl={authorMarkUrl ?? null}
-              label={authorMarkUrl ? `${authorPseudonym}'s Mark` : undefined}
-              size="md"
-            />
-            <p className="text-[15px] font-medium text-foreground">{authorPseudonym}</p>
-          </div>
+          {identity && identity.kind !== 'member' ? (
+            <DispatchIdentityLabel identity={identity} size="md" linkable={false} />
+          ) : (
+            <div className="flex items-center gap-3">
+              <ProfileIdentityMark
+                identifier={authorId}
+                markUrl={authorMarkUrl ?? null}
+                label={authorMarkUrl ? `${authorPseudonym}'s Mark` : undefined}
+                size="md"
+              />
+              <p className="text-[15px] font-medium text-foreground">{authorPseudonym}</p>
+            </div>
+          )}
 
           <h1 className={sectionTitleClass}>{title}</h1>
 

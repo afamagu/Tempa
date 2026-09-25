@@ -26,6 +26,12 @@ export type FakeDispatchRow = {
   // Admin Phase 2A-1 — defaults to 'visible' (matching the migration's
   // `not null default 'visible'`) when a test row omits it.
   moderation_status?: 'visible' | 'hidden'
+  // Official/Sponsored Dispatches — defaults to 'member' (the column
+  // default) when a test row omits it.
+  published_as?: 'member' | 'tempa' | 'sponsored'
+  sponsor_name?: string | null
+  sponsor_cta_label?: string | null
+  sponsor_cta_url?: string | null
 }
 
 export type FakeProfileRow = {
@@ -267,7 +273,7 @@ export function createFakeDispatches(options: {
   }
 
   function dispatchesFrom() {
-    const filters: { authorId?: string; status?: string; id?: string; moderationStatus?: string } = {}
+    const filters: { authorId?: string; status?: string; id?: string; moderationStatus?: string; publishedAs?: string; ids?: string[] } = {}
     let insertedPayload: Record<string, unknown> | null = null
 
     function applyFilters() {
@@ -275,6 +281,8 @@ export function createFakeDispatches(options: {
         .filter((r) => (filters.authorId ? r.author_id === filters.authorId : true))
         .filter((r) => (filters.status ? r.status === filters.status : true))
         .filter((r) => (filters.id ? r.id === filters.id : true))
+        .filter((r) => (filters.ids ? filters.ids.includes(r.id) : true))
+        .filter((r) => (filters.publishedAs ? (r.published_as ?? 'member') === filters.publishedAs : true))
         // Only applied when the caller actually asks for it (the
         // Board/Home/profile LISTING queries add this explicitly, per
         // lib/dispatches.ts) — getDispatchById never adds this filter,
@@ -293,6 +301,11 @@ export function createFakeDispatches(options: {
         if (column === 'status') filters.status = value as string
         if (column === 'id') filters.id = value as string
         if (column === 'moderation_status') filters.moderationStatus = value as string
+        if (column === 'published_as') filters.publishedAs = value as string
+        return builder
+      },
+      in(column: string, values: string[]) {
+        if (column === 'id') filters.ids = values
         return builder
       },
       order() {

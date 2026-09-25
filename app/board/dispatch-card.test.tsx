@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DispatchCard from './dispatch-card'
 import type { DispatchListItem } from '@/lib/dispatches'
+import { resolveDispatchIdentity } from '@/lib/dispatch-identity'
 
 function item(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
-  return {
+  const merged: Omit<DispatchListItem, 'identity'> = {
     id: 'd-1',
     authorId: 'author-1',
     authorPseudonym: 'Evening Quill',
@@ -14,8 +15,10 @@ function item(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
     publishedAt: '2026-09-07T12:00:00Z',
     moderationStatus: 'visible',
     topics: [],
+    publishedAs: 'member' as const,
     ...overrides,
   }
+  return { ...merged, identity: overrides.identity ?? resolveDispatchIdentity({ publishedAs: merged.publishedAs ?? 'member', authorId: merged.authorId, authorPseudonym: merged.authorPseudonym, authorCountry: merged.authorCountry, authorMarkUrl: merged.authorMarkUrl ?? null }) }
 }
 
 describe('DispatchCard', () => {

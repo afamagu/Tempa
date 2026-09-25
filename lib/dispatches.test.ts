@@ -42,6 +42,7 @@ import {
 } from './dispatches'
 import { docToPlainBody, RICH_BODY_MARKER } from './letter-editor-doc'
 import { blockUser, unblockUser } from './blocking'
+import { resolveDispatchIdentity } from '@/lib/dispatch-identity'
 import {
   createFakeDispatches,
   type FakeDispatchRow,
@@ -2608,7 +2609,7 @@ describe('getHomeBoardCandidates — shares the Board feed core, no separate pag
 describe('Home Phase 1 — partitionHomeSections', () => {
   function feedItem(overrides: Partial<BoardFeedItem>): BoardFeedItem {
     const id = overrides.id ?? 'd-1'
-    return {
+    const merged: Omit<BoardFeedItem, 'identity'> = {
       id,
       authorId: 'author-1',
       title: 'A title',
@@ -2621,8 +2622,10 @@ describe('Home Phase 1 — partitionHomeSections', () => {
       isKept: false,
       isFamiliar: false,
       cursor: { seenBucket: 0, rankKey: '1', seedHash: 0, id },
+      publishedAs: 'member' as const,
       ...overrides,
     }
+    return { ...merged, identity: overrides.identity ?? resolveDispatchIdentity({ publishedAs: merged.publishedAs ?? 'member', authorId: merged.authorId, authorPseudonym: merged.authorPseudonym, authorCountry: merged.authorCountry, authorMarkUrl: merged.authorMarkUrl ?? null }) }
   }
 
   it('never lets the same Dispatch id appear in more than one section', () => {
@@ -2731,7 +2734,7 @@ describe('Home Phase 1 — partitionHomeSections', () => {
 describe('Home Phase 1 — reading trail helpers (v2)', () => {
   function feedItem(overrides: Partial<BoardFeedItem>): BoardFeedItem {
     const id = overrides.id ?? 'd-1'
-    return {
+    const merged: Omit<BoardFeedItem, 'identity'> = {
       id,
       authorId: 'author-1',
       title: 'A title',
@@ -2744,8 +2747,10 @@ describe('Home Phase 1 — reading trail helpers (v2)', () => {
       isKept: false,
       isFamiliar: false,
       cursor: { seenBucket: 0, rankKey: '5', seedHash: 12345, id },
+      publishedAs: 'member' as const,
       ...overrides,
     }
+    return { ...merged, identity: overrides.identity ?? resolveDispatchIdentity({ publishedAs: merged.publishedAs ?? 'member', authorId: merged.authorId, authorPseudonym: merged.authorPseudonym, authorCountry: merged.authorCountry, authorMarkUrl: merged.authorMarkUrl ?? null }) }
   }
 
   it('readingTrailSearchParams encodes the session plus the item\'s own cursor (never the item id, never isKept/isFamiliar)', () => {

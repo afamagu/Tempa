@@ -4,6 +4,7 @@ import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BoardFeed from './board-feed'
 import type { BoardFeedCursor, BoardFeedItem } from '@/lib/dispatches'
+import { resolveDispatchIdentity } from '@/lib/dispatch-identity'
 
 // Board Load More resilience checkpoint — BoardFeed had no test file at
 // all before this checkpoint. Same SSR-only limitation as every other
@@ -31,7 +32,7 @@ const source = readFileSync(SOURCE_PATH, 'utf8')
 const CURSOR: BoardFeedCursor = { seenBucket: 0, rankKey: '1', seedHash: 42, id: 'd-1' }
 
 function item(overrides: Partial<BoardFeedItem> = {}): BoardFeedItem {
-  return {
+  const merged: Omit<BoardFeedItem, 'identity'> = {
     id: 'd-1',
     // Same authorId as the viewer used in every render() below, so
     // BoardFeed never renders a keepSlot/KeepButton — irrelevant to this
@@ -48,8 +49,10 @@ function item(overrides: Partial<BoardFeedItem> = {}): BoardFeedItem {
     isKept: false,
     isFamiliar: false,
     cursor: CURSOR,
+    publishedAs: 'member' as const,
     ...overrides,
   }
+  return { ...merged, identity: overrides.identity ?? resolveDispatchIdentity({ publishedAs: merged.publishedAs ?? 'member', authorId: merged.authorId, authorPseudonym: merged.authorPseudonym, authorCountry: merged.authorCountry, authorMarkUrl: merged.authorMarkUrl ?? null }) }
 }
 
 function render(overrides: Partial<Parameters<typeof BoardFeed>[0]> = {}) {

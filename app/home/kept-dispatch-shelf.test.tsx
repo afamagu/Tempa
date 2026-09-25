@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import KeptDispatchShelf from './kept-dispatch-shelf'
 import type { BoardFeedItem } from '@/lib/dispatches'
+import { resolveDispatchIdentity } from '@/lib/dispatch-identity'
 
 const dispatch: BoardFeedItem = {
   id: 'dispatch-1',
@@ -17,6 +18,14 @@ const dispatch: BoardFeedItem = {
   isKept: true,
   isFamiliar: true,
   cursor: { seenBucket: 0, rankKey: '1', seedHash: 1, id: 'dispatch-1' },
+  publishedAs: 'member',
+  identity: resolveDispatchIdentity({
+    publishedAs: 'member',
+    authorId: 'author-1',
+    authorPseudonym: 'Evening Quill',
+    authorCountry: 'South Africa',
+    authorMarkUrl: 'https://example.test/mark.png',
+  }),
 }
 
 describe('KeptDispatchShelf', () => {

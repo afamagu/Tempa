@@ -121,12 +121,12 @@ describe('Dispatch detail page — Correspondence Entry Point checkpoint', () =>
   })
 
   it('the author\'s own view never fetches any of this — isAuthor short-circuits to empty answers/empty Sets', () => {
-    expect(source).toContain('isAuthor ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId)')
+    expect(source).toContain('isAuthor || !isMemberDispatch ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId)')
     expect(source).toContain(
-      "isAuthor ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id)"
+      "isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id)"
     )
     expect(source).toContain(
-      "isAuthor ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id)"
+      "isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id)"
     )
   })
 

@@ -3,7 +3,7 @@ import { metadataTextClass } from '@/app/profile/ui'
 import { formatDatePlain } from '@/lib/format-date'
 import FormattedText from '@/app/letters/formatted-text'
 import { dispatchExcerpt, dispatchIsRich, type DispatchListItem } from '@/lib/dispatches'
-import DispatchAuthorLink from '@/app/board/dispatch-author-link'
+import DispatchIdentityLabel from '@/app/board/dispatch-identity-label'
 
 /**
  * One Home Dispatch preview card — a WIDE horizontal card, used across
@@ -87,12 +87,7 @@ export default function BoardShelfCard({
   return (
     <div className="rounded-md border border-foreground/10 p-4">
       <div className="flex items-center gap-1.5">
-        <DispatchAuthorLink
-          authorId={dispatch.authorId}
-          authorPseudonym={dispatch.authorPseudonym}
-          authorCountry={dispatch.authorCountry}
-          authorMarkUrl={dispatch.authorMarkUrl ?? null}
-        />
+        <DispatchIdentityLabel identity={dispatch.identity} />
         <p className={`shrink-0 ${metadataTextClass}`}>· {formatDatePlain(dispatch.publishedAt)}</p>
       </div>
 
