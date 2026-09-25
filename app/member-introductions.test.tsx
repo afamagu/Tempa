@@ -8,7 +8,7 @@ import path from 'node:path'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const push = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/letters/l1' }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/home' }))
 
 type Call = { fn: string; args: Record<string, unknown> }
 const state = {
@@ -189,7 +189,9 @@ describe('Member introductions — presented vs consumed', () => {
     await click(button(/View Name A.s profile/))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(called('consume_member_introduction')).toEqual([{ p_candidate_id: 'A', p_reason: 'profile' }])
-    expect(push).toHaveBeenCalledWith('/minds/A?returnTo=%2Fletters%2Fl1')
+    // no returnTo, so the profile's "← People" goes to /minds, never history-back to Home
+    expect(push).toHaveBeenCalledWith('/minds/A')
+    expect(dialog()).toBeNull()
   })
 })
 
