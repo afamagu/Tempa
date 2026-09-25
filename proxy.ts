@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { type OnboardingStage } from '@/lib/onboarding'
-import { resolveAccountEntryDestination, type EligibilityStatus } from '@/lib/account-entry'
-import { isLegalCurrent } from '@/lib/legal'
+import { resolveAccountEntryDestination } from '@/lib/account-entry'
+import { readProxyAccountEntry } from '@/lib/account-entry-state'
 
 /**
  * Return-to-requested-page after sign-in (pre-beta UX polish batch 1) —
@@ -50,47 +49,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signInUrl)
   }
 
-  // Permanent ban — a banned account cannot use any protected surface;
-  // it resolves to the account-unavailable notice instead. Read through
-  // the member's own session (current_account_status is client-safe and
-  // self-scoped) so this can never reveal anyone else's state. A failed
-  // read defaults to 'active' (the RPC's own fallback) — the database
-  // still refuses every write for a banned account regardless.
-  const { data: accountStatus } = await supabase.rpc('current_account_status')
+  // Permanent ban + Adult Eligibility + Legal Acceptance + onboarding
+  // gate, read in ONE self-scoped round trip (current_account_entry_state
+  // — see lib/account-entry-state.ts). Read live through the member's own
+  // session on every request (never cached), so a ban takes effect on the
+  // very next navigation. A banned account resolves to the
+  // account-unavailable notice; the database still refuses every write
+  // for a banned account regardless.
+  const { accountStatus, state } = await readProxyAccountEntry(supabase, user.id)
   if (accountStatus === 'banned') {
     return NextResponse.redirect(new URL('/account-unavailable', request.url))
   }
 
-  // Adult Eligibility + Legal Acceptance Gate — an authenticated
-  // account without confirmed eligibility or current legal acceptance
-  // must not reach any protected route by direct navigation, exactly
-  // like an incomplete profile already cannot. Three small independent
-  // reads (own-row RLS on each), same shape as the existing profiles
-  // read below — matches this file's own established "query inline,
-  // share only the pure resolver" pattern (see lib/account-entry.ts).
-  const [{ data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
-    supabase.from('profiles').select('id, onboarding_stage').eq('id', user.id).maybeSingle(),
-    supabase.from('account_eligibility').select('status').eq('user_id', user.id).maybeSingle(),
-    supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id),
-  ])
-
   const requestedDestination = `${request.nextUrl.pathname}${request.nextUrl.search}`
-  const destination = resolveAccountEntryDestination(
-    {
-      authenticated: true,
-      eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
-      eligibleOn: null,
-      legalCurrent: isLegalCurrent(
-        (legalRows ?? []).map((r) => ({
-          documentType: r.document_type as 'terms_of_service' | 'community_guidelines',
-          documentVersion: r.document_version as string,
-        }))
-      ),
-      hasProfile: Boolean(profile),
-      onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
-    },
-    requestedDestination
-  )
+  const destination = resolveAccountEntryDestination(state, requestedDestination)
 
   if (destination === '/begin') {
     const beginUrl = new URL('/begin', request.url)

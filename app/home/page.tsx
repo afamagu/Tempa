@@ -7,8 +7,6 @@ import {
   deriveArrivals,
   getHiddenCorrespondenceIds,
   getWaitingLetterCount,
-  getActiveCorrespondencePartnerIds,
-  getContactedAnswerIds,
   getIncomingMailInTransit,
   excludeHiddenMailInTransit,
   hasVisibleReply,
@@ -36,27 +34,9 @@ import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import KeptDispatchShelf from './kept-dispatch-shelf'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import { getDiscoveryPage, genderDisplay } from '@/lib/discovery'
 
 const RECOMMENDED_COUNT = 6
-
-function genderDisplay(gender: string | null, genderCustom: string | null) {
-  if (!gender || gender === 'Prefer not to say') return null
-  if (gender === 'Self-describe') return genderCustom || null
-  return gender
-}
-
-// Same deterministic-per-viewer ordering technique as Minds/Explore
-// (app/minds/page.tsx) — stable across a refresh, fair across viewers,
-// no stored seed required.
-function hashPair(viewerId: string, candidateId: string): number {
-  let h = 2166136261
-  const combined = `${viewerId}:${candidateId}`
-  for (let i = 0; i < combined.length; i++) {
-    h ^= combined.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -68,42 +48,40 @@ export default async function HomePage() {
     redirect('/sign-in')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('pseudonym')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (!profile) {
-    redirect('/profile')
-  }
-
+  // Every independent read in ONE round trip. The profile check gates
+  // rendering (redirect below) but the other reads are side-effect-free
+  // and member-scoped, so there is no reason to wait for it first.
+  // Recommended minds come from the SAME bounded discovery RPC People
+  // uses (lib/discovery.ts) — first batch, no filters — so exclusions
+  // (self, active partners, already-contacted, block/Safety visibility)
+  // and ordering happen in Postgres and only six rows come back.
   const [
+    { data: profile },
     allLettersRaw,
     waitingCount,
-    excludedPartnerIds,
-    contactedAnswerIds,
     incomingInTransitRaw,
     hiddenCorrespondenceIds,
     eligibleQuestions,
     myAnswers,
     boardCandidates,
+    activeAnnouncement,
+    recommendedPage,
   ] = await Promise.all([
+    supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
     getWaitingLetterCount(supabase, user.id),
-    getActiveCorrespondencePartnerIds(supabase, user.id),
-    getContactedAnswerIds(supabase, user.id),
     getIncomingMailInTransit(supabase),
     getHiddenCorrespondenceIds(supabase, user.id),
     getEligibleQuestions(supabase, user.id),
     getMyAnswers(supabase, user.id),
     getHomeBoardCandidates(supabase),
+    getActiveAnnouncement(supabase),
+    getDiscoveryPage(supabase, { offset: 0, limit: RECOMMENDED_COUNT }),
   ])
 
-  const activeAnnouncement = await getActiveAnnouncement(supabase)
-  const announcementImageUrl = activeAnnouncement?.heroImagePath
-    ? (await resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath)).url
-    : null
+  if (!profile) {
+    redirect('/profile')
+  }
 
   // Home Phase 1 (Editorial Reading Surface) — one candidate pool
   // (~HOME_CANDIDATE_COUNT rows from the SAME board_feed_page ranking
@@ -147,66 +125,42 @@ export default async function HomePage() {
   // Only fetched for the single-sender case — with more than one
   // person waiting there's no single identity to attach a profile link
   // to, so none is shown (see PeopleGrid/DiscoveryResults for the same
-  // "audit context, don't indiscriminately linkify" principle).
-  let singleAwaitingSender: { pseudonym: string; markUrl: string | null } | null = null
-  if (singleAwaiting) {
-    const { data } = await supabase
-      .from('public_profiles')
-      .select('pseudonym, mark_id')
-      .eq('id', singleAwaiting.senderId)
-      .maybeSingle()
-    singleAwaitingSender = data
-      ? {
-          pseudonym: data.pseudonym,
-          markUrl: data.mark_id ? publicProfileMarkUrl(supabase, `${data.mark_id}.png`) : null,
-        }
-      : null
-  }
+  // "audit context, don't indiscriminately linkify" principle). Resolved
+  // alongside the announcement image URL — the two only depend on the
+  // round above, not on each other.
+  const [announcementImageUrl, singleAwaitingSender] = await Promise.all([
+    activeAnnouncement?.heroImagePath
+      ? resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath).then((r) => r.url)
+      : Promise.resolve(null),
+    singleAwaiting
+      ? supabase
+          .from('public_profiles')
+          .select('pseudonym, mark_id')
+          .eq('id', singleAwaiting.senderId)
+          .maybeSingle()
+          .then(({ data }) =>
+            data
+              ? {
+                  pseudonym: data.pseudonym as string,
+                  markUrl: data.mark_id ? publicProfileMarkUrl(supabase, `${data.mark_id}.png`) : null,
+                }
+              : null
+          )
+      : Promise.resolve(null),
+  ])
 
-  // A small, compact taste of Minds — not a second Discovery surface.
-  // Same eligibility rule as Explore (current answer, not self, not
-  // contacted, not an existing correspondence partner), just capped
-  // tight and rendered without filters/pagination/full answer bodies.
-  const { data: candidateAnswers } = await supabase
-    .from('question_answers')
-    .select('id, user_id')
-    .eq('is_current', true)
-    .neq('user_id', user.id)
-
-  const eligibleUserIds = [
-    ...new Set(
-      (candidateAnswers ?? [])
-        .filter((a) => !excludedPartnerIds.has(a.user_id) && !contactedAnswerIds.has(a.id))
-        .map((a) => a.user_id)
-    ),
-  ]
-
-  let recommended: RecommendedMind[] = []
-  if (eligibleUserIds.length > 0) {
-    const ordered = eligibleUserIds
-      .map((id) => ({ id, h: hashPair(user.id, id) }))
-      .sort((a, b) => a.h - b.h)
-      .slice(0, RECOMMENDED_COUNT)
-      .map((x) => x.id)
-
-    const { data: profiles } = await supabase
-      .from('public_profiles')
-      .select('id, pseudonym, country, gender, gender_custom, age_range, mark_id')
-      .in('id', ordered)
-
-    const byId = new Map((profiles ?? []).map((p) => [p.id, p]))
-    recommended = ordered
-      .map((id) => byId.get(id))
-      .filter((p): p is NonNullable<typeof p> => Boolean(p))
-      .map((p) => ({
-        userId: p.id,
-        pseudonym: p.pseudonym,
-        country: p.country,
-        genderDisplay: genderDisplay(p.gender, p.gender_custom),
-        ageRange: p.age_range,
-        markUrl: p.mark_id ? publicProfileMarkUrl(supabase, `${p.mark_id}.png`) : null,
-      }))
-  }
+  // A small, compact taste of People — not a second Discovery surface,
+  // and not a second recommendation engine: the first six of the
+  // viewer's own People order, rendered without filters/pagination/full
+  // answer bodies.
+  const recommended: RecommendedMind[] = recommendedPage.candidates.slice(0, RECOMMENDED_COUNT).map((c) => ({
+    userId: c.userId,
+    pseudonym: c.pseudonym,
+    country: c.country,
+    genderDisplay: genderDisplay(c.gender, c.genderCustom),
+    ageRange: c.ageRange,
+    markUrl: c.markId ? publicProfileMarkUrl(supabase, `${c.markId}.png`) : null,
+  }))
 
   return (
     <AppShell active="home" waitingLetterCount={waitingCount}>
