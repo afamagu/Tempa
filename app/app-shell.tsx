@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import TempaEmblem from '@/app/tempa-emblem'
+import MemberIntroductions from '@/app/member-introductions'
 
 type NavKey = 'home' | 'letters' | 'minds' | 'board' | 'you'
 
@@ -135,6 +136,10 @@ export default function AppShell({
       </nav>
 
       <div className="flex-1 pb-16 sm:pb-0">{children}</div>
+
+      {/* "People to meet" — at most once per visit, loaded lazily after
+          this page renders and failing open (see member-introductions). */}
+      <MemberIntroductions />
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden">
         {NAV_ITEMS.map((item) => {
