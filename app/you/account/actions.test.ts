@@ -48,7 +48,7 @@ const redirect = vi.fn((url: string) => {
 vi.mock('next/navigation', () => ({ redirect: (url: string) => redirect(url) }))
 vi.mock('server-only', () => ({}))
 
-const { deleteMyAccount } = await import('./actions')
+const { deleteMyAccount, deactivateMyAccount, reactivateMyAccount } = await import('./actions')
 
 beforeEach(() => {
   state.user = { id: 'member-a' }
@@ -75,11 +75,21 @@ describe('deleteMyAccount', () => {
     expect(state.rpcCalls).toEqual([])
   })
 
-  it('2. no target parameter: the RPC is called with no arguments; the member is the session user', async () => {
+  it('2. no target account: the RPC gets only the optional reason; the member is the session user', async () => {
     await expect(deleteMyAccount('DELETE')).rejects.toThrow('NEXT_REDIRECT')
-    expect(state.rpcCalls).toEqual([{ fn: 'close_my_account', args: undefined }])
+    expect(state.rpcCalls).toEqual([{ fn: 'close_my_account', args: { p_reason_code: null, p_reason_detail: null } }])
     expect(state.finalizeCalls[0][1]).toBe('member-a')
-    expect(deleteMyAccount.length).toBe(1)
+  })
+
+  it('I. deletion reason is optional; detail only travels with Something else; unknown codes dropped', async () => {
+    await expect(deleteMyAccount('DELETE', { reasonCode: 'something_else', reasonDetail: '  moving on  ' })).rejects.toThrow('NEXT_REDIRECT')
+    await expect(deleteMyAccount('DELETE', { reasonCode: 'not_using_tempa', reasonDetail: 'ignored' })).rejects.toThrow('NEXT_REDIRECT')
+    await expect(deleteMyAccount('DELETE', { reasonCode: 'need_a_break', reasonDetail: '' })).rejects.toThrow('NEXT_REDIRECT')
+    expect(state.rpcCalls.map((c) => c.args)).toEqual([
+      { p_reason_code: 'something_else', p_reason_detail: 'moving on' },
+      { p_reason_code: 'not_using_tempa', p_reason_detail: null },
+      { p_reason_code: null, p_reason_detail: null },
+    ])
   })
 
   it('19. success: storage/auth finalized, signed out everywhere, redirected to the public confirmation', async () => {
@@ -110,5 +120,33 @@ describe('deleteMyAccount', () => {
   it('20. missing service-role configuration: still closed, reported as pending', async () => {
     state.serviceThrows = true
     await expect(deleteMyAccount('DELETE')).rejects.toThrow('NEXT_REDIRECT:/account-deleted?cleanup=pending')
+  })
+})
+
+describe('deactivateMyAccount / reactivateMyAccount — Take a break', () => {
+  it('A. deactivates self only (reason optional) and goes to the paused page', async () => {
+    await expect(deactivateMyAccount()).rejects.toThrow('NEXT_REDIRECT:/account-paused')
+    await expect(deactivateMyAccount({ reasonCode: 'something_else', reasonDetail: ' quiet ' })).rejects.toThrow('NEXT_REDIRECT:/account-paused')
+    expect(state.rpcCalls).toEqual([
+      { fn: 'deactivate_my_account', args: { p_reason_code: null, p_reason_detail: null } },
+      { fn: 'deactivate_my_account', args: { p_reason_code: 'something_else', p_reason_detail: 'quiet' } },
+    ])
+    expect(state.signOutCalls).toEqual([])
+  })
+
+  it('a failed pause says nothing changed and stays put', async () => {
+    state.rpcResult = { data: null, error: { message: 'boom' } }
+    expect(await deactivateMyAccount()).toEqual({ ok: false, error: 'We couldn’t pause your account. Nothing has been changed — please try again.' })
+    expect(redirect).not.toHaveBeenCalled()
+  })
+
+  it('Return to Tempa explicitly reactivates, then goes home', async () => {
+    await expect(reactivateMyAccount()).rejects.toThrow('NEXT_REDIRECT:/home')
+    expect(state.rpcCalls).toEqual([{ fn: 'reactivate_my_account', args: undefined }])
+  })
+
+  it('a failed return keeps the member on the paused page with an honest message', async () => {
+    state.rpcResult = { data: null, error: { message: 'boom' } }
+    expect(await reactivateMyAccount()).toEqual({ ok: false, error: 'We couldn’t reopen your account just now. Please try again.' })
   })
 })

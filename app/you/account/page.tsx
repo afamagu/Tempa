@@ -6,6 +6,7 @@ import { isStaff } from '@/lib/admin'
 import { proseSubheadingClass, helperTextClass, secondaryButtonClass, sectionLabelClass, systemBodyClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import DeleteAccountPanel from './delete-account-panel'
+import TakeABreakPanel from './take-a-break-panel'
 
 const rowClass =
   'flex items-center justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]'
@@ -17,7 +18,7 @@ const LEGAL_LINKS = [
   { href: '/safety', label: 'Safety' },
 ]
 
-/** You → Account: legal & privacy documents, and account deletion. */
+/** You → Account & privacy: legal documents, Take a break, and account deletion. */
 export default async function AccountPage() {
   const supabase = await createClient()
   const {
@@ -38,7 +39,7 @@ export default async function AccountPage() {
             <Link href="/you" className={secondaryButtonClass}>
               You
             </Link>
-            <h1 className={proseSubheadingClass}>Account</h1>
+            <h1 className={proseSubheadingClass}>Account &amp; privacy</h1>
           </div>
 
           <section className="space-y-3">
@@ -53,6 +54,22 @@ export default async function AccountPage() {
             </div>
           </section>
 
+          <section id="take-a-break" className="scroll-mt-6 space-y-3">
+            <p className={sectionLabelClass}>Take a break from Tempa</p>
+            <p className={systemBodyClass}>
+              Step away without losing what you&rsquo;ve built here. Your profile and Dispatches disappear from public
+              Tempa, nobody new can write to you, and your letters and Keepsakes wait for you. Come back whenever
+              you&rsquo;re ready.
+            </p>
+            {staff ? (
+              <p className={helperTextClass}>
+                Staff accounts can&rsquo;t take a break here, so Tempa content you manage stays available.
+              </p>
+            ) : (
+              <TakeABreakPanel />
+            )}
+          </section>
+
           <section className="space-y-3">
             <p className={sectionLabelClass}>Delete account</p>
             <p className={systemBodyClass}>
@@ -65,7 +82,7 @@ export default async function AccountPage() {
                 another administrator to close this account.
               </p>
             ) : (
-              <DeleteAccountPanel />
+              <DeleteAccountPanel takeBreakHref="#take-a-break" />
             )}
           </section>
         </div>

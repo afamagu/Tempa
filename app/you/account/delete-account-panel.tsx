@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { destructiveButtonClass, helperTextClass, inputClass, secondaryButtonClass, systemBodyClass } from '@/app/profile/ui'
+import { DELETION_REASONS, type ExitFeedback } from '@/lib/account-lifecycle'
 import { deleteMyAccount } from './actions'
+import ExitReasonFields from './exit-reason-fields'
 
 const CONFIRMATION = 'DELETE'
 
@@ -14,13 +16,17 @@ const CONFIRMATION = 'DELETE'
  */
 export default function DeleteAccountPanel({
   action = deleteMyAccount,
+  takeBreakHref,
 }: {
   /** Injectable for tests; always the server action in the app. */
-  action?: (confirmation: string) => Promise<{ ok: false; error: string } | void>
+  action?: (confirmation: string, feedback: ExitFeedback) => Promise<{ ok: false; error: string } | void>
+  /** Where "Take a break instead" points (omitted when already on a break). */
+  takeBreakHref?: string
 }) {
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<ExitFeedback>({ reasonCode: null, reasonDetail: '' })
   const [pending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
   const confirmed = typed === CONFIRMATION
@@ -48,7 +54,7 @@ export default function DeleteAccountPanel({
     startTransition(async () => {
       // On success the action redirects (the browser leaves this page);
       // it only ever returns when nothing was deleted.
-      const result = await action(typed)
+      const result = await action(typed, feedback)
       if (result && !result.ok) setError(result.error)
     })
   }
@@ -81,6 +87,25 @@ export default function DeleteAccountPanel({
                 integrity — for example reports, safety decisions and your acceptance of Tempa’s terms.
               </li>
             </ul>
+
+            {takeBreakHref && (
+              <p className={helperTextClass}>
+                Want to step away without losing anything?{' '}
+                <a href={takeBreakHref} onClick={close} className="underline underline-offset-4">
+                  Take a break instead
+                </a>
+                .
+              </p>
+            )}
+
+            <ExitReasonFields
+              name="deletion-reason"
+              legend="Why are you leaving?"
+              reasons={DELETION_REASONS}
+              value={feedback}
+              onChange={setFeedback}
+              disabled={pending}
+            />
 
             <label className="block space-y-1.5">
               <span className={helperTextClass}>

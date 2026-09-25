@@ -60,6 +60,16 @@ export async function proxy(request: NextRequest) {
   if (accountStatus === 'banned') {
     return NextResponse.redirect(new URL('/account-unavailable', request.url))
   }
+  // Account lifecycle (docs/sql/2026-10-16-account-lifecycle.sql) — a
+  // member taking a break lands on the calm paused page (never silently
+  // reactivated); a closed account's leftover session goes to the
+  // deletion confirmation, never the ban notice.
+  if (accountStatus === 'deactivated') {
+    return NextResponse.redirect(new URL('/account-paused', request.url))
+  }
+  if (accountStatus === 'closed') {
+    return NextResponse.redirect(new URL('/account-deleted', request.url))
+  }
 
   const requestedDestination = `${request.nextUrl.pathname}${request.nextUrl.search}`
   const destination = resolveAccountEntryDestination(state, requestedDestination)

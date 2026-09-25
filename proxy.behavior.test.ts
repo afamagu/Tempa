@@ -116,6 +116,18 @@ describe('proxy — protected entry destinations', () => {
     expect(await visit('/home')).toBeNull()
   })
 
+  it('a member taking a break lands on /account-paused from any protected route (never silently reactivated)', async () => {
+    fake.entryRow = { ...complete, account_status: 'deactivated' }
+    for (const path of ['/home', '/letters/abc', '/you/account']) {
+      expect((await visit(path))?.pathname).toBe('/account-paused')
+    }
+  })
+
+  it('a closed account’s leftover session goes to /account-deleted, not the ban notice', async () => {
+    fake.entryRow = { ...complete, account_status: 'closed' }
+    expect((await visit('/home'))?.pathname).toBe('/account-deleted')
+  })
+
   it('no eligibility / ineligible / review -> /begin?next=', async () => {
     for (const eligibility_status of [null, 'ineligible', 'review_required']) {
       fake.entryRow = { ...complete, eligibility_status }

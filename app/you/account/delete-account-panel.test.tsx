@@ -25,7 +25,7 @@ afterEach(async () => {
 })
 const button = (label: string) => Array.from(document.querySelectorAll('button')).find((b) => b.textContent === label) as HTMLButtonElement
 async function type(value: string) {
-  const input = document.querySelector('input') as HTMLInputElement
+  const input = document.querySelector('[role="dialog"] input[autocomplete="off"]') as HTMLInputElement
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
     setter.call(input, value)
@@ -63,7 +63,7 @@ describe('Delete account — deliberate two-step confirmation', () => {
     await act(async () => button('Delete account').click())
     await type('DELETE')
     await act(async () => button('Delete my account').click())
-    expect(action).toHaveBeenCalledWith('DELETE')
+    expect(action).toHaveBeenCalledWith('DELETE', { reasonCode: null, reasonDetail: '' })
     expect(document.querySelector('[role="alert"]')?.textContent).toContain('Nothing has been changed')
     expect(document.body.textContent).not.toMatch(/has been deleted/)
   })
@@ -83,7 +83,10 @@ describe('placement', () => {
     const you = readFileSync(path.join(__dirname, '..', 'page.tsx'), 'utf8')
     const account = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8')
     expect(you).toContain('href="/you/account"')
-    expect(account).toContain('<DeleteAccountPanel />')
+    expect(account).toContain('<DeleteAccountPanel takeBreakHref="#take-a-break" />')
+    // Take a break sits ABOVE permanent deletion
+    expect(account.indexOf('<TakeABreakPanel />')).toBeGreaterThan(-1)
+    expect(account.indexOf('<TakeABreakPanel />')).toBeLessThan(account.indexOf('<DeleteAccountPanel'))
     for (const href of ['/terms', '/privacy', '/community-guidelines', '/safety']) expect(account).toContain(`'${href}'`)
     expect(account).toContain('Staff accounts are closed by Tempa administrators')
   })
