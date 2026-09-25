@@ -97,6 +97,27 @@ fn_checks as (
       and pg_get_functiondef(f.shared) ilike '%d.moderation_status = ''visible''%' as shared_gate_unchanged
   from fns f
 ),
+board_feed as (
+  -- board_feed_page: relationship signals gated to member rows; shape,
+  -- security mode and keyset ordering unchanged
+  select
+    coalesce(bf.oid is not null, false) as board_feed_present,
+    coalesce(pg_get_functiondef(bf.oid) ilike '%left join familiar_authors fa on fa.author_id = ce.author_id and ce.published_as = ''member''%', false) as board_relationship_member_only,
+    coalesce(pg_get_functiondef(bf.oid) ilike '%and d2.published_as = ''member''%', false) as board_augment_member_only,
+    coalesce(pg_get_functiondef(bf.oid) ilike '%partition by c.seen_bucket, c.author_id, c.published_as%', false) as board_diversity_isolated,
+    coalesce(
+      pg_get_function_result(bf.oid) = 'TABLE(id uuid, author_id uuid, title text, body text, published_at timestamp with time zone, moderation_status text, is_kept boolean, is_familiar boolean, seen_bucket smallint, rank_key numeric, seed_hash integer)'
+      and not bf.prosecdef
+      and pg_get_functiondef(bf.oid) ilike '%order by f.seen_bucket, f.rank_key, f.seed_hash, f.id%',
+      false
+    ) as board_contract_unchanged,
+    coalesce(
+      has_function_privilege('authenticated', bf.oid, 'EXECUTE') and not has_function_privilege('anon', bf.oid, 'EXECUTE'),
+      false
+    ) as board_grants_unchanged
+  from (select 1) _a
+  left join pg_proc bf on bf.oid = to_regprocedure('public.board_feed_page(timestamptz, text, integer, smallint, numeric, integer, uuid)')
+),
 grants as (
   select
     has_function_privilege('authenticated', f.official_publish, 'EXECUTE')
@@ -126,6 +147,8 @@ select
   x.shared_identity_resolved, x.shared_never_returns_author_id, x.shared_gate_unchanged,
   g.authenticated_can_call_official, g.anon_cannot_mutate, g.anon_can_read_shared,
   g.public_execute_revoked, g.no_direct_dispatch_writes,
+  b.board_feed_present, b.board_relationship_member_only, b.board_augment_member_only,
+  b.board_diversity_isolated, b.board_contract_unchanged, b.board_grants_unchanged,
   coalesce(
     c.published_as_column_ok and c.sponsor_columns_ok
     and k.published_as_check_ok and k.sponsor_shape_ok and k.cta_https_only
@@ -136,7 +159,9 @@ select
     and x.official_publish_never_member and x.official_postcard_sender_resolved and x.sponsored_requires_name
     and x.shared_identity_resolved and x.shared_never_returns_author_id and x.shared_gate_unchanged
     and g.authenticated_can_call_official and g.anon_cannot_mutate and g.anon_can_read_shared
-    and g.public_execute_revoked and g.no_direct_dispatch_writes,
+    and g.public_execute_revoked and g.no_direct_dispatch_writes
+    and b.board_feed_present and b.board_relationship_member_only and b.board_augment_member_only
+    and b.board_diversity_isolated and b.board_contract_unchanged and b.board_grants_unchanged,
     false
   ) as overall_pass
-from col c, cons k, rows_ok r, trg t, fn_checks x, grants g;
+from col c, cons k, rows_ok r, trg t, fn_checks x, grants g, board_feed b;

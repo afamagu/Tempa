@@ -67,6 +67,10 @@
 --   sponsored  — the sponsor name.
 --   Resolved server-side; never a client-supplied sender.
 --
+-- BOARD RANKING: board_feed_page is re-created (section 6) so the creating
+-- admin's personal Keep/correspondence relationships never boost or
+-- classify Tempa/Sponsored rows — they rank as neutral discovery rows.
+--
 -- GET_SHARED_DISPATCH (anonymous /d/[shareToken]) — widened with
 -- published_as + sponsor fields. The share-token security gate is
 -- reproduced byte-for-byte. For tempa/sponsored rows author_pseudonym
@@ -636,5 +640,265 @@ $function$;
 
 revoke all on function public.get_shared_dispatch(uuid) from public, anon, authenticated;
 grant execute on function public.get_shared_dispatch(uuid) to anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 6. BOARD_FEED_PAGE — relationship signals isolated to member rows
+-- ------------------------------------------------------------
+-- Reproduces the CURRENT definition from docs/sql/2026-09-27-topical-
+-- interests.sql verbatim (signature, RETURNS TABLE shape, SECURITY
+-- INVOKER, search_path, session-stable ordering, seen/unseen buckets,
+-- keyset cursor, Keep:Correspondent and Familiar:Discovery ratios,
+-- topical tie-break, grants) with exactly three identity-isolation
+-- edits, each marked PUBLICATION IDENTITY below:
+--   a. published_as is carried through the two internal candidate CTEs
+--      and familiar_augment only augments with MEMBER rows;
+--   b. familiar_authors joins only when ce.published_as = 'member', so
+--      Tempa/Sponsored rows are always is_kept = false / is_familiar =
+--      false and rank in the neutral discovery stream;
+--   c. author_seq partitions by (author_id, published_as) so official
+--      rows never consume the creating admin's member diversity slots.
+-- No official/paid boost of any kind. Member rows rank exactly as before.
+
+create or replace function public.board_feed_page(
+  p_session_started_at timestamptz,
+  p_seed text,
+  p_limit integer default 12,
+  p_cursor_seen_bucket smallint default null,
+  p_cursor_rank_key numeric default null,
+  p_cursor_seed_hash integer default null,
+  p_cursor_id uuid default null
+)
+returns table (
+  id uuid,
+  author_id uuid,
+  title text,
+  body text,
+  published_at timestamptz,
+  moderation_status text,
+  is_kept boolean,
+  is_familiar boolean,
+  seen_bucket smallint,
+  rank_key numeric,
+  seed_hash integer
+)
+language sql
+security invoker
+stable
+set search_path to 'public'
+as $$
+  with eligible_global as (
+    select d.id, d.author_id, d.title, d.body, d.published_at, d.moderation_status, d.published_as
+    from public.dispatches d
+    where d.status = 'published'
+      and d.moderation_status = 'visible'
+      and d.published_at <= p_session_started_at
+    order by d.published_at desc
+    limit 300
+  ),
+
+  familiar_authors as (
+    select author_id, bool_or(is_kept) as is_kept
+    from (
+      select km.kept_user_id as author_id, true as is_kept
+      from public.kept_minds km
+      where km.viewer_user_id = auth.uid()
+        and km.created_at < p_session_started_at
+        and not tempa_private.is_blocked_pair(auth.uid(), km.kept_user_id)
+
+      union all
+
+      select
+        (case when c.participant_low = auth.uid() then c.participant_high else c.participant_low end) as author_id,
+        false as is_kept
+      from public.correspondences c
+      where c.status = 'active'
+        and c.established_at is not null
+        and c.established_at < p_session_started_at
+        and (c.participant_low = auth.uid() or c.participant_high = auth.uid())
+        and not tempa_private.is_blocked_pair(
+          auth.uid(),
+          case when c.participant_low = auth.uid() then c.participant_high else c.participant_low end
+        )
+    ) sources
+    group by author_id
+  ),
+
+  familiar_augment as (
+    select d.id, d.author_id, d.title, d.body, d.published_at, d.moderation_status, d.published_as
+    from familiar_authors fa
+    cross join lateral (
+      select d2.id, d2.author_id, d2.title, d2.body, d2.published_at, d2.moderation_status, d2.published_as
+      from public.dispatches d2
+      where d2.author_id = fa.author_id
+        -- PUBLICATION IDENTITY (2026-10-15): a relationship with the
+        -- creating admin never pulls their Tempa/Sponsored rows in.
+        and d2.published_as = 'member'
+        and d2.status = 'published'
+        and d2.moderation_status = 'visible'
+        and d2.published_at <= p_session_started_at
+        and not exists (
+          select 1 from public.dispatch_views dv
+          where dv.viewer_id = auth.uid()
+            and dv.dispatch_id = d2.id
+            and dv.first_viewed_at < p_session_started_at
+        )
+      order by d2.published_at desc
+      limit 2
+    ) d
+  ),
+
+  combined_eligible as (
+    select ce.*, hashtext(p_seed || ce.id::text) as seed_hash
+    from (
+      select * from eligible_global
+      union
+      select * from familiar_augment
+    ) ce
+  ),
+
+  -- Phase 2B addition — the viewer's own selected Interests, read live
+  -- (no session-stability rule: unlike Keep/correspondence, an Interest
+  -- selection is never treated as a relationship signal).
+  viewer_interests as (
+    select interest_key
+    from public.profile_interests
+    where viewer_user_id = auth.uid()
+  ),
+
+  -- Phase 2B addition — exact token/phrase alias matching only, never a
+  -- substring scan (see this file's own header comment). Empty when the
+  -- viewer has selected no Interests, which is what makes the zero-
+  -- interest degrade a structural consequence rather than a special case.
+  topical_matches as (
+    select distinct dt.dispatch_id
+    from public.dispatch_topics dt
+    join public.interest_topic_aliases ia
+      on ia.alias = tempa_private.normalize_topic_text(dt.topic)
+      or ia.alias = any(string_to_array(tempa_private.normalize_topic_text(dt.topic), ' '))
+    join viewer_interests vi on vi.interest_key = ia.interest_key
+  ),
+
+  classified as (
+    select
+      ce.*,
+      (case
+        when exists (
+          select 1 from public.dispatch_views dv
+          where dv.viewer_id = auth.uid()
+            and dv.dispatch_id = ce.id
+            and dv.first_viewed_at < p_session_started_at
+        ) then 1::smallint
+        else 0::smallint
+      end) as seen_bucket,
+      coalesce(fa.is_kept, false) as is_kept,
+      (fa.author_id is not null) as is_familiar,
+      exists (select 1 from topical_matches tm where tm.dispatch_id = ce.id) as is_topical_match
+    from combined_eligible ce
+    -- PUBLICATION IDENTITY (2026-10-15): Keep / correspondent
+    -- familiarity is a relationship with a MEMBER. Tempa/Sponsored rows
+    -- keep author_id = the creating admin for audit only, so they never
+    -- inherit that admin's relationships: is_kept = false,
+    -- is_familiar = false, ranked in the neutral discovery stream.
+    left join familiar_authors fa on fa.author_id = ce.author_id and ce.published_as = 'member'
+  ),
+
+  author_diverse as (
+    select
+      c.*,
+      -- PUBLICATION IDENTITY (2026-10-15): published_as joins the
+      -- partition so an admin's Tempa/Sponsored rows form their own
+      -- diversity group. Identical to before for every member-only author.
+      row_number() over (partition by c.seen_bucket, c.author_id, c.published_as order by c.published_at desc) as author_seq
+    from classified c
+  ),
+
+  -- ---- Level 1: Keep : second familiarity signal = 3 : 1, independently per seen_bucket ----
+  -- Phase 2B: each stream's own tie-break gains one new column
+  -- (topical_rank, 0=matched/1=unmatched) between author_seq and
+  -- seed_hash. This can only ever reorder rows that already tied on
+  -- author_seq — it cannot change a stream's size or the divisor math
+  -- below, which depends only on each row's position within its own
+  -- stream. See this file's own header comment for the zero-interest
+  -- degrade proof.
+
+  keep_ranked as (
+    select
+      id, seen_bucket, seed_hash,
+      row_number() over (
+        partition by seen_bucket
+        order by author_seq, (case when is_topical_match then 0 else 1 end), seed_hash
+      ) as stream_i
+    from author_diverse
+    where is_kept
+  ),
+  second_signal_ranked as (
+    select
+      id, seen_bucket, seed_hash,
+      row_number() over (
+        partition by seen_bucket
+        order by author_seq, (case when is_topical_match then 0 else 1 end), seed_hash
+      ) as stream_i
+    from author_diverse
+    where is_familiar and not is_kept
+  ),
+  familiar_merged as (
+    select id, seen_bucket, seed_hash, ((2 * stream_i - 1)::numeric / 3.0) as kc_key from keep_ranked
+    union all
+    select id, seen_bucket, seed_hash, ((2 * stream_i - 1)::numeric / 1.0) as kc_key from second_signal_ranked
+  ),
+  familiar_ranked as (
+    select
+      fm.id, fm.seen_bucket,
+      row_number() over (partition by fm.seen_bucket order by fm.kc_key, fm.seed_hash) as familiar_i
+    from familiar_merged fm
+  ),
+
+  -- ---- Level 2: Familiar : Discovery = 1 : 1, unbiased, independently per seen_bucket ----
+
+  discovery_ranked as (
+    select
+      id, seen_bucket, seed_hash,
+      row_number() over (
+        partition by seen_bucket
+        order by author_seq, (case when is_topical_match then 0 else 1 end), seed_hash
+      ) as stream_i
+    from author_diverse
+    where not is_familiar
+  ),
+  top_level as (
+    select fr.id, fr.seen_bucket, (2 * fr.familiar_i - 1)::numeric as rank_key from familiar_ranked fr
+    union all
+    select dr.id, dr.seen_bucket, (2 * dr.stream_i - 1)::numeric as rank_key from discovery_ranked dr
+  ),
+
+  final as (
+    select
+      cl.id, cl.author_id, cl.title, cl.body, cl.published_at, cl.moderation_status,
+      cl.is_kept, cl.is_familiar, cl.seen_bucket, cl.seed_hash,
+      tl.rank_key
+    from author_diverse cl
+    join top_level tl on tl.id = cl.id
+  )
+
+  select
+    f.id, f.author_id, f.title, f.body, f.published_at, f.moderation_status,
+    f.is_kept, f.is_familiar, f.seen_bucket, f.rank_key, f.seed_hash
+  from final f
+  where
+    p_cursor_seen_bucket is null
+    or (f.seen_bucket, f.rank_key, f.seed_hash, f.id)
+      > (p_cursor_seen_bucket, p_cursor_rank_key, p_cursor_seed_hash, p_cursor_id)
+  order by f.seen_bucket, f.rank_key, f.seed_hash, f.id
+  limit p_limit
+$$;
+
+-- Grants unchanged from Phase 2A — same signature, same posture.
+revoke all on function public.board_feed_page(
+  timestamptz, text, integer, smallint, numeric, integer, uuid
+) from public;
+
+grant execute on function public.board_feed_page(
+  timestamptz, text, integer, smallint, numeric, integer, uuid
+) to authenticated;
 
 commit;

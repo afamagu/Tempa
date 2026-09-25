@@ -117,3 +117,41 @@ describe('verifier', () => {
     }
   })
 })
+
+describe('board_feed_page — relationship signals isolated to member rows', () => {
+  const extract = (sql: string) => {
+    const start = sql.indexOf('create or replace function public.board_feed_page(')
+    expect(start).toBeGreaterThan(-1)
+    const grant = 'grant execute on function public.board_feed_page(\n  timestamptz, text, integer, smallint, numeric, integer, uuid\n) to authenticated;'
+    return sql.slice(start, sql.indexOf(grant, start) + grant.length)
+  }
+  const historical = extract(read('2026-09-27-topical-interests.sql'))
+  const current = extract(migration)
+
+  it('is the 2026-09-27 definition byte-for-byte except the three marked identity-isolation edits', () => {
+    const reverted = current
+      .replace(/\n\s*-- PUBLICATION IDENTITY \(2026-10-15\)[^\n]*(\n\s*--[^\n]*)*/g, '')
+      .replace(/, d2?\.published_as\n/g, '\n')
+      .replace("\n        and d2.published_as = 'member'", '')
+      .replace(" and ce.published_as = 'member'", '')
+      .replace('partition by c.seen_bucket, c.author_id, c.published_as order by', 'partition by c.seen_bucket, c.author_id order by')
+    expect(reverted).toBe(historical)
+  })
+
+  it('Keep/correspondent familiarity only joins member rows; augmentation only pulls member rows', () => {
+    expect(current).toContain("left join familiar_authors fa on fa.author_id = ce.author_id and ce.published_as = 'member'")
+    expect(current).toContain("where d2.author_id = fa.author_id\n        -- PUBLICATION IDENTITY")
+    expect(current).toContain("and d2.published_as = 'member'")
+  })
+
+  it('same signature, RETURNS TABLE, SECURITY INVOKER, search_path, keyset order and grants', () => {
+    const header = (fn: string) => fn.slice(0, fn.indexOf('as $$'))
+    expect(header(current)).toBe(header(historical))
+    expect(current).toContain('order by f.seen_bucket, f.rank_key, f.seed_hash, f.id')
+    expect(current).toContain('grant execute on function public.board_feed_page(\n  timestamptz, text, integer, smallint, numeric, integer, uuid\n) to authenticated;')
+  })
+
+  it('no official/paid boost is introduced', () => {
+    expect(current).not.toMatch(/published_as\s*(=|in)\s*\(?'(tempa|sponsored)'/)
+  })
+})
