@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   consumeIntroduction,
@@ -104,7 +104,6 @@ export function IntroductionDialog({
   supabase: () => Supabase
 }) {
   const router = useRouter()
-  const pathname = usePathname()
   const panelRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -187,7 +186,10 @@ export function IntroductionDialog({
   }
 
   const titleId = `intro-name-${card.candidateId}`
-  const profileHref = `/minds/${card.candidateId}?returnTo=${encodeURIComponent(pathname || '/home')}`
+  // No returnTo: the profile's existing "← People" control then uses its
+  // /minds default instead of history-back (which would land on the page
+  // the introduction happened to open over, e.g. Home).
+  const profileHref = `/minds/${card.candidateId}`
   const writeHref = `/write/${card.candidateId}?a=${card.answerId}`
   const hasCommon = card.sharedLanguages.length > 0 || card.sharedIntents.length > 0
 
