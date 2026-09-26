@@ -98,6 +98,10 @@ an item is repriced.
 
 Adopted: **versioned bundles with fixed per-item allocations.**
 
+- A bundle contains **durable entitlements only** (`entitlement_model =
+  'durable'`: premium Postcards, a future durable Keepsake). Gifts
+  (`gift_instance`), Credit packs, bundles, physical products and
+  non-entitlement templates are rejected (2026-10-21 correction).
 - A bundle is sold through `commerce_bundle_versions` (one published version
   per moment, frozen once published). Each `commerce_bundle_version_items` row
   carries a fixed `allocation_credits`.
@@ -123,16 +127,84 @@ migration plus a read-only verifier, proven on the production-faithful PGlite
 fixture before any production SQL gate.
 
 Checkpoint 1 status: `2026-10-20-commerce-core.sql` applied to production
-2026-09-26; verifier `overall_pass = true`. Every commercial switch and every
+2026-09-26; verifier `overall_pass = true`. Checkpoint 2 status:
+`2026-10-21-commerce-credit-services.sql` applied to production 2026-09-26;
+verifier `overall_pass = true`. Every commercial switch and every
 payment provider remains OFF.
+
+## Checkpoint 2 — server commerce services (`2026-10-21-commerce-credit-services.sql`)
+
+Everything below is inert until the commerce switches are turned on at a
+later, explicit launch gate; every spend path refuses while they are OFF.
+
+- **Eligibility.** Spending requires the canonical
+  `public.current_account_status() = 'active'` (closed → `banned`, paused →
+  `suspended`; `restricted` also refused). A refusal is commerce-only: no
+  letter, discovery or correspondence gate reads commerce state.
+- **Safety-restricted members (owner decision).** No NEW spending or Gifts.
+  They still read their balance and history, keep every entitlement, and an
+  already-owned premium Postcard stays usable wherever Tempa's ordinary
+  Safety/writing rules permit Postcards (today a restricted member's Letters
+  cannot carry Postcards — that is the existing Safety rule, unchanged; once
+  it lifts, ownership is intact). Commerce never adds a correspondence
+  restriction; a negative Credit balance blocks commerce only.
+- **Serialisation.** Every spend locks the member's wallet row first, then
+  checks idempotency, ownership and balance. Concurrent requests for one
+  member run one at a time; a retry always sees the committed original.
+- **Member reads.** `commerce_my_credit_balance` (0 without a wallet),
+  `commerce_my_credit_history` (own rows, newest first, keyset pages,
+  member categories, no reasons/actors/keys/provider data — raw ledger
+  SELECT is revoked from clients), `commerce_my_entitlements` (active only;
+  "restore" = re-read the server record), `commerce_product_offer`,
+  `commerce_bundle_offer`.
+- **Price resolution.** `tempa_private.commerce_resolve_credit_price`: product
+  published and inside its window, Credit-priced type, not Complimentary,
+  Postcard still sendable, exactly one published price covering now —
+  otherwise it fails closed. Callers never send a price.
+- **Purchases.** `commerce_purchase_product(product, key)`,
+  `commerce_purchase_bundle(bundle, key)`: one ledger debit, immutable
+  purchase + item snapshots, entitlements, all-or-nothing. Same key + same
+  operation returns the original; same key + different operation →
+  `idempotency_conflict`; already owned → `already_owned` (no debit); every
+  bundle item owned → `all_owned` (no debit).
+- **Gift primitive.** `commerce_purchase_gift(gift, correspondence, key)`:
+  `gifts_enabled` required; an established, unblocked correspondence;
+  recipient active and accepting Gifts; charged once; one
+  `pending_delivery` instance hidden from the recipient; no entitlement.
+  Dedications arrive with Safety wiring in Checkpoint 7.
+- **Admin Credits.** `admin_grant_credits` (promotional/complimentary) and
+  `admin_adjust_credits`: `is_staff('admin')` only, reason required,
+  `admin_audit_log` row, ledger helper only, no direct wallet edit, never
+  below zero, idempotent. They are NOT gated by the commerce switches:
+  `commerce_enabled` is the member-commerce kill switch, and support
+  corrections, controlled pre-launch grants, compensation and recovery must
+  work while it is OFF. The accounting type is fixed by the operation, never
+  inferred from reason text; `admin_adjustment` is a correction of last
+  resort, and refunds/chargebacks get dedicated operations and ledger types
+  in Checkpoint 6.
+- **Premium Postcard sending.** BEFORE INSERT / UPDATE OF artwork triggers on
+  `letter_postcards` and `dispatch_postcards` read the responsible member
+  from the parent Letter (`sender_id`) / Dispatch (`author_id`) — never
+  `auth.uid()` — and require an active entitlement unless the Postcard is
+  Complimentary. `postcard_catalog.is_active` stays the sendability gate.
+  No staff bypass: an official Dispatch with premium artwork needs the
+  publishing admin to hold the entitlement. Sent rows are never modified.
+- **Concurrency proof.** Run on a genuine PostgreSQL 17 server with
+  independent connections and a lock barrier (both racers observed waiting
+  inside the purchase function), plus an 8-connection burst. A negative
+  control with the wallet lock removed fails every race test.
 
 ### Carried requirements
 
-- **Checkpoint 2 (before Credit spending is enabled):** run a genuine
-  multi-connection PostgreSQL concurrency test proving two simultaneous
-  purchases cannot double-spend one wallet (wallet row lock + idempotency
-  under real concurrent sessions). PGlite's single connection is not
-  sufficient for that final proof.
+- **Before `credit_spend_enabled` is ever turned on:** re-run the Checkpoint 2
+  multi-connection concurrency suite against the exact production
+  PostgreSQL major version (proven on 17.9 locally).
+- **Checkpoint 4 (Admin → Commerce):** an explicit, AUDITED official-use
+  entitlement grant to an official publisher/admin account (the existing
+  `admin_grant` entitlement source, or its cleanest equivalent) so official
+  Dispatches can use premium artwork. No money moves; the grant is explicit
+  and in `admin_audit_log`. There is never a generic "staff can use
+  anything" bypass — the Checkpoint 2 no-bypass trigger stays.
 - **Checkpoint 5 (checkout):** enforce the `market='*'` invariant above —
   market, currency and provider eligibility are checked before price
   resolution; the fallback never authorizes a sale by itself.
