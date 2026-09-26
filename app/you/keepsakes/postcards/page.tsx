@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getMyPostcards } from '@/lib/keepsakes'
 import { getWaitingLetterCount } from '@/lib/letters'
-import { sectionTitleClass, sectionLabelClass } from '@/app/profile/ui'
+import Link from 'next/link'
+import { quietLinkClass, sectionTitleClass, sectionLabelClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import KeepsakePostcardCard from './keepsake-postcard-card'
 import KeepsakesEmptyState from './keepsakes-empty-state'
@@ -46,8 +47,11 @@ export default async function KeepsakesPostcardsPage() {
             </div>
             <TempaNote>
               Postcards you receive are automatically kept here once they&apos;ve arrived — nothing to save, nothing to
-              set up.
+              set up. Receiving a Postcard doesn&apos;t make it yours to send.
             </TempaNote>
+            <Link href="/you/postcards" className={quietLinkClass}>
+              Browse Postcards you can send
+            </Link>
           </div>
 
           {error && <p className="text-sm text-red-600">{error.message}</p>}

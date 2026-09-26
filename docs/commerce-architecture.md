@@ -194,6 +194,45 @@ later, explicit launch gate; every spend path refuses while they are OFF.
   inside the purchase function), plus an 8-connection burst. A negative
   control with the wallet lock removed fails every race test.
 
+## Checkpoint 3 — member marketplace (You → Postcards, `/you/postcards`)
+
+- **One catalogue system** (`app/marketplace/`, read model `lib/marketplace.ts`)
+  serves both the marketplace (browse) and the Letter/Dispatch Postcard picker
+  (pick). The composers' contract is unchanged: active catalogue in, Postcard
+  key out; sending, Safety, snapshot versioning and the Checkpoint 2
+  ownership trigger are untouched.
+- **Listing rule.** An active catalogue Postcard is listed when its commerce
+  product is visible to members (published, inside its window — RLS hides
+  drafts), or when the member owns it (a Postcard withdrawn from sale stays
+  sendable by its owners). Premium Postcards without a current price are not
+  listed. If commerce data cannot be read at all, the picker falls back to the
+  active catalogue with no commerce labels (the server still enforces).
+- **Discovery.** Postcards | Gifts (only when a real published Gift exists) |
+  Yours. Views — For You, Countries, Moods, Occasions, Worlds, Stories,
+  Complimentary — are facets over many-to-many taxonomy terms; empty views are
+  hidden; internal code-only labels (e.g. `MA`) are never shown. For You is
+  editorial/default ordering (featured collections, then title), labelled
+  "Chosen by Tempa" — no private Letters, Moments or traits are read.
+- **Grid.** Compact still tiles (3:4 window of the artwork; 2 columns on
+  mobile up to 6 on wide screens), lazy-loaded, one state each: Complimentary,
+  Yours, or a Credit price. No motion in the grid.
+- **Detail.** The real 9:16 Postcard object (front/back). Motion never
+  autoplays; `preview_policy` controlled_full/teaser allows a deliberate,
+  muted "Preview motion"; still_only/none never plays; reduced motion never
+  plays.
+- **Yours.** "Yours to send" (unlocked + Complimentary) is kept visibly apart
+  from "Received Keepsakes" (received ≠ sendable).
+- **Unlock UX.** Uses `commerce_purchase_product` only; the displayed price is
+  never authority. One idempotency key per intent (retries reuse it), repeat
+  clicks ignored, confirm step, ownership and balance update in place. While
+  member commerce is OFF the price is shown with unlocking unavailable; no
+  "Get Credits" checkout exists yet (Checkpoint 5).
+- **Read hardening (`2026-10-22-commerce-catalogue-read-hardening.sql`).**
+  Column-level SELECT for members on catalogue tables (no rights-review
+  notes, admin metadata, authors, idempotency keys or ledger links) and
+  `commerce_member_context()` (own balance + member-facing switch states).
+  The app selects explicit columns, so it works before and after this runs.
+
 ### Carried requirements
 
 - **Before `credit_spend_enabled` is ever turned on:** re-run the Checkpoint 2
