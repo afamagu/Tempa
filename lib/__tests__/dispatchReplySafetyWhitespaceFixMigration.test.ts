@@ -25,10 +25,10 @@ describe('2026-10-17 Dispatch Reply Safety whitespace fix', () => {
   const fixed = createReply(fix)
   const previous = createReply(checkpoint4)
 
-  it('is one forward-only transaction, marked not executed', () => {
+  it('is one forward-only transaction, recorded as applied', () => {
     expect((fix.match(/^begin;/m) ?? []).length).toBe(1)
     expect((fix.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(fix).toContain('STATUS: NOT EXECUTED')
+    expect(fix).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
     expect(stripComments(fix)).not.toMatch(/drop function/i)
   })
 

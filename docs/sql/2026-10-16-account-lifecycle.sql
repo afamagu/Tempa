@@ -1,7 +1,8 @@
 -- ============================================================
 -- TEMPA — ACCOUNT LIFECYCLE: TAKE A BREAK, DELETION, EXIT FEEDBACK
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor
--- BEFORE deploying the application code that calls these functions.
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26 (before the PR #19 deploy);
+-- 2026-10-16-account-lifecycle-verify.sql returned overall_pass = true.
+-- Do not re-run casually. Must precede the app code that calls it.
 -- Forward-only. Edits no historical migration. Supersedes the unexecuted
 -- PR #19 draft (2026-10-16-account-deletion.sql) — this ONE file is the
 -- whole lifecycle. No Safety threshold, ranking or classifier changes.

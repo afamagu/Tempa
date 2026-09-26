@@ -24,10 +24,10 @@ const deactivate = () => fn('public.deactivate_my_account')
 const reactivate = () => fn('public.reactivate_my_account')
 
 describe('forward-only', () => {
-  it('one transaction, NOT EXECUTED, never deletes auth users; only signature-replacing drops', () => {
+  it('one transaction, recorded as applied, never deletes auth users; only signature-replacing drops', () => {
     expect((migration.match(/^begin;/gm) ?? []).length).toBe(1)
     expect((migration.match(/^commit;/gm) ?? []).length).toBe(1)
-    expect(migration).toContain('STATUS: NOT EXECUTED')
+    expect(migration).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
     expect(code).not.toMatch(/delete from auth\.users/i)
     const drops = (code.match(/\bdrop\b[^;]*;/gi) ?? []).map((d) => d.replace(/\s+/g, ' '))
     // get_shared_dispatch keeps its exact signature/return shape, so it is
