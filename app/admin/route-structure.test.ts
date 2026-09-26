@@ -92,7 +92,7 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(emailStatusPageSource).not.toContain('redirect(')
   })
 
-  it('the nav offers exactly Overview / Moderation / Members / Content / System / Feedback — no empty Analytics/Commerce destination, no fake Postcards tab yet', () => {
+  it('the nav offers Overview / Moderation / Members / Content / Commerce / System / Feedback — Commerce only now that Admin → Commerce is real (Checkpoint 4); no empty Analytics, no fake Postcards tab', () => {
     // Scoped to the actual DESTINATIONS array, not the whole file —
     // this file's own doc comment legitimately mentions "Analytics" as
     // a past placeholder name, which a bare whole-file substring check
@@ -108,7 +108,7 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(destinationsSource).toContain("label: 'System'")
     expect(destinationsSource).toContain("label: 'Feedback'")
     expect(destinationsSource).not.toContain('Analytics')
-    expect(destinationsSource).not.toContain('Commerce')
+    expect(destinationsSource).toContain("label: 'Commerce'")
     expect(destinationsSource).not.toContain('More')
     expect(destinationsSource).not.toContain('Postcards')
   })

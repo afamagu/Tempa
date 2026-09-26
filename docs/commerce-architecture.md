@@ -238,6 +238,48 @@ later, explicit launch gate; every spend path refuses while they are OFF.
   marketplace and picker until their commerce product is explicitly
   published (Admin → Commerce, Checkpoint 4).
 
+## Checkpoint 4 — Admin → Commerce (`/admin/commerce`, `2026-10-23-commerce-admin-operations.sql`)
+
+Applied to production 2026-09-27; verifier `overall_pass = true`.
+
+- **Sections:** Overview · Catalog (product detail) · Facets · Collections &
+  merchandising · Pricing · Credits · Entitlements & Gifts · Orders &
+  Payments (read-only) · Settings (read-only) · Audit. ADMIN-only: moderators
+  see an explanation; every RPC re-checks `is_staff('admin')` server-side.
+- **Server operations only.** Admins are `authenticated` too, so since 10-22
+  they read only member-safe published data. All admin reads and writes are
+  SECURITY DEFINER RPCs (pinned search_path, admin gate first); pure helpers
+  (`commerce_slugify`, `commerce_is_human_label`) stay immutable invoker
+  functions. No table-write grants; nothing can switch commerce on.
+- **Publishing:** draft → complete the checklist (artwork, price or
+  Complimentary, local price for packs, published bundle version, rights and
+  cultural review cleared) → publish now or **schedule = published + future
+  `publish_at`** (owner decision; no separate scheduled state) → remove from
+  sale / retire. The checklist is enforced server-side; putting a live
+  product's review on hold removes it from sale. Owners always keep what they
+  own. `postcard_catalog.is_active` stays independent of publication.
+- **Versions:** immutable; a change is a new current version (Gifts/Keepsakes
+  here, Postcards in Content → Postcards); any earlier version can be made
+  current again.
+- **Pricing:** new rows only. A published change closes the open window at
+  the new start; overlaps are refused with an explanation; drafts can be
+  published or discarded; a scheduled price can be withdrawn. Price books:
+  one market per row, `*` = price fallback only (not sale authorization),
+  integer minor units with a canonical USD reference, no live FX.
+- **Taxonomy:** facets are managed data (no React arrays); publishing a term
+  requires a human label, so `MA`-style codes can never become member-facing.
+- **Bundles:** draft versions of durable items with fixed allocations, a live
+  completion-price preview, publish (freezes) and retire.
+- **Credits:** grant / correction through the 2026-10-21 RPCs — two-step
+  confirmation with the resulting balance, reason required, one idempotency
+  key per intent, works while member commerce is OFF.
+- **Entitlements:** explicit, reasoned, audited ADMIN GRANT of durable
+  products with a purpose (`official_use`, support, compensation, other) —
+  the official-Dispatch path for premium artwork. No revoke and no
+  staff-wide bypass.
+- **Audit:** every mutation writes `admin_audit_log` (actor, action, target,
+  reason, concise before/after; review notes and secrets never included).
+
 ### Carried requirements
 
 - **Before `credit_spend_enabled` is ever turned on:** re-run the Checkpoint 2
@@ -256,6 +298,8 @@ later, explicit launch gate; every spend path refuses while they are OFF.
   Dispatches can use premium artwork. No money moves; the grant is explicit
   and in `admin_audit_log`. There is never a generic "staff can use
   anything" bypass — the Checkpoint 2 no-bypass trigger stays.
+- **Checkpoint 6 (refunds/chargebacks):** entitlement revocation, with an
+  explicit reason and audit semantics (owner decision: not in Checkpoint 4).
 - **Checkpoint 5 (checkout):** enforce the `market='*'` invariant above —
   market, currency and provider eligibility are checked before price
   resolution; the fallback never authorizes a sale by itself.
