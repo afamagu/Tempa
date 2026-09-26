@@ -1,6 +1,7 @@
 -- ============================================================
 -- TEMPA — COMMERCE CATALOGUE READ HARDENING — VERIFIER (READ-ONLY)
 -- Pairs with docs/sql/2026-10-22-commerce-catalogue-read-hardening.sql.
+-- PASSED IN PRODUCTION 2026-09-26 (overall_pass = true, every column true).
 -- One SELECT; changes nothing. Expect exactly one row with every column
 -- true and overall_pass = true.
 -- ============================================================

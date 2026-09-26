@@ -128,11 +128,11 @@ describe('discovery', () => {
     expect(applyQuery(listed, { view: 'complimentary', term: null, search: '' }).map((i) => i.key).sort()).toEqual(['bangkok', 'essaouira'])
   })
 
-  it('For You is editorial/default ordering — featured first, then by title', () => {
+  it('Featured is editorial/default ordering — featured collections first, then by title', () => {
     expect(forYouOrder(listed).map((i) => i.key)).toEqual(['lanterns', 'bangkok', 'essaouira', 'harbour', 'retiredOwned'])
   })
 
-  it('For You never reads private content: the marketplace module queries no Letters, Moments or profiles', () => {
+  it('Featured never reads private content: the marketplace module queries no Letters, Moments or profiles', () => {
     const src = readFileSync(path.join(__dirname, 'marketplace.ts'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/gm, '')

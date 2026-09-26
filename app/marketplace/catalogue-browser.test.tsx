@@ -86,10 +86,11 @@ describe('compact grid', () => {
     expect(tileTitles()).not.toContain('No Price')
   })
 
-  it('For You is labelled as Tempa’s choice, never as personalised', async () => {
+  it('the default view is labelled Featured (“Chosen by Tempa”), never as personalised', async () => {
     await render()
     expect(container.textContent).toContain('Chosen by Tempa')
-    expect(container.textContent).not.toMatch(/personali[sz]ed|based on your/i)
+    expect(container.textContent).not.toMatch(/personali[sz]ed|based on your|For You/i)
+    expect(byText('Featured')?.getAttribute('aria-pressed')).toBe('true')
     expect(tileTitles().slice(0, 2)).toEqual(['Lanterns', 'Bangkok'])
   })
 })
@@ -108,7 +109,7 @@ describe('search and facets', () => {
   it('only non-empty views appear; a facet shows its terms; internal country codes never appear', async () => {
     await render()
     const views = [...container.querySelectorAll('[aria-label="Browse by"] button')].map((b) => b.textContent)
-    expect(views).toEqual(['For You', 'Countries', 'Moods', 'Occasions', 'Complimentary'])
+    expect(views).toEqual(['Featured', 'Countries', 'Moods', 'Occasions', 'Complimentary'])
     await click(byText('Countries'))
     const terms = [...container.querySelectorAll('[aria-label="Countries filter"] button')].map((b) => b.textContent)
     expect(terms).toEqual(['All', 'Morocco'])

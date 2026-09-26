@@ -13,10 +13,11 @@ const verify = read('2026-10-22-commerce-catalogue-read-hardening-verify.sql')
 const body = sql.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n')
 
 describe('2026-10-22 commerce catalogue read hardening', () => {
-  it('is one forward-only transaction, not yet executed; privileges + one read-only function only', () => {
+  it('is one forward-only transaction, recorded as applied; privileges + one read-only function only', () => {
     expect((sql.match(/^begin;/m) ?? []).length).toBe(1)
     expect((sql.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(sql).toContain('STATUS: NOT EXECUTED')
+    expect(sql).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
+    expect(sql).not.toContain('NOT EXECUTED')
     expect(body).not.toMatch(/create table|alter table|drop |create policy|insert into|update public\.|delete from/i)
     expect([...body.matchAll(/create or replace function ([\w.]+)\(/g)].map((m) => m[1])).toEqual(['public.commerce_member_context'])
   })

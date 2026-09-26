@@ -265,7 +265,9 @@ export function stateLabel(state: ItemState, credits: number | null): string {
 export type DiscoveryView = 'for_you' | 'countries' | 'moods' | 'occasions' | 'worlds' | 'stories' | 'complimentary'
 
 export const VIEW_LABELS: Record<DiscoveryView, string> = {
-  for_you: 'For You',
+  // Owner decision (Checkpoint 3): member-facing label is "Featured" until real
+  // personalisation exists (Checkpoint 8). The internal view key stays 'for_you'.
+  for_you: 'Featured',
   countries: 'Countries',
   moods: 'Moods',
   occasions: 'Occasions',
@@ -296,7 +298,7 @@ export function facetTerms(items: CatalogueItem[], facet: CatalogueFacet): { slu
   return [...bySlug.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)).map(({ slug, label, count }) => ({ slug, label, count }))
 }
 
-/** Discovery views that have something to show. For You is always present when anything is listed. */
+/** Discovery views that have something to show. Featured is always present when anything is listed. */
 export function availableViews(items: CatalogueItem[]): DiscoveryView[] {
   if (items.length === 0) return []
   const views: DiscoveryView[] = ['for_you']
@@ -307,7 +309,7 @@ export function availableViews(items: CatalogueItem[]): DiscoveryView[] {
   return views
 }
 
-/** For You (Checkpoint 3): editorial/default order only — featured collections first,
+/** Featured (Checkpoint 3): editorial/default order only — featured collections first,
  * then everything else by title. Never derived from private Letters, Moments or traits. */
 export function forYouOrder(items: CatalogueItem[]): CatalogueItem[] {
   return [...items].sort((a, b) => {

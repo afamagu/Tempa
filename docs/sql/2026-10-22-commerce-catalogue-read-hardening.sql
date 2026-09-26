@@ -1,8 +1,9 @@
 -- ============================================================
 -- TEMPA — COMMERCE CATALOGUE READ HARDENING (Checkpoint 3)
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-22-commerce-catalogue-read-hardening-verify.sql
--- (read-only; overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26. Verified with
+-- 2026-10-22-commerce-catalogue-read-hardening-verify.sql (read-only): one
+-- row, every check true, overall_pass = true.
+-- Do not edit: any change ships as a new forward-only migration.
 -- Forward-only, privileges + one read-only function. No table, row,
 -- policy or setting changes; enables nothing.
 -- ============================================================

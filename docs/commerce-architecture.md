@@ -208,12 +208,13 @@ later, explicit launch gate; every spend path refuses while they are OFF.
   listed. If commerce data cannot be read at all, the picker falls back to the
   active catalogue with no commerce labels (the server still enforces).
 - **Discovery.** Postcards | Gifts (only when a real published Gift exists) |
-  Yours. Views — For You, Countries, Moods, Occasions, Worlds, Stories,
+  Yours. Views — Featured, Countries, Moods, Occasions, Worlds, Stories,
   Complimentary — are facets over many-to-many taxonomy terms; empty views are
-  hidden; internal code-only labels (e.g. `MA`) are never shown. For You is
-  editorial/default ordering (featured collections, then title), labelled
+  hidden; internal code-only labels (e.g. `MA`) are never shown. Featured is
+  (owner decision: "Featured", not "For You", until real personalisation in
+  Checkpoint 8) editorial/default ordering (featured collections, then title), labelled
   "Chosen by Tempa" — no private Letters, Moments or traits are read.
-- **Grid.** Compact still tiles (3:4 window of the artwork; 2 columns on
+- **Grid (owner-approved crop).** Compact still tiles (3:4 window of the artwork; 2 columns on
   mobile up to 6 on wide screens), lazy-loaded, one state each: Complimentary,
   Yours, or a Credit price. No motion in the grid.
 - **Detail.** The real 9:16 Postcard object (front/back). Motion never
@@ -231,13 +232,24 @@ later, explicit launch gate; every spend path refuses while they are OFF.
   Column-level SELECT for members on catalogue tables (no rights-review
   notes, admin metadata, authors, idempotency keys or ledger links) and
   `commerce_member_context()` (own balance + member-facing switch states).
-  The app selects explicit columns, so it works before and after this runs.
+  The app selects explicit columns, so it works before and after this runs. Applied to
+  production 2026-09-26; verifier `overall_pass = true`.
+- **Publication (owner decision).** New Postcards stay hidden from the
+  marketplace and picker until their commerce product is explicitly
+  published (Admin → Commerce, Checkpoint 4).
 
 ### Carried requirements
 
 - **Before `credit_spend_enabled` is ever turned on:** re-run the Checkpoint 2
   multi-connection concurrency suite against the exact production
   PostgreSQL major version (proven on 17.9 locally).
+- **Before paid Postcards go live (launch hardening):** the degraded
+  commerce-read fallback (picker shows the active catalogue when commerce
+  data cannot be read) must never make an unknown premium Postcard appear
+  Complimentary or sendable. Today it shows no label and relies on the
+  server ownership trigger to refuse the send; before any premium product
+  is published, the fallback must fail closed for anything not known to be
+  Complimentary or owned.
 - **Checkpoint 4 (Admin → Commerce):** an explicit, AUDITED official-use
   entitlement grant to an official publisher/admin account (the existing
   `admin_grant` entitlement source, or its cleanest equivalent) so official
