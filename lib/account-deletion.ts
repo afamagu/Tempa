@@ -2,7 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Member account deletion — the server-only half. close_my_account()
-// (docs/sql/2026-10-16-account-deletion.sql) runs first under the
+// (docs/sql/2026-10-16-account-lifecycle.sql) runs first under the
 // member's OWN session: it closes the account and deletes/de-identifies
 // their data atomically, and returns the member-owned storage objects to
 // remove. Everything here then runs with the service role, strictly
