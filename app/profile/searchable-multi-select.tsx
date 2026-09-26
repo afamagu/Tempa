@@ -45,20 +45,28 @@ export default function SearchableMultiSelect({
   const listLength = filtered.length + (showCustomOption ? 1 : 0)
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    // Pointer events cover touch, pen and mouse consistently. The old
+    // mousedown-only listener could leave the listbox open on phones,
+    // covering the next onboarding field until the member happened to
+    // tap elsewhere.
+    function handlePointerDown(e: PointerEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
         setQuery('')
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [])
 
   function addValue(value: string) {
     if (!values.includes(value)) {
       onChange([...values, value])
     }
+    // A selection completes the interaction. Close immediately so the
+    // dropdown never obscures the field below on a small screen; tapping
+    // the control again still lets the member add more languages.
+    setOpen(false)
     setQuery('')
     setHighlighted(0)
   }
@@ -133,6 +141,13 @@ export default function SearchableMultiSelect({
             setHighlighted(0)
           }}
           onFocus={() => {
+            setOpen(true)
+            setHighlighted(0)
+          }}
+          // After a selection the input keeps focus (options preventDefault
+          // on mousedown), so a second tap fires no focus event — reopen on
+          // click so the member can add another language.
+          onClick={() => {
             setOpen(true)
             setHighlighted(0)
           }}
