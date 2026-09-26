@@ -3,9 +3,11 @@
 -- bundles, prices, price books, Credits wallet + immutable ledger,
 -- purchases, entitlements, Gift instances, provider-neutral fiat orders,
 -- payment attempts, payment events and payment adjustments.
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-20-commerce-core-verify.sql (read-only;
--- overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26. Verified with
+-- 2026-10-20-commerce-core-verify.sql (read-only): one row, every check
+-- true, overall_pass = true; fresh-state informational checks
+-- (all_commercial_switches_off, no_provider_enabled, no_money_moved) true.
+-- Do not edit: any change ships as a new forward-only migration.
 -- Forward-only and additive: creates new tables/functions/triggers (and
 -- the btree_gist extension) only; edits no historical migration and
 -- redefines no existing function. Enables NO money movement: there is no

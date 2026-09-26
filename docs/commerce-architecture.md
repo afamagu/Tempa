@@ -31,6 +31,10 @@ gate.
   Credit price; one product/currency/market in the price book; one bundle's
   versions. Each price-book row names exactly one `market` (ISO 3166-1 alpha-2,
   or `*` as the explicit fallback; resolution is exact market, then `*`).
+  **Invariant (owner-approved):** market='*' is a pricing fallback only. It
+  does not itself authorize sales in every country. Checkout must separately
+  verify that the member's market, currency and payment provider are eligible
+  before resolving exact-market pricing and then '*' fallback.
   Once a price row or bundle version leaves `draft` it is frozen: only closing
   its window (`effective_to`, never reopened) or retiring it is allowed. A price
   change is "close the old window, publish a new row from that instant".
@@ -117,3 +121,20 @@ Adopted: **versioned bundles with fixed per-item allocations.**
 10 lifecycle/legal/launch gate. Each database change ships as a forward-only
 migration plus a read-only verifier, proven on the production-faithful PGlite
 fixture before any production SQL gate.
+
+Checkpoint 1 status: `2026-10-20-commerce-core.sql` applied to production
+2026-09-26; verifier `overall_pass = true`. Every commercial switch and every
+payment provider remains OFF.
+
+### Carried requirements
+
+- **Checkpoint 2 (before Credit spending is enabled):** run a genuine
+  multi-connection PostgreSQL concurrency test proving two simultaneous
+  purchases cannot double-spend one wallet (wallet row lock + idempotency
+  under real concurrent sessions). PGlite's single connection is not
+  sufficient for that final proof.
+- **Checkpoint 5 (checkout):** enforce the `market='*'` invariant above —
+  market, currency and provider eligibility are checked before price
+  resolution; the fallback never authorizes a sale by itself.
+- **Checkpoint 10 (launch gate):** human country names for Place terms;
+  legal review of unused-Credit wording on closure.

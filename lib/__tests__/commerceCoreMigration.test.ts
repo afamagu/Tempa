@@ -16,10 +16,11 @@ const code = (s: string) => s.split('\n').map((l) => l.replace(/--.*$/, '')).joi
 const body = code(sql)
 
 describe('2026-10-20 commerce core migration', () => {
-  it('is one forward-only transaction, not yet executed, redefining no existing function', () => {
+  it('is one forward-only transaction, recorded as applied, redefining no existing function', () => {
     expect((sql.match(/^begin;/m) ?? []).length).toBe(1)
     expect((sql.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(sql).toContain('STATUS: NOT EXECUTED')
+    expect(sql).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
+    expect(sql).not.toContain('NOT EXECUTED')
     const replaced = [...body.matchAll(/create or replace function ([\w.]+)\(/g)].map((m) => m[1])
     expect(replaced.every((f) => f.startsWith('tempa_private.commerce_'))).toBe(true)
     expect(body).not.toMatch(/drop table|drop column|alter table public\.(letters|profiles|postcard_catalog|postcard_versions|letter_postcards|dispatch_postcards)\b/i)

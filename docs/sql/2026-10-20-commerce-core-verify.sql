@@ -1,6 +1,7 @@
 -- ============================================================
 -- TEMPA — COMMERCE CORE — VERIFIER (READ-ONLY)
 -- Pairs with docs/sql/2026-10-20-commerce-core.sql.
+-- PASSED IN PRODUCTION 2026-09-26 (overall_pass = true, all columns true).
 -- One SELECT; changes nothing. Expect exactly one row with
 -- overall_pass = true. Right after the migration every column is true;
 -- all_commercial_switches_off, no_provider_enabled and no_money_moved are informational
