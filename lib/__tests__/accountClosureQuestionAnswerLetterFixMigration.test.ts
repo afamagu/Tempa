@@ -33,10 +33,10 @@ describe('2026-10-19 account closure: Question answers referenced by letters', (
     expect(fn(mailCall, TRIGGER)).toContain('or new.question_answer_id is distinct from old.question_answer_id')
   })
 
-  it('is one forward-only transaction, not yet executed, and leaves close_my_account alone', () => {
+  it('is one forward-only transaction, recorded as applied, and leaves close_my_account alone', () => {
     expect((fix.match(/^begin;/m) ?? []).length).toBe(1)
     expect((fix.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(fix).toContain('STATUS: NOT EXECUTED')
+    expect(fix).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
     const body = code(fix).join('\n')
     expect(body).not.toMatch(/close_my_account|drop trigger|drop function|alter table|disable trigger|drop constraint/i)
   })

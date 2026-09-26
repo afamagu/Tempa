@@ -31,10 +31,10 @@ describe('2026-10-18 account closure own-replies fix', () => {
     expect(repliesMigration).toMatch(/dispatch_id uuid not null\n\s+references public\.dispatches\(id\),/)
   })
 
-  it('is one forward-only transaction, not yet executed, and does not edit 2026-10-16', () => {
+  it('is one forward-only transaction, recorded as applied, and does not edit 2026-10-16', () => {
     expect((fix.match(/^begin;/m) ?? []).length).toBe(1)
     expect((fix.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(fix).toContain('STATUS: NOT EXECUTED')
+    expect(fix).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
     expect(code(fix).join('\n')).not.toMatch(/drop function|alter table|drop table/i)
     expect(applied).not.toContain('delete from public.dispatch_replies')
   })
