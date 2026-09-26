@@ -1,50 +1,54 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { helperTextClass, sectionLabelClass, inputClass, secondaryButtonClass } from '@/app/profile/ui'
-import { filterPostcardCatalog, type PostcardCatalogEntry } from '@/lib/postcards'
+import { createClient } from '@/lib/supabase/client'
+import { buildMarketplace, loadMarketplace, type Marketplace } from '@/lib/marketplace'
+import type { PostcardCatalogEntry } from '@/lib/postcards'
+import CatalogueBrowser from '@/app/marketplace/catalogue-browser'
 
 /**
- * Tempa's own postcard catalog — never the device photo library. Admin
- * Phase 2A-2 — `postcards` is the live, ACTIVE DB-backed catalogue
- * (lib/postcards.ts's getActivePostcards), fetched once by the caller
- * (moments-composer.tsx) rather than a hand-maintained TypeScript list:
- * a Postcard added entirely through Admin appears here with zero
- * picker changes.
+ * Tempa's own postcard catalog — never the device photo library.
  *
- * Release Polish Pass — simplified into an honest catalogue for first
- * release: the previous Featured/My Postcards/Places/Collections
- * section scaffolding (three of which were permanent "nothing here
- * yet" placeholders) read as an unfinished product and is removed.
- * Received Keepsakes are deliberately NOT surfaced as a "My Postcards"
- * section here — receiving a Postcard never implies the recipient now
- * "owns" a design they may send; that would blur Keepsakes (a
- * received-mail archive) with the send-time catalogue. A restrained
- * search field (matching the same fields as Admin's own catalogue
- * search) is added ahead of the catalogue eventually holding scores of
- * Postcards.
+ * Commerce Checkpoint 3 — the Letter / Dispatch picker is now the same
+ * catalogue system as the marketplace (app/marketplace/catalogue-browser),
+ * in "pick" mode: compact still tiles, search, discovery views, a detail
+ * view with front/back and a deliberate motion preview, and "Use this
+ * Postcard" only for what this member may send (Complimentary, or a
+ * premium Postcard they have unlocked). Received Keepsakes are still
+ * never offered as sendable. The caller's contract is unchanged: it
+ * passes the live ACTIVE catalogue and gets back a postcard key; sending,
+ * Safety, snapshot versioning and the server ownership check are exactly
+ * as before.
  */
-function PostcardCard({ postcard, onSelect }: { postcard: PostcardCatalogEntry; onSelect: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="group overflow-hidden rounded-lg border border-foreground/12 bg-background text-left transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <span className="relative block aspect-[9/16] w-full overflow-hidden bg-foreground/[0.04]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={postcard.frontImagePath}
-          alt=""
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-        />
-      </span>
-      <span className="block p-2.5">
-        <span className="block truncate text-[13px] font-semibold text-foreground">{postcard.title}</span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted">{postcard.location}</span>
-      </span>
-    </button>
-  )
+
+// One marketplace read per page session (the composers re-open the picker
+// freely); refreshed after five minutes, and after a Postcard is chosen.
+let cached: { at: number; value: Promise<Marketplace> } | null = null
+
+function readMarketplace(postcards: PostcardCatalogEntry[]): Promise<Marketplace> {
+  if (!cached || Date.now() - cached.at > 5 * 60_000) {
+    const value = loadMarketplace(createClient(), postcards)
+    cached = { at: Date.now(), value }
+    value.catch(() => {
+      cached = null
+    })
+  }
+  return cached.value
+}
+
+/** If commerce data cannot be read at all, never block sending: offer the
+ * active catalogue exactly as before commerce (the server still enforces). */
+function degraded(postcards: PostcardCatalogEntry[]): Marketplace {
+  return buildMarketplace({
+    postcards,
+    products: null,
+    prices: [],
+    productTerms: [],
+    collectionProducts: [],
+    giftVersions: [],
+    entitlements: [],
+    context: { spendEnabled: false, giftsEnabled: false, checkoutEnabled: false, balance: 0 },
+  })
 }
 
 export default function PostcardPicker({
@@ -52,19 +56,24 @@ export default function PostcardPicker({
   onSelect,
   onCancel,
 }: {
-  /** The live, active DB catalogue — fetched by the caller. An empty
-   * array (fetch still pending, or genuinely nothing active yet) shows
-   * an honest empty state rather than stale hard-coded cards. */
+  /** The live, active DB catalogue — fetched by the caller. */
   postcards: PostcardCatalogEntry[]
   onSelect: (postcardKey: string) => void
   onCancel: () => void
 }) {
-  const [query, setQuery] = useState('')
-  const [visibleCount, setVisibleCount] = useState(12)
-  const filtered = filterPostcardCatalog(postcards, query)
-  const visible = filtered.slice(0, visibleCount)
+  const [marketplace, setMarketplace] = useState<Marketplace | null>(null)
 
-  useEffect(() => setVisibleCount(12), [query])
+  useEffect(() => {
+    let live = true
+    if (postcards.length === 0) return
+    readMarketplace(postcards).then(
+      (m) => live && setMarketplace(m),
+      () => live && setMarketplace(degraded(postcards))
+    )
+    return () => {
+      live = false
+    }
+  }, [postcards])
 
   // Both composers place this catalogue in a full-viewport scroll
   // container. Lock the document beneath it so mobile swipes scroll the
@@ -78,51 +87,36 @@ export default function PostcardPicker({
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 rounded-lg border border-foreground/10 bg-background p-4 sm:p-5">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className={sectionLabelClass}>Postcards</p>
-          <p className="mt-1 text-sm text-muted">Choose a place for your letter.</p>
-        </div>
-        {postcards.length > 0 && <span className="text-xs text-muted">{filtered.length} available</span>}
-      </div>
-
-      {postcards.length > 0 && (
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search Postcards…"
-          aria-label="Search Postcards"
-          className={inputClass}
+    <div className="mx-auto w-full max-w-6xl rounded-lg border border-foreground/10 bg-background p-4 sm:p-6">
+      {marketplace ? (
+        <CatalogueBrowser
+          marketplace={marketplace}
+          mode="pick"
+          onPick={(key) => {
+            cached = null
+            onSelect(key)
+          }}
+          onClose={onCancel}
         />
-      )}
-
-      {postcards.length === 0 ? (
-        <p className={helperTextClass}>No postcards available right now.</p>
-      ) : filtered.length === 0 ? (
-        <p className={helperTextClass}>No Postcards match &ldquo;{query.trim()}&rdquo;.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {visible.map((postcard) => (
-            <PostcardCard key={postcard.key} postcard={postcard} onSelect={() => onSelect(postcard.key)} />
-          ))}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] font-medium uppercase tracking-wider text-muted">Postcards</p>
+            <button type="button" onClick={onCancel} className="text-[13px] text-muted underline underline-offset-4">
+              Cancel
+            </button>
+          </div>
+          {postcards.length === 0 ? (
+            <p className="text-[13px] text-muted">No postcards available right now.</p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" aria-busy="true" aria-label="Loading Postcards">
+              {postcards.slice(0, 12).map((p) => (
+                <li key={p.key} className="aspect-[3/4] animate-pulse rounded-md bg-foreground/[0.05] motion-reduce:animate-none" />
+              ))}
+            </ul>
+          )}
         </div>
       )}
-
-      {visibleCount < filtered.length && (
-        <button
-          type="button"
-          className={`w-full ${secondaryButtonClass}`}
-          onClick={() => setVisibleCount((count) => count + 12)}
-        >
-          Show 12 more
-        </button>
-      )}
-
-      <button type="button" onClick={onCancel} className={helperTextClass}>
-        Cancel
-      </button>
     </div>
   )
 }

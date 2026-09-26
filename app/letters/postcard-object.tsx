@@ -71,6 +71,11 @@ export type PostcardObjectProps = {
    * false/front) by every other caller — historical Moment display,
    * the delivered reader, Preview's own read-only view. */
   initialShowingBack?: boolean
+  /** Commerce Checkpoint 3 — the marketplace product detail shows a
+   * catalogue Postcard with hasRevealedBefore (never autoplaying), where
+   * the one deliberate motion control is a preview rather than a
+   * "replay". Purely a label; omitted everywhere else ("Replay"). */
+  motionControlLabel?: string
 }
 
 function usePrefersReducedMotion() {
@@ -366,6 +371,7 @@ export default function PostcardObject({
   hasRevealedBefore = false,
   editableBack,
   initialShowingBack = false,
+  motionControlLabel = 'Replay',
 }: PostcardObjectProps) {
   const reducedMotion = usePrefersReducedMotion()
   const [showingBack, setShowingBack] = useState(initialShowingBack)
@@ -515,11 +521,11 @@ export default function PostcardObject({
           <button
             type="button"
             onClick={handleReplay}
-            aria-label="Play the Living Reveal again"
+            aria-label={motionControlLabel === 'Replay' ? 'Play the Living Reveal again' : motionControlLabel}
             className={`inline-flex items-center gap-2 ${secondaryButtonClass}`}
           >
             <ReplayIcon />
-            Replay
+            {motionControlLabel}
           </button>
         )}
       </div>
