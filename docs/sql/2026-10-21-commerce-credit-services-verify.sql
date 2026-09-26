@@ -1,6 +1,7 @@
 -- ============================================================
 -- TEMPA — COMMERCE CREDIT SERVICES — VERIFIER (READ-ONLY)
 -- Pairs with docs/sql/2026-10-21-commerce-credit-services.sql.
+-- PASSED IN PRODUCTION 2026-09-26 (overall_pass = true, every column true).
 -- One SELECT; changes nothing. Expect exactly one row with every column
 -- true and overall_pass = true. The switch/provider columns are part of
 -- overall_pass for THIS gate (Checkpoint 2 must leave everything OFF);

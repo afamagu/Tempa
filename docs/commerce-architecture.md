@@ -127,7 +127,9 @@ migration plus a read-only verifier, proven on the production-faithful PGlite
 fixture before any production SQL gate.
 
 Checkpoint 1 status: `2026-10-20-commerce-core.sql` applied to production
-2026-09-26; verifier `overall_pass = true`. Every commercial switch and every
+2026-09-26; verifier `overall_pass = true`. Checkpoint 2 status:
+`2026-10-21-commerce-credit-services.sql` applied to production 2026-09-26;
+verifier `overall_pass = true`. Every commercial switch and every
 payment provider remains OFF.
 
 ## Checkpoint 2 — server commerce services (`2026-10-21-commerce-credit-services.sql`)

@@ -20,10 +20,11 @@ const fn = (name: string) => {
 }
 
 describe('2026-10-21 commerce credit services migration', () => {
-  it('is one forward-only transaction, not yet executed; does not touch applied migrations or send RPCs', () => {
+  it('is one forward-only transaction, recorded as applied; does not touch applied migrations or send RPCs', () => {
     expect((sql.match(/^begin;/m) ?? []).length).toBe(1)
     expect((sql.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(sql).toContain('STATUS: NOT EXECUTED')
+    expect(sql).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-26')
+    expect(sql).not.toContain('NOT EXECUTED')
     expect(body).not.toMatch(/create or replace function public\.(write_letter|reply_to_letter|publish_dispatch|publish_official_dispatch|update_dispatch|close_my_account|current_account_status)\(/)
     expect(body).not.toMatch(/drop table|drop column|alter table public\.(letters|dispatches|letter_postcards|dispatch_postcards|postcard_catalog)\b/i)
     const replaced = [...body.matchAll(/create or replace function ([\w.]+)\(/g)].map((m) => m[1])

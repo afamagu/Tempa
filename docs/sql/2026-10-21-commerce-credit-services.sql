@@ -3,9 +3,10 @@
 -- Credit reads, price resolution, durable-product and bundle purchases,
 -- the Gift purchase primitive, audited admin Credit operations, and
 -- premium Postcard ownership enforcement at the snapshot tables.
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-21-commerce-credit-services-verify.sql (read-only;
--- overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26. Verified with
+-- 2026-10-21-commerce-credit-services-verify.sql (read-only): one row,
+-- every check true, overall_pass = true.
+-- Do not edit: any change ships as a new forward-only migration.
 -- Forward-only. Builds on 2026-10-20-commerce-core.sql (applied); edits no
 -- applied migration. Redefines exactly one existing function,
 -- tempa_private.commerce_bundle_items_guard (durable-only bundles). Does
