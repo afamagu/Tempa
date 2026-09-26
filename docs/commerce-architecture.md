@@ -240,6 +240,8 @@ later, explicit launch gate; every spend path refuses while they are OFF.
 
 ## Checkpoint 4 — Admin → Commerce (`/admin/commerce`, `2026-10-23-commerce-admin-operations.sql`)
 
+Applied to production 2026-09-27; verifier `overall_pass = true`.
+
 - **Sections:** Overview · Catalog (product detail) · Facets · Collections &
   merchandising · Pricing · Credits · Entitlements & Gifts · Orders &
   Payments (read-only) · Settings (read-only) · Audit. ADMIN-only: moderators

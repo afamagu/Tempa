@@ -1,6 +1,7 @@
 -- ============================================================
 -- TEMPA — COMMERCE ADMIN OPERATIONS — VERIFIER (READ-ONLY)
 -- Pairs with docs/sql/2026-10-23-commerce-admin-operations.sql.
+-- PASSED IN PRODUCTION 2026-09-27 (overall_pass = true, every column true).
 -- One SELECT; changes nothing. Expect exactly one row with every column
 -- true and overall_pass = true.
 -- ============================================================

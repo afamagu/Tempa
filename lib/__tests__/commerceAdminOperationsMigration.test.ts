@@ -19,10 +19,11 @@ const fn = (name: string) => {
 }
 
 describe('2026-10-23 commerce admin operations', () => {
-  it('one forward-only transaction, not yet executed; no applied function redefined', () => {
+  it('one forward-only transaction, recorded as applied; no applied function redefined', () => {
     expect((sql.match(/^begin;/m) ?? []).length).toBe(1)
     expect((sql.match(/^commit;/m) ?? []).length).toBe(1)
-    expect(sql).toContain('STATUS: NOT EXECUTED')
+    expect(sql).toContain('STATUS: APPLIED TO PRODUCTION 2026-09-27')
+    expect(sql).not.toContain('NOT EXECUTED')
     expect(fns.every((f) => f.startsWith('public.admin_commerce_') || f.startsWith('tempa_private.commerce_'))).toBe(true)
     for (const applied of ['commerce_append_ledger', 'commerce_bundle_items_guard', 'commerce_price_row_guard', 'commerce_require_spender', 'commerce_purchase_product', 'admin_grant_credits', 'admin_adjust_credits']) {
       expect(fns.some((f) => f.endsWith(`.${applied}`))).toBe(false)

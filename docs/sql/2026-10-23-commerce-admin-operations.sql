@@ -1,8 +1,9 @@
 -- ============================================================
 -- TEMPA — COMMERCE ADMIN OPERATIONS (Checkpoint 4: Admin → Commerce)
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-23-commerce-admin-operations-verify.sql (read-only;
--- overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-27. Verified with
+-- 2026-10-23-commerce-admin-operations-verify.sql (read-only): one row,
+-- every check true, overall_pass = true.
+-- Do not edit: any change ships as a new forward-only migration.
 -- Forward-only. Edits no applied migration and redefines no existing
 -- function. Enables NOTHING: no commerce_settings or payment-provider
 -- write exists anywhere in this file.
