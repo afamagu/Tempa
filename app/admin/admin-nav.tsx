@@ -10,6 +10,8 @@ const DESTINATIONS: Destination[] = [
   { href: '/admin/moderation/reports', label: 'Moderation', matchPrefix: '/admin/moderation' },
   { href: '/admin/members', label: 'Members' },
   { href: '/admin/content', label: 'Content', matchPrefix: '/admin/content' },
+  // Commerce Checkpoint 4 — Admin → Commerce (admin-only inside).
+  { href: '/admin/commerce', label: 'Commerce', matchPrefix: '/admin/commerce' },
   { href: '/admin/system/email', label: 'System', matchPrefix: '/admin/system' },
   // Account lifecycle checkpoint — account-exit feedback (breaks,
   // deletions, reasons) and private "Something else" letter notes.
@@ -61,7 +63,7 @@ export default function AdminNav() {
           obscuring page content (see the layout's own bottom padding on
           mobile) or causing horizontal scroll (grid-cols-4, no wrapping). */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-foreground/10 bg-background sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-foreground/10 bg-background sm:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {DESTINATIONS.map((dest) => {
