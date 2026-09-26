@@ -683,9 +683,14 @@ $function$;
 -- 6. AUDITED ADMIN CREDIT OPERATIONS (admin role only)
 -- ------------------------------------------------------------
 -- Grants and corrections go through the ledger helper and leave an
--- admin_audit_log row. They never touch refund/chargeback accounting
--- (Checkpoint 6 has dedicated operations for those), never link to an
--- order/purchase/payment, and never take a balance below zero.
+-- admin_audit_log row. They are admin-only operations and deliberately NOT
+-- gated by commerce_settings: commerce_enabled is the MEMBER-commerce kill
+-- switch, and support corrections, controlled pre-launch grants,
+-- compensation and recovery must work while it is OFF. The accounting type
+-- is fixed by the operation, never by the reason text: admin_adjustment is
+-- a correction of last resort; refunds and chargebacks get their own
+-- explicit operations and ledger types (Checkpoint 6). Adjustments never
+-- link to an order/purchase/payment and never take a balance below zero.
 create or replace function tempa_private.commerce_admin_credit_op(
   p_user_id uuid,
   p_delta bigint,
@@ -709,14 +714,8 @@ begin
   if v_actor is null or not public.is_staff('admin') then
     raise exception 'COMMERCE:not_authorized' using errcode = '42501';
   end if;
-  if not coalesce((select commerce_enabled from public.commerce_settings where id), false) then
-    perform tempa_private.commerce_raise('commerce_disabled');
-  end if;
   if char_length(v_reason) not between 1 and 500 then
     perform tempa_private.commerce_raise('reason_required');
-  end if;
-  if v_reason ~* '(refund|chargeback|charge-back|dispute)' then
-    perform tempa_private.commerce_raise('use_refund_operation');
   end if;
   if p_delta is null or p_delta = 0 or (p_entry_type <> 'admin_adjustment' and p_delta < 0) then
     perform tempa_private.commerce_raise('invalid_request');

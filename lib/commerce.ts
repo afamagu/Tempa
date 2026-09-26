@@ -23,7 +23,6 @@ export type CommerceErrorCode =
   | 'recipient_unavailable'
   | 'not_authorized'
   | 'reason_required'
-  | 'use_refund_operation'
   | 'adjustment_below_zero'
   | 'member_unavailable'
 
@@ -44,7 +43,6 @@ export const COMMERCE_ERROR_COPY: Record<CommerceErrorCode | 'unexpected', strin
   recipient_unavailable: 'This Gift can’t be sent to them right now.',
   not_authorized: 'You don’t have permission to do that.',
   reason_required: 'Add a reason before saving.',
-  use_refund_operation: 'Use the refund or dispute tools for payment reversals.',
   adjustment_below_zero: 'A correction can’t take a balance below zero.',
   member_unavailable: 'That member can’t receive Credits.',
   unexpected: 'Something went wrong. Please try again.',

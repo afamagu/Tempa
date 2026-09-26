@@ -107,6 +107,12 @@ checks as (
       and (select body from def where name = 'tempa_private.commerce_admin_credit_op(uuid, bigint, text, text, text)') ~ 'tempa_private\.commerce_append_ledger\('
       and (select body from def where name = 'tempa_private.commerce_admin_credit_op(uuid, bigint, text, text, text)') !~* 'update public\.commerce_wallets'
       as admin_ops_gated_audited_ledger_only,
+    -- admin operations are NOT gated by the member-commerce switches, and reason
+    -- text never decides the accounting type
+    (select body from def where name = 'tempa_private.commerce_admin_credit_op(uuid, bigint, text, text, text)') !~ 'commerce_settings|commerce_enabled'
+      and (select body from def where name = 'tempa_private.commerce_admin_credit_op(uuid, bigint, text, text, text)') !~ 'v_reason\s*~'
+      and (select body from def where name = 'tempa_private.commerce_admin_credit_op(uuid, bigint, text, text, text)') !~* 'refund|chargeback|dispute'
+      as admin_ops_not_switch_gated_no_keyword_accounting,
     -- clients still cannot write anything financial; ledger read only via the history RPC
     not exists (
       select 1 from fin, unnest(array['anon', 'authenticated']) r(role), unnest(array['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) p(priv)
@@ -137,6 +143,6 @@ select *,
    and spend_switches_and_account_state_required and price_resolution_fails_closed and bundle_items_durable_only
    and postcard_send_trigger_on_both_tables and postcard_actor_from_parent_no_bypass
    and complimentary_passes_premium_needs_active_entitlement and every_postcard_has_product
-   and admin_ops_gated_audited_ledger_only and no_client_financial_writes and ledger_read_only_via_rpc
+   and admin_ops_gated_audited_ledger_only and admin_ops_not_switch_gated_no_keyword_accounting and no_client_financial_writes and ledger_read_only_via_rpc
    and ledger_still_append_only and wallet_matches_ledger and all_commercial_switches_off and providers_disabled) as overall_pass
 from checks;

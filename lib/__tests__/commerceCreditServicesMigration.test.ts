@@ -91,11 +91,13 @@ describe('2026-10-21 commerce credit services migration', () => {
     expect(g).not.toMatch(/dedication/)
   })
 
-  it('admin Credit operations: admin role, reason, audit, ledger helper only, never below zero', () => {
+  it('admin Credit operations: admin role, reason, audit, ledger helper only, never below zero; not switch-gated, no keyword accounting', () => {
     const op = fn('tempa_private.commerce_admin_credit_op')
     expect(op).toContain("if v_actor is null or not public.is_staff('admin') then")
     expect(op).toContain("perform tempa_private.commerce_raise('reason_required')")
-    expect(op).toContain("perform tempa_private.commerce_raise('use_refund_operation')")
+    expect(op).not.toMatch(/commerce_settings|commerce_enabled/)
+    expect(op).not.toMatch(/v_reason\s*~/)
+    expect(op).not.toMatch(/refund|chargeback|dispute/i)
     expect(op).toContain("perform tempa_private.commerce_raise('adjustment_below_zero')")
     expect(op).toContain('insert into public.admin_audit_log (')
     expect(op).toContain("tempa_private.commerce_append_ledger(p_user_id, p_delta, p_entry_type, 'admin', null, v_key, v_reason, v_actor)")
@@ -140,7 +142,7 @@ describe('2026-10-21 commerce credit services migration', () => {
     for (const col of ['all_functions_exist', 'definer_and_search_path_pinned', 'member_rpcs_authenticated_only', 'private_helpers_not_client_callable',
       'spend_paths_gated_and_serialised', 'spend_switches_and_account_state_required', 'price_resolution_fails_closed', 'bundle_items_durable_only',
       'postcard_send_trigger_on_both_tables', 'postcard_actor_from_parent_no_bypass', 'complimentary_passes_premium_needs_active_entitlement',
-      'admin_ops_gated_audited_ledger_only', 'no_client_financial_writes', 'ledger_read_only_via_rpc', 'ledger_still_append_only',
+      'admin_ops_gated_audited_ledger_only', 'admin_ops_not_switch_gated_no_keyword_accounting', 'no_client_financial_writes', 'ledger_read_only_via_rpc', 'ledger_still_append_only',
       'wallet_matches_ledger', 'all_commercial_switches_off', 'providers_disabled', 'overall_pass']) {
       expect(verify).toContain(col)
     }
