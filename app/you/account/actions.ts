@@ -46,6 +46,16 @@ export async function deleteMyAccount(confirmation: string, feedback?: ExitFeedb
 
   const { data, error } = await supabase.rpc('close_my_account', exitFeedbackArgs(feedback, DELETION_REASONS))
   if (error || !data) {
+    // Server-side only — the member only ever sees GENERIC_FAILURE (or a
+    // fixed staff message). Without this line a failed closure left no
+    // trace of the actual database error.
+    console.error('[account-deletion] close_my_account failed', {
+      userId: user.id,
+      code: error?.code ?? null,
+      message: error?.message ?? 'no data returned',
+      details: error?.details ?? null,
+      hint: error?.hint ?? null,
+    })
     const message = error?.message ?? ''
     return { ok: false, error: STAFF_MESSAGES.includes(message) ? message : GENERIC_FAILURE }
   }

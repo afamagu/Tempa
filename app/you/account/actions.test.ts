@@ -106,6 +106,38 @@ describe('deleteMyAccount', () => {
     expect(state.finalizeCalls).toEqual([])
   })
 
+  it('20. a failed close_my_account is logged server-side with code/message/details/hint — never shown to the member', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    state.rpcResult = {
+      data: null,
+      error: {
+        code: '23503',
+        message: 'update or delete on table "dispatches" violates foreign key constraint "dispatch_replies_dispatch_id_fkey" on table "dispatch_replies"',
+        details: 'Key (id)=(abc) is still referenced from table "dispatch_replies".',
+        hint: null,
+      } as never,
+    }
+    const result = await deleteMyAccount('DELETE', { reasonCode: 'something_else', reasonDetail: 'test account' })
+    expect(result).toEqual({ ok: false, error: 'We couldn’t delete your account. Nothing has been changed — please try again.' })
+    expect(JSON.stringify(result)).not.toContain('dispatch_replies')
+    expect(logged).toHaveBeenCalledWith('[account-deletion] close_my_account failed', {
+      userId: 'member-a',
+      code: '23503',
+      message: expect.stringContaining('dispatch_replies_dispatch_id_fkey'),
+      details: expect.stringContaining('still referenced'),
+      hint: null,
+    })
+    logged.mockRestore()
+  })
+
+  it('20. no data and no error is also logged (never silent)', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    state.rpcResult = { data: null, error: null }
+    await deleteMyAccount('DELETE')
+    expect(logged).toHaveBeenCalledWith('[account-deletion] close_my_account failed', expect.objectContaining({ userId: 'member-a', message: 'no data returned' }))
+    logged.mockRestore()
+  })
+
   it('17. staff refusal message is shown as-is', async () => {
     state.rpcResult = { data: null, error: { message: 'Staff accounts are closed by Tempa administrators.' } }
     expect(await deleteMyAccount('DELETE')).toEqual({ ok: false, error: 'Staff accounts are closed by Tempa administrators.' })
