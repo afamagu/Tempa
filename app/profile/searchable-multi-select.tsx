@@ -144,6 +144,13 @@ export default function SearchableMultiSelect({
             setOpen(true)
             setHighlighted(0)
           }}
+          // After a selection the input keeps focus (options preventDefault
+          // on mousedown), so a second tap fires no focus event — reopen on
+          // click so the member can add another language.
+          onClick={() => {
+            setOpen(true)
+            setHighlighted(0)
+          }}
           onKeyDown={handleKeyDown}
           placeholder={values.length === 0 ? placeholder : undefined}
           autoComplete="off"
