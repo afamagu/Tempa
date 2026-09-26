@@ -1,8 +1,8 @@
 -- ============================================================
 -- TEMPA — DISPATCH REPLY: SAFETY FINGERPRINT / WHITESPACE FIX
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-17-dispatch-reply-safety-whitespace-fix-verify.sql
--- (read-only; overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26;
+-- 2026-10-17-dispatch-reply-safety-whitespace-fix-verify.sql returned
+-- overall_pass = true (every column true). Do not re-run casually.
 -- Forward-only. Does NOT edit 2026-10-06-safety-checkpoint4-public-
 -- surfaces.sql. Same signature, same grants — no app deploy needed.
 -- ============================================================
