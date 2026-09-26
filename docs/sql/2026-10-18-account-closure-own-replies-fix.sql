@@ -1,8 +1,8 @@
 -- ============================================================
 -- TEMPA — ACCOUNT CLOSURE: A MEMBER'S OWN REPLIES UNDER THEIR OWN DISPATCH
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-18-account-closure-own-replies-fix-verify.sql
--- (read-only; overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26;
+-- 2026-10-18-account-closure-own-replies-fix-verify.sql returned
+-- overall_pass = true (every column true). Do not re-run casually.
 -- Forward-only. Does NOT edit the applied 2026-10-16 migration. Same
 -- signature and grants — no app deploy needed for the database fix.
 -- ============================================================

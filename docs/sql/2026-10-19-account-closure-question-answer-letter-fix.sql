@@ -1,8 +1,9 @@
 -- ============================================================
 -- TEMPA — ACCOUNT CLOSURE: QUESTION ANSWERS REFERENCED BY OTHER MEMBERS' LETTERS
--- STATUS: NOT EXECUTED — review, then run in the Supabase SQL editor,
--- then run 2026-10-19-account-closure-question-answer-letter-fix-verify.sql
--- (read-only; overall_pass must be true).
+-- STATUS: APPLIED TO PRODUCTION 2026-09-26;
+-- 2026-10-19-account-closure-question-answer-letter-fix-verify.sql returned
+-- overall_pass = true (every column true). A real production account
+-- deletion then succeeded end to end. Do not re-run casually.
 -- Forward-only. Does NOT edit 2026-08-30-letters.sql, 2026-10-16-account-
 -- lifecycle.sql or 2026-10-18-account-closure-own-replies-fix.sql, and
 -- does not touch close_my_account() (the 2026-10-18 version stays live).

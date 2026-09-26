@@ -9,6 +9,8 @@ obvious from the migration files alone.
 |---|---|
 | `docs/sql/2026-10-17-dispatch-reply-safety-whitespace-fix.sql` | `…-verify.sql`: one row, every column true, `overall_pass = true` |
 | `docs/sql/2026-10-16-account-lifecycle.sql` | `…-verify.sql`: one row, every pass/fail check true, `overall_pass = true` |
+| `docs/sql/2026-10-18-account-closure-own-replies-fix.sql` | `…-verify.sql`: one row, every column true, `overall_pass = true` |
+| `docs/sql/2026-10-19-account-closure-question-answer-letter-fix.sql` | `…-verify.sql`: one row, every column true, `overall_pass = true` |
 
 `2026-10-16-account-lifecycle.sql` is the **only** account lifecycle
 migration. The earlier `2026-10-16-account-deletion.sql` draft was never
@@ -53,3 +55,29 @@ kept off `main`) replayed migrations textually and did not model renames:
   and both policies; `dispatches_select_published` was later redefined
   (2026-09-22) and `dispatches_insert_own` deliberately dropped
   (2026-10-06, Safety). Nothing should be recreated.
+
+## Account deletion repairs (after the lifecycle migration)
+
+The first real production deletion failed twice; both causes were
+production schema rules the lifecycle test fixture had not reproduced.
+
+1. **2026-10-18** — `dispatch_replies.dispatch_id` has **no** ON DELETE
+   action (2026-09-23). `close_my_account` deleted a member's Dispatch that
+   carried the member's own reply → 23503 on
+   `dispatch_replies_dispatch_id_fkey`. Fix: delete the member's own replies
+   under deletable Dispatches first; a Dispatch with a reported reply is
+   never deletable. The live `close_my_account` is the 2026-10-18 version.
+2. **2026-10-19** — `letters.question_answer_id` is ON DELETE SET NULL
+   (2026-08-30) but the 2026-09-04 `enforce_letter_immutability` trigger
+   rejected that change → P0001 "Letters are immutable except for their
+   lifecycle status fields." when another member's letter cited the
+   member's answer. Fix: one narrow trigger exception (non-null → NULL,
+   whole row otherwise unchanged, answer genuinely deleted).
+
+After both, a disposable production account was deleted end to end.
+`close_my_account` now logs `[account-deletion] close_my_account failed`
+server-side (code, message, details, hint) on any future failure.
+
+Known, unchanged: the 2026-09-04 letter rule compares `correspondence_id`
+with `<>`, so a letter whose `correspondence_id` is NULL could be given
+one by a privileged writer (members have no UPDATE policy on letters).
