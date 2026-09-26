@@ -92,6 +92,7 @@ export default async function YouPage() {
             <div className="grid gap-2 sm:grid-cols-2">
               <Link href="/you/guide" className={controlClass}><span>Tempa Guide</span><span aria-hidden>→</span></Link>
               <Link href="/you/safety/blocked-minds" className={controlClass}><span>Blocked minds</span><span aria-hidden>→</span></Link>
+              <Link href="/you/account" className={controlClass}><span>Account &amp; privacy</span><span aria-hidden>→</span></Link>
             </div>
           </section>
 

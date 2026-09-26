@@ -11,6 +11,9 @@ const DESTINATIONS: Destination[] = [
   { href: '/admin/members', label: 'Members' },
   { href: '/admin/content', label: 'Content', matchPrefix: '/admin/content' },
   { href: '/admin/system/email', label: 'System', matchPrefix: '/admin/system' },
+  // Account lifecycle checkpoint — account-exit feedback (breaks,
+  // deletions, reasons) and private "Something else" letter notes.
+  { href: '/admin/feedback/account-exits', label: 'Feedback', matchPrefix: '/admin/feedback' },
 ]
 
 function isActive(pathname: string, dest: Destination): boolean {
@@ -58,7 +61,7 @@ export default function AdminNav() {
           obscuring page content (see the layout's own bottom padding on
           mobile) or causing horizontal scroll (grid-cols-4, no wrapping). */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-foreground/10 bg-background sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-foreground/10 bg-background sm:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {DESTINATIONS.map((dest) => {
@@ -68,7 +71,7 @@ export default function AdminNav() {
               key={dest.href}
               href={dest.href}
               aria-current={active ? 'page' : undefined}
-              className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[13px] font-medium transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[12px] font-medium transition-colors ${
                 active ? 'text-accent' : 'text-foreground/60'
               }`}
             >

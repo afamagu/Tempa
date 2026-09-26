@@ -7,7 +7,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase/client'
 import ChoiceGroup from '@/app/profile/choice-group'
 import { helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
-import { CLOSE_REASONS } from '@/lib/letters'
+import { CLOSE_REASONS, CLOSE_REASON_SOMETHING_ELSE, CLOSE_REASON_DETAIL_MAX } from '@/lib/letters'
 import { readLetterDraft, writeLetterDraft, clearLetterDraft } from '@/lib/letter-draft'
 import { baseWritingExtensions } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
@@ -97,6 +97,9 @@ export default function FirstContactResponse({
   const [financialBlocked, setFinancialBlocked] = useState(false)
 
   const [reason, setReason] = useState<string | null>(null)
+  // Private feedback to Tempa, only for "Something else" — never shown
+  // to the letter's sender (see lib/letters.ts's CLOSE_REASONS comment).
+  const [closeDetail, setCloseDetail] = useState('')
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
 
@@ -280,6 +283,7 @@ export default function FirstContactResponse({
     const { error } = await supabase.rpc('close_letter', {
       p_letter_id: letterId,
       p_reason: reason,
+      p_detail: reason === CLOSE_REASON_SOMETHING_ELSE ? closeDetail.trim() || null : null,
     })
 
     setClosing(false)
@@ -352,6 +356,19 @@ export default function FirstContactResponse({
           onToggle={setReason}
           layout="card"
         />
+        {reason === CLOSE_REASON_SOMETHING_ELSE && (
+          <label className="block space-y-1.5">
+            <span className={helperTextClass}>If you&rsquo;d like, tell Tempa why.</span>
+            <textarea
+              value={closeDetail}
+              onChange={(e) => setCloseDetail(e.target.value)}
+              maxLength={CLOSE_REASON_DETAIL_MAX}
+              rows={3}
+              className="w-full rounded-md border border-foreground/15 bg-background px-3 py-2 text-[15px] text-foreground focus:border-foreground/35 focus:outline-none"
+            />
+            <span className={helperTextClass}>Only Tempa reads this. It is never shared with the person who wrote to you.</span>
+          </label>
+        )}
         {closeError && <p className="text-sm text-red-600">{closeError}</p>}
         <div className="flex flex-wrap gap-3">
           <button type="button" onClick={() => setMode('choose')} className={secondaryButtonClass}>

@@ -108,16 +108,33 @@ export function isRichBody(body: string): boolean {
   return stripRichBodyMarker(body).isRich
 }
 
-// Human-selected reasons only — "Something else" was removed for V1 (see
-// build guide: it would need its own moderation surface for a
-// rejection-adjacent free-text field, out of scope here). Automatic
-// expiry never uses one of these; it's its own closedBy = 'system' state
-// with close_reason left null, never a fabricated human reason.
+// Human-selected reasons only. Automatic expiry never uses one of these;
+// it's its own closedBy = 'system' state with close_reason left null,
+// never a fabricated human reason.
+//
+// "Something else" (account lifecycle checkpoint, docs/sql/2026-10-16-
+// account-lifecycle.sql) is stored as this FIXED marker only. The
+// recipient's optional explanation is feedback to Tempa: close_letter
+// writes it to the private letter_close_feedback table, which no member
+// read surface (letters_for_participant, any member RPC) ever exposes —
+// so free text can never reach the person who wrote the letter.
+export const CLOSE_REASON_SOMETHING_ELSE = 'Something else'
+export const CLOSE_REASON_DETAIL_MAX = 1000
+
 export const CLOSE_REASONS = [
   "I can't take on another correspondence right now.",
   "I don't think we're the right correspondence.",
   "I'm taking a break from new letters.",
+  CLOSE_REASON_SOMETHING_ELSE,
 ] as const
+
+/** The closure line a letter's SENDER (and the recipient's own history)
+ * sees. The three preset reasons are shown as written, unchanged;
+ * "Something else" becomes neutral product copy. */
+export function closeReasonForSender(reason: string | null | undefined): string {
+  if (reason === CLOSE_REASON_SOMETHING_ELSE) return 'They chose not to continue this correspondence.'
+  return reason ?? ''
+}
 
 export type CloseReason = (typeof CLOSE_REASONS)[number]
 

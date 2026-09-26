@@ -15,6 +15,7 @@ import {
   resolveLetterDirection,
   resolveLetterActionState,
   shouldMarkLetterOpened,
+  closeReasonForSender,
 } from '@/lib/letters'
 import { hasCompletedGuide } from '@/lib/guide'
 import { getBlockScope } from '@/lib/blocking'
@@ -113,6 +114,7 @@ export default async function LetterPage({
     lockedElsewhere,
     otherPartyBlockScope,
     { data: contactNote },
+    { data: onBreakIds },
   ] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, mark_id').in('id', [user.id, otherPartyId]),
     getCorrespondence(supabase, target.correspondenceId),
@@ -130,7 +132,12 @@ export default async function LetterPage({
     isRecipientOfTarget
       ? supabase.from('letter_safety_notices').select('kind').eq('letter_id', target.id).maybeSingle()
       : Promise.resolve({ data: null }),
+    // Account lifecycle — whether the other person is taking a break.
+    // correspondents_on_break only ever answers for people who already
+    // share letters with the caller.
+    supabase.rpc('correspondents_on_break', { p_user_ids: [otherPartyId] }),
   ])
+  const otherIsOnBreak = Array.isArray(onBreakIds) && (onBreakIds as unknown[]).length > 0
   const letterPostcard = letterPostcardsByLetterId.get(target.id) ?? null
 
   const pseudonymById = new Map((profiles ?? []).map((p) => [p.id, p.pseudonym]))
@@ -259,6 +266,10 @@ export default async function LetterPage({
             {otherPseudonym}
           </Link>
 
+          {otherIsOnBreak && (
+            <p className={`mt-3 ${metadataTextClass}`}>{otherPseudonym} is taking a break from Tempa.</p>
+          )}
+
           {context && (
             <p className={`mt-4 line-clamp-2 ${metadataTextClass}`}>
               Started from: &ldquo;{context}&rdquo;
@@ -298,7 +309,7 @@ export default async function LetterPage({
               {targetEffectiveClosedBy === 'recipient' ? (
                 <ClosureStatusNotice
                   title={isRecipientOfTarget ? 'You passed on this letter.' : `${otherPseudonym} passed on this letter.`}
-                  detail={target.closeReason ?? ''}
+                  detail={closeReasonForSender(target.closeReason)}
                 />
               ) : (
                 <ClosureStatusNotice

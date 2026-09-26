@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getFirstContact, isEffectivelyExpired, isEstablishedForViewer, resolveFirstContactDisplayStatus } from '@/lib/letters'
+import { closeReasonForSender, getFirstContact, isEffectivelyExpired, isEstablishedForViewer, resolveFirstContactDisplayStatus } from '@/lib/letters'
 import { sectionLabelClass, helperTextClass, secondaryButtonClass, closureTextClass, quietLinkClass } from '@/app/profile/ui'
 import FirstLetterComposer from './first-letter-composer'
 import ClosureRecommendations from '@/app/letters/closure-recommendations'
@@ -84,7 +84,7 @@ export default async function WriteToPage({
                 <p className={closureTextClass}>
                   {recipient.pseudonym} passed on this letter.
                 </p>
-                <p className={closureTextClass}>{existing.closeReason}</p>
+                <p className={closureTextClass}>{closeReasonForSender(existing.closeReason)}</p>
               </div>
             ) : (
               <div className="space-y-2">
