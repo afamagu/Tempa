@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   CLOSED_ACCOUNT_BAN_DURATION,
@@ -12,10 +12,10 @@ import {
 const UID = '00000000-0000-4000-8000-000000000001'
 const MARK = '11111111-2222-4333-8444-555555555555.png'
 
-type Calls = { removes: { bucket: string; paths: string[] }[]; authUpdates: Record<string, unknown>[]; closureUpdates: Record<string, unknown>[] }
+type Calls = { removes: { bucket: string; paths: string[] }[]; authUpdates: Record<string, unknown>[]; closureUpdates: Record<string, unknown>[]; closureFilters: [string, string][] }
 
-function fakeService(opts: { enforcement?: string | null; reports?: number; cases?: number; failRemove?: boolean; failEmailUpdate?: boolean; failBan?: boolean } = {}) {
-  const calls: Calls = { removes: [], authUpdates: [], closureUpdates: [] }
+function fakeService(opts: { enforcement?: string | null; reports?: number; cases?: number; failRemove?: boolean; failEmailUpdate?: boolean; failBan?: boolean; failClosureUpdate?: boolean } = {}) {
+  const calls: Calls = { removes: [], authUpdates: [], closureUpdates: [], closureFilters: [] }
   const table = (name: string) => {
     const chain = {
       select: () => chain,
@@ -24,8 +24,18 @@ function fakeService(opts: { enforcement?: string | null; reports?: number; case
       then: (resolve: (v: unknown) => void) =>
         resolve({ count: name === 'reports' ? (opts.reports ?? 0) : (opts.cases ?? 0), error: null }),
       update: (values: Record<string, unknown>) => {
-        calls.closureUpdates.push(values)
-        return { eq: async () => ({ error: null }) }
+        calls.closureUpdates.push({ table: name, ...values })
+        return {
+          eq: async (column: string, value: string) => {
+            calls.closureFilters.push([column, value])
+            // The production refusal: service_role held no UPDATE on account_closures.
+            return {
+              error: opts.failClosureUpdate
+                ? { code: '42501', message: 'permission denied for table account_closures' }
+                : null,
+            }
+          },
+        }
       },
     }
     return chain
@@ -131,5 +141,56 @@ describe('finalizeAccountClosure — records progress for retry', () => {
     expect(result.error).toMatch(/auth:/)
     expect(calls.closureUpdates[0]).not.toHaveProperty('auth_disabled_at')
     expect(calls.closureUpdates[0].last_error).toMatch(/auth:/)
+  })
+})
+
+describe('finalizeAccountClosure — the progress record itself', () => {
+  it('writes the three progress columns to account_closures, filtered by this user id only', async () => {
+    const { service, calls } = fakeService()
+    await finalizeAccountClosure(service, UID, {})
+    expect(Object.keys(calls.closureUpdates[0]).sort()).toEqual(['auth_disabled_at', 'last_error', 'storage_cleaned_at', 'table'])
+    expect(calls.closureUpdates[0].table).toBe('account_closures')
+    expect(calls.closureFilters).toEqual([['user_id', UID]])
+  })
+
+  it('a refused update (42501) is surfaced and logged — never a silent success', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { service, calls } = fakeService({ failClosureUpdate: true })
+      const result = await finalizeAccountClosure(service, UID, {})
+      // the ban itself is unchanged and still reported as applied
+      expect(calls.authUpdates[0]).toMatchObject({ ban_duration: CLOSED_ACCOUNT_BAN_DURATION })
+      expect(result.authDisabled).toBe(true)
+      expect(result.error).toBe('record:42501:permission denied for table account_closures')
+      expect(log).toHaveBeenCalledWith('[account-deletion] closure progress not recorded', {
+        userId: UID,
+        code: '42501',
+        message: 'permission denied for table account_closures',
+      })
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('a refused update is appended to an earlier cleanup error', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { service } = fakeService({ failClosureUpdate: true, failBan: true })
+      const result = await finalizeAccountClosure(service, UID, {})
+      expect(result.error).toMatch(/^auth:auth down \| record:42501:/)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('logs nothing when the update succeeds', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { service } = fakeService()
+      expect((await finalizeAccountClosure(service, UID, {})).error).toBeNull()
+      expect(log).not.toHaveBeenCalled()
+    } finally {
+      log.mockRestore()
+    }
   })
 })
