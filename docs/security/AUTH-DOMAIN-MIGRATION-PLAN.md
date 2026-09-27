@@ -1,130 +1,151 @@
-# auth.jointempa.com — migration plan (second mandatory stop)
+# auth.jointempa.com — migration plan (second mandatory stop, revision 2)
 
 Status: **plan only.** Nothing below has been executed. No DNS, Supabase, Google or Vercel setting
-has been changed. Activation waits for "APPROVE AUTH DOMAIN ACTIVATION".
+has been changed, nothing has been deployed, and there is no PR. Activation waits for
+"APPROVE AUTH DOMAIN ACTIVATION".
 
-Items marked **owner** live in a dashboard this assessment cannot (and must not) read. They need
-a read-only look before activation.
+**Owner** marks a value that lives in a dashboard this assessment does not read.
 
-## 1. Current Supabase hostname
-`gmggfxynconujrzlbtio.supabase.co` (project ref `gmggfxynconujrzlbtio`), reached through
-`NEXT_PUBLIC_SUPABASE_URL`.
+## Scope
 
-## 2. Repo dependencies on it
-Everything goes through `NEXT_PUBLIC_SUPABASE_URL`; the hostname is not hard-coded in app code.
+**Phase 1 (this plan) is the trust fix only.** It activates `auth.jointempa.com` so Google's sign-in
+flow names Tempa's own domain instead of `gmggfxynconujrzlbtio.supabase.co`.
 
-| Where | Dependency | Effect of switching the variable |
-|---|---|---|
-| `lib/supabase/{client,server,service}.ts`, `proxy.ts` | client base URL | Calls go to the new host. |
-| `@supabase/supabase-js` default storage key | `sb-${hostname.split('.')[0]}-auth-token`: **`sb-gmggfxynconujrzlbtio-auth-token` → `sb-auth-auth-token`** | **Every member is signed out, and in-flight PKCE and magic-link flows fail**, unless the cookie name is pinned (step 0). |
-| `app/auth/confirm/page.tsx` → `validateConfirmationUrl` | accepts only `…/auth/v1/verify` on the origin of `NEXT_PUBLIC_SUPABASE_URL` | Links issued on the other host are refused while both hosts are live (step 0). |
-| `proxy.ts` → `lib/security/csp.ts` | only this origin is in `connect-src`/`img-src`/`media-src` | Artwork on the old host would report as violations (Report-Only), and would be blocked once enforced (step 0). |
-| `lib/postcard-images.ts`, `lib/profile-marks.ts` | `getPublicUrl()` | Mark URLs are computed at render, so they follow the variable. Postcard artwork URLs are **stored** (see 3). |
+Per Supabase's custom-domain documentation, after activation:
+- the original `gmggfxynconujrzlbtio.supabase.co` host keeps working;
+- clients do not need to change their URL;
+- Supabase Auth immediately uses and advertises the custom domain for OAuth callbacks.
 
-## 3. Absolute stored URLs (F-18)
-- Admin-uploaded Postcard artwork, both image and motion, is stored as a full
-  `https://gmggfxynconujrzlbtio.supabase.co/storage/v1/object/public/…` URL. These come from `lib/postcard-images.ts` and are used by admin → Postcards and admin → Commerce catalogue.
-- Member photos (letters, Dispatches) are stored as bucket-relative paths, so they are unaffected.
-- Supabase keeps the original `*.supabase.co` host serving after a custom domain is activated, so the stored URLs keep working and **no data rewrite is needed**. The CSP must simply allow both hosts.
+**`NEXT_PUBLIC_SUPABASE_URL` stays `https://gmggfxynconujrzlbtio.supabase.co` throughout Phase 1.**
+Moving the app's general client URL is a separate, later decision (Phase 2, see the appendix).
 
-## 4. Current Google callback
-`https://gmggfxynconujrzlbtio.supabase.co/auth/v1/callback` is Supabase's standard callback for this project. **Owner:** confirm it appears in Google Cloud → Credentials → OAuth client → Authorised redirect URIs.
+## Reassessment: what activation changes for Tempa while the client URL is unchanged
 
-## 5. New callback
-`https://auth.jointempa.com/auth/v1/callback`. **Add** it alongside the old one; do not replace the old one. Keeping both is what makes rollback work.
+| Area | Depends on | Phase 1 effect | Action |
+|---|---|---|---|
+| Session cookie name (`sb-<first label of NEXT_PUBLIC_SUPABASE_URL host>-auth-token`) | client URL | **None.** It stays `sb-gmggfxynconujrzlbtio-auth-token`. | **Cookie-name pinning is not needed in Phase 1** and is withdrawn from this phase. |
+| Existing sessions and refresh | client URL, same project | None. Refresh still goes to the old host, which remains operational. | Smoke test only |
+| JWT `iss` claim | Auth external URL | New tokens may carry the custom-domain issuer. No Tempa code checks `iss` (repo-wide search: no `getClaims`, `jwtVerify` or issuer checks). | Smoke test only |
+| Google OAuth | Auth external URL | `redirect_uri` becomes `https://auth.jointempa.com/auth/v1/callback`. **Google must already allow it** or sign-in fails with `redirect_uri_mismatch`. | Step 6 before step 8 |
+| Code exchange (`/auth/callback`) | client URL + PKCE cookie on jointempa.com | None. The exchange goes to the old host; flow state lives in the project database, not on a hostname. | Smoke test only |
+| **Magic links (`/auth/confirm`)** | `validateConfirmationUrl` accepts **only** the origin of `NEXT_PUBLIC_SUPABASE_URL` | **Breaks** if the emailed ConfirmationURL moves to the custom host. See "Required precondition" below. | **Precondition code change P-1** |
+| CSP (`proxy.ts`) | client URL | None. The browser never fetches from the custom host. OAuth is top-level navigation (not governed by `connect-src`/`form-action`), and the magic-link form posts to Tempa itself. | None in Phase 1 |
+| Stored artwork URLs (F-18) | old host | None. The old host keeps serving. | None |
+| Site URL / redirect allowlist | app URLs, not the auth host | None. | Verify only (step 7) |
 
-## 6. Google branding status — **owner**
-Check Google Auth Platform → Branding / Audience:
-- publishing status;
-- verification status;
-- app name;
-- logo;
-- authorised domains (should include `jointempa.com`).
+### Required precondition P-1: magic-link origin check (demonstrated)
 
-The custom domain replaces the `…supabase.co` hostname the Google chooser shows (F-10). The chooser shows the app name only once branding is verified.
+**How the flow works:**
+- The magic-link email points to `https://jointempa.com/auth/confirm?confirmation_url={{ .ConfirmationURL }}`.
+- `app/auth/confirm/page.tsx` accepts the link only if `validateConfirmationUrl(url, NEXT_PUBLIC_SUPABASE_URL)` passes.
+- That check requires the link's origin to equal the client URL's origin exactly.
 
-## 7. Site URL — **owner**
-Expected: `https://jointempa.com`. Read it from Supabase → Authentication → URL Configuration.
+**Why activation is expected to break it:**
+- Supabase builds `{{ .ConfirmationURL }}` from the Auth external URL.
+- That is the same value that makes OAuth callbacks use the custom domain on activation.
+- So once `auth.jointempa.com` is active, emailed links are expected to read `https://auth.jointempa.com/auth/v1/verify?...`.
 
-## 8. Redirect allowlist — **owner**
-- The app sends `emailRedirectTo` / `redirectTo` = `${window.location.origin}/auth/callback?next=…`.
-- The allowlist must therefore contain at least `https://jointempa.com/auth/callback**`.
-- Add any preview or `localhost` entries you deliberately use; remove any you don't.
-- No change is needed for the custom domain: these are *app* URLs, not auth-host URLs.
+**Demonstrated on the current code, with the client URL unchanged:**
+- A link on `gmggfxynconujrzlbtio.supabase.co` is **accepted**.
+- The same link on `auth.jointempa.com` is **rejected**. The member sees "This sign-in link isn't valid", so magic-link sign-in fails for everyone.
+- Token parsing (`extractMagicLinkVerificationParams`) is host-independent.
+- The token is verified server-side by `verifyOtp` through the unchanged client URL.
+- **The origin check is therefore the only thing that breaks.**
 
-## 9. Required CNAME
-`auth.jointempa.com  CNAME  gmggfxynconujrzlbtio.supabase.co`
+**P-1 (smallest fix):**
+- `validateConfirmationUrl` accepts `/auth/v1/verify` on an explicit two-origin allowlist:
+  - the origin of `NEXT_PUBLIC_SUPABASE_URL`;
+  - the constant `https://auth.jointempa.com`.
+- No environment variable is involved, and every other check (https, exact path) is unchanged.
+- Add regression tests: both origins accepted; lookalikes, other hosts and other paths still rejected.
 
-If jointempa.com's DNS is on Cloudflare, set this record to **DNS only** (not proxied).
+**Safety of P-1:**
+- It is harmless to deploy before activation, because it only widens acceptance to a domain Tempa owns that maps to the same project.
+- A token from any other project fails `verifyOtp`.
 
-## 10. Exact TXT value — **not yet available**
-- Supabase generates the TXT record(s) only when the hostname is registered, via `supabase domains create --project-ref gmggfxynconujrzlbtio --custom-hostname auth.jointempa.com` or Dashboard → Settings → Custom Domains.
-- The record is typically `_cf-custom-hostname.auth.jointempa.com` plus an ACME validation record.
-- Registering the hostname does not route traffic. It is still a production configuration change, so it has not been done.
-- After you (or I, with approval) register it, paste the exact record(s) here.
+**Sequencing:**
+- P-1 must be **deployed before step 8**.
+- It needs your approval to open a PR and deploy. It has **not** been implemented yet.
 
-## 11. Add-on eligibility — **owner**
-- Custom Domains is a paid add-on and needs a paid organisation plan.
-- Confirm the plan and the add-on price under Dashboard → Settings → Add-ons.
-- Vanity subdomains are a different feature and do not change the auth host shown to Google.
+**Alternative without code:** if you prefer, test magic links right after activation and roll back if they fail. That leaves a live outage window, so P-1 is recommended.
 
-## 12. Session effects
-- **With step 0 (pinned cookie name):** no forced sign-out.
-  - Access and refresh tokens are issued by the same project and are valid through either host.
-  - PKCE verifiers keep the same cookie key.
-- **Without step 0:** every member is signed out at deploy, and any sign-in in progress at that moment fails.
-- **Magic links already in inboxes:**
-  - Links issued before activation point at the old host.
-  - With step 0 they still work, because `/auth/confirm` accepts both hosts.
-  - They expire under the normal OTP expiry.
-- **Google sign-ins in progress at the moment of activation** may fail once. The member simply retries.
+## Items 1–16 (Phase 1)
 
-## 13. Environment-variable recommendation
-| Variable | Value | Scope |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://auth.jointempa.com`, set **after** activation | Production (Preview optional) |
-| `NEXT_PUBLIC_SUPABASE_PROJECT_URL` *(new)* | `https://gmggfxynconujrzlbtio.supabase.co` | All environments, set **before** step 0 deploys |
+1. **Current Supabase hostname:** `gmggfxynconujrzlbtio.supabase.co`.
+2. **Repo dependencies on it:**
+   - All code reaches it through `NEXT_PUBLIC_SUPABASE_URL`:
+     - the clients in `lib/supabase/{client,server,service}.ts`;
+     - `proxy.ts` (auth gate and CSP);
+     - `validateConfirmationUrl`;
+     - the cookie name, derived by the library.
+   - None of these changes in Phase 1 except the magic-link check (P-1).
+3. **Absolute stored URLs:**
+   - Admin-uploaded Postcard artwork (image and motion) is stored as full `…supabase.co/storage/v1/object/public/…` URLs.
+   - It keeps working after activation, so no rewrite is needed.
+   - Member photos are stored as relative paths, and Mark URLs are computed at render time.
+4. **Current Google callback:** `https://gmggfxynconujrzlbtio.supabase.co/auth/v1/callback`. **Owner:** confirm it is listed on the OAuth client.
+5. **New callback:** `https://auth.jointempa.com/auth/v1/callback`. **Add it; keep the existing one.**
+6. **Google branding status (owner):**
+   - Check Google Auth Platform → Branding / Audience: app name, logo, publishing status, verification status, and authorised domains.
+   - `jointempa.com` must be an authorised domain for the new redirect URI.
+   - Expectation for the chooser:
+     - Activation alone makes the chooser name `auth.jointempa.com` instead of the supabase.co host.
+     - Showing the **Tempa** app name there depends on Google's branding verification, which is not something Supabase controls.
+7. **Site URL (owner):** expected `https://jointempa.com`. No change.
+8. **Redirect allowlist (owner):**
+   - It must include `https://jointempa.com/auth/callback**`, because the app sends `${origin}/auth/callback?next=…`.
+   - No change is needed for the custom domain.
+9. **Required CNAME:** `auth.jointempa.com CNAME gmggfxynconujrzlbtio.supabase.co`, set to DNS only (not proxied) if the zone is on Cloudflare.
+10. **Exact TXT value:**
+    - It is issued by Supabase at registration (step 3), and is not available until then.
+    - Record the exact name and value here once registered.
+11. **Add-on eligibility (owner):** Custom Domains is a paid add-on on a paid plan. Confirm under Dashboard → Settings → Add-ons.
+12. **Session effects:**
+    - **None expected.** The cookie name, refresh host and code-exchange host are all unchanged.
+    - A Google sign-in that is mid-flight at the moment of activation may fail once, and the member simply retries.
+    - Magic links already in inboxes (old host) keep working with or without P-1.
+    - Links sent after activation need P-1.
+13. **Env-var recommendation:**
+    - **No environment-variable change in Phase 1.**
+    - `NEXT_PUBLIC_SUPABASE_URL` stays on the project host.
+    - The `NEXT_PUBLIC_SUPABASE_PROJECT_URL` variable proposed in revision 1 is withdrawn.
+14. **Migration steps (your sequence, with P-1 inserted):**
+    0. *(Approval: PR + deploy.)* Ship P-1 with its tests and verify that the production magic link still works on the old host.
+    1. Leave `NEXT_PUBLIC_SUPABASE_URL` unchanged.
+    2. **Owner:** confirm add-on eligibility (11).
+    3. Register `auth.jointempa.com`, **without activating it** (`supabase domains create --project-ref gmggfxynconujrzlbtio --custom-hostname auth.jointempa.com`, or Dashboard → Custom Domains).
+    4. Record the exact TXT value(s) (10).
+    5. Add the CNAME (9) and TXT; wait for Supabase to report the domain verified and the certificate issued (`supabase domains reverify`).
+    6. Google: **add** `https://auth.jointempa.com/auth/v1/callback` and keep the existing callback. Confirm `jointempa.com` is an authorised domain.
+    7. **Owner:** verify the Site URL (7) and redirect allowlist (8).
+    8. **Activate** `auth.jointempa.com`. ← "APPROVE AUTH DOMAIN ACTIVATION"
+    9. Run the smoke tests (16) within minutes of activation.
+    10. Confirm the chooser change (16.2).
+15. **Rollback:**
+    - Deactivate or delete the custom domain in Supabase. Auth then advertises the project host again, and Google still has the original callback.
+    - Keep the DNS records until outstanding custom-host magic links have expired (OTP expiry), then remove them.
+    - P-1 can stay: it is harmless without the custom domain. The app itself needs no rollback, because nothing in its configuration changed.
+16. **Smoke tests** (production, owner's own accounts, fresh private window unless noted):
+    1. **Existing session:** a browser signed in before activation stays signed in; reload `/home` and open a letter.
+    2. **Google sign-in:**
+       - the chooser no longer shows `gmggfxynconujrzlbtio.supabase.co`, and shows `auth.jointempa.com` (or "Tempa" if branding is verified);
+       - the network log shows `redirect_uri=https://auth.jointempa.com/auth/v1/callback`;
+       - the flow lands on `/home` or on `next`.
+    3. **Magic link after activation:**
+       - the email link's `confirmation_url` host is `auth.jointempa.com`;
+       - `/auth/confirm` shows "Your sign-in is ready", and signing in succeeds.
+    4. **Magic link sent before activation** (old host): still signs in.
+    5. **Logout → login:** `/sign-in?signed_out=1` clears drafts; sign back in with Google, then with a magic link.
+    6. **Token refresh:** a session left idle past access-token expiry (about 1 hour) still works.
+    7. **App behaviour:** Realtime arrivals, letter send with safety evaluation, and the admin gate (staff account) all work, and `/api/csp-report` stays quiet.
+    8. **Mobile browser:** repeat 2 and 3.
+    9. **Rollback rehearsal (optional, with your approval):** deactivate, confirm Google works again on the original callback, then reactivate.
 
-The new variable carries the stable project origin. It pins the cookie name (`sb-<ref>-auth-token`), is the second allowed origin in the CSP and in `validateConfirmationUrl`, and means rollback is a single variable flip. `NEXT_PUBLIC_*` values are inlined at build time, so every change needs a redeploy.
+## Appendix: Phase 2 (separate later decision, not approved or planned for now)
 
-## 14. Migration steps
-0. **Code PR (no production effect on its own).**
-   - Pin `cookieOptions.name` to `sb-<ref>-auth-token`, derived from `NEXT_PUBLIC_SUPABASE_PROJECT_URL`, in all three SSR clients and in `proxy.ts`.
-   - Accept both origins in the CSP and in `validateConfirmationUrl`.
-   - Add tests for all of the above.
-   - Deploy and verify that sessions survive the deploy.
-1. **Owner:** confirm items 6, 7, 8 and 11.
-2. Register `auth.jointempa.com` in Supabase and record the TXT record(s) in item 10.
-3. DNS: add the CNAME (9) and the TXT record(s) (10).
-4. Wait for Supabase to report the domain verified and the certificate issued (`supabase domains reverify`).
-5. Google: **add** the redirect URI `https://auth.jointempa.com/auth/v1/callback` and keep the old one.
-6. **Activate** the custom domain in Supabase. ← gated by "APPROVE AUTH DOMAIN ACTIVATION"
-7. Vercel Production: set `NEXT_PUBLIC_SUPABASE_URL=https://auth.jointempa.com`, then redeploy.
-8. Run the smoke tests (16).
-9. Watch `[auth/callback]` errors and `/api/csp-report` for 48 hours. Keep the old Google URI indefinitely.
+Switching `NEXT_PUBLIC_SUPABASE_URL` to `https://auth.jointempa.com` would change:
+- the library-derived cookie name to `sb-auth-auth-token`, which would **sign everyone out** unless the name is pinned first;
+- the CSP origins;
+- the origin used by the confirm-URL check (already covered by P-1).
 
-## 15. Rollback
-- **Fast rollback (minutes):**
-  - Set `NEXT_PUBLIC_SUPABASE_URL` back to `https://gmggfxynconujrzlbtio.supabase.co` and redeploy.
-  - Sessions survive because the cookie name is pinned.
-  - Both Google URIs remain registered.
-  - The old host keeps serving throughout.
-- **Full rollback:**
-  - Deactivate or delete the custom domain in Supabase.
-  - Remove the CNAME and TXT records.
-  - Stored URLs are unaffected in both directions.
-- **Rollback of step 0 alone:** revert the PR. This is harmless only while `NEXT_PUBLIC_SUPABASE_URL` is still the old host.
-
-## 16. Smoke-test plan (production, the owner's own accounts only)
-1. Signed in before the deploy → still signed in after it (reload `/home`, open a letter).
-2. Google sign-in in a fresh browser.
-   - The chooser shows `auth.jointempa.com`, or the app name if branding is verified.
-   - The callback lands on `/home` or on the `next` path.
-3. Magic link: request one, open it, and confirm `/auth/confirm` works. Also open a link issued *before* step 7.
-4. Sign out → `/sign-in?signed_out=1`, and drafts are cleared.
-5. Postcard artwork (old stored host) and a new admin upload (new host) both render. The Mark renders.
-6. Realtime arrival updates still arrive.
-7. The response `Content-Security-Policy-Report-Only` header lists both hosts, and `/api/csp-report` stays quiet.
-8. The safety evaluate / send flow works (letter + Dispatch).
-9. The admin gate works (staff account).
-10. Check on a mobile browser as well.
+That phase would reintroduce cookie-name pinning, and it is evaluated on its own merits later. It is not needed for the trust fix.
