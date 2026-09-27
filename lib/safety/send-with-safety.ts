@@ -121,6 +121,7 @@ export const SAFETY_CHECK_FAILED_MESSAGE =
  * wording to show. */
 export const SAFETY_FINANCIAL_REQUEST_COPY_KEY = 'safety_financial_request'
 export const SAFETY_CONTACT_SHARING_COPY_KEY = 'safety_contact_sharing'
+export const SAFETY_PUBLIC_CONTACT_SHARING_COPY_KEY = 'safety_contact_sharing_public'
 
 export const SAFETY_NOTE_TITLE = 'A quick note from Tempa'
 
@@ -138,6 +139,15 @@ export const SAFETY_CONTACT_BODY = [
 ]
 export const SAFETY_CONTACT_REVIEW_ACTION = 'Review my letter'
 export const SAFETY_CONTACT_SEND_ACTION = 'Send anyway'
+
+/** Pre-beta security F-12 — personal contact details in something every
+ * member can read (a Dispatch, update, Dispatch reply or public answer).
+ * The member may still post; the surface's own action label is kept. */
+export const SAFETY_PUBLIC_CONTACT_BODY = [
+  'This includes personal contact details or an invitation to talk somewhere else.',
+  'Everyone on Tempa will be able to see it. You can still continue — just share personal details publicly only if you are comfortable doing so.',
+]
+export const SAFETY_PUBLIC_CONTACT_REVIEW_ACTION = 'Let me look again'
 
 /** The short, non-accusatory note attached to a DELIVERED letter whose
  * sender shared personal contact details (shown to the recipient). */

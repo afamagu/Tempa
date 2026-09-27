@@ -1,0 +1,8 @@
+# Tempa — vulnerability disclosure (RFC 9116)
+# Please report security issues privately to the contact below. Do not
+# test against other members' accounts or data, and do not run load or
+# denial-of-service tests.
+Contact: mailto:support@jointempa.com
+Expires: 2027-09-27T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://jointempa.com/.well-known/security.txt

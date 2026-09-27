@@ -3,9 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { combineClassifications } from '@/lib/safety'
 import { analyzeText } from '@/lib/safety/analysis-boundary'
-import { buildEvaluateResponse, parseEvaluateRequest, type ParsedPostcard } from '@/lib/safety/route-contract'
+import { buildEvaluateResponse, isPrivateLetterSurface, parseEvaluateRequest, type ParsedPostcard } from '@/lib/safety/route-contract'
 
-const PRIVATE_LETTER_SURFACES = new Set<string>(['first_letter', 'reply', 'write_anytime'])
 
 /** The EXACT jsonb shape write_letter/reply_to_letter's own p_postcard
  * accepts (postcard_key/reveal_line/back_message) — see route-
@@ -175,15 +174,17 @@ export async function POST(request: NextRequest) {
   // doesn't have them (first_letter/reply/write_anytime/question_
   // answer/dispatch_reply), so this naturally degrades to the existing
   // body(+postcard) classification for those surfaces.
-  // Personal-contact / off-platform sharing is a privacy reminder that
-  // only makes sense in a PRIVATE letter (first letter, reply, write-
-  // anytime) — never on a public surface.
-  const privateLetter = PRIVATE_LETTER_SURFACES.has(parsed.request.surface)
+  // Personal-contact / off-platform sharing is an allowed, warn-only
+  // advisory: a privacy reminder in a PRIVATE letter (first letter,
+  // reply, write-anytime), and — pre-beta security F-12 — an exposure
+  // reminder on every public surface, where anyone can read it.
+  const privateLetter = isPrivateLetterSurface(parsed.request.surface)
+  const publicSurface = !privateLetter
   // Phase 1 has no translation provider: analyzeText analyses the original
   // text only (lib/safety/analysis-boundary.ts — the one place a later,
   // privacy-safe translated representation can be added, and where
   // "translation unavailable" can never mean "safe").
-  const classify = (text: string) => analyzeText(text, { privateLetter }).classification
+  const classify = (text: string) => analyzeText(text, { privateLetter, publicSurface }).classification
   const classifications = [classify(parsed.request.body)]
   if (parsed.request.title) {
     classifications.push(classify(parsed.request.title))
@@ -230,6 +231,6 @@ export async function POST(request: NextRequest) {
 
   const row = data as { evaluation_id: string; expires_at: string; is_new: boolean }
   return NextResponse.json(
-    buildEvaluateResponse(row.evaluation_id, classification.mutationDisposition, classification.reasonCodes)
+    buildEvaluateResponse(row.evaluation_id, classification.mutationDisposition, classification.reasonCodes, parsed.request.surface)
   )
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import ClearLocalDrafts from '@/app/clear-local-drafts'
 import { pageTitleClass, secondaryButtonClass, systemBodyClass } from '@/app/profile/ui'
 import { SUPPORT_EMAIL } from '@/lib/legal'
 
@@ -21,6 +22,8 @@ export default async function AccountDeletedPage({
 
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
+      {/* F-15 — the account is gone; its private drafts must not stay on this device. */}
+      <ClearLocalDrafts />
       <div className="w-full max-w-md space-y-5">
         <p className="font-serif text-lg italic text-foreground">Tempa</p>
         <h1 className={pageTitleClass}>{pending ? 'Your account has been closed' : 'Your account has been deleted'}</h1>

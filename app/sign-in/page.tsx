@@ -4,6 +4,8 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
+import { SIGNED_OUT_PARAM } from '@/lib/local-drafts'
+import ClearLocalDrafts from '@/app/clear-local-drafts'
 import TempaEmblem from '@/app/tempa-emblem'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
 
@@ -134,6 +136,8 @@ function SignInForm() {
   // since a client-supplied query param is never trusted merely
   // because this page generated the original link.
   const nextPath = sanitizeInternalPath(searchParams.get('next'))
+  // F-15 — arriving right after an explicit sign-out: clear private drafts.
+  const signedOut = searchParams.get(SIGNED_OUT_PARAM) === '1'
 
   // Checkpoint 1, Phase B — refines the generic `?error=auth_failed`
   // message (set above, from the query string, visible during SSR)
@@ -333,6 +337,7 @@ function SignInForm() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
+      {signedOut && <ClearLocalDrafts />}
       {/* Brand asset correction (2026-09-24) — /sign-in is the app's one
           real logged-out landing surface (the root route always
           redirects here or onward; there is no separate marketing

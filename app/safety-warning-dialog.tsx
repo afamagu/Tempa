@@ -10,6 +10,9 @@ import {
   SAFETY_CONTACT_REVIEW_ACTION,
   SAFETY_CONTACT_SEND_ACTION,
   SAFETY_CONTACT_SHARING_COPY_KEY,
+  SAFETY_PUBLIC_CONTACT_BODY,
+  SAFETY_PUBLIC_CONTACT_REVIEW_ACTION,
+  SAFETY_PUBLIC_CONTACT_SHARING_COPY_KEY,
 } from '@/lib/safety/send-with-safety'
 
 /**
@@ -56,10 +59,14 @@ export default function SafetyWarningDialog({
   sendingLabel?: string
   /** Phase 1 — the opaque, server-chosen copy key (never a reason
    * code). 'safety_contact_sharing' shows the personal-contact privacy
-   * reminder wording; anything else keeps the generic pause. */
+   * reminder wording; 'safety_contact_sharing_public' the public-
+   * exposure reminder (pre-beta security F-12); anything else keeps the
+   * generic pause. */
   copyKey?: string
 }) {
   const isContactNote = copyKey === SAFETY_CONTACT_SHARING_COPY_KEY
+  const isPublicContactNote = copyKey === SAFETY_PUBLIC_CONTACT_SHARING_COPY_KEY
+  const body = isContactNote ? SAFETY_CONTACT_BODY : isPublicContactNote ? SAFETY_PUBLIC_CONTACT_BODY : [SAFETY_WARNING_BODY]
   useEffect(() => {
     if (!open) return
     const previousOverflow = document.body.style.overflow
@@ -87,20 +94,16 @@ export default function SafetyWarningDialog({
         className="relative w-full max-w-md space-y-4 rounded-lg border border-foreground/10 bg-background p-6 shadow-lg"
       >
         <h2 id="safety-warning-title" className="text-[17px] font-medium text-foreground">
-          {isContactNote ? SAFETY_NOTE_TITLE : SAFETY_WARNING_TITLE}
+          {isContactNote || isPublicContactNote ? SAFETY_NOTE_TITLE : SAFETY_WARNING_TITLE}
         </h2>
-        {isContactNote ? (
-          SAFETY_CONTACT_BODY.map((paragraph) => (
-            <p key={paragraph} className="text-[15px] leading-relaxed text-foreground/80">
-              {paragraph}
-            </p>
-          ))
-        ) : (
-          <p className="text-[15px] leading-relaxed text-foreground/80">{SAFETY_WARNING_BODY}</p>
-        )}
+        {body.map((paragraph) => (
+          <p key={paragraph} className="text-[15px] leading-relaxed text-foreground/80">
+            {paragraph}
+          </p>
+        ))}
         <div className="flex flex-wrap gap-3 pt-2">
           <button type="button" onClick={onCancel} className={secondaryButtonClass}>
-            {isContactNote ? SAFETY_CONTACT_REVIEW_ACTION : 'Let me look again'}
+            {isContactNote ? SAFETY_CONTACT_REVIEW_ACTION : isPublicContactNote ? SAFETY_PUBLIC_CONTACT_REVIEW_ACTION : 'Let me look again'}
           </button>
           <button type="button" onClick={onAcknowledgeAndSend} disabled={sending} className={primaryButtonClass}>
             {sending ? sendingLabel : isContactNote ? SAFETY_CONTACT_SEND_ACTION : actionLabel}

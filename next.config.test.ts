@@ -24,7 +24,7 @@ describe('next.config.ts — security headers (Checkpoint 9)', () => {
     expect(byKey['Strict-Transport-Security']).toMatch(/max-age=\d+/)
   })
 
-  it('does not add a Content-Security-Policy — deliberately deferred to backlog, not silently forgotten', async () => {
+  it('does not add a static Content-Security-Policy — the nonce-based policy is set per request by proxy.ts (F-02)', async () => {
     const rules = await nextConfig.headers!()
     const keys = rules[0].headers.map((h) => h.key.toLowerCase())
     expect(keys).not.toContain('content-security-policy')
