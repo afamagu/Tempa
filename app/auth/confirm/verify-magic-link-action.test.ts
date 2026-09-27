@@ -192,13 +192,26 @@ describe('verifyMagicLink — defensive runtime validation for direct/bypassing 
     expect(mockVerifyOtp).not.toHaveBeenCalled()
   })
 
-  it('"signup" (a real EmailOtpType value, but never a Tempa magic-link sign-in) never calls verifyOtp', async () => {
-    const destination = await redirectPath(
-      verifyMagicLink('some-token', 'signup' as unknown as Parameters<typeof verifyMagicLink>[1], null)
-    )
-
-    expect(destination).toBe('/sign-in?error=link_expired')
+  it('"invite" and "email_change" never call verifyOtp', async () => {
+    for (const type of ['invite', 'email_change']) {
+      const destination = await redirectPath(
+        verifyMagicLink('some-token', type as unknown as Parameters<typeof verifyMagicLink>[1], null)
+      )
+      expect(destination).toBe('/sign-in?error=link_expired')
+    }
     expect(mockVerifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('a NEW member Confirm-signup link (PKCE-issued) is verified server-side by token hash alone — works in any browser — and routes to /begin', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: 'new-user' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: null })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: null })
+    mockLegalAcceptances.mockResolvedValue({ data: [] })
+
+    const destination = await redirectPath(verifyMagicLink('pkce_' + 'a'.repeat(56), 'signup', '/home'))
+
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'pkce_' + 'a'.repeat(56), type: 'signup' })
+    expect(destination.startsWith('/begin')).toBe(true)
   })
 
   it('an empty token never calls verifyOtp', async () => {
