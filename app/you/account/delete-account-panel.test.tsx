@@ -100,4 +100,19 @@ describe('placement', () => {
     expect(pending).toContain('didn’t finish')
     expect(pending).not.toContain('has been deleted')
   })
+
+  it('a voluntary deletion is told the old account is gone and offered a brand-new account', async () => {
+    const { default: AccountDeletedPage } = await import('@/app/account-deleted/page')
+    const done = renderToStaticMarkup(await AccountDeletedPage({ searchParams: Promise.resolve({}) }))
+    expect(done).toContain('This account was deleted and can’t be restored. If you’d like to return to Tempa, you’ll need to create a new account.')
+    expect(done).toContain('Create a new account')
+    expect(done).not.toMatch(/banned/i)
+  })
+
+  it('deleted while suspended/banned: no new-account invitation', async () => {
+    const { default: AccountDeletedPage } = await import('@/app/account-deleted/page')
+    const html = renderToStaticMarkup(await AccountDeletedPage({ searchParams: Promise.resolve({ return: 'unavailable' }) }))
+    expect(html).toContain('can’t be restored')
+    expect(html).not.toContain('Create a new account')
+  })
 })

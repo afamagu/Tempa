@@ -9,7 +9,12 @@ const state = {
   rpcResult: { data: { storage_objects: { 'profile-marks': ['m.png'] } }, error: null } as { data: unknown; error: { message: string } | null },
   rpcCalls: [] as { fn: string; args: unknown }[],
   signOutCalls: [] as unknown[],
-  finalizeResult: { storageCleaned: true, authDisabled: true, error: null } as { storageCleaned: boolean; authDisabled: boolean; error: string | null },
+  finalizeResult: { storageCleaned: true, authDisabled: true, authMode: 'retired', error: null } as {
+    storageCleaned: boolean
+    authDisabled: boolean
+    authMode?: 'retired' | 'banned' | null
+    error: string | null
+  },
   finalizeCalls: [] as unknown[][],
   serviceThrows: false,
 }
@@ -55,7 +60,7 @@ beforeEach(() => {
   state.rpcResult = { data: { storage_objects: { 'profile-marks': ['m.png'] } }, error: null }
   state.rpcCalls = []
   state.signOutCalls = []
-  state.finalizeResult = { storageCleaned: true, authDisabled: true, error: null }
+  state.finalizeResult = { storageCleaned: true, authDisabled: true, authMode: 'retired', error: null }
   state.finalizeCalls = []
   state.serviceThrows = false
   redirect.mockClear()
@@ -147,6 +152,16 @@ describe('deleteMyAccount', () => {
     state.finalizeResult = { storageCleaned: true, authDisabled: false, error: 'auth:down' }
     await expect(deleteMyAccount('DELETE')).rejects.toThrow('NEXT_REDIRECT:/account-deleted?cleanup=pending')
     expect(state.signOutCalls).toEqual([{ scope: 'global' }])
+  })
+
+  it('deleted while suspended/banned: identity kept banned, so the confirmation page offers no new account', async () => {
+    state.finalizeResult = { storageCleaned: true, authDisabled: true, authMode: 'banned', error: null }
+    await expect(deleteMyAccount('DELETE')).rejects.toThrow('NEXT_REDIRECT:/account-deleted?return=unavailable')
+  })
+
+  it('pending cleanup and a kept identity are both reported', async () => {
+    state.finalizeResult = { storageCleaned: false, authDisabled: true, authMode: 'banned', error: 'storage:x' }
+    await expect(deleteMyAccount('DELETE')).rejects.toThrow('NEXT_REDIRECT:/account-deleted?cleanup=pending&return=unavailable')
   })
 
   it('20. missing service-role configuration: still closed, reported as pending', async () => {

@@ -15,7 +15,17 @@ export async function GET(request: Request) {
   // whether or not this app's own sign-in page happened to generate it.
   const next = sanitizeInternalPath(searchParams.get('next'))
 
+  // GoTrue refuses a banned identity with error_code=user_banned. Google
+  // carries no identity Tempa could look up, so this stays neutral:
+  // never "expired", never "banned", never an invitation to join. (A
+  // voluntarily deleted account never reaches this: its Google identity
+  // was retired, so Google simply creates a new account.)
+  const refusedAccount = searchParams.get('error_code') === 'user_banned'
+
   if (oauthError) {
+    if (refusedAccount) {
+      return NextResponse.redirect(`${origin}/sign-in?error=account_unavailable`)
+    }
     console.error('[auth/callback] provider returned an error', {
       error: oauthError,
       description: searchParams.get('error_description'),
@@ -41,6 +51,10 @@ export async function GET(request: Request) {
       const destination = await resolvePostAuthDestination(supabase, data.user.id, requestedDestination)
 
       return NextResponse.redirect(`${origin}${destination}`)
+    }
+
+    if (error?.code === 'user_banned') {
+      return NextResponse.redirect(`${origin}/sign-in?error=account_unavailable`)
     }
 
     if (error) {

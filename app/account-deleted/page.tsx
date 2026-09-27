@@ -1,7 +1,8 @@
-import Link from 'next/link'
 import ClearLocalDrafts from '@/app/clear-local-drafts'
 import { pageTitleClass, secondaryButtonClass, systemBodyClass } from '@/app/profile/ui'
 import { SUPPORT_EMAIL } from '@/lib/legal'
+import { ACCOUNT_DELETED_MESSAGE, CREATE_NEW_ACCOUNT_LABEL } from '@/lib/sign-in-refusals'
+import { startNewAccount } from './actions'
 
 export const metadata = { title: 'Account deleted — Tempa', robots: { index: false, follow: false } }
 
@@ -10,15 +11,18 @@ export const metadata = { title: 'Account deleted — Tempa', robots: { index: f
  * Not a protected route: the person is signed out by now. `?cleanup=pending`
  * is shown when the account was closed but a final server-side step
  * (storage removal / sign-in disablement) did not finish — said plainly,
- * never presented as fully complete.
+ * never presented as fully complete. `?return=unavailable` is set when
+ * the account was deleted while suspended or banned: the identity stays
+ * blocked, so no "Create a new account" invitation is shown.
  */
 export default async function AccountDeletedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cleanup?: string }>
+  searchParams: Promise<{ cleanup?: string; return?: string }>
 }) {
-  const { cleanup } = await searchParams
+  const { cleanup, return: returnParam } = await searchParams
   const pending = cleanup === 'pending'
+  const mayReturn = returnParam !== 'unavailable'
 
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
@@ -41,9 +45,24 @@ export default async function AccountDeletedPage({
             Your profile has been removed and you&rsquo;ve been signed out. Thank you for the letters you wrote here.
           </p>
         )}
-        <Link href="/sign-in" className={secondaryButtonClass}>
-          Back to Tempa
-        </Link>
+        {mayReturn ? (
+          <>
+            <p className={systemBodyClass}>{ACCOUNT_DELETED_MESSAGE}</p>
+            <form action={startNewAccount}>
+              <button type="submit" className={secondaryButtonClass}>
+                {CREATE_NEW_ACCOUNT_LABEL}
+              </button>
+            </form>
+          </>
+        ) : (
+          <p className={systemBodyClass}>
+            This account was deleted and can&rsquo;t be restored. If you have questions, write to{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="underline underline-offset-4">
+              {SUPPORT_EMAIL}
+            </a>
+            .
+          </p>
+        )}
       </div>
     </main>
   )

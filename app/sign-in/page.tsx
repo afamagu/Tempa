@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
 import { SIGNED_OUT_PARAM } from '@/lib/local-drafts'
+import { CREATE_NEW_ACCOUNT_LABEL, signInRefusal } from '@/lib/sign-in-refusals'
 import ClearLocalDrafts from '@/app/clear-local-drafts'
 import TempaEmblem from '@/app/tempa-emblem'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
@@ -101,6 +102,13 @@ export function getInitialErrorMessage(errorParam: string | null): string {
   return ''
 }
 
+/** GoTrue's refusal of a banned identity (a Google sign-in carries no
+ * identity Tempa could look up, so it maps to the neutral refusal). */
+export function isRefusedAccountFragment(hash: string): boolean {
+  if (!hash) return false
+  return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash).get('error_code') === 'user_banned'
+}
+
 export function getAuthErrorMessageFromFragment(hash: string): string {
   if (!hash) return ''
 
@@ -127,6 +135,10 @@ function SignInForm() {
   const [errorMessage, setErrorMessage] = useState(() => getInitialErrorMessage(searchParams.get('error')))
   const [googleLoading, setGoogleLoading] = useState(false)
   const [joinIntent, setJoinIntent] = useState(() => searchParams.get('intent') === 'join')
+  // A refused account (deleted / permanently banned / unattributable),
+  // chosen server-side from Tempa's own account state — never shown as
+  // an expired link. See lib/sign-in-refusals.ts.
+  const [refusal, setRefusal] = useState(() => signInRefusal(searchParams.get('error')))
 
   // Return-to-requested-page after sign-in (pre-beta UX polish batch 1)
   // — sanitized here too (not only server-side in the auth callback)
@@ -157,7 +169,14 @@ function SignInForm() {
     if (searchParams.get('error') !== 'auth_failed') return
     const message = getAuthErrorMessageFromFragment(window.location.hash)
     if (!message) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read from window.location.hash, see comment above
+    if (isRefusedAccountFragment(window.location.hash)) {
+      // A refused account, not a generic failure (see isRefusedAccountFragment).
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read from window.location.hash, see comment above
+      setRefusal(signInRefusal('account_unavailable'))
+      setErrorMessage('')
+      window.history.replaceState(null, '', window.location.pathname + '?error=account_unavailable')
+      return
+    }
     setErrorMessage(message)
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -480,7 +499,26 @@ function SignInForm() {
           <p className="text-sm text-red-600">{errorMessage}</p>
         )}
 
-        {joinIntent ? (
+        {refusal && (
+          <div className="space-y-3" role="status">
+            <p className="text-sm text-foreground">{refusal.message}</p>
+            {refusal.offerNewAccount && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRefusal(null)
+                  setJoinIntent(true)
+                  window.history.replaceState(null, '', window.location.pathname + '?intent=join')
+                }}
+                className="w-full rounded-md border border-foreground/15 px-3 py-2 text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
+              >
+                {CREATE_NEW_ACCOUNT_LABEL}
+              </button>
+            )}
+          </div>
+        )}
+
+        {refusal?.hideJoinInvitations ? null : joinIntent ? (
           <p className="text-center text-sm text-muted">
             Already have an account?{' '}
             <button

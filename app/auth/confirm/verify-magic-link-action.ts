@@ -2,6 +2,8 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { readAccountAuthStateForEmailLink, refusedSignInError } from '@/lib/account-auth-state'
 import { resolvePostAuthDestination } from '@/lib/post-auth-destination'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
 import { ALLOWED_MAGIC_LINK_OTP_TYPES, type MagicLinkOtpType } from '@/lib/auth-confirm'
@@ -75,9 +77,25 @@ export async function verifyMagicLink(tokenHash: string, type: MagicLinkOtpType,
         name: error.name,
       })
     }
+    // A REFUSED account is not an expired link. GoTrue's `user_banned`
+    // is the same for every refusal, so the message comes from Tempa's
+    // own state for the account this (still unconsumed) link belongs to
+    // — deleted, deleted while suspended, or permanently banned.
+    if (error?.code === 'user_banned') {
+      redirect(`/sign-in?error=${await refusedSignInErrorForLink(tokenHash)}`)
+    }
     redirect('/sign-in?error=link_expired')
   }
 
   const destination = await resolvePostAuthDestination(supabase, data.user.id, sanitizedNext ?? '/home')
   redirect(destination)
+}
+
+async function refusedSignInErrorForLink(tokenHash: string) {
+  try {
+    return refusedSignInError(await readAccountAuthStateForEmailLink(createServiceClient(), tokenHash))
+  } catch (err) {
+    console.error('[auth/confirm] refusal lookup failed', { message: err instanceof Error ? err.message : String(err) })
+    return refusedSignInError(null)
+  }
 }

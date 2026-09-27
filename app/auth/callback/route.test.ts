@@ -296,3 +296,25 @@ describe('GET /auth/callback — no code AND no query-string error (the Phase A 
     expect(mockExchangeCodeForSession).not.toHaveBeenCalled()
   })
 })
+
+describe('GET /auth/callback — a refused (Auth-banned) identity is never "auth failed" or "expired"', () => {
+  it('provider redirect with error_code=user_banned -> neutral account_unavailable (Google carries no identity to look up)', async () => {
+    const res = await GET(
+      new Request('https://jointempa.com/auth/callback?error=access_denied&error_code=user_banned&error_description=User+is+banned')
+    )
+    expect(locationOf(res)).toBe('https://jointempa.com/sign-in?error=account_unavailable')
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled()
+  })
+
+  it('code exchange refused with user_banned -> account_unavailable', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: null }, error: { message: 'User is banned', code: 'user_banned', name: 'AuthApiError' } })
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
+    expect(locationOf(res)).toBe('https://jointempa.com/sign-in?error=account_unavailable')
+  })
+
+  it('an ordinary provider denial is unchanged (auth_failed)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await GET(new Request('https://jointempa.com/auth/callback?error=access_denied&error_code=other'))
+    expect(locationOf(res)).toBe('https://jointempa.com/sign-in?error=auth_failed')
+  })
+})
