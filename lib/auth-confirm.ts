@@ -106,24 +106,22 @@ export function validateConfirmationUrl(
 }
 
 /**
- * Tempa never sends a signup/invite/recovery/email_change email — the
- * ONLY email-auth action this app performs is a magic-link sign-in via
- * `supabase.auth.signInWithOtp({ email, options })` (see app/sign-in/
- * page.tsx). Supabase's own EmailOtpType (node_modules/@supabase/auth-js/
- * dist/main/lib/types.d.ts) is much broader ('signup' | 'invite' |
- * 'magiclink' | 'recovery' | 'email_change' | 'email' | (string & {})) —
- * inspected directly, not guessed. 'magiclink' is the literal GoTrue's
- * mailer uses for a link-shaped signInWithOtp confirmation; 'email' is
- * kept in the allowlist too since it is the other EmailOtpType literal
- * documented for an email-OTP sign-in (never verified against a live
- * ConfirmationURL here, since doing so would require a real production
- * credential this checkpoint must never request). Anything else —
- * 'signup'/'invite'/'recovery'/'email_change', or any unrecognized
- * value — is rejected outright: this is a "smallest explicit allowlist"
- * boundary, never a permissive passthrough of whatever `type` a
- * same-origin, same-path URL happens to carry.
+ * The ONLY email-auth action this app performs is
+ * `supabase.auth.signInWithOtp({ email, options })` (app/sign-in/page.tsx),
+ * but GoTrue answers it with one of TWO emails (supabase/auth
+ * internal/api/magic_link.go): an EXISTING user gets the Magic Link email
+ * (type 'magiclink'); an email with NO account yet gets the "Confirm
+ * signup" email (type 'signup', GoTrue calls Signup internally). Both
+ * carry a single-use token hash that proves inbox ownership, and both
+ * are verified here the same browser-independent way (verifyOtp with
+ * token_hash — no PKCE code verifier), so a link requested in one
+ * browser works in another. 'email' is kept as the generic email-OTP
+ * literal. 'invite'/'recovery'/'email_change', or any unrecognized value,
+ * are rejected outright: Tempa sends none of them, and this stays a
+ * "smallest explicit allowlist" boundary, never a permissive passthrough
+ * of whatever `type` a same-origin, same-path URL happens to carry.
  */
-export const ALLOWED_MAGIC_LINK_OTP_TYPES = ['magiclink', 'email'] as const
+export const ALLOWED_MAGIC_LINK_OTP_TYPES = ['magiclink', 'signup', 'email'] as const
 export type MagicLinkOtpType = (typeof ALLOWED_MAGIC_LINK_OTP_TYPES)[number]
 
 export type MagicLinkVerificationParams = {

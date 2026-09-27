@@ -123,8 +123,13 @@ describe('extractMagicLinkVerificationParams', () => {
     }
   })
 
-  it('rejects a type outside the allowlist — signup/invite/recovery/email_change are never magic-link sign-in', () => {
-    for (const type of ['signup', 'invite', 'recovery', 'email_change']) {
+  it('accepts the "Confirm signup" link GoTrue sends a NEW email for signInWithOtp (pkce_-prefixed token hash kept verbatim)', () => {
+    const url = `${SUPABASE_URL}/auth/v1/verify?token=pkce_abc123&type=signup&redirect_to=https%3A%2F%2Fjointempa.com%2Fauth%2Fcallback`
+    expect(extractMagicLinkVerificationParams(url)).toEqual({ tokenHash: 'pkce_abc123', type: 'signup' })
+  })
+
+  it('rejects a type outside the allowlist — invite/recovery/email_change are never sign-in', () => {
+    for (const type of ['invite', 'recovery', 'email_change']) {
       const url = `${SUPABASE_URL}/auth/v1/verify?token=tok&type=${type}`
       expect(extractMagicLinkVerificationParams(url)).toBeNull()
     }
