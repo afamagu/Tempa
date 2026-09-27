@@ -132,10 +132,22 @@ describe('sign-in page wiring', () => {
   const page = read('app/sign-in/page.tsx')
   const button = read('app/sign-in/google-identity-button.tsx')
 
-  it('keeps the redirect flow as the fallback when GIS is not configured or cannot load', () => {
-    expect(page).toContain('signInWithOAuth({')
-    expect(page).toMatch(/useGoogleIdentity = Boolean\(googleClientId\) && !gisUnavailable/)
+  it('uses GIS whenever the client id is configured, and never falls back to the Supabase-hosted redirect flow', () => {
+    expect(page).toMatch(/const useGoogleIdentity = Boolean\(googleClientId\)\n/)
     expect(page).toContain('onUnavailable={() => setGisUnavailable(true)}')
+    // GIS unavailable → a note; email sign-in stays; no signInWithOAuth.
+    const gisBranch = page.slice(page.indexOf('{useGoogleIdentity && googleClientId ? ('), page.indexOf('<GoogleIdentityButton'))
+    expect(gisBranch).toContain("Google sign-in isn&apos;t available right now. You can still sign in with your email below.")
+    expect(gisBranch).not.toContain('handleGoogleSignIn')
+    // The redirect flow exists only in the not-configured branch.
+    expect(page).toContain('signInWithOAuth({')
+  })
+
+  it('submits at most one Google credential per page load; a retry reloads for a fresh nonce', () => {
+    expect(page).toMatch(/if \(googleSubmittedRef\.current\) return\n\s*googleSubmittedRef\.current = true/)
+    expect(page).toMatch(/function handleGoogleCredential[\s\S]{0,120}if \(googleSubmittedRef\.current\) return/)
+    expect(page).toContain('setGoogleRetryNeeded(true)')
+    expect(page).toContain('onClick={() => window.location.reload()}')
   })
 
   it('never logs the Google credential or nonce', () => {
@@ -144,11 +156,13 @@ describe('sign-in page wiring', () => {
     }
   })
 
-  it('binds each Google attempt to a fresh hashed nonce and uses popup mode', () => {
+  it('initializes GIS once per page load with one hashed nonce, in popup mode', () => {
+    expect(button.match(/\.initialize\(\{/g)).toHaveLength(1)
+    expect(button).toContain('if (initialized && initialized.clientId === clientId) return initialized.nonce')
     expect(button).toContain('nonce: nonce.hashed')
+    expect(button).toContain('deliverCredential?.(response.credential, nonce.raw)')
     expect(button).toContain("ux_mode: 'popup'")
-    expect(button).toContain('onCredentialRef.current(response.credential, nonce.raw)')
-    expect(button).toContain('void setup()')
+    expect(button).not.toContain('void setup()')
   })
 
   it("gives Google's script the page nonce so its injected stylesheet satisfies the CSP", () => {

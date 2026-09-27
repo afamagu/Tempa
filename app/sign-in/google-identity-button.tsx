@@ -1,15 +1,19 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { GOOGLE_GSI_SCRIPT_SRC, createGoogleNonce } from '@/lib/google-identity'
+import { GOOGLE_GSI_SCRIPT_SRC, createGoogleNonce, type GoogleNonce } from '@/lib/google-identity'
 
 /**
  * The ONE place Google Identity Services is loaded and its button
  * rendered (imported only by app/sign-in/page.tsx). Google issues an ID
  * token only to its own rendered button (or One Tap), so the button's
- * look is Google's; Tempa chooses theme/shape/text/width. Each attempt
- * gets a fresh nonce: after a credential is delivered the widget is
- * re-initialized, so a retry never reuses one.
+ * look is Google's; Tempa chooses theme/shape/text/width.
+ *
+ * `google.accounts.id.initialize()` runs ONCE per page load (Google's
+ * guidance), with ONE nonce generated for that page. The page submits at
+ * most one credential per page load (app/sign-in/page.tsx); a retry
+ * reloads the page, which yields a fresh initialize and a fresh nonce —
+ * so a nonce is never reused across submitted attempts.
  */
 
 type GsiCredentialResponse = { credential?: string }
@@ -76,6 +80,39 @@ function loadGsiScript(): Promise<void> {
   return gsiScriptPromise
 }
 
+// Page-lifetime GIS state: one initialize, one nonce. The callback is
+// fixed at initialize time, so it forwards to whichever mounted button
+// currently owns the handler.
+let initialized: { clientId: string; nonce: GoogleNonce } | null = null
+let initializing: Promise<GoogleNonce> | null = null
+let deliverCredential: ((credential: string, rawNonce: string) => void) | null = null
+
+async function initializeOnce(clientId: string, joinIntent: boolean): Promise<GoogleNonce> {
+  if (initialized && initialized.clientId === clientId) return initialized.nonce
+  if (!initializing) {
+    initializing = (async () => {
+      const nonce = await createGoogleNonce()
+      window.google!.accounts.id.initialize({
+        client_id: clientId,
+        nonce: nonce.hashed,
+        context: joinIntent ? 'signup' : 'signin',
+        ux_mode: 'popup',
+        auto_select: false,
+        itp_support: true,
+        use_fedcm_for_button: true,
+        callback: (response) => {
+          if (response.credential) deliverCredential?.(response.credential, nonce.raw)
+        },
+      })
+      initialized = { clientId, nonce }
+      return nonce
+    })().finally(() => {
+      initializing = null
+    })
+  }
+  return initializing
+}
+
 export default function GoogleIdentityButton({
   clientId,
   joinIntent,
@@ -86,7 +123,7 @@ export default function GoogleIdentityButton({
   joinIntent: boolean
   /** Receives the Google ID token and the RAW nonce it is bound to. */
   onCredential: (credential: string, rawNonce: string) => void
-  /** GIS could not load (blocked, offline) — the page falls back. */
+  /** GIS could not load (blocked, offline). */
   onUnavailable: () => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -99,47 +136,33 @@ export default function GoogleIdentityButton({
 
   useEffect(() => {
     let cancelled = false
-
-    async function setup() {
-      const nonce = await createGoogleNonce()
-      if (cancelled || !containerRef.current || !window.google?.accounts?.id) return
-      const gsi = window.google.accounts.id
-      gsi.initialize({
-        client_id: clientId,
-        nonce: nonce.hashed,
-        context: joinIntent ? 'signup' : 'signin',
-        ux_mode: 'popup',
-        auto_select: false,
-        itp_support: true,
-        use_fedcm_for_button: true,
-        callback: (response) => {
-          if (cancelled) return
-          if (response.credential) onCredentialRef.current(response.credential, nonce.raw)
-          // Fresh nonce for any further attempt.
-          void setup()
-        },
-      })
-      containerRef.current.replaceChildren()
-      gsi.renderButton(containerRef.current, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: joinIntent ? 'signup_with' : 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'center',
-        width: Math.min(400, Math.max(200, containerRef.current.offsetWidth || 320)),
-      })
-    }
+    const handler = (credential: string, rawNonce: string) => onCredentialRef.current(credential, rawNonce)
+    deliverCredential = handler
 
     loadGsiScript()
-      .then(setup)
+      .then(() => initializeOnce(clientId, joinIntent))
+      .then(() => {
+        if (cancelled || !containerRef.current || !window.google?.accounts?.id) return
+        containerRef.current.replaceChildren()
+        // Rendering a button again (e.g. after a re-mount) is fine; only
+        // initialize is once per page.
+        window.google.accounts.id.renderButton(containerRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: joinIntent ? 'signup_with' : 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'center',
+          width: Math.min(400, Math.max(200, containerRef.current.offsetWidth || 320)),
+        })
+      })
       .catch(() => {
         if (!cancelled) onUnavailableRef.current()
       })
 
     return () => {
       cancelled = true
-      window.google?.accounts?.id?.cancel()
+      if (deliverCredential === handler) deliverCredential = null
     }
   }, [clientId, joinIntent])
 

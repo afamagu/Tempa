@@ -339,12 +339,17 @@ function SignInForm() {
 
   // Google Identity Services (lib/google-identity.ts) — Google returns an
   // ID token to THIS page, so the chooser names Tempa's own origin rather
-  // than the Supabase project host. Enabled only when the public client id
-  // is configured; otherwise (or if Google's script cannot load) the
-  // redirect flow below is used exactly as before.
+  // than the Supabase project host. Enabled when the public client id is
+  // configured. Once enabled there is deliberately NO fallback to the
+  // Supabase-hosted redirect flow: if Google's script cannot load, the
+  // member sees a short note and email sign-in stays available.
   const googleClientId = googleIdentityClientId()
+  const useGoogleIdentity = Boolean(googleClientId)
   const [gisUnavailable, setGisUnavailable] = useState(false)
-  const useGoogleIdentity = Boolean(googleClientId) && !gisUnavailable
+  // One submitted Google credential per page load (its nonce is then
+  // spent); a retry reloads the page for a fresh GIS initialize + nonce.
+  const googleSubmittedRef = useRef(false)
+  const [googleRetryNeeded, setGoogleRetryNeeded] = useState(false)
   // Supabase verifies Turnstile on the ID-token grant too (its CAPTCHA
   // protection covers it, unlike the redirect flow). If the member chose
   // Google before the check finished, the credential waits here and the
@@ -353,6 +358,8 @@ function SignInForm() {
   const [pendingGoogle, setPendingGoogle] = useState<{ credential: string; rawNonce: string } | null>(null)
 
   async function completeGoogleSignIn(credential: string, rawNonce: string, token: string | null) {
+    if (googleSubmittedRef.current) return
+    googleSubmittedRef.current = true
     setErrorMessage('')
     setPendingGoogle(null)
     setGoogleLoading(true)
@@ -362,6 +369,7 @@ function SignInForm() {
     turnstileRef.current?.reset()
     if (!result.ok) {
       setGoogleLoading(false)
+      setGoogleRetryNeeded(true)
       setErrorMessage(result.message)
       return
     }
@@ -371,6 +379,7 @@ function SignInForm() {
   }
 
   function handleGoogleCredential(credential: string, rawNonce: string) {
+    if (googleSubmittedRef.current) return
     if (turnstileEnabled && !captchaToken) {
       setPendingGoogle({ credential, rawNonce })
       setErrorMessage('Complete the security check below to finish signing in with Google.')
@@ -435,6 +444,18 @@ function SignInForm() {
         {useGoogleIdentity && googleClientId ? (
           googleLoading ? (
             <p className="py-2.5 text-center text-sm text-muted">Signing you in…</p>
+          ) : gisUnavailable ? (
+            <p className="py-2.5 text-center text-sm text-muted">
+              Google sign-in isn&apos;t available right now. You can still sign in with your email below.
+            </p>
+          ) : googleRetryNeeded ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="w-full rounded-md border border-foreground/15 px-3 py-2.5 text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
+            >
+              Try Google again
+            </button>
           ) : (
             <GoogleIdentityButton
               clientId={googleClientId}
