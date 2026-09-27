@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:security": "vitest run tests/security lib/safe-redirect proxy lib/safety app/api/safety app/api/csp-report app/admin/layout app/admin/route-structure lib/admin lib/reports lib/announcement-link-safety lib/__tests__/safety lib/__tests__/privateLettersNoSharing lib/__tests__/blockUserOverload lib/__tests__/accountLifecycle lib/__tests__/adultEligibility lib/__tests__/accountClosure next.config"
+    "test:security": "vitest run tests/security lib/safe-redirect lib/auth-confirm app/auth proxy lib/safety app/api/safety app/api/csp-report app/admin/layout app/admin/route-structure lib/admin lib/reports lib/announcement-link-safety lib/__tests__/safety lib/__tests__/privateLettersNoSharing lib/__tests__/blockUserOverload lib/__tests__/accountLifecycle lib/__tests__/adultEligibility lib/__tests__/accountClosure next.config"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

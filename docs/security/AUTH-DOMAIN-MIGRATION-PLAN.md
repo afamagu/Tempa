@@ -65,7 +65,7 @@ Moving the app's general client URL is a separate, later decision (Phase 2, see 
 
 **Sequencing:**
 - P-1 must be **deployed before step 8**.
-- It needs your approval to open a PR and deploy. It has **not** been implemented yet.
+- **Implemented** (approved 2026-09-27, "APPROVE MAGIC-LINK COMPATIBILITY FIX"): `SUPABASE_AUTH_CUSTOM_ORIGIN` in `lib/auth-confirm.ts`, with tests in `lib/auth-confirm.test.ts`. It is not yet deployed.
 
 **Alternative without code:** if you prefer, test magic links right after activation and roll back if they fail. That leaves a live outage window, so P-1 is recommended.
 
