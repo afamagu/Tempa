@@ -6,23 +6,27 @@ import {
   eligibleStorageObjects,
   finalizeAccountClosure,
   removeClosedAccountStorage,
-  tombstoneEmail,
 } from './account-deletion'
 
 const UID = '00000000-0000-4000-8000-000000000001'
 const MARK = '11111111-2222-4333-8444-555555555555.png'
 
-type Calls = { removes: { bucket: string; paths: string[] }[]; authUpdates: Record<string, unknown>[]; closureUpdates: Record<string, unknown>[]; closureFilters: [string, string][] }
+type Calls = { removes: { bucket: string; paths: string[] }[]; authUpdates: Record<string, unknown>[]; softDeletes: [string, boolean][]; rpcs: [string, unknown][]; closureUpdates: Record<string, unknown>[]; closureFilters: [string, string][] }
 
-function fakeService(opts: { enforcement?: string | null; reports?: number; cases?: number; failRemove?: boolean; failEmailUpdate?: boolean; failBan?: boolean; failClosureUpdate?: boolean } = {}) {
-  const calls: Calls = { removes: [], authUpdates: [], closureUpdates: [], closureFilters: [] }
+function fakeService(
+  opts: {
+    /** account_auth_state() for this closing member (default 'deleted'). */
+    state?: string | null
+    stateError?: boolean
+    failRemove?: boolean
+    failSoftDelete?: boolean
+    failBan?: boolean
+    failClosureUpdate?: boolean
+  } = {}
+) {
+  const calls: Calls = { removes: [], authUpdates: [], softDeletes: [], rpcs: [], closureUpdates: [], closureFilters: [] }
   const table = (name: string) => {
     const chain = {
-      select: () => chain,
-      eq: () => chain,
-      maybeSingle: async () => ({ data: opts.enforcement ? { status: opts.enforcement } : null, error: null }),
-      then: (resolve: (v: unknown) => void) =>
-        resolve({ count: name === 'reports' ? (opts.reports ?? 0) : (opts.cases ?? 0), error: null }),
       update: (values: Record<string, unknown>) => {
         calls.closureUpdates.push({ table: name, ...values })
         return {
@@ -42,6 +46,11 @@ function fakeService(opts: { enforcement?: string | null; reports?: number; case
   }
   const service = {
     from: table,
+    rpc: async (fn: string, args: unknown) => {
+      calls.rpcs.push([fn, args])
+      if (opts.stateError) return { data: null, error: { code: '42501', message: 'permission denied' } }
+      return { data: opts.state === undefined ? 'deleted' : opts.state, error: null }
+    },
     storage: {
       from: (bucket: string) => ({
         remove: async (paths: string[]) => {
@@ -54,9 +63,12 @@ function fakeService(opts: { enforcement?: string | null; reports?: number; case
       admin: {
         updateUserById: async (_id: string, attrs: Record<string, unknown>) => {
           calls.authUpdates.push(attrs)
-          if ('email' in attrs && opts.failEmailUpdate) return { error: { message: 'email rejected' } }
           if (opts.failBan) return { error: { message: 'auth down' } }
           return { error: null }
+        },
+        deleteUser: async (id: string, shouldSoftDelete: boolean) => {
+          calls.softDeletes.push([id, shouldSoftDelete])
+          return { error: opts.failSoftDelete ? { message: 'delete refused' } : null }
         },
       },
     },
@@ -98,29 +110,56 @@ describe('removeClosedAccountStorage — batched, server-side', () => {
   })
 })
 
-describe('disableClosedAuthUser — permanent Auth disablement', () => {
-  it('clean account: banned and email replaced with a non-deliverable tombstone', async () => {
+const BAN = { ban_duration: CLOSED_ACCOUNT_BAN_DURATION, user_metadata: { account_closed: true } }
+
+describe('disableClosedAuthUser — Tempa state decides, never Safety history', () => {
+  it('reads Tempa’s own state for this member only', async () => {
     const { service, calls } = fakeService()
-    expect(await disableClosedAuthUser(service, UID)).toBeNull()
-    expect(calls.authUpdates[0]).toMatchObject({ ban_duration: CLOSED_ACCOUNT_BAN_DURATION, email: tombstoneEmail(UID), email_confirm: true })
-    expect(tombstoneEmail(UID)).toMatch(/\.invalid$/)
+    await disableClosedAuthUser(service, UID)
+    expect(calls.rpcs).toEqual([['account_auth_state', { p_user_id: UID }]])
   })
 
-  it.each([
-    ['restricted', { enforcement: 'restricted' }],
-    ['reported', { reports: 1 }],
-    ['subject of a Safety case', { cases: 2 }],
-  ])('%s account: banned but email retained (ban-evasion defence)', async (_label, opts) => {
-    const { service, calls } = fakeService(opts)
-    expect(await disableClosedAuthUser(service, UID)).toBeNull()
-    expect(calls.authUpdates[0]).toMatchObject({ ban_duration: CLOSED_ACCOUNT_BAN_DURATION })
-    expect(calls.authUpdates[0]).not.toHaveProperty('email')
+  it('voluntary deletion: Auth identity SOFT-deleted (email/Google freed), never banned', async () => {
+    const { service, calls } = fakeService({ state: 'deleted' })
+    expect(await disableClosedAuthUser(service, UID)).toEqual({ mode: 'retired', error: null })
+    expect(calls.softDeletes).toEqual([[UID, true]])
+    expect(calls.authUpdates).toEqual([])
   })
 
-  it('if the email rewrite is refused, still bans (never leaves sign-in open)', async () => {
-    const { service, calls } = fakeService({ failEmailUpdate: true })
-    expect(await disableClosedAuthUser(service, UID)).toMatch(/^auth:email_not_scrubbed/)
-    expect(calls.authUpdates[1]).toEqual({ ban_duration: CLOSED_ACCOUNT_BAN_DURATION, user_metadata: { account_closed: true } })
+  it.each(['deleted_suspended', 'permanently_banned'])(
+    '%s: banned with identity kept — deletion cannot escape the sanction',
+    async (state) => {
+      const { service, calls } = fakeService({ state })
+      expect(await disableClosedAuthUser(service, UID)).toEqual({ mode: 'banned', error: null })
+      expect(calls.softDeletes).toEqual([])
+      expect(calls.authUpdates).toEqual([BAN])
+    }
+  )
+
+  it('the state cannot be read: fail safe — banned + identity kept, reported for follow-up', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { service, calls } = fakeService({ stateError: true })
+    expect(await disableClosedAuthUser(service, UID)).toEqual({ mode: 'banned', error: 'auth:state_unreadable' })
+    expect(calls.softDeletes).toEqual([])
+    expect(calls.authUpdates).toEqual([BAN])
+    vi.mocked(console.error).mockRestore()
+  })
+
+  it('soft delete refused: still banned (never leaves sign-in open) and reported', async () => {
+    const { service, calls } = fakeService({ failSoftDelete: true })
+    expect(await disableClosedAuthUser(service, UID)).toEqual({ mode: 'banned', error: 'auth:not_retired:delete refused' })
+    expect(calls.authUpdates).toEqual([BAN])
+  })
+
+  it('soft delete AND ban refused: reported as not disabled', async () => {
+    const { service } = fakeService({ failSoftDelete: true, failBan: true })
+    expect(await disableClosedAuthUser(service, UID)).toEqual({ mode: null, error: 'auth:auth down' })
+  })
+
+  it('never hard-deletes the Auth user (retained records keep their foreign keys)', async () => {
+    const { service, calls } = fakeService()
+    await disableClosedAuthUser(service, UID)
+    expect(calls.softDeletes.every(([, soft]) => soft === true)).toBe(true)
   })
 })
 
@@ -128,14 +167,14 @@ describe('finalizeAccountClosure — records progress for retry', () => {
   it('success stamps storage_cleaned_at and auth_disabled_at with no error', async () => {
     const { service, calls } = fakeService()
     const result = await finalizeAccountClosure(service, UID, { 'profile-marks': [MARK] })
-    expect(result).toEqual({ storageCleaned: true, authDisabled: true, error: null })
+    expect(result).toEqual({ storageCleaned: true, authDisabled: true, authMode: 'retired', error: null })
     expect(calls.closureUpdates[0]).toMatchObject({ last_error: null })
     expect(calls.closureUpdates[0]).toHaveProperty('storage_cleaned_at')
     expect(calls.closureUpdates[0]).toHaveProperty('auth_disabled_at')
   })
 
   it('an auth failure is recorded and reported — never a silent success', async () => {
-    const { service, calls } = fakeService({ failBan: true })
+    const { service, calls } = fakeService({ state: 'deleted_suspended', failBan: true })
     const result = await finalizeAccountClosure(service, UID, {})
     expect(result.authDisabled).toBe(false)
     expect(result.error).toMatch(/auth:/)
@@ -158,8 +197,8 @@ describe('finalizeAccountClosure — the progress record itself', () => {
     try {
       const { service, calls } = fakeService({ failClosureUpdate: true })
       const result = await finalizeAccountClosure(service, UID, {})
-      // the ban itself is unchanged and still reported as applied
-      expect(calls.authUpdates[0]).toMatchObject({ ban_duration: CLOSED_ACCOUNT_BAN_DURATION })
+      // the Auth retirement itself still happened and is reported
+      expect(calls.softDeletes).toEqual([[UID, true]])
       expect(result.authDisabled).toBe(true)
       expect(result.error).toBe('record:42501:permission denied for table account_closures')
       expect(log).toHaveBeenCalledWith('[account-deletion] closure progress not recorded', {
@@ -175,7 +214,7 @@ describe('finalizeAccountClosure — the progress record itself', () => {
   it('a refused update is appended to an earlier cleanup error', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      const { service } = fakeService({ failClosureUpdate: true, failBan: true })
+      const { service } = fakeService({ state: 'permanently_banned', failClosureUpdate: true, failBan: true })
       const result = await finalizeAccountClosure(service, UID, {})
       expect(result.error).toMatch(/^auth:auth down \| record:42501:/)
     } finally {

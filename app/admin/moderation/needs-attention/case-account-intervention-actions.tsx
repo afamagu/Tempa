@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { syncMemberAuthAccess } from '@/app/admin/auth-access-action'
 import { createClient } from '@/lib/supabase/client'
 import { applySafetyCaseIntervention, type CaseStatus, type CaseInterventionStatus } from '@/lib/admin-safety'
 import type { AccountStatus } from '@/lib/admin'
@@ -42,10 +43,14 @@ const ACTIONS: { status: CaseInterventionStatus; label: string }[] = [
  */
 export default function CaseAccountInterventionActions({
   caseId,
+  userId,
   caseStatus,
   accountStatus,
 }: {
   caseId: string
+  /** The case subject — only used to bring their Auth sign-in access in
+   * line with the status the database just saved. */
+  userId: string
   caseStatus: CaseStatus
   accountStatus: AccountStatus
 }) {
@@ -80,6 +85,16 @@ export default function CaseAccountInterventionActions({
           ? interventionError.message
           : 'Could not apply this action. Please try again.'
       )
+      return
+    }
+
+    // A permanent ban must also refuse sign-in (and lifting it restore
+    // sign-in). The status is already saved; if this step fails the
+    // database still blocks the account, so say so and allow a retry.
+    const { ok: authSynced } = await syncMemberAuthAccess(userId)
+    if (!authSynced) {
+      setError('Status saved, but sign-in access could not be updated yet. Apply the same status again to retry.')
+      router.refresh()
       return
     }
 

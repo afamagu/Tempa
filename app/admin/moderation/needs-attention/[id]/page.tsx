@@ -104,6 +104,7 @@ export default async function NeedsAttentionCaseDetailPage({ params }: { params:
         {ACTIVE_CASE_STATUSES.has(safetyCase.status) ? (
           <CaseAccountInterventionActions
             caseId={safetyCase.id}
+            userId={safetyCase.subjectUserId}
             caseStatus={safetyCase.status}
             accountStatus={safetyCase.subjectAccountStatus}
           />

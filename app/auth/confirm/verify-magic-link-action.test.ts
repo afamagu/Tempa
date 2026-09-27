@@ -258,3 +258,55 @@ describe('verifyMagicLink — defensive runtime validation for direct/bypassing 
     expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'tok-2', type: 'email' })
   })
 })
+
+// ------------------------------------------------------------------
+// Refused accounts (2026-10-25) — GoTrue's `user_banned` is resolved to
+// TEMPA's own state for the account the link belongs to. Three distinct
+// outcomes, none of them "link expired".
+// ------------------------------------------------------------------
+const mockServiceRpc = vi.fn()
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceClient: () => ({ rpc: mockServiceRpc }),
+}))
+
+describe('verifyMagicLink — a refused account is never shown as an expired link', () => {
+  const banned = { data: { user: null, session: null }, error: { message: 'User is banned', code: 'user_banned', name: 'AuthApiError' } }
+
+  beforeEach(() => {
+    mockServiceRpc.mockReset()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it.each([
+    ['deleted', '/sign-in?error=account_deleted'],
+    ['deleted_suspended', '/sign-in?error=account_deleted_unavailable'],
+    ['permanently_banned', '/sign-in?error=account_banned'],
+    ['suspended', '/sign-in?error=account_unavailable'],
+    ['none', '/sign-in?error=account_unavailable'],
+    [null, '/sign-in?error=account_unavailable'],
+  ])('Tempa state %s -> %s', async (state, path) => {
+    mockVerifyOtp.mockResolvedValue(banned)
+    mockServiceRpc.mockResolvedValue({ data: state, error: null })
+    expect(await redirectPath(verifyMagicLink('a'.repeat(56), 'email', null))).toBe(path)
+    expect(mockServiceRpc).toHaveBeenCalledWith('account_auth_state_for_email_link', { p_token_hash: 'a'.repeat(56) })
+  })
+
+  it('a failed state lookup stays neutral — never "expired", never "banned"', async () => {
+    mockVerifyOtp.mockResolvedValue(banned)
+    mockServiceRpc.mockResolvedValue({ data: null, error: { code: '42883', message: 'function does not exist' } })
+    expect(await redirectPath(verifyMagicLink('a'.repeat(56), 'email', null))).toBe('/sign-in?error=account_unavailable')
+  })
+
+  it('an ordinary expired link still says link_expired and never looks up account state', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: null }, error: { message: 'Email link is invalid or has expired', code: 'otp_expired', name: 'AuthApiError' } })
+    expect(await redirectPath(verifyMagicLink('a'.repeat(56), 'email', null))).toBe('/sign-in?error=link_expired')
+    expect(mockServiceRpc).not.toHaveBeenCalled()
+  })
+
+  it('never logs the token hash', async () => {
+    mockVerifyOtp.mockResolvedValue(banned)
+    mockServiceRpc.mockResolvedValue({ data: null, error: { code: 'x', message: 'down' } })
+    await redirectPath(verifyMagicLink('secret-token-hash-'.padEnd(56, 'z'), 'email', null))
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('secret-token-hash')
+  })
+})

@@ -2,10 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import SignInPage, { getAuthErrorMessage, getAuthErrorMessageFromFragment, getInitialErrorMessage } from './page'
+import SignInPage, { getAuthErrorMessage, getAuthErrorMessageFromFragment, getInitialErrorMessage, isRefusedAccountFragment } from './page'
 
+let currentSearchParams = new URLSearchParams()
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => currentSearchParams,
 }))
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -305,5 +306,61 @@ describe('SignInPage — auth-error fragment is read once and then scrubbed from
     const replaceStateIndex = body.indexOf('window.history.replaceState')
     expect(guardIndex).toBeGreaterThan(-1)
     expect(replaceStateIndex).toBeGreaterThan(guardIndex)
+  })
+})
+
+describe('SignInPage — deleted, permanently banned and expired are three different messages', () => {
+  function renderWith(query: string) {
+    currentSearchParams = new URLSearchParams(query)
+    try {
+      return renderToStaticMarkup(<SignInPage />)
+    } finally {
+      currentSearchParams = new URLSearchParams()
+    }
+  }
+
+  it('voluntarily deleted: the exact deleted-account message and a Create a new account button', () => {
+    const html = renderWith('error=account_deleted')
+    expect(html).toContain('This account was deleted and can’t be restored. If you’d like to return to Tempa, you’ll need to create a new account.')
+    expect(html).toContain('>Create a new account</button>')
+    expect(html).not.toMatch(/banned|no longer valid|expired/i)
+  })
+
+  it('permanently banned: the exact ban message, support contact, and NO create-account invitation anywhere', () => {
+    const html = renderWith('error=account_banned')
+    expect(html).toContain(
+      'This account has been permanently banned from Tempa and can no longer be used to sign in. If you believe this is a mistake, contact support@jointempa.com.'
+    )
+    expect(html).not.toContain('Create a new account')
+    expect(html).not.toContain('Create an account')
+    expect(html).not.toMatch(/no longer valid|expired/i)
+  })
+
+  it('deleted during a suspension: no invitation, not called banned', () => {
+    const html = renderWith('error=account_deleted_unavailable')
+    expect(html).toContain('This account was deleted and can’t be restored.')
+    expect(html).not.toContain('Create a new account')
+    expect(html).not.toContain('Create an account')
+    expect(html).not.toMatch(/banned/i)
+  })
+
+  it('unattributable refusal (e.g. Google): neutral, no invitation, not "banned", not "expired"', () => {
+    const html = renderWith('error=account_unavailable')
+    expect(html).toContain('This account can’t be used to sign in to Tempa.')
+    expect(html).not.toContain('Create an account')
+    expect(html).not.toMatch(/banned|expired|no longer valid/i)
+  })
+
+  it('an ordinary expired magic link still gets the normal link message and no refusal copy', () => {
+    const html = renderWith('error=link_expired')
+    expect(html).toContain('This sign-in link is no longer valid. Request a new link and use the newest email.')
+    expect(html).not.toMatch(/deleted|banned|can’t be used to sign in/)
+    expect(html).toContain('Create an account')
+  })
+
+  it('GoTrue fragment error_code=user_banned is recognised; otp_expired is not', () => {
+    expect(isRefusedAccountFragment('#error=access_denied&error_code=user_banned&error_description=User+is+banned')).toBe(true)
+    expect(isRefusedAccountFragment('#error=access_denied&error_code=otp_expired')).toBe(false)
+    expect(isRefusedAccountFragment('')).toBe(false)
   })
 })

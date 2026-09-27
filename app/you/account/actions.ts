@@ -61,6 +61,7 @@ export async function deleteMyAccount(confirmation: string, feedback?: ExitFeedb
   }
 
   let cleanupComplete = false
+  let mayReturn = true
   try {
     const result = await finalizeAccountClosure(
       createServiceClient(),
@@ -68,6 +69,9 @@ export async function deleteMyAccount(confirmation: string, feedback?: ExitFeedb
       (data as { storage_objects?: ClosureStorageObjects }).storage_objects
     )
     cleanupComplete = result.error === null
+    // A member deleted while suspended/banned keeps a banned identity and
+    // is never invited to create a new account.
+    mayReturn = result.authMode !== 'banned'
     if (result.error) console.error('[account-deletion] cleanup incomplete', { userId: user.id, error: result.error })
   } catch (err) {
     console.error('[account-deletion] cleanup failed', { userId: user.id, message: err instanceof Error ? err.message : String(err) })
@@ -80,7 +84,11 @@ export async function deleteMyAccount(confirmation: string, feedback?: ExitFeedb
     // everyone) and Auth-banned, so a leftover session cannot refresh.
   }
 
-  redirect(cleanupComplete ? '/account-deleted' : '/account-deleted?cleanup=pending')
+  const params = new URLSearchParams()
+  if (!cleanupComplete) params.set('cleanup', 'pending')
+  if (!mayReturn) params.set('return', 'unavailable')
+  const query = params.toString()
+  redirect(query ? `/account-deleted?${query}` : '/account-deleted')
 }
 
 /**
