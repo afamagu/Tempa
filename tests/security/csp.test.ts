@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { NextRequest } from 'next/server'
-import { buildCsp, generateNonce, originOf, CSP_REPORT_PATH, TURNSTILE_ORIGIN } from '@/lib/security/csp'
+import { buildCsp, generateNonce, originOf, CSP_REPORT_PATH, GOOGLE_GSI_ORIGIN, TURNSTILE_ORIGIN } from '@/lib/security/csp'
 import { summarizeCspReports, CSP_REPORT_MAX_BYTES } from '@/lib/security/csp-report'
 import { POST as cspReport } from '@/app/api/csp-report/route'
 import { proxy, config, isProtectedPath, PROTECTED_MATCHERS } from '@/proxy'
@@ -32,9 +32,13 @@ describe('buildCsp', () => {
     expect(prod['report-uri']).toEqual([CSP_REPORT_PATH])
   })
 
-  it('allows exactly Supabase and Turnstile beyond self for network, images and frames', () => {
-    expect(prod['connect-src']).toEqual(["'self'", 'https://x.supabase.co', TURNSTILE_ORIGIN])
-    expect(prod['frame-src']).toEqual([TURNSTILE_ORIGIN])
+  it('allows exactly Supabase, Turnstile and Google Identity Services beyond self for network, images and frames', () => {
+    expect(prod['connect-src']).toEqual(["'self'", 'https://x.supabase.co', TURNSTILE_ORIGIN, GOOGLE_GSI_ORIGIN])
+    expect(prod['frame-src']).toEqual([TURNSTILE_ORIGIN, GOOGLE_GSI_ORIGIN])
+    expect(prod['script-src']).toContain('https://accounts.google.com/gsi/client')
+    expect(prod['style-src']).toContain('https://accounts.google.com/gsi/style')
+    // GIS is scoped to its own path, never all of accounts.google.com.
+    expect(Object.values(prod).flat()).not.toContain('https://accounts.google.com')
     expect(prod['img-src']).toContain('https://x.supabase.co')
     expect(Object.values(prod).flat()).not.toContain('*')
   })
