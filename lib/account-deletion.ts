@@ -12,7 +12,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 //      Safety history requires keeping it to prevent ban evasion).
 // Both steps are idempotent. A failure never reopens anything: the
 // account is already closed in the database before either runs, and
-// the failure is recorded on account_closures for a retry.
+// the failure is recorded on account_closures for a retry. If that
+// record itself is refused, the refusal is logged and returned too.
 
 export const DELETE_CONFIRMATION = 'DELETE'
 
@@ -104,7 +105,7 @@ export async function finalizeAccountClosure(
   const error = [storageError, authError].filter(Boolean).join(' | ') || null
 
   const now = new Date().toISOString()
-  await service
+  const { error: recordError } = await service
     .from('account_closures')
     .update({
       ...(storageError ? {} : { storage_cleaned_at: now }),
@@ -112,6 +113,20 @@ export async function finalizeAccountClosure(
       last_error: error,
     })
     .eq('user_id', userId)
+  if (recordError) {
+    // Without this, a refused write (e.g. a missing service_role grant)
+    // left auth_disabled_at NULL on banned accounts with no trace.
+    console.error('[account-deletion] closure progress not recorded', {
+      userId,
+      code: recordError.code ?? null,
+      message: recordError.message,
+    })
+  }
+  const recordFailure = recordError ? `record:${recordError.code ?? 'unknown'}:${recordError.message}` : null
 
-  return { storageCleaned: storageError === null, authDisabled, error }
+  return {
+    storageCleaned: storageError === null,
+    authDisabled,
+    error: [error, recordFailure].filter(Boolean).join(' | ') || null,
+  }
 }
