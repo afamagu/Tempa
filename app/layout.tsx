@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import { Geist, Newsreader } from "next/font/google";
 import "./globals.css";
 import { BRAND_BACKGROUND, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
@@ -46,7 +47,11 @@ export const viewport: Viewport = {
   themeColor: BRAND_BACKGROUND,
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Pre-beta security F-02 — every page renders per request so Next.js can
+// attach the Content-Security-Policy nonce generated in proxy.ts to its
+// scripts (nonces cannot exist in prerendered HTML).
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
   return (
     <html
       lang="en"

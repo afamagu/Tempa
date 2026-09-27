@@ -47,7 +47,9 @@ import { sanitizeInternalPath } from '@/lib/safe-redirect'
  *   2. Its scheme is exactly `https:`.
  *   3. Its origin exactly matches the configured Supabase project's own
  *      origin (derived from NEXT_PUBLIC_SUPABASE_URL — never
- *      hardcoded, so this stays correct across environments/projects).
+ *      hardcoded, so this stays correct across environments/projects),
+ *      OR exactly SUPABASE_AUTH_CUSTOM_ORIGIN below — nothing else, no
+ *      other subdomain.
  *   4. Its path is EXACTLY GoTrue's own auth-verification endpoint
  *      (`/auth/v1/verify`) — an exact match, not a prefix check, so a
  *      hypothetical sibling endpoint that merely starts with the same
@@ -63,6 +65,17 @@ import { sanitizeInternalPath } from '@/lib/safe-redirect'
  * re-encoding, no truncation of its own query string) on success, or
  * `null` if any check fails. Never throws.
  */
+/**
+ * Tempa's Supabase Auth custom domain (auth.jointempa.com). Once it is
+ * activated, Supabase builds `{{ .ConfirmationURL }}` on this host while
+ * the app's own client URL (NEXT_PUBLIC_SUPABASE_URL) can stay on the
+ * project host — so a genuine magic link may arrive on either origin.
+ * Accepting it is safe before activation too: it is a domain Tempa owns,
+ * mapped to the same project, and the token is still verified server-
+ * side by verifyOtp through the configured client. Exact origin only.
+ */
+export const SUPABASE_AUTH_CUSTOM_ORIGIN = 'https://auth.jointempa.com'
+
 export function validateConfirmationUrl(
   raw: string | null | undefined,
   supabaseUrl: string | undefined
@@ -85,7 +98,7 @@ export function validateConfirmationUrl(
     return null
   }
 
-  if (url.origin !== expectedOrigin.origin) return null
+  if (url.origin !== expectedOrigin.origin && url.origin !== SUPABASE_AUTH_CUSTOM_ORIGIN) return null
 
   if (url.pathname !== '/auth/v1/verify') return null
 

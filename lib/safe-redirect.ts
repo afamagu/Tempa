@@ -14,6 +14,13 @@
  * real browser would treat it — a bare `path.startsWith('/')` check
  * alone does not see this. A protocol-relative `//evil.com` is caught
  * the same way (its own origin resolves away from the fixed base).
+ *
+ * Pre-beta security F-01 — the RESULT must also be safe to use as a bare
+ * path. Dot-segment normalisation can turn an input that resolves
+ * same-origin (`/.//evil.com`, `/%2e//evil.com`, `/a/..//evil.com`) into
+ * the pathname `//evil.com`; used directly in `redirect()` or an `href`
+ * that is protocol-relative, i.e. an external URL. Any normalised
+ * pathname starting with `//` or `/\` is therefore rejected.
  */
 
 const SAFE_BASE = 'https://tempa-internal.invalid'
@@ -30,6 +37,11 @@ export function sanitizeInternalPath(path: string | null | undefined): string | 
   }
 
   if (parsed.origin !== SAFE_BASE) return null
+  if (parsed.pathname.startsWith('//') || parsed.pathname.startsWith('/\\')) return null
 
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  const result = `${parsed.pathname}${parsed.search}${parsed.hash}`
+  // Defence in depth: the value callers receive must resolve same-origin
+  // when used exactly as given (bare path in a redirect or href).
+  if (new URL(result, SAFE_BASE).origin !== SAFE_BASE) return null
+  return result
 }

@@ -22,12 +22,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Safety 2 — Checkpoint 9 launch hardening. Deliberately NOT a
-  // Content-Security-Policy: a safe CSP here would need a nonce
-  // architecture threaded through every server-rendered page, and would
-  // otherwise risk breaking Supabase/Storage, Google OAuth, Cloudflare
-  // Turnstile, and external font/image origins without dedicated
-  // testing — tracked as backlog rather than destabilizing launch.
+  // Safety 2 — Checkpoint 9 launch hardening. The Content-Security-
+  // Policy is NOT set here: it needs a per-request nonce, so proxy.ts
+  // attaches it (pre-beta security F-02, lib/security/csp.ts).
   async headers() {
     return [
       {

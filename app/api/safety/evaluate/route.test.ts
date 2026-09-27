@@ -349,7 +349,7 @@ describe('POST /api/safety/evaluate', () => {
     expect(params).toMatchObject({ p_mutation_disposition: 'warn' })
   })
 
-  it('personal contact sharing in a PRIVATE letter is a warning_required evaluation with the contact copy key — and never on a public surface', async () => {
+  it('personal contact sharing in a PRIVATE letter is a warning_required evaluation with the contact copy key — and on a public surface the separate public-exposure copy key (pre-beta security F-12), still warn-only', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
     rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-contact', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
     const { POST } = await import('./route')
@@ -364,7 +364,13 @@ describe('POST /api/safety/evaluate', () => {
     expect(privParams.p_reason_codes).toContain('PERSONAL_CONTACT_SHARING')
 
     const pub = await POST(request({ surface: 'question_answer', questionId: RECIPIENT_ID, body: 'Message me on WhatsApp.' }))
-    expect(await pub.json()).toMatchObject({ disposition: 'allow' })
+    expect(await pub.json()).toMatchObject({ disposition: 'warning_required', warningCopyKey: 'safety_contact_sharing_public' })
+    const [, pubParams] = recordingRpc.mock.calls.filter(([name]) => name === 'record_safety_evaluation').at(-1)!
+    // Same weak advisory: never a block, never a solicitation code, never a case.
+    expect(pubParams).toMatchObject({ p_risk_band: 'weak', p_mutation_disposition: 'warn', p_escalate_case: false })
+
+    const plain = await POST(request({ surface: 'question_answer', questionId: RECIPIENT_ID, body: 'I think kindness is underrated.' }))
+    expect(await plain.json()).toMatchObject({ disposition: 'allow' })
   })
 
   it('a record_safety_evaluation failure on a signal-creating (warn) evaluation is a fail-closed HTTP 500 with a generic body, logged distinctly from an intervention', async () => {

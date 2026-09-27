@@ -4,6 +4,7 @@ import {
   extractMagicLinkVerificationParams,
   extractSanitizedNextFromConfirmationUrl,
   ALLOWED_MAGIC_LINK_OTP_TYPES,
+  SUPABASE_AUTH_CUSTOM_ORIGIN,
 } from './auth-confirm'
 
 const SUPABASE_URL = 'https://abcdefghijklmnop.supabase.co'
@@ -197,5 +198,90 @@ describe('extractSanitizedNextFromConfirmationUrl', () => {
     const url = `${SUPABASE_URL}/auth/v1/verify?token=tok&type=magiclink&redirect_to=not-a-url`
     expect(() => extractSanitizedNextFromConfirmationUrl(url)).not.toThrow()
     expect(extractSanitizedNextFromConfirmationUrl(url)).toBeNull()
+  })
+})
+
+// Magic-link compatibility with the auth.jointempa.com custom domain
+// (docs/security/AUTH-DOMAIN-MIGRATION-PLAN.md, P-1): after activation
+// Supabase issues ConfirmationURLs on the custom host while
+// NEXT_PUBLIC_SUPABASE_URL stays on the project host. Exactly two
+// origins are accepted — nothing else.
+describe('validateConfirmationUrl — auth.jointempa.com custom domain (P-1)', () => {
+  const PROJECT_URL = 'https://gmggfxynconujrzlbtio.supabase.co'
+  const QUERY = '/auth/v1/verify?token=pkce_abc123&type=magiclink&redirect_to=https%3A%2F%2Fjointempa.com%2Fauth%2Fcallback'
+
+  it('the custom origin constant is exactly https://auth.jointempa.com', () => {
+    expect(SUPABASE_AUTH_CUSTOM_ORIGIN).toBe('https://auth.jointempa.com')
+  })
+
+  it('keeps accepting magic links on the configured project host', () => {
+    const url = `${PROJECT_URL}${QUERY}`
+    expect(validateConfirmationUrl(url, PROJECT_URL)).toBe(url)
+  })
+
+  it('accepts magic links on https://auth.jointempa.com, with token parsing unchanged', () => {
+    const url = `https://auth.jointempa.com${QUERY}`
+    expect(validateConfirmationUrl(url, PROJECT_URL)).toBe(url)
+    expect(extractMagicLinkVerificationParams(url)).toEqual({ tokenHash: 'pkce_abc123', type: 'magiclink' })
+    expect(extractSanitizedNextFromConfirmationUrl(url)).toBe(extractSanitizedNextFromConfirmationUrl(`${PROJECT_URL}${QUERY}`))
+  })
+
+  it('still applies every other check on the custom host (https, exact path)', () => {
+    expect(validateConfirmationUrl(`http://auth.jointempa.com${QUERY}`, PROJECT_URL)).toBeNull()
+    expect(validateConfirmationUrl('https://auth.jointempa.com/auth/v1/verify-x?token=x', PROJECT_URL)).toBeNull()
+    expect(validateConfirmationUrl('https://auth.jointempa.com/auth/v1/verify/?token=x', PROJECT_URL)).toBeNull()
+    expect(validateConfirmationUrl('https://auth.jointempa.com/auth/v1/authorize?token=x', PROJECT_URL)).toBeNull()
+  })
+
+  it('rejects unrelated HTTPS origins, other Tempa subdomains and other Supabase projects', () => {
+    for (const origin of [
+      'https://evil.example',
+      'https://jointempa.com',
+      'https://www.jointempa.com',
+      'https://api.jointempa.com',
+      'https://auth2.jointempa.com',
+      'https://x.auth.jointempa.com',
+      'https://otherproject00000000.supabase.co',
+      'https://auth.jointempa.com:8443',
+    ]) {
+      expect(validateConfirmationUrl(`${origin}${QUERY}`, PROJECT_URL), origin).toBeNull()
+    }
+  })
+
+  it('rejects lookalike domains', () => {
+    for (const origin of [
+      'https://auth.jointempa.com.evil.example',
+      'https://auth-jointempa.com',
+      'https://auth.jointempa.co',
+      'https://authjointempa.com',
+      'https://auth.jointempa.com@evil.example',
+      'https://auth.xn--jintempa-v2a.com',
+      'https://auth.jointempa.com%2eevil.example',
+    ]) {
+      expect(validateConfirmationUrl(`${origin}${QUERY}`, PROJECT_URL), origin).toBeNull()
+    }
+  })
+
+  it('rejects protocol-relative and malformed values', () => {
+    for (const raw of [
+      `//auth.jointempa.com${QUERY}`,
+      `/auth/v1/verify?token=x`,
+      `auth.jointempa.com${QUERY}`,
+      'https://',
+      'https://auth.jointempa.com:99999/auth/v1/verify',
+      `javascript://auth.jointempa.com/%0aalert(1)`,
+    ]) {
+      expect(validateConfirmationUrl(raw, PROJECT_URL), raw).toBeNull()
+    }
+  })
+
+  it('a single-slash https:/ value is normalised by the WHATWG parser to the exact same origin — never to another host', () => {
+    expect(validateConfirmationUrl(`https:/auth.jointempa.com${QUERY}`, PROJECT_URL)).toBe(`https://auth.jointempa.com${QUERY}`)
+    expect(validateConfirmationUrl(`https:/evil.example${QUERY}`, PROJECT_URL)).toBeNull()
+  })
+
+  it('still fails closed when the configured Supabase URL is missing or malformed, even for the custom host', () => {
+    expect(validateConfirmationUrl(`https://auth.jointempa.com${QUERY}`, undefined)).toBeNull()
+    expect(validateConfirmationUrl(`https://auth.jointempa.com${QUERY}`, 'not-a-url')).toBeNull()
   })
 })

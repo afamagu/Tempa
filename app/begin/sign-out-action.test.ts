@@ -79,7 +79,7 @@ describe('signOutAndReturnToSignIn — a RETURNED error (not a thrown exception)
     consoleErrorSpy.mockRestore()
   })
 
-  it('never exposes the raw provider error text to the member — the redirect destination is always exactly /sign-in, never carrying an error query param or message', async () => {
+  it('never exposes the raw provider error text to the member — the redirect destination is always exactly /sign-in?signed_out=1 (the F-15 draft-clearing marker), never carrying an error query param or message', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockSignOut.mockResolvedValue({ error: { message: 'super secret internal detail', name: 'AuthApiError' } })
 
@@ -90,7 +90,7 @@ describe('signOutAndReturnToSignIn — a RETURNED error (not a thrown exception)
       caught = e
     }
 
-    expect((caught as Error).message).toBe('REDIRECT:/sign-in')
+    expect((caught as Error).message).toBe('REDIRECT:/sign-in?signed_out=1')
     expect((caught as Error).message).not.toContain('super secret internal detail')
     consoleErrorSpy.mockRestore()
   })

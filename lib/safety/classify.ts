@@ -355,6 +355,12 @@ export type ClassifyOptions = {
    * platform sharing produce a privacy-reminder interruption — on a
    * public surface it is neither expected nor this policy's concern. */
   privateLetter?: boolean
+  /** Pre-beta security F-12 — the text is being PUBLISHED (a Dispatch,
+   * Dispatch update, Dispatch reply or public Question answer). Contact
+   * details there are readable by every member, so the same allowed,
+   * never-a-strike 'warn' is raised as an exposure reminder (different
+   * copy — see copyKeyFor's surface argument). Never a block. */
+  publicSurface?: boolean
 }
 
 export function classifyContent(rawText: string, options: ClassifyOptions = {}): ClassificationResult {
@@ -409,7 +415,7 @@ export function classifyContent(rawText: string, options: ClassifyOptions = {}):
   // gets a privacy heads-up (they can still send) and the recipient later
   // sees a short note. Added AFTER compounding on purpose: it is a weak
   // band and must never inflate the compounding count or open a case.
-  if (options.privateLetter && detectContactSharing(rawText).kinds.length > 0) {
+  if ((options.privateLetter || options.publicSurface) && detectContactSharing(rawText).kinds.length > 0) {
     reasonCodeSet.add('PERSONAL_CONTACT_SHARING')
     band = maxRiskBand(band, 'weak')
     disposition = moreRestrictiveDisposition(disposition, 'warn')

@@ -39,5 +39,6 @@ export async function signOutAndReturnToSignIn() {
     console.error('[begin] sign-out failed', { message: error.message, name: error.name })
   }
 
-  redirect('/sign-in')
+  // F-15: the marker tells /sign-in to clear this browser's private drafts.
+  redirect('/sign-in?signed_out=1')
 }

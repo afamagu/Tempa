@@ -36,6 +36,14 @@ export const SAFETY_SURFACES = [
 ] as const
 export type SafetySurface = (typeof SAFETY_SURFACES)[number]
 
+/** The PRIVATE letter surfaces; every other surface publishes its text
+ * to other members (pre-beta security F-12). */
+export const PRIVATE_LETTER_SURFACES: readonly SafetySurface[] = ['first_letter', 'reply', 'write_anytime']
+
+export function isPrivateLetterSurface(surface: string): boolean {
+  return (PRIVATE_LETTER_SURFACES as readonly string[]).includes(surface)
+}
+
 /** The exact optional Postcard shape write_letter/reply_to_letter's own
  * p_postcard jsonb actually accepts (postcard_key/reveal_line/
  * back_message) — camelCase here at the TS boundary, translated to
@@ -541,12 +549,20 @@ export const GENERIC_WARNING_COPY_KEY = 'safety_warning_generic'
  *  - safety_warning_generic: everything else (warn or deny). */
 export const FINANCIAL_REQUEST_COPY_KEY = 'safety_financial_request'
 export const CONTACT_SHARING_COPY_KEY = 'safety_contact_sharing'
+/** Pre-beta security F-12 — the same contact-sharing advisory on a
+ * PUBLIC surface: an exposure reminder (everyone can read it), never a
+ * block, never a strike, and no recipient note. */
+export const PUBLIC_CONTACT_SHARING_COPY_KEY = 'safety_contact_sharing_public'
 
 /** Codes that never, on their own, make a warning about anything other
  * than contact sharing. */
 const CONTACT_ONLY_COMPANION_CODES: readonly ReasonCode[] = ['PERSONAL_CONTACT_SHARING', 'OFF_PLATFORM_ESCALATION']
 
-export function copyKeyFor(mutationDisposition: MutationDisposition, reasonCodes: readonly ReasonCode[] = []): string {
+export function copyKeyFor(
+  mutationDisposition: MutationDisposition,
+  reasonCodes: readonly ReasonCode[] = [],
+  surface?: SafetySurface
+): string {
   if (mutationDisposition === 'deny') {
     return reasonCodes.some((code) => (FINANCIAL_SOLICITATION_REASON_CODES as readonly ReasonCode[]).includes(code))
       ? FINANCIAL_REQUEST_COPY_KEY
@@ -557,7 +573,7 @@ export function copyKeyFor(mutationDisposition: MutationDisposition, reasonCodes
     reasonCodes.includes('PERSONAL_CONTACT_SHARING') &&
     reasonCodes.every((code) => CONTACT_ONLY_COMPANION_CODES.includes(code))
   ) {
-    return CONTACT_SHARING_COPY_KEY
+    return surface && !isPrivateLetterSurface(surface) ? PUBLIC_CONTACT_SHARING_COPY_KEY : CONTACT_SHARING_COPY_KEY
   }
   return GENERIC_WARNING_COPY_KEY
 }
@@ -571,13 +587,14 @@ export type EvaluateResponseBody = {
 export function buildEvaluateResponse(
   evaluationId: string,
   mutationDisposition: MutationDisposition,
-  reasonCodes: readonly ReasonCode[] = []
+  reasonCodes: readonly ReasonCode[] = [],
+  surface?: SafetySurface
 ): EvaluateResponseBody {
   const disposition = toMemberFacingDisposition(mutationDisposition)
   if (disposition === 'allow') {
     return { evaluationId, disposition }
   }
-  return { evaluationId, disposition, warningCopyKey: copyKeyFor(mutationDisposition, reasonCodes) }
+  return { evaluationId, disposition, warningCopyKey: copyKeyFor(mutationDisposition, reasonCodes, surface) }
 }
 
 // Re-exported only so route.ts has one import source for the request-
