@@ -186,7 +186,7 @@ function UnlockPanel({
         </button>
         <p className={helperTextClass}>
           You have {context.balance} Credits — {shortBy} more needed.
-          {context.checkoutEnabled ? '' : ' Getting Credits isn’t available yet.'}
+          {context.checkoutAvailable ? ' You can get more Credits from You → Get Credits.' : ' Getting Credits isn’t available yet.'}
         </p>
       </div>
     )

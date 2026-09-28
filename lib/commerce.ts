@@ -25,6 +25,11 @@ export type CommerceErrorCode =
   | 'reason_required'
   | 'adjustment_below_zero'
   | 'member_unavailable'
+  | 'checkout_disabled'
+  | 'market_unsupported'
+  | 'currency_unsupported'
+  | 'live_unavailable'
+  | 'too_many_orders'
 
 export type CommerceError = { code: CommerceErrorCode | 'unexpected'; message: string }
 
@@ -45,6 +50,11 @@ export const COMMERCE_ERROR_COPY: Record<CommerceErrorCode | 'unexpected', strin
   reason_required: 'Add a reason before saving.',
   adjustment_below_zero: 'A correction can’t take a balance below zero.',
   member_unavailable: 'That member can’t receive Credits.',
+  checkout_disabled: 'Getting Credits isn’t available yet.',
+  market_unsupported: 'Getting Credits isn’t available in your country yet.',
+  currency_unsupported: 'That currency isn’t available for you yet.',
+  live_unavailable: 'Getting Credits isn’t available yet.',
+  too_many_orders: 'You have several unfinished checkouts. Please try again later.',
   unexpected: 'Something went wrong. Please try again.',
 }
 
@@ -181,4 +191,55 @@ export async function getCreditHistory(
   }))
   const last = entries.at(-1)
   return { data: { entries, next: entries.length === limit && last ? { occurredAt: last.occurredAt, id: last.id } : null }, error: null }
+}
+
+// ---------- Commerce Checkpoint 5 — getting Credits (fiat checkout) ----------
+
+export type CreditPackOffer = { productId: string; title: string; credits: number; currency: string; amountMinor: number }
+
+export type CreditPackOffers =
+  | { available: true; mode: 'test' | 'live'; market: string; offers: CreditPackOffer[] }
+  | { available: false; reason: CommerceError; offers: [] }
+
+export async function getCreditPackOffers(supabase: SupabaseClient): Promise<CreditPackOffers> {
+  const { data, error } = await supabase.rpc('commerce_credit_pack_offers')
+  const raw = data as {
+    available?: boolean
+    reason?: string | null
+    mode?: 'test' | 'live'
+    market?: string
+    offers?: { product_id: string; title: string; credits: number | string; currency: string; amount_minor: number | string }[]
+  } | null
+  if (error || !raw) return { available: false, reason: commerceError(error), offers: [] }
+  if (!raw.available) return { available: false, reason: commerceError({ message: `COMMERCE:${raw.reason ?? 'checkout_disabled'}` }), offers: [] }
+  return {
+    available: true,
+    mode: raw.mode === 'live' ? 'live' : 'test',
+    market: raw.market ?? '',
+    offers: (raw.offers ?? []).map((o) => ({
+      productId: o.product_id,
+      title: o.title,
+      credits: Number(o.credits),
+      currency: o.currency,
+      amountMinor: Number(o.amount_minor),
+    })),
+  }
+}
+
+export type MyOrder = {
+  reference: string
+  state: 'created' | 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' | 'partially_refunded' | 'charged_back'
+  product: string
+  credits: number
+  currency: string
+  amountMinor: number
+  mode: 'test' | 'live' | null
+  balance: number
+}
+
+export async function getMyOrder(supabase: SupabaseClient, reference: string): Promise<MyOrder | null> {
+  const { data, error } = await supabase.rpc('commerce_my_order', { p_reference: reference })
+  const o = data as { reference: string; state: MyOrder['state']; product: string; credits: number | string; currency: string; amount_minor: number | string; mode: MyOrder['mode']; balance: number | string } | null
+  if (error || !o) return null
+  return { reference: o.reference, state: o.state, product: o.product, credits: Number(o.credits), currency: o.currency, amountMinor: Number(o.amount_minor), mode: o.mode, balance: Number(o.balance) }
 }
