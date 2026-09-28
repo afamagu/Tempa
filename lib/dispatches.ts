@@ -945,11 +945,15 @@ export function dispatchPostcardToBaseContent(version: DispatchPostcardVersion):
     frontImagePath: version.frontImagePath,
     postmarkText: version.postmarkText,
     footerText: version.footerText,
+    // A per-template layout property — carried through regardless of
+    // whether this frozen version also has Living Reveal motion, so a
+    // plain static Postcard's Reveal Line still lands where the
+    // template intends (see PostcardBaseContent's own doc comment).
+    revealLineAlignment: (version.revealLineAlignment as PostcardRevealLineAlignment | null) ?? undefined,
     living: version.motionSrc
       ? {
           motionSrc: version.motionSrc,
           durationSeconds: version.durationSeconds ?? undefined,
-          revealLineAlignment: (version.revealLineAlignment as PostcardRevealLineAlignment | null) ?? undefined,
         }
       : undefined,
   }

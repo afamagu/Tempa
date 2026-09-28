@@ -34,6 +34,9 @@ import {
   clearLetterPostcardDraft,
 } from '@/lib/letter-editor-draft'
 import { readLetterDraft, clearLetterDraft } from '@/lib/letter-draft'
+import { acknowledgeCorrespondenceFeature } from '@/lib/acknowledgements'
+import type { PhotoConsentStatus } from '@/lib/letters'
+import SourceLetterPanel from './source-letter-panel'
 import {
   getMyAccountStatus,
   accountBlockedMessage,
@@ -118,6 +121,8 @@ export default function MomentsComposer({
   senderPseudonym,
   cancelHref,
   showPostcardIntro = false,
+  viewerId,
+  sourceLetter,
 }: {
   correspondenceId: string
   /** Optional contextual ancestry only ("this letter was written in
@@ -173,6 +178,31 @@ export default function MomentsComposer({
    * teaches itself once, on whichever surface a member reaches it
    * first. */
   showPostcardIntro?: boolean
+  /** The current viewer's own id — needed only to key "View
+   * [pseudonym]'s letter"'s reading-position state (lib/reading-
+   * places.ts, via SourceLetterPanel/LetterReader), never sent
+   * anywhere else. */
+  viewerId: string
+  /** The EXACT incoming letter this draft is replying to (replyToId),
+   * already resolved and fetched by the caller — never re-derived here,
+   * and never "whichever letter is newest" (see write/page.tsx's own
+   * doc comment on why body/moments are fetched alongside replyToId
+   * itself). null for a fresh, non-reply Write Anytime letter, in which
+   * case "View [pseudonym]'s letter" simply doesn't render — nothing
+   * here ever fabricates a source letter to show one anyway. */
+  sourceLetter: {
+    id: string
+    body: string
+    moments: Moment[]
+    photoConsent?: {
+      correspondenceId: string
+      status: PhotoConsentStatus
+      requestedBy: string | null
+      resolvedBy: string | null
+      userId: string
+      otherPseudonym: string
+    }
+  } | null
 }) {
   const router = useRouter()
   // Two SEPARATE, statically-configured inputs rather than one shared
@@ -258,6 +288,20 @@ export default function MomentsComposer({
   const [pendingFirstPhoto, setPendingFirstPhoto] = useState<
     { index: number; imagePath: string; previewUrl: string } | null
   >(null)
+  // Repeated-first-photo-explanation fix — flips true the moment THIS
+  // member continues past the explanation for the FIRST photo (see
+  // confirmFirstPhoto), so a second/third/... photo added later in this
+  // SAME still-open composer never re-shows it, without waiting on a
+  // round trip to re-read the durable acknowledgement this same click
+  // also writes (acknowledgeCorrespondenceFeature) — that durable write
+  // is what makes it stay skipped after a refresh/close-reopen/sign-out
+  // (isFirstPhotoRequest itself already reflects it on the NEXT mount,
+  // via write/page.tsx's own hasAcknowledgedCorrespondenceFeature read).
+  const [firstPhotoNoticeDone, setFirstPhotoNoticeDone] = useState(false)
+  // "View [pseudonym]'s letter" — a read-only foreground layer over
+  // this draft (SourceLetterPanel), never a navigation; opening/closing
+  // it never touches the editor below.
+  const [showSourceLetter, setShowSourceLetter] = useState(false)
   // Letter-Level Postcards V1 (2026-09-13) — the whole letter's one
   // optional Postcard, held entirely SEPARATE from the editor document
   // (see lib/moments.ts's own LetterPostcardDraft doc comment). null
@@ -566,7 +610,13 @@ export default function MomentsComposer({
       if (uploadError) throw uploadError
 
       const previewUrl = URL.createObjectURL(blob)
-      if (isFirstPhotoRequest) {
+      // Correspondence-scoped, not photo-scoped: once firstPhotoNoticeDone
+      // is true (this member already continued past the explanation once
+      // for this correspondence — either earlier in this same draft, or
+      // durably in an earlier session, reflected in isFirstPhotoRequest
+      // itself), every later photo attaches immediately, exactly like
+      // canSendPhoto's own 'enabled' case.
+      if (isFirstPhotoRequest && !firstPhotoNoticeDone) {
         // Don't attach yet — the member sees the explanation screen
         // first and must actively continue before this becomes a real
         // Moment on the letter.
@@ -588,6 +638,18 @@ export default function MomentsComposer({
       previewUrl: pendingFirstPhoto.previewUrl,
     })
     setPendingFirstPhoto(null)
+    // Flip immediately (in-memory) so a photo added later in this SAME
+    // composer session never re-shows the explanation, and persist it
+    // durably (correspondence_feature_acknowledgements — the same
+    // primitive 'moments_available' already uses) so it stays skipped
+    // across a refresh, a close/reopen, or signing out and back in. A
+    // write failure here is logged but never blocks the photo itself —
+    // worst case, the explanation could reappear on a LATER visit,
+    // never that this photo fails to attach.
+    setFirstPhotoNoticeDone(true)
+    acknowledgeCorrespondenceFeature(createClient(), correspondenceId, 'first_photo_notice').then(({ error }) => {
+      if (error) console.error('[moments] first-photo acknowledgement failed', error)
+    })
   }
 
   function cancelFirstPhoto() {
@@ -1018,6 +1080,17 @@ export default function MomentsComposer({
         <Link href={cancelHref} className={secondaryButtonClass}>
           Back
         </Link>
+        {/* "View [pseudonym]'s letter" — only when this draft is
+            genuinely replying to a specific incoming letter (never
+            fabricated for a fresh Write Anytime letter). Opens
+            SourceLetterPanel as a sibling overlay above this same JSX
+            tree; the Tiptap editor below is never unmounted or touched
+            by opening/closing it, so nothing typed is ever lost. */}
+        {sourceLetter && (
+          <button type="button" onClick={() => setShowSourceLetter(true)} className={secondaryButtonClass}>
+            View {recipientPseudonym}&rsquo;s letter
+          </button>
+        )}
         {/* WRITE → PREVIEW → SEND: the composer's own primary/final
             action is now Preview, never a direct send — Send itself
             only ever happens from inside LetterPreview below, which
@@ -1063,6 +1136,18 @@ export default function MomentsComposer({
         sending={sending}
       />
       <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
+      {sourceLetter && (
+        <SourceLetterPanel
+          open={showSourceLetter}
+          onClose={() => setShowSourceLetter(false)}
+          pseudonym={recipientPseudonym}
+          viewerId={viewerId}
+          letterId={sourceLetter.id}
+          body={sourceLetter.body}
+          moments={sourceLetter.moments}
+          photoConsent={sourceLetter.photoConsent}
+        />
+      )}
     </div>
   )
 }

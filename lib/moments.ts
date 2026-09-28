@@ -79,15 +79,6 @@ export type PostcardLivingReveal = {
   /** The resting still shown before playback and returned to afterward.
    * Defaults to the postcard's own frontImagePath when omitted. */
   posterSrc?: string
-  /** Optional short sender-written line shown during roughly the latter
-   * half of playback. Product rule: at most 32 characters, ideally 3-7
-   * words — always passed through clampRevealLine before rendering, so
-   * a too-long value can never overflow the card regardless of what a
-   * future caller supplies. */
-  revealLine?: string
-  /** Where the Reveal Line sits on the card. Defaults to 'bottom-center'
-   * when a revealLine is given but no alignment is specified. */
-  revealLineAlignment?: PostcardRevealLineAlignment
   /** Informational only — the asset's intended length (normally 7-8s,
    * up to 10s for future assets). Used only to schedule the Reveal
    * Line's fade-in/out when the video's own real duration isn't known
@@ -134,6 +125,22 @@ export type PostcardData = {
   postmarkText: string
   date?: string
   footerText?: string
+  /** Optional short sender-written line shown on the FRONT of the card.
+   * Product rule: at most 32 characters, ideally 3-7 words — always
+   * passed through clampRevealLine before rendering, so a too-long
+   * value can never overflow the card regardless of what a future
+   * caller supplies. Independent of `living`: it appears on every
+   * Postcard that has one, whether or not that Postcard also has Living
+   * Reveal motion — see app/letters/postcard-object.tsx's own timing
+   * rules for the two cases (tied to video playback when motion will
+   * actually play; shown on its own once otherwise). Absent for every
+   * historical/catalog Postcard today (POSTCARD_CATALOG never sets it);
+   * present only for a letter/Dispatch-level Postcard whose sender
+   * wrote one (resolveLetterPostcardDisplay below). */
+  revealLine?: string
+  /** Where the Reveal Line sits on the card. Defaults to 'bottom-center'
+   * when a revealLine is given but no alignment is specified. */
+  revealLineAlignment?: PostcardRevealLineAlignment
   /** Absent for every historical/catalog Postcard today — see
    * PostcardLivingReveal's own doc comment. */
   living?: PostcardLivingReveal
@@ -300,6 +307,11 @@ export type PostcardBaseContent = {
   frontImagePath: string
   postmarkText: string
   footerText: string
+  /** Where THIS template wants its Reveal Line positioned — a per-
+   * template layout property, independent of whether the template also
+   * has Living Reveal motion (see PostcardData.revealLineAlignment's own
+   * doc comment). Defaults to 'bottom-center' when omitted. */
+  revealLineAlignment?: PostcardRevealLineAlignment
   living?: PostcardLivingReveal
 }
 
@@ -355,8 +367,6 @@ export function resolveLetterPostcardDisplay(
 ): PostcardData {
   const revealLine = overrides.revealLine.trim().length > 0 ? overrides.revealLine : undefined
 
-  const living = base.living ? { ...base.living, revealLine } : undefined
-
   return {
     title: base.title,
     location: base.location,
@@ -370,7 +380,14 @@ export function resolveLetterPostcardDisplay(
     // this function's own doc comment above.
     recipientLabel: undefined,
     recipientDetail: undefined,
-    living,
+    // Independent of `living` — see PostcardData.revealLine's own doc
+    // comment for why this must reach the front for EVERY Postcard, not
+    // only one with Living Reveal motion (the root cause of a real
+    // production defect: a sender's Reveal Line silently never appeared
+    // on a plain static Postcard, including one sent inside a Dispatch).
+    revealLine,
+    revealLineAlignment: base.revealLineAlignment,
+    living: base.living,
   }
 }
 

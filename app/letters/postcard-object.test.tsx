@@ -40,9 +40,12 @@ const STATIC_ESSAOUIRA: PostcardData = { ...ESSAOUIRA, living: undefined }
 function livingPostcard(overrides: Partial<NonNullable<PostcardData['living']>> = {}): PostcardData {
   return {
     ...STATIC_ESSAOUIRA,
+    // revealLine is a top-level PostcardData field now (independent of
+    // `living` — see lib/moments.ts's own doc comment), not part of the
+    // `living` override bag any more.
+    revealLine: 'Keep a little sea with you.',
     living: {
       motionSrc: '/postcards/living/essaouira-motion.mp4',
-      revealLine: 'Keep a little sea with you.',
       ...overrides,
     },
   }
@@ -192,7 +195,7 @@ describe('PostcardObject — D. Living Reveal data is supported end to end', () 
   })
 
   it('supports a typed alignment option for the Reveal Line, defaulting sensibly', () => {
-    expect(source).toContain("postcard.living?.revealLineAlignment ?? 'bottom-center'")
+    expect(source).toContain("postcard.revealLineAlignment ?? 'bottom-center'")
     // 'center' is a valid bare object-key identifier (no hyphen), so it
     // appears unquoted in source; every other alignment contains a
     // hyphen and must be quoted.
@@ -291,8 +294,44 @@ describe('PostcardObject — H. reduced motion still renders full sender content
     // initializer, not an effect+setTimeout) — this is what lets a
     // reduced-motion viewer see it immediately, with no fade-in delay.
     expect(source).toContain(
-      'useState(\n    () => reducedMotion && !hasRevealedBefore && Boolean(postcard.living?.revealLine)\n  )'
+      'useState(\n    () => reducedMotion && !hasRevealedBefore && Boolean(postcard.revealLine)\n  )'
     )
+  })
+})
+
+// Root-cause fix — a plain static Postcard (no Living Reveal motion at
+// all) still shows its own Reveal Line: the actual production defect,
+// confirmed in a real onboarding Dispatch, where a sender-written
+// Reveal Line was silently dropped for any Postcard whose template had
+// no motion asset. Independent of reduced motion (H, above), which
+// covers the "video would have played but the viewer's OS preference
+// suppressed it" case; this covers "there was never a video to play."
+describe('PostcardObject — static Postcards show their own Reveal Line', () => {
+  const staticWithRevealLine: PostcardData = { ...STATIC_ESSAOUIRA, revealLine: 'Wish you were here.' }
+
+  it('renders the Reveal Line text for a Postcard with no `living` at all', () => {
+    const html = renderToStaticMarkup(<PostcardObject postcard={staticWithRevealLine} />)
+    expect(html).toContain('Wish you were here.')
+  })
+
+  it('renders no <video>/hourglass/Replay for it — this is still an ordinary static Postcard, only the text appears', () => {
+    const html = renderToStaticMarkup(<PostcardObject postcard={staticWithRevealLine} />)
+    expect(html).not.toContain('<video')
+    expect(html).not.toContain('Replay')
+  })
+
+  it('a static Postcard with no revealLine at all renders no Reveal Line markup either', () => {
+    const html = renderToStaticMarkup(<PostcardObject postcard={STATIC_ESSAOUIRA} />)
+    expect(html).not.toContain('Wish you were here.')
+  })
+
+  it('schedules the appearance on its own timer (not tied to any video event), skipped entirely when there is no video AND no reduced motion is forced', () => {
+    expect(source).toContain('if (isPlayableLiving || reducedMotion || hasRevealedBefore || !postcard.revealLine) return')
+    expect(source).toContain('window.setTimeout(() => setRevealLineVisible(true), 500)')
+  })
+
+  it('a Living Postcard whose video will actually play is unaffected — the video path still owns its own timed schedule', () => {
+    expect(source).toContain('function scheduleRevealLine(durationSeconds: number) {\n    if (!postcard.revealLine) return')
   })
 })
 

@@ -37,8 +37,10 @@ import {
   getDispatchPostcard,
   isWithinDispatchEditWindow,
   canEditDispatch,
+  dispatchPostcardToBaseContent,
   type BoardFeedCursor,
   type BoardFeedItem,
+  type DispatchPostcardVersion,
 } from './dispatches'
 import { docToPlainBody, RICH_BODY_MARKER } from './letter-editor-doc'
 import { blockUser, unblockUser } from './blocking'
@@ -2985,5 +2987,45 @@ describe('getDispatchMoments — the full-detail reader path (Board Feed Foundat
     expect(result.map((m) => m.position)).toEqual([0, 1])
     expect(result[0].imageUrl).toContain('first.jpg')
     expect(result[1].imageUrl).toContain('second.jpg')
+  })
+})
+
+// Root-cause fix (production defect, confirmed in the onboarding
+// Dispatch) — a Postcard's front Reveal Line used to be silently
+// dropped for any Postcard whose frozen version had no motion asset,
+// because it lived only inside the `living` block. revealLineAlignment
+// is now a top-level PostcardBaseContent field, carried through
+// regardless of motionSrc, exactly mirroring letterPostcardToBaseContent
+// (lib/letters.test.ts) — the two surfaces share one coherent postcard
+// data model, never a Dispatch-only divergence.
+describe('dispatchPostcardToBaseContent', () => {
+  const livingVersion: DispatchPostcardVersion = {
+    title: 'Essaouira',
+    location: 'Atlantic Morocco',
+    collection: 'Atlantic Morocco Collection',
+    postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
+    footerText: 'Tempa Postcard · Atlantic Morocco Collection',
+    frontImagePath: '/postcards/essaouira.jpg',
+    motionSrc: '/postcards/essaouira-living.mp4',
+    durationSeconds: 10.04,
+    revealLineAlignment: 'top-center',
+  }
+
+  it('carries every frozen presentation field straight through, revealLineAlignment at the top level', () => {
+    const base = dispatchPostcardToBaseContent(livingVersion)
+    expect(base.title).toBe('Essaouira')
+    expect(base.frontImagePath).toBe('/postcards/essaouira.jpg')
+    expect(base.revealLineAlignment).toBe('top-center')
+    expect(base.living).toEqual({ motionSrc: '/postcards/essaouira-living.mp4', durationSeconds: 10.04 })
+  })
+
+  it('a version with no motion asset produces no living block, but still carries revealLineAlignment — this is the exact defect: the Reveal Line must still reach the front of a static Postcard in a Dispatch', () => {
+    const base = dispatchPostcardToBaseContent({
+      ...livingVersion,
+      motionSrc: null,
+      durationSeconds: null,
+    })
+    expect(base.living).toBeUndefined()
+    expect(base.revealLineAlignment).toBe('top-center')
   })
 })
