@@ -1,6 +1,6 @@
 -- ============================================================
 -- TEMPA — LETTER SEND IDEMPOTENCY — VERIFIER (READ-ONLY)
--- Pairs with docs/sql/2026-09-28-letter-send-idempotency.sql.
+-- Pairs with docs/sql/2026-10-05-write-letter-send-idempotency.sql.
 -- One SELECT; changes nothing. Expect exactly one row with
 -- overall_pass = true (every other column true as well).
 -- ============================================================

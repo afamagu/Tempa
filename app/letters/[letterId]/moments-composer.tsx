@@ -198,7 +198,7 @@ export default function MomentsComposer({
   const sentRef = useRef(false)
   // One id per letter, reused for every retry of it: write_letter_once
   // returns the already-sent letter instead of inserting a second copy
-  // (docs/sql/2026-09-28-letter-send-idempotency.sql).
+  // (docs/sql/2026-10-05-write-letter-send-idempotency.sql).
   const submissionIdRef = useRef<string | null>(null)
   const attemptsRef = useRef(0)
   const timingRef = useRef<{ start: number; ackAt?: number; report: LetterSendTiming } | null>(null)
@@ -740,7 +740,7 @@ export default function MomentsComposer({
         p_client_submission_id: submissionIdRef.current,
         ...letterArgs,
       })
-      // Deploy-order guard: until docs/sql/2026-09-28-letter-send-
+      // Deploy-order guard: until docs/sql/2026-10-05-write-letter-send-
       // idempotency.sql is applied, PostgREST reports the function as
       // missing (PGRST202) — fall back to the original, non-idempotent
       // write_letter rather than failing every send.

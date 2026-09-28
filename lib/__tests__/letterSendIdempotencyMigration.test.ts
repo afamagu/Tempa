@@ -3,14 +3,14 @@
 // migration tests.
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 const DIR = path.join(__dirname, '..', '..', 'docs', 'sql')
 const read = (f: string) => readFileSync(path.join(DIR, f), 'utf8').replace(/\r\n/g, '\n')
 const strip = (s: string) => s.replace(/--.*$/gm, '')
-const migration = read('2026-09-28-letter-send-idempotency.sql')
-const verify = read('2026-09-28-letter-send-idempotency-verify.sql')
+const migration = read('2026-10-05-write-letter-send-idempotency.sql')
+const verify = read('2026-10-05-write-letter-send-idempotency-verify.sql')
 const code = strip(migration)
 const fn = code.slice(code.indexOf('create or replace function public.write_letter_once('), code.indexOf('$function$;', code.indexOf('$function$')) )
 
@@ -21,6 +21,15 @@ describe('2026-09-28 letter send idempotency', () => {
     expect(migration).toContain('STATUS: NOT YET APPLIED')
     expect(code).not.toMatch(/create or replace function public\.write_letter\(/)
     expect(code).not.toMatch(/\bdrop\b/i)
+  })
+
+  it('sorts after the last migration that defines write_letter (clean replay in filename order)', () => {
+    const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort()
+    const definers = files.filter((f) => /create or replace function public\.write_letter\(/.test(read(f)))
+    const self = files.indexOf('2026-10-05-write-letter-send-idempotency.sql')
+    expect(self).toBeGreaterThan(-1)
+    expect(definers.length).toBeGreaterThan(0)
+    for (const f of definers) expect(files.indexOf(f)).toBeLessThan(self)
   })
 
   it('submissions table: one letter per (sender, submission id), RLS on, no member privilege', () => {
