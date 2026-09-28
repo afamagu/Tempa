@@ -76,6 +76,7 @@ import PostcardEditor from '@/app/letters/[letterId]/postcard-editor'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
 import DispatchPreview from './dispatch-preview'
+import { setDispatchWebPublic, WEB_PUBLIC_COPY } from '@/lib/public-dispatches'
 
 // Smoke-test contract completion checkpoint — 70 -> 140, mirroring
 // lib/dispatches.ts's own TITLE_MAX_CHARS and the server-side
@@ -123,6 +124,10 @@ export type ExistingDispatchForEditing = {
    * control; update_dispatch itself has no Postcard parameter at all, so
    * there is no ordinary path to mutate this even if a control existed. */
   postcard: DispatchPostcard | null
+  /** Public Dispatch web pages (2026-10-27) — the current "Public on the
+   * web" state, or null when it can't be read (the choice is then not
+   * offered). */
+  webPublic?: boolean | null
 }
 
 /**
@@ -197,6 +202,7 @@ export default function DispatchComposer({
   showComposerIntro = false,
   showPostcardIntro = false,
   publication,
+  webChoiceAvailable = false,
 }: {
   /** Official/Sponsored Dispatches (Admin Content only) — the SAME
    * composer, publishing through the staff-only publish_official_
@@ -225,6 +231,9 @@ export default function DispatchComposer({
    * activating the Postcard feature (the "Add a postcard" slot below),
    * never pre-emptively before that. */
   showPostcardIntro?: boolean
+  /** Public Dispatch web pages (2026-10-27) — server-resolved: whether
+   * the "Public on the web" choice can be offered at all. */
+  webChoiceAvailable?: boolean
 }) {
   const isEdit = mode === 'edit' && Boolean(existingDispatch)
   const official = publication ?? null
@@ -243,6 +252,13 @@ export default function DispatchComposer({
   const [topics, setTopics] = useState<string[]>(existingDispatch?.topics ?? [])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // "Published" = on the Board (members). "Public on the web" is a
+  // separate, explicit choice: off by default for members, on by default
+  // for official/Sponsored Dispatches (the database applies the same
+  // default). Applied after the Dispatch is saved, only when it differs.
+  const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : publication ? true : false
+  const showWebChoice = webChoiceAvailable && initialWebPublic !== null
+  const [webPublic, setWebPublic] = useState<boolean>(initialWebPublic === true)
   // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
   // pendingWarning/handleCancelWarning/handleAcknowledgeWarning split
   // exactly: null means no warning is pending (the ordinary case);
@@ -792,7 +808,12 @@ export default function DispatchComposer({
         clearDispatchPostcardDraft(draftKey)
       }
       setPendingWarning(null)
-      router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
+      const savedId = isEdit && existingDispatch ? existingDispatch.id : data.id
+      if (showWebChoice && webPublic !== initialWebPublic) {
+        const web = await setDispatchWebPublic(createClient(), savedId, webPublic)
+        if (!web.ok) console.error('[board] web visibility update failed')
+      }
+      router.push(`/board/${savedId}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error(isEdit ? '[board] edit threw' : '[board] publish threw', { message })
@@ -1037,6 +1058,22 @@ export default function DispatchComposer({
             rendered in edit mode (edit mode has its own direct "Save
             changes" with no Preview step). */}
         {!isEdit && previewBlockedReason && <p className={helperTextClass}>{previewBlockedReason}</p>}
+
+        {showWebChoice && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-foreground/12 p-3">
+            <input
+              type="checkbox"
+              checked={webPublic}
+              onChange={(e) => setWebPublic(e.target.checked)}
+              className="mt-1 h-4 w-4 accent-accent"
+              data-testid="web-public-choice"
+            />
+            <span className="space-y-0.5">
+              <span className="block text-[15px] font-medium text-foreground">{WEB_PUBLIC_COPY.label}</span>
+              <span className={`block ${helperTextClass}`}>{webPublic ? WEB_PUBLIC_COPY.on : WEB_PUBLIC_COPY.off}</span>
+            </span>
+          </label>
+        )}
 
         {error && <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p>}
 

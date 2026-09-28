@@ -1594,7 +1594,7 @@ type SharedDispatchPostcardJson = {
   sender_pseudonym_snapshot: string
 } | null
 
-type SharedDispatchRpcRow = {
+export type SharedDispatchRpcRow = {
   dispatch_id: string
   title: string
   body: string
@@ -1701,7 +1701,17 @@ export async function getSharedDispatch(
   })
 
   if (!row) return null
+  return mapSharedDispatchRow(supabase, row)
+}
 
+/**
+ * Turns one row of an anonymous Dispatch read (get_shared_dispatch, or
+ * get_public_dispatch for /dispatches/[slug]) into the reader's shape:
+ * photo paths → short-lived signed URLs (the storage policy decides
+ * whether anon may sign them), Postcard fields, public identity. Shared
+ * by both anonymous readers so there is one mapping, not two.
+ */
+export async function mapSharedDispatchRow(supabase: SupabaseClient, row: SharedDispatchRpcRow): Promise<SharedDispatch> {
   // Stage 2: the returned moments array's exact structural shape —
   // ids/positions/paths, so a wrong column, a null path, or an
   // unexpected type is visible directly.

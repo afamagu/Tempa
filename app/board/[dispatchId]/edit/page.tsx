@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { getDispatchWebState } from '@/lib/public-dispatches'
 import { createClient } from '@/lib/supabase/server'
 import {
   getDispatchById,
@@ -82,6 +83,8 @@ export default async function EditDispatchPage({
     supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
   ])
 
+  const webState = await getDispatchWebState(supabase, dispatch.id)
+
   return (
     <DispatchComposer
       authorId={user.id}
@@ -94,7 +97,9 @@ export default async function EditDispatchPage({
         topics: dispatch.topics,
         moments,
         postcard,
+        webPublic: webState?.webPublic ?? null,
       }}
+      webChoiceAvailable={webState !== null}
     />
   )
 }

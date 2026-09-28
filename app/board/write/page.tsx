@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { webChoiceAvailable } from '@/lib/public-dispatches'
 import { createClient } from '@/lib/supabase/server'
 import { hasCompletedGuide } from '@/lib/guide'
 import DispatchComposer from '../dispatch-composer'
@@ -31,6 +32,7 @@ export default async function WriteDispatchPage() {
       authorMarkUrl={profile?.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null}
       showComposerIntro={!composerIntroSeen}
       showPostcardIntro={!postcardIntroSeen}
+      webChoiceAvailable={await webChoiceAvailable(supabase)}
     />
   )
 }
