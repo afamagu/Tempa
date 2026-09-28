@@ -2,8 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Free-text key rather than an enum — matches GuideKey's reasoning — so
 // a future per-correspondence feature notice doesn't need a migration
-// to add. Only 'moments_available' exists today.
-export type CorrespondenceFeatureKey = 'moments_available'
+// to add. 'moments_available' is the original key; 'first_photo_notice'
+// (added for the repeated-first-photo-explanation fix) tracks whether
+// THIS member has already continued past the "Your first photo in this
+// correspondence" explanation for THIS correspondence — see
+// moments-composer.tsx's own use of it.
+export type CorrespondenceFeatureKey = 'moments_available' | 'first_photo_notice'
 
 /** Tracked per (user, correspondence EPISODE, feature) — deliberately
  * NOT the same table as guide_completions. A closed episode and any

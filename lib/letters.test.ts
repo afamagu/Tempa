@@ -991,14 +991,17 @@ describe('mapLetterPostcardRows', () => {
       expect(base.postmarkText).toBe('ESSAOUIRA\nATLANTIC MOROCCO')
       expect(base.footerText).toBe('Tempa Postcard · Atlantic Morocco Collection')
       expect(base.frontImagePath).toBe('/postcards/essaouira.jpg')
+      // revealLineAlignment is a top-level PostcardBaseContent field now
+      // (a per-template layout property, independent of `living` — see
+      // that type's own doc comment), not part of the `living` block.
       expect(base.living).toEqual({
         motionSrc: '/postcards/essaouira-living.mp4',
         durationSeconds: 10.04,
-        revealLineAlignment: 'top-center',
       })
+      expect(base.revealLineAlignment).toBe('top-center')
     })
 
-    it('a version with no motion asset produces no living block at all', () => {
+    it('a version with no motion asset produces no living block at all, but still carries revealLineAlignment at the top level', () => {
       const base = letterPostcardToBaseContent({
         title: 'A Static Card',
         location: 'Nowhere',
@@ -1008,9 +1011,10 @@ describe('mapLetterPostcardRows', () => {
         frontImagePath: '/postcards/static.jpg',
         motionSrc: null,
         durationSeconds: null,
-        revealLineAlignment: null,
+        revealLineAlignment: 'top-center',
       })
       expect(base.living).toBeUndefined()
+      expect(base.revealLineAlignment).toBe('top-center')
     })
   })
 })

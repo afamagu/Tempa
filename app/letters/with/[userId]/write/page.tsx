@@ -4,12 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import {
   getActiveEstablishedCorrespondenceWithUser,
   getFirstLockedPhotoLetterMoment,
+  getMomentsForLetters,
   isEstablishedForViewer,
   isMomentsQualifiedForViewer,
   isPhotoDecisionOutstandingForUser,
   resolveReplyToId,
 } from '@/lib/letters'
 import { hasCompletedGuide } from '@/lib/guide'
+import { hasAcknowledgedCorrespondenceFeature } from '@/lib/acknowledgements'
+import type { Moment } from '@/lib/moments'
 import { helperTextClass, secondaryButtonClass, systemHeadingClass } from '@/app/profile/ui'
 import MomentsComposer from '@/app/letters/[letterId]/moments-composer'
 
@@ -116,9 +119,17 @@ export default async function WriteToPersonPage({
 
   // A supplied replyTo must genuinely belong to THIS correspondence —
   // defense in depth only (resolveReplyToId); write_letter re-validates
-  // this itself, server-side, regardless of what the client sends.
+  // this itself, server-side, regardless of what the client sends. Body
+  // is fetched in this same round trip (not a second query) so "View
+  // [pseudonym]'s letter" (below) can open instantly with the exact
+  // source letter this draft is actually replying to — never merely the
+  // newest letter in the correspondence, and never re-derived later.
   const { data: replyToLetterRow } = replyTo
-    ? await supabase.from('letters_for_participant').select('id, correspondence_id').eq('id', replyTo).maybeSingle()
+    ? await supabase
+        .from('letters_for_participant')
+        .select('id, correspondence_id, body')
+        .eq('id', replyTo)
+        .maybeSingle()
     : { data: null }
   const replyToId = resolveReplyToId(
     replyTo,
@@ -128,7 +139,6 @@ export default async function WriteToPersonPage({
 
   const canSendPhoto =
     correspondence.photoConsentStatus === 'no_request' || correspondence.photoConsentStatus === 'enabled'
-  const isFirstPhotoRequest = correspondence.photoConsentStatus === 'no_request'
   const photoDecisionOutstandingForMe = isPhotoDecisionOutstandingForUser(
     {
       status: correspondence.photoConsentStatus,
@@ -138,23 +148,63 @@ export default async function WriteToPersonPage({
     user.id
   )
 
-  const [lockedElsewhere, momentsQualified, postcardIntroSeen] = await Promise.all([
-    getFirstLockedPhotoLetterMoment(supabase, correspondence.id),
-    // Distinct from establishedForViewer above: Write Anytime access to
-    // THIS composer only requires establishment; whether a Moment may
-    // actually be attached in it needs Letter 2 to have delivered too.
-    // See isMomentsQualifiedForViewer's own doc comment (lib/letters.ts).
-    isMomentsQualifiedForViewer(supabase, correspondence.id),
-    // Onboarding & First-Use checkpoint (Checkpoint 2B, Section A) — the
-    // SAME 'postcard' guide_completions key the Dispatch composer's own
-    // Postcard slot uses (app/board/write/page.tsx) — Postcard is one
-    // cross-surface feature, taught once on whichever surface a member
-    // reaches it first, never a second surface-specific guide key.
-    hasCompletedGuide(supabase, user.id, 'postcard'),
-  ])
+  const [lockedElsewhere, momentsQualified, postcardIntroSeen, firstPhotoNoticeAcknowledged, sourceLetterMomentsById] =
+    await Promise.all([
+      getFirstLockedPhotoLetterMoment(supabase, correspondence.id),
+      // Distinct from establishedForViewer above: Write Anytime access to
+      // THIS composer only requires establishment; whether a Moment may
+      // actually be attached in it needs Letter 2 to have delivered too.
+      // See isMomentsQualifiedForViewer's own doc comment (lib/letters.ts).
+      isMomentsQualifiedForViewer(supabase, correspondence.id),
+      // Onboarding & First-Use checkpoint (Checkpoint 2B, Section A) — the
+      // SAME 'postcard' guide_completions key the Dispatch composer's own
+      // Postcard slot uses (app/board/write/page.tsx) — Postcard is one
+      // cross-surface feature, taught once on whichever surface a member
+      // reaches it first, never a second surface-specific guide key.
+      hasCompletedGuide(supabase, user.id, 'postcard'),
+      // Repeated-first-photo-explanation fix — durable, per-(member,
+      // correspondence) state (correspondence_feature_acknowledgements,
+      // the SAME table/primitive 'moments_available' already uses),
+      // never client-side-only memory: this is what makes "already
+      // continued past the explanation" survive closing/reopening the
+      // composer, a refresh, or signing out and back in. Read here
+      // regardless of the CURRENT photoConsentStatus — a member who has
+      // already continued once must not see it again even if they
+      // haven't sent a photo yet (see isFirstPhotoRequest below).
+      hasAcknowledgedCorrespondenceFeature(supabase, user.id, correspondence.id, 'first_photo_notice'),
+      replyToId ? getMomentsForLetters(supabase, [replyToId]) : Promise.resolve(new Map<string, Moment[]>()),
+    ])
   const reviewPhotoHref = lockedElsewhere
     ? `/letters/${lockedElsewhere.letterId}#locked-photo-${lockedElsewhere.momentId}`
     : undefined
+
+  // The first-photo explanation is correspondence-scoped, not photo-
+  // scoped: once this member has continued past it once for this
+  // correspondence (whether in an earlier session or earlier in this
+  // same draft), every later photo attaches immediately — see
+  // moments-composer.tsx's own confirmFirstPhoto, which is what writes
+  // this acknowledgement the first time.
+  const isFirstPhotoRequest = correspondence.photoConsentStatus === 'no_request' && !firstPhotoNoticeAcknowledged
+
+  // "View [pseudonym]'s letter" — the exact source letter this draft is
+  // replying to, already fetched above; never fabricated when there is
+  // none (a fresh, non-reply Write Anytime letter has no source letter
+  // at all, and the composer simply omits the control).
+  const sourceLetter = replyToId
+    ? {
+        id: replyToId,
+        body: replyToLetterRow?.body ?? '',
+        moments: sourceLetterMomentsById.get(replyToId) ?? [],
+        photoConsent: {
+          correspondenceId: correspondence.id,
+          status: correspondence.photoConsentStatus,
+          requestedBy: correspondence.photoConsentRequestedBy,
+          resolvedBy: correspondence.photoConsentResolvedBy,
+          userId: user.id,
+          otherPseudonym: profile.pseudonym,
+        },
+      }
+    : null
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -184,6 +234,8 @@ export default async function WriteToPersonPage({
             senderPseudonym={myPseudonym}
             cancelHref={cancelHref}
             showPostcardIntro={!postcardIntroSeen}
+            viewerId={user.id}
+            sourceLetter={sourceLetter}
           />
         </div>
       </div>

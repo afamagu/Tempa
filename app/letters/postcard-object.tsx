@@ -384,6 +384,13 @@ export default function PostcardObject({
   // fallback below) and never played once its own asset has failed.
   const living = postcard.living && !videoFailed && !reducedMotion ? postcard.living : null
   const hasLivingContent = Boolean(postcard.living) && !videoFailed
+  // True only when a video will actually play for this viewer right
+  // now. False for a plain static Postcard, a reduced-motion viewer, or
+  // one whose motion asset failed — in every one of those cases the
+  // Reveal Line (if any) has no video to time itself against, so it
+  // appears on its own schedule instead (see the effect below and the
+  // lazy initializer's reduced-motion branch).
+  const isPlayableLiving = Boolean(living)
 
   // Deliberate-open auto-reveal: this component only ever mounts once
   // the member has actually tapped to open the Postcard (MomentDisplay
@@ -399,7 +406,7 @@ export default function PostcardObject({
   const [isRevealing, setIsRevealing] = useState(() => Boolean(living) && !hasRevealedBefore)
   const [isFirstReveal, setIsFirstReveal] = useState(!hasRevealedBefore)
   const [revealLineVisible, setRevealLineVisible] = useState(
-    () => reducedMotion && !hasRevealedBefore && Boolean(postcard.living?.revealLine)
+    () => reducedMotion && !hasRevealedBefore && Boolean(postcard.revealLine)
   )
   const revealTimeoutsRef = useRef<number[]>([])
 
@@ -415,8 +422,25 @@ export default function PostcardObject({
     return () => clearScheduledRevealLine()
   }, [])
 
+  // A plain static Postcard (no video ever plays for this viewer) still
+  // shows its own Reveal Line — the actual production defect this fixes:
+  // a sender's Reveal Line used to be silently dropped for any Postcard
+  // whose template had no Living Reveal motion, letters and Dispatches
+  // alike. Same "first open only, then stays" parity as the video path
+  // (isRevealing/isFirstReveal above), via a short fade-in rather than
+  // the video's own playback-timed schedule — the reduced-motion case is
+  // already handled, immediately and without a timer, by this state's
+  // own lazy initializer just above.
+  useEffect(() => {
+    if (isPlayableLiving || reducedMotion || hasRevealedBefore || !postcard.revealLine) return
+    const id = window.setTimeout(() => setRevealLineVisible(true), 500)
+    revealTimeoutsRef.current.push(id)
+    return () => window.clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function scheduleRevealLine(durationSeconds: number) {
-    if (!postcard.living?.revealLine) return
+    if (!postcard.revealLine) return
     clearScheduledRevealLine()
     // Approximately the latter half of playback, fading out again
     // before the end — informational duration metadata only; the
@@ -463,7 +487,7 @@ export default function PostcardObject({
   }
 
   const posterSrc = postcard.living?.posterSrc ?? postcard.frontImagePath
-  const revealLineAlignment = postcard.living?.revealLineAlignment ?? 'bottom-center'
+  const revealLineAlignment = postcard.revealLineAlignment ?? 'bottom-center'
 
   const frontVisual = (
     <FrontVisual
@@ -473,7 +497,7 @@ export default function PostcardObject({
       living={living}
       isFirstReveal={isFirstReveal}
       revealLineVisible={revealLineVisible}
-      revealLine={postcard.living?.revealLine}
+      revealLine={postcard.revealLine}
       revealLineAlignment={revealLineAlignment}
       reducedMotion={reducedMotion}
       onPlay={handlePlay}

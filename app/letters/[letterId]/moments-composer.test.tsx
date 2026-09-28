@@ -21,6 +21,8 @@ function renderComposer(overrides: Partial<Parameters<typeof MomentsComposer>[0]
       recipientPseudonym="Evening Quill"
       senderPseudonym="Morning Larch"
       cancelHref="/letters/with/recipient-1"
+      viewerId="viewer-1"
+      sourceLetter={null}
       {...overrides}
     />
   )
@@ -462,5 +464,93 @@ describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard 
 
   it('LetterPreview\'s own onSend still points at handleSend — Send only ever happens through the one Safety-gated path, never a second implementation', () => {
     expect(source).toContain('onSend={handleSend}')
+  })
+})
+
+// Repeated-first-photo-explanation fix — the explanation is
+// correspondence-scoped, not photo-scoped: once this member has
+// continued past it once for this correspondence, every later photo
+// (in this same session AND in a later one) attaches immediately. See
+// lib/acknowledgements.test.ts for the underlying persistence
+// primitive's own round-trip/idempotency coverage; this file checks the
+// composer actually wires it in, at both the in-session and the
+// durable layer, and never loses that gate on the SAME photo-flow path
+// isFirstPhotoRequest already used.
+describe('MomentsComposer — first-photo explanation is correspondence-scoped, not photo-scoped', () => {
+  it('the pending-photo gate additionally requires !firstPhotoNoticeDone — a second photo in the same session skips the explanation', () => {
+    expect(source).toContain('if (isFirstPhotoRequest && !firstPhotoNoticeDone) {')
+  })
+
+  it('confirming the first photo flips the in-session gate immediately, before any round trip resolves', () => {
+    const fnBody = source.slice(source.indexOf('function confirmFirstPhoto'), source.indexOf('function cancelFirstPhoto'))
+    expect(fnBody).toContain('setFirstPhotoNoticeDone(true)')
+    // The photo is inserted unconditionally on confirm — the durable
+    // write must never gate or delay attaching the photo itself.
+    expect(fnBody.indexOf('insertPhotoMomentAtParagraphEnd')).toBeLessThan(fnBody.indexOf('setFirstPhotoNoticeDone(true)'))
+  })
+
+  it('confirming the first photo durably persists the acknowledgement via the existing correspondence_feature_acknowledgements primitive — not a new one', () => {
+    const fnBody = source.slice(source.indexOf('function confirmFirstPhoto'), source.indexOf('function cancelFirstPhoto'))
+    expect(fnBody).toContain("acknowledgeCorrespondenceFeature(createClient(), correspondenceId, 'first_photo_notice')")
+  })
+
+  it('a write failure while persisting the acknowledgement is logged but never re-shows the pending-photo screen or blocks the photo', () => {
+    const fnBody = source.slice(source.indexOf('function confirmFirstPhoto'), source.indexOf('function cancelFirstPhoto'))
+    expect(fnBody).toContain('console.error')
+    // setPendingFirstPhoto(null) clears the just-inserted pending photo
+    // (the existing, unrelated reset) — a failure must never repopulate
+    // it with a new pending entry.
+    expect(fnBody).not.toMatch(/setPendingFirstPhoto\(\{/)
+  })
+
+  it('cancelling the first photo does NOT acknowledge — the explanation must still appear on the next attempt', () => {
+    const fnBody = source.slice(source.indexOf('function cancelFirstPhoto'), source.indexOf('// Letter-Level Postcards V1 — a SEPARATE payload'))
+    expect(fnBody).not.toContain('firstPhotoNoticeDone')
+    expect(fnBody).not.toContain('acknowledgeCorrespondenceFeature')
+  })
+
+  it('the durable read (write/page.tsx) is what makes isFirstPhotoRequest itself already false on the next mount — this composer never re-derives that from photoConsentStatus alone', () => {
+    expect(source).not.toContain("isFirstPhotoRequest: correspondence.photoConsentStatus === 'no_request'\n")
+  })
+})
+
+// "View [Name]'s letter" — reference panel for the exact source letter
+// this draft replies to (Part 2 of this pass). Placement: between Back
+// and Preview letter, per the product spec.
+describe('MomentsComposer — "View [pseudonym]\'s letter" reference panel', () => {
+  it('does not render the control when there is no source letter (a fresh, non-reply Write Anytime letter)', () => {
+    const html = renderComposer({ sourceLetter: null })
+    expect(html).not.toContain('&rsquo;s letter')
+  })
+
+  it('renders "View [pseudonym]\'s letter" between Back and Preview letter when a source letter is given', () => {
+    const html = renderComposer({
+      sourceLetter: { id: 'letter-1', body: 'Dear you,\n\nHello.', moments: [] },
+    })
+    const backIndex = html.indexOf('Back')
+    const viewIndex = html.indexOf('View Evening Quill')
+    const previewIndex = html.indexOf('Preview letter')
+    expect(backIndex).toBeGreaterThan(-1)
+    expect(viewIndex).toBeGreaterThan(backIndex)
+    expect(previewIndex).toBeGreaterThan(viewIndex)
+  })
+
+  it('never fabricates a source letter — the control is driven entirely by the caller-supplied prop, never derived from replyToId alone', () => {
+    const html = renderComposer({ replyToId: 'letter-1', sourceLetter: null })
+    expect(html).not.toContain('&rsquo;s letter')
+  })
+
+  it('mounts SourceLetterPanel with the exact source letter id/body/moments/photoConsent given, and the current viewer id — never re-fetched or re-derived here', () => {
+    expect(source).toContain('<SourceLetterPanel')
+    expect(source).toContain('letterId={sourceLetter.id}')
+    expect(source).toContain('body={sourceLetter.body}')
+    expect(source).toContain('moments={sourceLetter.moments}')
+    expect(source).toContain('viewerId={viewerId}')
+  })
+
+  it('opening/closing the panel is local state only — never a router navigation', () => {
+    expect(source).toContain('setShowSourceLetter(true)')
+    expect(source).toContain('open={showSourceLetter}')
+    expect(source).not.toMatch(/router\.push\([^)]*source/i)
   })
 })

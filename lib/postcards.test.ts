@@ -115,13 +115,15 @@ describe('postcardEntryToBaseContent', () => {
       frontImagePath: '/postcards/essaouira.jpg',
       postmarkText: 'ESSAOUIRA\nATLANTIC MOROCCO',
       footerText: 'Tempa Postcard · Atlantic Morocco Collection',
-      living: { motionSrc: '/postcards/essaouira-living.mp4', durationSeconds: 10.04, revealLineAlignment: undefined },
+      revealLineAlignment: undefined,
+      living: { motionSrc: '/postcards/essaouira-living.mp4', durationSeconds: 10.04 },
     })
   })
 
-  it('omits the living block entirely for a static (no motion asset) Postcard', () => {
-    const base = postcardEntryToBaseContent({ ...ESSAOUIRA, motionSrc: null, durationSeconds: null })
+  it('omits the living block entirely for a static (no motion asset) Postcard, but still carries revealLineAlignment at the top level', () => {
+    const base = postcardEntryToBaseContent({ ...ESSAOUIRA, motionSrc: null, durationSeconds: null, revealLineAlignment: 'top-center' })
     expect(base.living).toBeUndefined()
+    expect(base.revealLineAlignment).toBe('top-center')
   })
 })
 

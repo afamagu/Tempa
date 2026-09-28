@@ -160,7 +160,7 @@ describe('POSTCARD_CATALOG.essaouira — canonical Living Reveal wiring (Checkpo
   })
 
   it('carries no hard-coded production Reveal Line yet — that arrives with the future sent-letter Postcard data', () => {
-    expect(POSTCARD_CATALOG.essaouira.living?.revealLine).toBeUndefined()
+    expect(POSTCARD_CATALOG.essaouira.revealLine).toBeUndefined()
   })
 
   it('sets durationSeconds to the asset\'s actual measured length, not the old placeholder default', () => {
@@ -211,7 +211,7 @@ describe('POSTCARD_CATALOG.bangkokAfterRain — second canonical Living Postcard
 
   // F. No hard-coded Reveal Line.
   it('carries no hard-coded Reveal Line — that arrives with the future letter-level Postcard architecture', () => {
-    expect(POSTCARD_CATALOG.bangkokAfterRain.living?.revealLine).toBeUndefined()
+    expect(POSTCARD_CATALOG.bangkokAfterRain.revealLine).toBeUndefined()
   })
 
   it('uses the front image as its resting/poster state (posterSrc left unset)', () => {
@@ -281,7 +281,7 @@ describe('resolveLetterPostcardDisplay', () => {
   it('C. with blank overrides, resolves backMessage to an empty string', () => {
     const result = resolveLetterPostcardDisplay(essaouiraBase, blank)
     expect(result.backMessage).toBe('')
-    expect(result.living?.revealLine).toBeUndefined()
+    expect(result.revealLine).toBeUndefined()
   })
 
   it('D. never returns POSTCARD_BACK_PLACEHOLDER as backMessage data', () => {
@@ -320,14 +320,19 @@ describe('resolveLetterPostcardDisplay', () => {
     expect(result.recipientDetail).toBeUndefined()
   })
 
-  it('a sender-provided revealLine is merged onto base.living, without altering motionSrc/duration', () => {
+  it('a sender-provided revealLine is carried at the top level, independent of `living`, without altering motionSrc/duration', () => {
     const result = resolveLetterPostcardDisplay(essaouiraBase, {
       revealLine: 'Keep a little sea with you.',
       backMessage: '',
     })
-    expect(result.living?.revealLine).toBe('Keep a little sea with you.')
+    expect(result.revealLine).toBe('Keep a little sea with you.')
     expect(result.living?.motionSrc).toBe(essaouiraBase.living?.motionSrc)
     expect(result.living?.durationSeconds).toBe(essaouiraBase.living?.durationSeconds)
+    // living itself carries no revealLine of its own any more — it's a
+    // top-level PostcardData field now (see this function's own doc
+    // comment for why: it must reach the front for every Postcard, not
+    // only one with Living Reveal motion).
+    expect(result.living).not.toHaveProperty('revealLine')
   })
 
   it('never mutates its base argument', () => {
@@ -336,12 +341,33 @@ describe('resolveLetterPostcardDisplay', () => {
     expect(essaouiraBase).toEqual(before)
   })
 
-  it('base content with no living data (a plain static Postcard) simply carries no living block, revealLine ignored', () => {
+  // Root-cause fix (production defect): a sender-provided Reveal Line
+  // used to be silently dropped whenever the chosen Postcard had no
+  // Living Reveal motion — the postcard-editor's own Reveal Line field
+  // never checked that, so a member could write one that then never
+  // appeared anywhere, on a letter or a Dispatch alike (confirmed in the
+  // onboarding Dispatch). The Reveal Line is a top-level PostcardData
+  // field, independent of `living`: it survives for a plain static
+  // Postcard exactly like it does for a Living one; `living` itself
+  // still carries no block at all when the base has none.
+  it('base content with no living data (a plain static Postcard) still carries the Reveal Line — only the living block itself is absent', () => {
     const result = resolveLetterPostcardDisplay(staticBase, {
-      revealLine: 'A line that would be ignored if this card had no living data',
+      revealLine: 'A line that must still appear on a plain static Postcard',
       backMessage: '',
     })
     expect(result.living).toBeUndefined()
+    expect(result.revealLine).toBe('A line that must still appear on a plain static Postcard')
+  })
+
+  it('a blank revealLine resolves to undefined for a static Postcard too, exactly like a Living one', () => {
+    const result = resolveLetterPostcardDisplay(staticBase, blank)
+    expect(result.revealLine).toBeUndefined()
+  })
+
+  it("carries the base template's own revealLineAlignment through, independent of living", () => {
+    const aligned: PostcardBaseContent = { ...staticBase, revealLineAlignment: 'top-left' }
+    const result = resolveLetterPostcardDisplay(aligned, { revealLine: 'Hi', backMessage: '' })
+    expect(result.revealLineAlignment).toBe('top-left')
   })
 
   it('carries title/location/collection/postmarkText/footerText straight through from base, untouched', () => {

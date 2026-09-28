@@ -138,11 +138,15 @@ export function postcardEntryToBaseContent(entry: PostcardCatalogEntry): Postcar
     frontImagePath: entry.frontImagePath,
     postmarkText: entry.postmarkText,
     footerText: entry.footerText,
+    // A per-template layout property — carried through regardless of
+    // whether this template also has Living Reveal motion, so a plain
+    // static Postcard's Reveal Line still lands where the template
+    // intends, not just the default.
+    revealLineAlignment: entry.revealLineAlignment ?? undefined,
     living: entry.motionSrc
       ? {
           motionSrc: entry.motionSrc,
           durationSeconds: entry.durationSeconds ?? undefined,
-          revealLineAlignment: entry.revealLineAlignment ?? undefined,
         }
       : undefined,
   }
