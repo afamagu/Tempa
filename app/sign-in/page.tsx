@@ -369,6 +369,11 @@ function SignInForm() {
     turnstileRef.current?.reset()
     if (!result.ok) {
       setGoogleLoading(false)
+      if (result.refused) {
+        // Same neutral refusal /auth/callback gives a refused Google identity.
+        setRefusal(signInRefusal('account_unavailable'))
+        return
+      }
       setGoogleRetryNeeded(true)
       setErrorMessage(result.message)
       return

@@ -41,7 +41,11 @@ export async function createGoogleNonce(): Promise<GoogleNonce> {
 
 export type GoogleSignInResult =
   | { ok: true }
-  | { ok: false; message: string }
+  /** `refused`: Supabase refused the identity itself (user_banned). Like
+   * the redirect flow's /auth/callback, this maps to the neutral
+   * `account_unavailable` refusal (lib/sign-in-refusals.ts) — never an
+   * "expired" or generic retry message. */
+  | { ok: false; message: string; refused?: true }
 
 export const GOOGLE_SIGN_IN_FAILED = 'Could not sign in with Google. Please try again.'
 export const GOOGLE_CAPTCHA_FAILED = 'Please complete the security check again, then continue with Google.'
@@ -62,6 +66,7 @@ export async function signInWithGoogleIdToken(
       nonce: rawNonce,
       ...(captchaToken ? { options: { captchaToken } } : {}),
     })
+    if (error?.code === 'user_banned') return { ok: false, message: GOOGLE_SIGN_IN_FAILED, refused: true }
     if (error || !data.session) {
       const captcha = error?.code === 'captcha_failed' || /captcha/i.test(error?.message ?? '')
       return { ok: false, message: captcha ? GOOGLE_CAPTCHA_FAILED : GOOGLE_SIGN_IN_FAILED }

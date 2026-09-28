@@ -70,9 +70,15 @@ describe('session establishment (signInWithGoogleIdToken)', () => {
     expect(signInWithIdToken).not.toHaveBeenCalled()
   })
 
-  it('maps errors to member copy — banned, bad nonce, network — never echoing the provider message or token', async () => {
+  it('a refused identity (user_banned) is flagged for the neutral account_unavailable refusal, like /auth/callback', async () => {
+    const { client } = fakeSupabase({ data: { session: null, user: null }, error: { code: 'user_banned', message: 'User is banned' } })
+    expect(await signInWithGoogleIdToken(client, { credential: 'jwt', rawNonce: 'n', captchaToken: null })).toEqual({ ok: false, message: GOOGLE_SIGN_IN_FAILED, refused: true })
+    const page = read('app/sign-in/page.tsx')
+    expect(page).toMatch(/if \(result\.refused\) \{[\s\S]{0,160}setRefusal\(signInRefusal\('account_unavailable'\)\)/)
+  })
+
+  it('maps other errors to member copy — bad nonce, missing session, network — never echoing the provider message or token', async () => {
     for (const result of [
-      { data: { session: null, user: null }, error: { code: 'user_banned', message: 'User is banned' } },
       { data: { session: null, user: null }, error: { code: 'bad_jwt', message: 'Passed nonce and nonce in id_token should either both exist or not.' } },
       { data: { session: null, user: { id: 'u' } }, error: null },
     ]) {
