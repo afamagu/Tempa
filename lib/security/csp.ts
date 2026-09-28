@@ -18,6 +18,9 @@
 
 export const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com'
 export const CSP_REPORT_PATH = '/api/csp-report'
+/** Google Identity Services (sign-in button) — the sources Google
+ * documents for GIS under a CSP. */
+export const GOOGLE_GSI_ORIGIN = 'https://accounts.google.com/gsi/'
 
 export function originOf(url: string | undefined | null): string | null {
   if (!url) return null
@@ -50,14 +53,14 @@ export function buildCsp({ nonce, supabaseOrigins, isDev, enforce = false }: Csp
   const supabase = [...new Set(supabaseOrigins.filter(Boolean))]
   const directives: [string, string[]][] = [
     ['default-src', ["'self'"]],
-    ['script-src', ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", TURNSTILE_ORIGIN, ...(isDev ? ["'unsafe-eval'"] : [])]],
-    ['style-src', ["'self'", `'nonce-${nonce}'`]],
+    ['script-src', ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", TURNSTILE_ORIGIN, `${GOOGLE_GSI_ORIGIN}client`, ...(isDev ? ["'unsafe-eval'"] : [])]],
+    ['style-src', ["'self'", `'nonce-${nonce}'`, `${GOOGLE_GSI_ORIGIN}style`]],
     ['style-src-attr', ["'unsafe-inline'"]],
     ['img-src', ["'self'", 'data:', 'blob:', ...supabase]],
     ['media-src', ["'self'", 'blob:', ...supabase]],
     ['font-src', ["'self'"]],
-    ['connect-src', ["'self'", ...supabase, TURNSTILE_ORIGIN, ...(isDev ? ['ws:'] : [])]],
-    ['frame-src', [TURNSTILE_ORIGIN]],
+    ['connect-src', ["'self'", ...supabase, TURNSTILE_ORIGIN, GOOGLE_GSI_ORIGIN, ...(isDev ? ['ws:'] : [])]],
+    ['frame-src', [TURNSTILE_ORIGIN, GOOGLE_GSI_ORIGIN]],
     ['worker-src', ["'self'", 'blob:']],
     ['object-src', ["'none'"]],
     ['base-uri', ["'self'"]],

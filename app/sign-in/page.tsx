@@ -9,6 +9,9 @@ import { CREATE_NEW_ACCOUNT_LABEL, signInRefusal } from '@/lib/sign-in-refusals'
 import ClearLocalDrafts from '@/app/clear-local-drafts'
 import TempaEmblem from '@/app/tempa-emblem'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
+import GoogleIdentityButton from './google-identity-button'
+import { googleSignInDestination } from './google-destination-action'
+import { googleIdentityClientId, signInWithGoogleIdToken } from '@/lib/google-identity'
 
 /**
  * Board live-test corrections (2026-09-10): an external Dispatch's
@@ -334,6 +337,70 @@ function SignInForm() {
     setCaptchaToken(null)
   }
 
+  // Google Identity Services (lib/google-identity.ts) — Google returns an
+  // ID token to THIS page, so the chooser names Tempa's own origin rather
+  // than the Supabase project host. Enabled when the public client id is
+  // configured. Once enabled there is deliberately NO fallback to the
+  // Supabase-hosted redirect flow: if Google's script cannot load, the
+  // member sees a short note and email sign-in stays available.
+  const googleClientId = googleIdentityClientId()
+  const useGoogleIdentity = Boolean(googleClientId)
+  const [gisUnavailable, setGisUnavailable] = useState(false)
+  // One submitted Google credential per page load (its nonce is then
+  // spent); a retry reloads the page for a fresh GIS initialize + nonce.
+  const googleSubmittedRef = useRef(false)
+  const [googleRetryNeeded, setGoogleRetryNeeded] = useState(false)
+  // Supabase verifies Turnstile on the ID-token grant too (its CAPTCHA
+  // protection covers it, unlike the redirect flow). If the member chose
+  // Google before the check finished, the credential waits here and the
+  // sign-in completes as soon as a token arrives — the Google button is
+  // never disabled by Turnstile.
+  const [pendingGoogle, setPendingGoogle] = useState<{ credential: string; rawNonce: string } | null>(null)
+
+  async function completeGoogleSignIn(credential: string, rawNonce: string, token: string | null) {
+    if (googleSubmittedRef.current) return
+    googleSubmittedRef.current = true
+    setErrorMessage('')
+    setPendingGoogle(null)
+    setGoogleLoading(true)
+    const result = await signInWithGoogleIdToken(createClient(), { credential, rawNonce, captchaToken: token })
+    // A Turnstile token is single-use whatever the outcome.
+    setCaptchaToken(null)
+    turnstileRef.current?.reset()
+    if (!result.ok) {
+      setGoogleLoading(false)
+      if (result.refused) {
+        // Same neutral refusal /auth/callback gives a refused Google identity.
+        setRefusal(signInRefusal('account_unavailable'))
+        return
+      }
+      setGoogleRetryNeeded(true)
+      setErrorMessage(result.message)
+      return
+    }
+    const destination = await googleSignInDestination(nextPath).catch(() => '/home')
+    // Full navigation so every server component reads the new session.
+    window.location.assign(destination)
+  }
+
+  function handleGoogleCredential(credential: string, rawNonce: string) {
+    if (googleSubmittedRef.current) return
+    if (turnstileEnabled && !captchaToken) {
+      setPendingGoogle({ credential, rawNonce })
+      setErrorMessage('Complete the security check below to finish signing in with Google.')
+      return
+    }
+    void completeGoogleSignIn(credential, rawNonce, captchaToken)
+  }
+
+  useEffect(() => {
+    if (pendingGoogle && captchaToken) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- completes a sign-in the member already chose, once Turnstile delivers its token
+      void completeGoogleSignIn(pendingGoogle.credential, pendingGoogle.rawNonce, captchaToken)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGoogle, captchaToken])
+
   async function handleGoogleSignIn() {
     setErrorMessage('')
     setGoogleLoading(true)
@@ -379,14 +446,39 @@ function SignInForm() {
           {joinIntent ? 'Create your Tempa account' : 'Sign in'}
         </h1>
 
-        <button
-          type="button"
-          onClick={handleGoogleSignIn}
-          disabled={googleLoading}
-          className="w-full rounded-md bg-accent text-accent-foreground px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
-        >
-          {googleLoading ? 'Redirecting…' : 'Continue with Google'}
-        </button>
+        {useGoogleIdentity && googleClientId ? (
+          googleLoading ? (
+            <p className="py-2.5 text-center text-sm text-muted">Signing you in…</p>
+          ) : gisUnavailable ? (
+            <p className="py-2.5 text-center text-sm text-muted">
+              Google sign-in isn&apos;t available right now. You can still sign in with your email below.
+            </p>
+          ) : googleRetryNeeded ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="w-full rounded-md border border-foreground/15 px-3 py-2.5 text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
+            >
+              Try Google again
+            </button>
+          ) : (
+            <GoogleIdentityButton
+              clientId={googleClientId}
+              joinIntent={joinIntent}
+              onCredential={handleGoogleCredential}
+              onUnavailable={() => setGisUnavailable(true)}
+            />
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+            className="w-full rounded-md bg-accent text-accent-foreground px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
+          >
+            {googleLoading ? 'Redirecting…' : 'Continue with Google'}
+          </button>
+        )}
 
         <div className="flex items-center gap-3 text-xs text-muted">
           <div className="h-px flex-1 bg-foreground/10" />
