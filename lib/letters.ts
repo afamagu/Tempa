@@ -815,6 +815,18 @@ export function resolveLetterActionState(
 }
 
 /**
+ * Pure: the letter the floating quill on a single-letter page is a reply
+ * to — only a letter the viewer RECEIVED. Pressing the quill while
+ * reading an incoming letter means "reply to this letter", so the
+ * composer gets `?replyTo=` (and "View [name]'s letter"). The viewer's
+ * own sent letter is never treated as the source they are replying to:
+ * the quill there stays a plain Write Anytime.
+ */
+export function quillReplyToId(target: { id: string; recipientId: string }, viewerId: string): string | null {
+  return target.recipientId === viewerId ? target.id : null
+}
+
+/**
  * Pure: resolves a `?replyTo=` query param into a real reply_to_id for
  * the write composer — only when it actually names a letter belonging
  * to THIS correspondence. Defense in depth only (write_letter

@@ -13,6 +13,7 @@ import {
   getWaitingLetterCount,
   getCorrespondence,
   resolveLetterDirection,
+  quillReplyToId,
   resolveLetterActionState,
   shouldMarkLetterOpened,
   closeReasonForSender,
@@ -452,7 +453,13 @@ export default async function LetterPage({
         </main>
       </div>
 
-      {showWriteQuill && <WriteQuillButton otherUserId={otherPartyId} otherPseudonym={otherPseudonym} />}
+      {showWriteQuill && (
+        <WriteQuillButton
+          otherUserId={otherPartyId}
+          otherPseudonym={otherPseudonym}
+          replyToId={quillReplyToId(target, user.id)}
+        />
+      )}
     </AppShell>
   )
 }
