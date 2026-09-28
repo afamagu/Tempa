@@ -21,12 +21,20 @@
 -- (members SELECT only, anon nothing).
 --
 -- web_slug: generated once, the first time a Dispatch becomes public on
--- the web — readable title words + 6 random hex characters, globally
+-- the web — readable title words + 12 random hex characters, globally
 -- unique, never derived from the author. It is permanent: editing the
 -- title, going members-only and back, or moderation never changes it.
 --
 -- content_updated_at: set when the title or body actually changes; the
 -- page's dateModified and the sitemap's lastmod (published_at otherwise).
+--
+-- ATOMIC VISIBILITY: the composer saves content and the requested web
+-- state in ONE transaction (*_with_web_visibility wrappers around the
+-- unchanged Safety-wired publish/update RPCs). A privacy-reducing request
+-- (members only) is applied BEFORE the content update; an official/
+-- Sponsored Dispatch requested members-only is inserted members-only
+-- (the insert default is overridden for that transaction). Any failure
+-- rolls back content AND visibility together — fail closed.
 
 begin;
 
@@ -41,7 +49,7 @@ do $constraint$
 begin
   if not exists (select 1 from pg_constraint where conname = 'dispatches_web_slug_shape') then
     alter table public.dispatches add constraint dispatches_web_slug_shape
-      check (web_slug is null or (web_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*-[0-9a-f]{6}$' and char_length(web_slug) <= 80));
+      check (web_slug is null or (web_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*-[0-9a-f]{12}$' and char_length(web_slug) <= 80));
   end if;
 end
 $constraint$;
@@ -83,9 +91,13 @@ as $function$
 declare
   v_candidate text;
 begin
-  -- Official Tempa / Sponsored Dispatches are public on the web by default.
+  -- Official Tempa / Sponsored Dispatches are public on the web by default
+  -- — unless THIS transaction's save explicitly requested members-only
+  -- (publish_official_dispatch_with_web_visibility sets the transaction-
+  -- local tempa.dispatch_web_public_request), in which case the row is
+  -- inserted members-only and never carries the public default at all.
   if tg_op = 'INSERT' and new.published_as <> 'member' then
-    new.web_public := true;
+    new.web_public := coalesce(nullif(current_setting('tempa.dispatch_web_public_request', true), '')::boolean, true);
   end if;
 
   if tg_op = 'UPDATE' then
@@ -99,7 +111,7 @@ begin
 
   if new.web_public and new.web_slug is null then
     loop
-      v_candidate := tempa_private.dispatch_slugify(new.title) || '-' || substr(md5(gen_random_uuid()::text), 1, 6);
+      v_candidate := tempa_private.dispatch_slugify(new.title) || '-' || substr(md5(gen_random_uuid()::text), 1, 12);
       exit when not exists (select 1 from public.dispatches where web_slug = v_candidate);
     end loop;
     new.web_slug := v_candidate;
@@ -188,8 +200,9 @@ begin
     case when d.published_as = 'member'
       then (select pp.country from public.public_profiles pp where pp.id = d.author_id) end,
     coalesce((select array_agg(t.topic order by t.topic) from public.dispatch_topics t where t.dispatch_id = d.id), '{}'::text[]),
+    -- position + storage path only; never the internal dispatch_moments.id
     coalesce((
-      select jsonb_agg(jsonb_build_object('id', dm.id, 'position', dm.position, 'image_path', dm.image_path) order by dm.position)
+      select jsonb_agg(jsonb_build_object('position', dm.position, 'image_path', dm.image_path) order by dm.position)
       from public.dispatch_moments dm where dm.dispatch_id = d.id), '[]'::jsonb),
     (
       select jsonb_build_object(
@@ -229,13 +242,14 @@ as $function$
 $function$;
 
 -- ------------------------------------------------------------
--- 5. THE AUTHOR'S CHOICE
+-- 5. THE AUTHOR'S CHOICE (applied atomically with the save)
 -- ------------------------------------------------------------
--- Member Dispatch: only its author, only while their account is active,
--- only once published. Official / Sponsored: admins. Turning it OFF is
--- always allowed for the same people and takes effect immediately.
-create or replace function public.set_dispatch_web_public(p_dispatch_id uuid, p_public boolean)
-returns jsonb
+-- Member Dispatch: only its author, only while their account is active
+-- to turn it ON, only once published. Official / Sponsored: admins.
+-- Turning it OFF is always allowed for the same people and takes effect
+-- immediately. Raises (never partially applies) on any refusal.
+create or replace function tempa_private.apply_dispatch_web_public(p_dispatch_id uuid, p_public boolean)
+returns public.dispatches
 language plpgsql
 security definer
 set search_path to 'pg_catalog'
@@ -269,8 +283,165 @@ begin
   end if;
 
   update public.dispatches set web_public = p_public where id = p_dispatch_id returning * into d;
+  return d;
+end;
+$function$;
+
+-- The standing control (reader page): visibility only, no content.
+create or replace function public.set_dispatch_web_public(p_dispatch_id uuid, p_public boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  d public.dispatches;
+begin
+  d := tempa_private.apply_dispatch_web_public(p_dispatch_id, p_public);
   return jsonb_build_object('web_public', d.web_public, 'web_slug', d.web_slug,
                             'live', tempa_private.dispatch_is_web_public(d.id));
+end;
+$function$;
+
+-- The composer: content + requested web state in ONE transaction. The
+-- wrapped RPCs are called unchanged (Safety evaluation, ownership, edit
+-- window, official staff gate all still apply). Any refusal — by the save
+-- or by the visibility rules — rolls back both.
+create or replace function public.publish_dispatch_with_web_visibility(
+  p_title text,
+  p_body text,
+  p_safety_evaluation_id uuid,
+  p_topics text[] default '{}',
+  p_moments jsonb default '[]'::jsonb,
+  p_postcard jsonb default null,
+  p_warning_acknowledged boolean default false,
+  p_web_public boolean default false
+)
+returns public.dispatches
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  d public.dispatches;
+begin
+  if p_web_public is null then
+    raise exception 'DISPATCH_WEB:invalid_request' using errcode = '22023';
+  end if;
+  -- member Dispatches are inserted members-only (column default); going
+  -- public is applied before this transaction commits
+  d := public.publish_dispatch(p_title, p_body, p_safety_evaluation_id, p_topics, p_moments, p_postcard, p_warning_acknowledged);
+  if p_web_public then
+    d := tempa_private.apply_dispatch_web_public(d.id, true);
+  end if;
+  return d;
+end;
+$function$;
+
+create or replace function public.update_dispatch_with_web_visibility(
+  p_dispatch_id uuid,
+  p_title text,
+  p_body text,
+  p_safety_evaluation_id uuid,
+  p_topics text[] default '{}',
+  p_moments jsonb default '[]'::jsonb,
+  p_warning_acknowledged boolean default false,
+  p_web_public boolean default false
+)
+returns public.dispatches
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  d public.dispatches;
+begin
+  if p_web_public is null then
+    raise exception 'DISPATCH_WEB:invalid_request' using errcode = '22023';
+  end if;
+  -- privacy-reducing first: the edited content is never written while
+  -- the Dispatch is still public when the author asked for members only
+  if not p_web_public then
+    perform tempa_private.apply_dispatch_web_public(p_dispatch_id, false);
+  end if;
+  d := public.update_dispatch(p_dispatch_id, p_title, p_body, p_safety_evaluation_id, p_topics, p_moments, p_warning_acknowledged);
+  if p_web_public then
+    d := tempa_private.apply_dispatch_web_public(p_dispatch_id, true);
+  else
+    select * into d from public.dispatches where id = p_dispatch_id;
+  end if;
+  return d;
+end;
+$function$;
+
+create or replace function public.publish_official_dispatch_with_web_visibility(
+  p_published_as text,
+  p_title text,
+  p_body text,
+  p_topics text[] default '{}',
+  p_moments jsonb default '[]'::jsonb,
+  p_postcard jsonb default null,
+  p_sponsor_name text default null,
+  p_sponsor_cta_label text default null,
+  p_sponsor_cta_url text default null,
+  p_web_public boolean default true
+)
+returns public.dispatches
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  d public.dispatches;
+begin
+  if p_web_public is null then
+    raise exception 'DISPATCH_WEB:invalid_request' using errcode = '22023';
+  end if;
+  -- the insert takes the requested state directly (members-only is never
+  -- even transiently public); transaction-local, cleared right after
+  perform set_config('tempa.dispatch_web_public_request', p_web_public::text, true);
+  d := public.publish_official_dispatch(p_published_as, p_title, p_body, p_topics, p_moments, p_postcard,
+                                        p_sponsor_name, p_sponsor_cta_label, p_sponsor_cta_url);
+  perform set_config('tempa.dispatch_web_public_request', '', true);
+  -- authoritative: staff gate + rules re-applied, and the state asserted
+  d := tempa_private.apply_dispatch_web_public(d.id, p_web_public);
+  return d;
+end;
+$function$;
+
+create or replace function public.update_official_dispatch_with_web_visibility(
+  p_dispatch_id uuid,
+  p_title text,
+  p_body text,
+  p_topics text[] default '{}',
+  p_moments jsonb default '[]'::jsonb,
+  p_sponsor_name text default null,
+  p_sponsor_cta_label text default null,
+  p_sponsor_cta_url text default null,
+  p_web_public boolean default true
+)
+returns public.dispatches
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $function$
+declare
+  d public.dispatches;
+begin
+  if p_web_public is null then
+    raise exception 'DISPATCH_WEB:invalid_request' using errcode = '22023';
+  end if;
+  if not p_web_public then
+    perform tempa_private.apply_dispatch_web_public(p_dispatch_id, false);
+  end if;
+  d := public.update_official_dispatch(p_dispatch_id, p_title, p_body, p_topics, p_moments,
+                                       p_sponsor_name, p_sponsor_cta_label, p_sponsor_cta_url);
+  if p_web_public then
+    d := tempa_private.apply_dispatch_web_public(p_dispatch_id, true);
+  else
+    select * into d from public.dispatches where id = p_dispatch_id;
+  end if;
+  return d;
 end;
 $function$;
 
@@ -317,6 +488,7 @@ update public.dispatches set web_public = true where published_as <> 'member' an
 revoke all on function tempa_private.dispatch_slugify(text) from public, anon, authenticated;
 revoke all on function tempa_private.dispatch_web_lifecycle() from public, anon, authenticated;
 revoke all on function tempa_private.dispatch_is_web_public(uuid) from public, anon, authenticated;
+revoke all on function tempa_private.apply_dispatch_web_public(uuid, boolean) from public, anon, authenticated;
 
 revoke all on function public.get_public_dispatch(text) from public;
 grant execute on function public.get_public_dispatch(text) to anon, authenticated;
@@ -324,5 +496,13 @@ revoke all on function public.list_public_dispatches() from public;
 grant execute on function public.list_public_dispatches() to anon, authenticated;
 revoke all on function public.set_dispatch_web_public(uuid, boolean) from public, anon;
 grant execute on function public.set_dispatch_web_public(uuid, boolean) to authenticated;
+revoke all on function public.publish_dispatch_with_web_visibility(text, text, uuid, text[], jsonb, jsonb, boolean, boolean) from public, anon;
+grant execute on function public.publish_dispatch_with_web_visibility(text, text, uuid, text[], jsonb, jsonb, boolean, boolean) to authenticated;
+revoke all on function public.update_dispatch_with_web_visibility(uuid, text, text, uuid, text[], jsonb, boolean, boolean) from public, anon;
+grant execute on function public.update_dispatch_with_web_visibility(uuid, text, text, uuid, text[], jsonb, boolean, boolean) to authenticated;
+revoke all on function public.publish_official_dispatch_with_web_visibility(text, text, text, text[], jsonb, jsonb, text, text, text, boolean) from public, anon;
+grant execute on function public.publish_official_dispatch_with_web_visibility(text, text, text, text[], jsonb, jsonb, text, text, text, boolean) to authenticated;
+revoke all on function public.update_official_dispatch_with_web_visibility(uuid, text, text, text[], jsonb, text, text, text, boolean) from public, anon;
+grant execute on function public.update_official_dispatch_with_web_visibility(uuid, text, text, text[], jsonb, text, text, text, boolean) to authenticated;
 
 commit;

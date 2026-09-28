@@ -36,9 +36,18 @@ export type PublicDispatch = SharedDispatch & {
   dateModified: string
 }
 
-type PublicDispatchRpcRow = Omit<SharedDispatchRpcRow, 'dispatch_id'> & {
+type PublicDispatchRpcRow = Omit<SharedDispatchRpcRow, 'dispatch_id' | 'moments'> & {
   web_slug: string
   content_updated_at: string | null
+  /** position + storage path only — get_public_dispatch never returns the
+   * internal dispatch_moments.id. */
+  moments: { position: number; image_path: string }[]
+}
+
+/** Presentation-only Moment identifiers for the public page (React keys,
+ * viewer state): derived from the slug and order, never a database id. */
+export function publicMomentIds(slug: string, moments: { position: number; image_path: string }[]) {
+  return moments.map((m, i) => ({ id: `${slug}-moment-${i + 1}`, position: m.position, image_path: m.image_path }))
 }
 
 export async function getPublicDispatch(supabase: SupabaseClient, slug: string): Promise<PublicDispatch | null> {
@@ -48,7 +57,11 @@ export async function getPublicDispatch(supabase: SupabaseClient, slug: string):
   if (!row) return null
   // The public reader is keyed by the slug; the internal Dispatch id is
   // never returned by the RPC and never rendered.
-  const shared = await mapSharedDispatchRow(supabase, { ...row, dispatch_id: row.web_slug })
+  const shared = await mapSharedDispatchRow(supabase, {
+    ...row,
+    dispatch_id: row.web_slug,
+    moments: publicMomentIds(row.web_slug, row.moments ?? []),
+  })
   const datePublished = row.published_at
   const dateModified = row.content_updated_at && row.content_updated_at > row.published_at ? row.content_updated_at : row.published_at
   return { ...shared, slug: row.web_slug, datePublished, dateModified }
@@ -197,8 +210,19 @@ export const WEB_PUBLIC_COPY = {
   label: 'Public on the web',
   on: 'Anyone can read this Dispatch on the web. Public Dispatches may appear in search engines.',
   off: 'Members only — this Dispatch appears on the Tempa Board for members.',
-  failed: 'Your Dispatch was saved, but its web visibility couldn’t be updated. You can try again from Edit.',
+  failed: 'Its web visibility couldn’t be changed. Nothing was changed — please try again.',
+  saveRefused: 'Nothing was saved: this Dispatch’s web visibility couldn’t be applied. Please try again.',
+  accountRefused: 'Nothing was saved: your account can’t make Dispatches public right now.',
 } as const
+
+/** The composer's message when the atomic save was refused because of the
+ * requested web visibility (the whole save rolled back). null = not a
+ * web-visibility refusal. */
+export function webVisibilityRefusal(message: string | null | undefined): string | null {
+  const code = message?.match(/DISPATCH_WEB:([a-z_]+)/)?.[1]
+  if (!code) return null
+  return code === 'account_unavailable' ? WEB_PUBLIC_COPY.accountRefused : WEB_PUBLIC_COPY.saveRefused
+}
 
 export async function setDispatchWebPublic(supabase: SupabaseClient, dispatchId: string, webPublic: boolean): Promise<SetWebPublicResult> {
   const { data, error } = await supabase.rpc('set_dispatch_web_public', { p_dispatch_id: dispatchId, p_public: webPublic })

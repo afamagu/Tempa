@@ -76,7 +76,7 @@ import PostcardEditor from '@/app/letters/[letterId]/postcard-editor'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
 import DispatchPreview from './dispatch-preview'
-import { setDispatchWebPublic, WEB_PUBLIC_COPY } from '@/lib/public-dispatches'
+import { WEB_PUBLIC_COPY, webVisibilityRefusal } from '@/lib/public-dispatches'
 
 // Smoke-test contract completion checkpoint — 70 -> 140, mirroring
 // lib/dispatches.ts's own TITLE_MAX_CHARS and the server-side
@@ -254,8 +254,8 @@ export default function DispatchComposer({
   const [error, setError] = useState<string | null>(null)
   // "Published" = on the Board (members). "Public on the web" is a
   // separate, explicit choice: off by default for members, on by default
-  // for official/Sponsored Dispatches (the database applies the same
-  // default). Applied after the Dispatch is saved, only when it differs.
+  // for official/Sponsored Dispatches. Sent WITH the save (one database
+  // transaction) — never a separate follow-up call.
   const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : publication ? true : false
   const showWebChoice = webChoiceAvailable && initialWebPublic !== null
   const [webPublic, setWebPublic] = useState<boolean>(initialWebPublic === true)
@@ -728,6 +728,9 @@ export default function DispatchComposer({
       // postcard parameter at all (update_dispatch has no such RPC
       // argument), so an edit-mode submission cannot touch it even by
       // accident.
+      // Public Dispatch web pages — the requested web state travels WITH
+      // the save (one database transaction). undefined = choice not offered.
+      const requestedWeb = showWebChoice ? webPublic : undefined
       const { data, error: submitError } = official
         ? isEdit && existingDispatch
           ? await updateOfficialDispatch(createClient(), existingDispatch.id, {
@@ -737,6 +740,7 @@ export default function DispatchComposer({
               topics,
               moments,
               sponsor,
+              webPublic: requestedWeb,
             })
           : await publishOfficialDispatch(createClient(), {
               publishedAs: official.publishedAs,
@@ -746,6 +750,7 @@ export default function DispatchComposer({
               moments,
               postcard: postcardDraft,
               sponsor,
+              webPublic: requestedWeb,
             })
         : safetyEvaluationId === null
           ? { data: null, error: { message: 'A Safety evaluation is required.' } }
@@ -757,6 +762,7 @@ export default function DispatchComposer({
               moments,
               safetyEvaluationId,
               warningAcknowledged,
+              webPublic: requestedWeb,
             })
           : await publishDispatch(createClient(), {
               title,
@@ -766,6 +772,7 @@ export default function DispatchComposer({
               postcard: postcardDraft,
               safetyEvaluationId,
               warningAcknowledged,
+              webPublic: requestedWeb,
             })
 
       if (submitError || !data) {
@@ -793,6 +800,13 @@ export default function DispatchComposer({
         // so the caller's own already-known status (never decoded from
         // the RPC's shared generic message) can replace the generic
         // retry-implying fallback outright when it applies.
+        // A refused web-visibility request rolled back the whole save:
+        // say so plainly (nothing changed), and stay here.
+        const webRefusal = webVisibilityRefusal(submitError?.message)
+        if (webRefusal) {
+          setError(webRefusal)
+          return
+        }
         setError(
           submitError?.message === editLockMessage
             ? editLockMessage
@@ -808,12 +822,7 @@ export default function DispatchComposer({
         clearDispatchPostcardDraft(draftKey)
       }
       setPendingWarning(null)
-      const savedId = isEdit && existingDispatch ? existingDispatch.id : data.id
-      if (showWebChoice && webPublic !== initialWebPublic) {
-        const web = await setDispatchWebPublic(createClient(), savedId, webPublic)
-        if (!web.ok) console.error('[board] web visibility update failed')
-      }
-      router.push(`/board/${savedId}`)
+      router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error(isEdit ? '[board] edit threw' : '[board] publish threw', { message })

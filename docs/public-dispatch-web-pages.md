@@ -23,15 +23,37 @@ A Dispatch is *Published + Members only* or *Published + Public on the web*.
 ## URL
 
 `https://jointempa.com/dispatches/{slug}` — e.g.
-`/dispatches/my-mother-never-apologised-she-cooked-a8f3c2`.
+`/dispatches/my-mother-never-apologised-she-cooked-a8f3c29d41b7`.
 
 - **slug** = title words (lower-case ASCII, accents folded, ≤ 60 chars, cut
-  at a word boundary; `dispatch` if empty) + `-` + 6 random hex characters.
+  at a word boundary; `dispatch` if empty) + `-` + 12 random hex characters.
   Globally unique (unique index), not derived from the author or the
   internal id.
 - Generated once, the first time a Dispatch becomes public on the web
   (database trigger). **Permanent**: title edits, members-only ↔ public
   changes and moderation never change it (the trigger refuses to rewrite it).
+
+## Saving is atomic (fail closed)
+
+The composer never saves content and visibility in two steps. When the
+choice is offered it calls `publish_dispatch_with_web_visibility`,
+`update_dispatch_with_web_visibility`,
+`publish_official_dispatch_with_web_visibility` or
+`update_official_dispatch_with_web_visibility`: the unchanged
+Safety-wired save RPC and the requested web state in **one database
+transaction**.
+
+- **Public → members only**: members-only is applied *before* the edited
+  content is written; if anything fails, the whole transaction rolls back
+  (old content, unchanged state) — new content is never committed public.
+- **Members only → public**: the content is saved, then the public step is
+  checked (author, active account, published); a refusal rolls back the
+  content too.
+- **Official / Sponsored created members-only**: the row is *inserted*
+  members-only (a transaction-local request overrides the public default),
+  so it is never public, not even inside the transaction, and gets no slug.
+- A refusal is shown in the composer ("Nothing was saved: …") and the
+  composer stays open. The reader's standing control shows its error too.
 
 ## What is indexable
 

@@ -38,7 +38,9 @@ describe('2026-10-27 public Dispatch web pages', () => {
     expect(trig).toContain("if tg_op = 'INSERT' and new.published_as <> 'member' then")
     expect(trig).toContain("web address is permanent")
     expect(trig).toContain('if new.web_public and new.web_slug is null then')
-    expect(trig).toContain("tempa_private.dispatch_slugify(new.title) || '-' || substr(md5(gen_random_uuid()::text), 1, 6)")
+    expect(trig).toContain("tempa_private.dispatch_slugify(new.title) || '-' || substr(md5(gen_random_uuid()::text), 1, 12)")
+    expect(body).toContain("web_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*-[0-9a-f]{12}$'")
+    expect(body).not.toMatch(/\{6\}|, 1, 6\)/)
     expect(body).toContain('create unique index if not exists dispatches_web_slug_key on public.dispatches (web_slug) where web_slug is not null;')
   })
 
@@ -70,7 +72,9 @@ describe('2026-10-27 public Dispatch web pages', () => {
   })
 
   it('only the author (member) or an admin (official/sponsored) can change it; restricted accounts cannot make things public', () => {
-    const set = fn('public.set_dispatch_web_public')
+    // one rule set, shared by the standing control and the atomic saves
+    expect(fn('public.set_dispatch_web_public')).toContain('tempa_private.apply_dispatch_web_public(p_dispatch_id, p_public)')
+    const set = fn('tempa_private.apply_dispatch_web_public')
     expect(set).toContain('d.author_id is distinct from v_uid')
     expect(set).toContain("public.is_staff('admin')")
     expect(set).toContain("p_public and public.current_account_status() is distinct from 'active'")
@@ -82,10 +86,57 @@ describe('2026-10-27 public Dispatch web pages', () => {
     expect(body).toContain('grant execute on function public.get_public_dispatch(text) to anon, authenticated;')
     expect(body).toContain('grant execute on function public.list_public_dispatches() to anon, authenticated;')
     expect(body).toContain('revoke all on function public.set_dispatch_web_public(uuid, boolean) from public, anon;')
+    expect(body).toContain('revoke all on function tempa_private.apply_dispatch_web_public(uuid, boolean) from public, anon, authenticated;')
+    for (const w of ['publish_dispatch_with_web_visibility(text, text, uuid, text[], jsonb, jsonb, boolean, boolean)',
+      'update_dispatch_with_web_visibility(uuid, text, text, uuid, text[], jsonb, boolean, boolean)',
+      'publish_official_dispatch_with_web_visibility(text, text, text, text[], jsonb, jsonb, text, text, text, boolean)',
+      'update_official_dispatch_with_web_visibility(uuid, text, text, text[], jsonb, text, text, text, boolean)']) {
+      expect(body).toContain(`revoke all on function public.${w} from public, anon;`)
+      expect(body).toContain(`grant execute on function public.${w} to authenticated;`)
+    }
     for (const f of ['dispatch_slugify(text)', 'dispatch_web_lifecycle()', 'dispatch_is_web_public(uuid)']) {
       expect(body).toContain(`revoke all on function tempa_private.${f} from public, anon, authenticated;`)
     }
     expect(body).not.toMatch(/grant (select|insert|update|delete)[^;]*on public\.dispatches/i)
+  })
+
+  it('save + requested web state are ONE transaction: members-only applied BEFORE the content is written (public → members-only)', () => {
+    for (const [wrapper, inner] of [
+      ['public.update_dispatch_with_web_visibility', 'public.update_dispatch('],
+      ['public.update_official_dispatch_with_web_visibility', 'public.update_official_dispatch('],
+    ]) {
+      const w = fn(wrapper)
+      const off = w.indexOf('if not p_web_public then')
+      expect(off, wrapper).toBeGreaterThan(-1)
+      expect(w.indexOf('tempa_private.apply_dispatch_web_public(p_dispatch_id, false)'), wrapper).toBeGreaterThan(off)
+      expect(w.indexOf('tempa_private.apply_dispatch_web_public(p_dispatch_id, false)'), wrapper).toBeLessThan(w.indexOf(inner))
+      // members-only → public: the content first, then the (refusable) public step — a refusal rolls back both
+      expect(w.indexOf('tempa_private.apply_dispatch_web_public(p_dispatch_id, true)'), wrapper).toBeGreaterThan(w.indexOf(inner))
+      expect(w, wrapper).not.toMatch(/exception\s+when/i)
+    }
+  })
+
+  it('member publish is members-only unless public is requested, in the same transaction', () => {
+    const w = fn('public.publish_dispatch_with_web_visibility')
+    expect(w.indexOf('public.publish_dispatch(')).toBeLessThan(w.indexOf('tempa_private.apply_dispatch_web_public(d.id, true)'))
+    expect(w).not.toMatch(/exception\s+when/i)
+  })
+
+  it('official/sponsored created members-only are INSERTED members-only — never the public default, even inside the transaction', () => {
+    const w = fn('public.publish_official_dispatch_with_web_visibility')
+    const req = w.indexOf("set_config('tempa.dispatch_web_public_request', p_web_public::text, true)")
+    expect(req).toBeGreaterThan(-1)
+    expect(req).toBeLessThan(w.indexOf('public.publish_official_dispatch('))
+    expect(w.indexOf("set_config('tempa.dispatch_web_public_request', '', true)")).toBeGreaterThan(w.indexOf('public.publish_official_dispatch('))
+    expect(w).toContain('tempa_private.apply_dispatch_web_public(d.id, p_web_public)')
+    expect(fn('tempa_private.dispatch_web_lifecycle')).toContain(
+      "new.web_public := coalesce(nullif(current_setting('tempa.dispatch_web_public_request', true), '')::boolean, true);")
+  })
+
+  it('the anonymous Moments payload carries position + storage path only — never dispatch_moments.id', () => {
+    const get = fn('public.get_public_dispatch')
+    expect(get).toContain("jsonb_build_object('position', dm.position, 'image_path', dm.image_path)")
+    expect(get).not.toMatch(/'id',\s*dm\.id/)
   })
 
   it('the verifier is read-only and its overall_pass covers the structural guarantees', () => {
@@ -93,7 +144,8 @@ describe('2026-10-27 public Dispatch web pages', () => {
     expect(code.trim()).toMatch(/^with /)
     expect(code).not.toMatch(/\b(insert\s+into|update\s+\w+\s+set|delete\s+from|alter|create|drop|grant|revoke|truncate)\b/i)
     const overall = verify.slice(verify.lastIndexOf('select *,'))
-    for (const c of ['execute_privileges_correct', 'base_table_closed', 'one_predicate_everywhere', 'no_internal_ids_exposed', 'slug_permanent', 'every_public_dispatch_has_slug']) {
+    for (const c of ['execute_privileges_correct', 'base_table_closed', 'one_predicate_everywhere', 'no_internal_ids_exposed',
+      'visibility_atomic_and_fail_closed', 'slug_suffix_12_hex', 'slug_permanent', 'every_public_dispatch_has_slug']) {
       expect(overall, c).toContain(c)
     }
   })

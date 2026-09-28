@@ -1038,6 +1038,19 @@ export type DispatchMomentDraft = { position: number; imagePath: string }
  * publish time, exactly like write_letter does for a sent letter;
  * omitted/null means no Postcard, valid behavior either way.
  */
+/**
+ * Public Dispatch web pages — when the composer offers "Public on the
+ * web", the save and the requested web state go to the database in ONE
+ * call (the *_with_web_visibility wrappers, docs/sql/2026-10-27-public-
+ * dispatch-web-pages.sql): one transaction, so a refused visibility
+ * change rolls back the content save too, and members-only is applied
+ * before any edited content is written. `webPublic` undefined keeps the
+ * original RPC exactly (the choice isn't offered).
+ */
+export function saveRpc(fn: string, args: Record<string, unknown>, webPublic: boolean | undefined): [string, Record<string, unknown>] {
+  return webPublic === undefined ? [fn, args] : [`${fn}_with_web_visibility`, { ...args, p_web_public: webPublic }]
+}
+
 export async function publishDispatch(
   supabase: SupabaseClient,
   input: {
@@ -1053,9 +1066,11 @@ export async function publishDispatch(
      * evaluates before calling this. */
     safetyEvaluationId: string
     warningAcknowledged?: boolean
+    /** Requested "Public on the web" state, applied atomically (see saveRpc). */
+    webPublic?: boolean
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc('publish_dispatch', {
+  const { data, error } = await supabase.rpc(...saveRpc('publish_dispatch', {
     p_title: input.title,
     p_body: input.body,
     p_safety_evaluation_id: input.safetyEvaluationId,
@@ -1071,7 +1086,7 @@ export async function publishDispatch(
         }
       : null,
     p_warning_acknowledged: input.warningAcknowledged ?? false,
-  })
+  }, input.webPublic))
 
   if (error) {
     // Diagnostic checkpoint (2026-09-08): details/hint were previously
@@ -1154,9 +1169,11 @@ export async function updateDispatch(
     /** Safety Checkpoint 4 — see publishDispatch's own doc comment. */
     safetyEvaluationId: string
     warningAcknowledged?: boolean
+    /** Requested "Public on the web" state, applied atomically (see saveRpc). */
+    webPublic?: boolean
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc('update_dispatch', {
+  const { data, error } = await supabase.rpc(...saveRpc('update_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,
@@ -1164,7 +1181,7 @@ export async function updateDispatch(
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
     p_warning_acknowledged: input.warningAcknowledged ?? false,
-  })
+  }, input.webPublic))
 
   if (error) {
     return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
@@ -1207,9 +1224,11 @@ export async function publishOfficialDispatch(
     moments?: DispatchMomentDraft[]
     postcard?: LetterPostcardDraft | null
     sponsor?: SponsorFields | null
+    /** Requested "Public on the web" state, applied atomically (see saveRpc). */
+    webPublic?: boolean
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc('publish_official_dispatch', {
+  const { data, error } = await supabase.rpc(...saveRpc('publish_official_dispatch', {
     p_published_as: input.publishedAs,
     p_title: input.title,
     p_body: input.body,
@@ -1223,7 +1242,7 @@ export async function publishOfficialDispatch(
         }
       : null,
     ...sponsorRpcArgs(input.publishedAs, input.sponsor),
-  })
+  }, input.webPublic))
   if (error) {
     return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
   }
@@ -1240,16 +1259,18 @@ export async function updateOfficialDispatch(
     topics: string[]
     moments?: DispatchMomentDraft[]
     sponsor?: SponsorFields | null
+    /** Requested "Public on the web" state, applied atomically (see saveRpc). */
+    webPublic?: boolean
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc('update_official_dispatch', {
+  const { data, error } = await supabase.rpc(...saveRpc('update_official_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
     ...sponsorRpcArgs(input.publishedAs, input.sponsor),
-  })
+  }, input.webPublic))
   if (error) {
     return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
   }

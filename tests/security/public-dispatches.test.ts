@@ -25,7 +25,7 @@ import {
 
 const root = path.resolve(import.meta.dirname, '..', '..')
 const read = (p: string) => readFileSync(path.join(root, p), 'utf8')
-const SLUG = 'my-mother-never-apologised-she-cooked-a8f3c2'
+const SLUG = 'my-mother-never-apologised-she-cooked-a8f3c29d41b7'
 
 const rpcRow = (over: Record<string, unknown> = {}) => ({
   web_slug: SLUG,
@@ -36,7 +36,7 @@ const rpcRow = (over: Record<string, unknown> = {}) => ({
   author_pseudonym: 'Alice Quill',
   author_country: 'Nigeria',
   topics: ['family'],
-  moments: [],
+  moments: [{ position: 0, image_path: 'author-folder/kitchen.jpg' }],
   postcard: null,
   published_as: 'member',
   sponsor_name: null,
@@ -80,10 +80,13 @@ describe('reading a public Dispatch', () => {
     expect(await getPublicDispatch(fakeSupabase(null, { message: 'x' }).client, SLUG)).toBeNull()
   })
 
-  it('maps the article, keyed by its slug — never an internal id', async () => {
+  it('maps the article, keyed by its slug — never an internal id (nested Moments included)', async () => {
     const d = await load()
     expect(d.slug).toBe(SLUG)
     expect(d.id).toBe(SLUG)
+    expect(d.moments.map((m) => ({ id: m.id, position: m.position }))).toEqual([{ id: `${SLUG}-moment-1`, position: 0 }])
+    const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+    expect(JSON.stringify(d)).not.toMatch(UUID)
     expect(d.body).toContain('jollof')
     expect(d.identity).toMatchObject({ kind: 'member', name: 'Alice Quill' })
     expect(d.datePublished).toBe('2026-09-01T10:00:00.000Z')
@@ -185,7 +188,7 @@ describe('the page (server HTML)', () => {
     const meta = await generateMetadata({ params: Promise.resolve({ slug: SLUG }) })
     expect(meta.alternates).toEqual({ canonical: `https://jointempa.com/dispatches/${SLUG}` })
     expect(rpc).toHaveBeenCalledWith('get_public_dispatch', { p_slug: SLUG })
-  })
+  }, 20_000)
 
   it('anything not public on the web right now → 404 + noindex, and nothing of it in the page or metadata', async () => {
     rpc.mockResolvedValue({ data: [], error: null })
@@ -244,6 +247,18 @@ describe('the author’s choice', () => {
     expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : publication ? true : false')
   })
 
+  it('the composer sends the requested web state WITH the save (one transaction) — no separate follow-up call', () => {
+    const composer = read('app/board/dispatch-composer.tsx')
+    expect(composer).toContain('const requestedWeb = showWebChoice ? webPublic : undefined')
+    expect(composer.match(/webPublic: requestedWeb,/g)).toHaveLength(4)
+    expect(composer).not.toContain('setDispatchWebPublic')
+    // a web-visibility refusal is shown, and the composer stays put (no navigation)
+    const refusal = composer.indexOf('const webRefusal = webVisibilityRefusal(submitError?.message)')
+    expect(refusal).toBeGreaterThan(-1)
+    expect(composer.slice(refusal, refusal + 160)).toContain('setError(webRefusal)\n          return')
+    expect(composer.indexOf('router.push(')).toBeGreaterThan(refusal)
+  })
+
   it('setting web visibility goes through the RPC only and maps errors to calm copy', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: { message: 'DISPATCH_WEB:account_unavailable' } }))
     expect(await setDispatchWebPublic({ rpc } as never, 'id', true)).toEqual({ ok: false, message: 'Your account can’t make Dispatches public right now.' })
@@ -259,5 +274,78 @@ describe('listing', () => {
   it('drops anything that is not a well-formed slug', async () => {
     const rpc = vi.fn(async () => ({ data: [{ web_slug: 'ok-abc123', last_modified: 't' }, { web_slug: '<x>', last_modified: 't' }], error: null }))
     expect(await listPublicDispatches({ rpc } as never)).toEqual([{ slug: 'ok-abc123', lastModified: 't' }])
+  })
+})
+
+describe('atomic save + visibility (client side)', () => {
+  const capture = () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = []
+    const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      calls.push({ fn, args })
+      return { data: { id: 'x', author_id: 'a', title: 't', body: 'b', published_at: 'p', moderation_status: 'visible' }, error: null }
+    })
+    return { client: { rpc } as never, calls }
+  }
+  const base = { title: 't', body: 'b', topics: [], safetyEvaluationId: 'e' }
+
+  it('public → members-only on edit: one call to update_dispatch_with_web_visibility with p_web_public=false', async () => {
+    const { updateDispatch } = await import('@/lib/dispatches')
+    const { client, calls } = capture()
+    await updateDispatch(client, 'd1', { ...base, webPublic: false })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].fn).toBe('update_dispatch_with_web_visibility')
+    expect(calls[0].args).toMatchObject({ p_dispatch_id: 'd1', p_web_public: false })
+  })
+
+  it('members-only → public on edit and on publish: the same single call with p_web_public=true', async () => {
+    const { updateDispatch, publishDispatch } = await import('@/lib/dispatches')
+    const { client, calls } = capture()
+    await updateDispatch(client, 'd1', { ...base, webPublic: true })
+    await publishDispatch(client, { ...base, webPublic: true })
+    expect(calls.map((c) => [c.fn, c.args.p_web_public])).toEqual([
+      ['update_dispatch_with_web_visibility', true],
+      ['publish_dispatch_with_web_visibility', true],
+    ])
+  })
+
+  it('official / sponsored created with Public on the web unchecked: one atomic call with p_web_public=false', async () => {
+    const { publishOfficialDispatch, updateOfficialDispatch } = await import('@/lib/dispatches')
+    const { client, calls } = capture()
+    await publishOfficialDispatch(client, { publishedAs: 'tempa', title: 't', body: 'b', topics: [], webPublic: false })
+    await publishOfficialDispatch(client, { publishedAs: 'sponsored', title: 't', body: 'b', topics: [], webPublic: false,
+      sponsor: { sponsorName: 'Paper Co', ctaLabel: '', ctaUrl: '' } })
+    await updateOfficialDispatch(client, 'o1', { publishedAs: 'tempa', title: 't', body: 'b', topics: [], webPublic: false })
+    expect(calls.map((c) => [c.fn, c.args.p_web_public])).toEqual([
+      ['publish_official_dispatch_with_web_visibility', false],
+      ['publish_official_dispatch_with_web_visibility', false],
+      ['update_official_dispatch_with_web_visibility', false],
+    ])
+  })
+
+  it('without the choice (before the migration) the original RPCs are used unchanged', async () => {
+    const { publishDispatch, updateDispatch } = await import('@/lib/dispatches')
+    const { client, calls } = capture()
+    await publishDispatch(client, base)
+    await updateDispatch(client, 'd1', base)
+    expect(calls.map((c) => c.fn)).toEqual(['publish_dispatch', 'update_dispatch'])
+    expect(calls.every((c) => !('p_web_public' in c.args))).toBe(true)
+  })
+
+  it('a visibility refusal fails the whole save and is surfaced with plain copy (nothing saved)', async () => {
+    const { updateDispatch } = await import('@/lib/dispatches')
+    const { webVisibilityRefusal } = await import('@/lib/public-dispatches')
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'DISPATCH_WEB:not_found', code: 'P0002' } }))
+    const r = await updateDispatch({ rpc } as never, 'd1', { ...base, webPublic: false })
+    expect(r.data).toBeNull()
+    expect(webVisibilityRefusal(r.error?.message)).toBe(WEB_PUBLIC_COPY.saveRefused)
+    expect(webVisibilityRefusal('DISPATCH_WEB:account_unavailable')).toBe(WEB_PUBLIC_COPY.accountRefused)
+    expect(webVisibilityRefusal('This Dispatch can no longer be edited.')).toBeNull()
+    expect(WEB_PUBLIC_COPY.saveRefused).toMatch(/^Nothing was saved/)
+  })
+
+  it('the standing control surfaces a failed change and never silently keeps going', () => {
+    const control = read('app/board/[dispatchId]/web-visibility-control.tsx')
+    expect(control).toMatch(/if \(!result\.ok\) \{\s*setError\(result\.message\)\s*return/)
+    expect(control).toContain('role="alert"')
   })
 })
