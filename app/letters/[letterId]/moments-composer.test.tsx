@@ -402,7 +402,7 @@ describe('MomentsComposer — Postcard FeatureIntroduction (cross-surface first 
 describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard bound in (Checkpoint 3)', () => {
   it('evaluates via evaluateSafety, surface: write_anytime, before ever calling write_letter — same for both the quill and a reply, since both use this one RPC', () => {
     const evaluateIndex = source.indexOf("surface: 'write_anytime'")
-    const rpcIndex = source.indexOf("supabase.rpc('write_letter'")
+    const rpcIndex = source.indexOf("supabase.rpc('write_letter_once'")
     expect(evaluateIndex, 'expected a call to evaluateSafety with surface: write_anytime').toBeGreaterThan(-1)
     expect(rpcIndex, 'expected a call to write_letter').toBeGreaterThan(-1)
     expect(evaluateIndex).toBeLessThan(rpcIndex)
@@ -411,7 +411,7 @@ describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard 
   it('a failed evaluation (status: error) never falls through to write_letter — fails closed', () => {
     const handleSendBody = source.slice(source.indexOf('async function handleSend()'), source.indexOf('function handleCancelWarning'))
     expect(handleSendBody).toContain("outcome.status === 'error'")
-    expect(handleSendBody).not.toContain("supabase.rpc('write_letter'")
+    expect(handleSendBody).not.toContain("supabase.rpc('write_letter")
   })
 
   it('the Postcard\'s Reveal Line and back message are bound into the Safety evaluation, closing the Postcard-text bypass', () => {
@@ -419,6 +419,33 @@ describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard 
     expect(handleSendBody).toContain('postcardKey: postcardPayload.postcard_key')
     expect(handleSendBody).toContain('revealLine: postcardPayload.reveal_line')
     expect(handleSendBody).toContain('backMessage: postcardPayload.back_message')
+  })
+
+  it('Send is idempotent: one client submission id per letter, reused on retry, sent to write_letter_once', () => {
+    expect(source).toContain('submissionIdRef.current ??= crypto.randomUUID()')
+    expect(source).toContain('p_client_submission_id: submissionIdRef.current')
+    // the plain write_letter is reachable ONLY as the deploy-order
+    // fallback, when write_letter_once does not exist yet (PGRST202)
+    expect(source.match(/supabase\.rpc\('write_letter',/g) ?? []).toHaveLength(1)
+    expect(source).toMatch(/if \(sendError\?\.code === 'PGRST202'\) \{\s+;\(\{ error: sendError \} = await supabase\.rpc\('write_letter', letterArgs\)\)/)
+    // never reset after being assigned: a retry must reuse it
+    expect(source).not.toMatch(/submissionIdRef\.current = (null|crypto)/)
+  })
+
+  it('a second tap cannot start a second send, even within the same frame (ref lock, not state)', () => {
+    const handleSendBody = source.slice(source.indexOf('async function handleSend()'), source.indexOf('function handleCancelWarning'))
+    expect(handleSendBody).toContain('if (submittingRef.current || sentRef.current) return')
+    expect(handleSendBody.indexOf('submittingRef.current = true')).toBeLessThan(handleSendBody.indexOf('await evaluateSafety'))
+    const ackBody = source.slice(source.indexOf('async function handleAcknowledgeWarning()'), source.indexOf('async function sendLetter('))
+    expect(ackBody).toContain('if (submittingRef.current || sentRef.current) return')
+  })
+
+  it('after acknowledgement Send stays pending until the next page replaces the composer; only a real failure re-enables it', () => {
+    const sendBody = source.slice(source.indexOf('async function sendLetter('), source.indexOf('function handleReviewPhoto'))
+    const finallyBlock = sendBody.slice(sendBody.lastIndexOf('} finally {'))
+    expect(finallyBlock).toMatch(/if \(!acknowledged\) \{\s+setSending\(false\)\s+submittingRef\.current = false/)
+    expect(sendBody.indexOf('acknowledged = true')).toBeLessThan(sendBody.indexOf('router.push(cancelHref)'))
+    expect(sendBody).toContain('sentRef.current = true')
   })
 
   it('warning_required opens the shared SafetyWarningDialog, stacked above LetterPreview', () => {

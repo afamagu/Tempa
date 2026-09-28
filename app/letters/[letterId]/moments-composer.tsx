@@ -58,6 +58,8 @@ import { MomentAffordance } from './moment-affordance-extension'
 import PhotoSourceInputs, { selectPhotoSourceRef } from './photo-source-inputs'
 import MomentSourceMenu from './moment-source-menu'
 import { processImageForUpload } from '@/lib/image-processing'
+import { reportLetterSendTiming, resourceNet, startLetterSendTiming, type LetterSendTiming } from '@/lib/letter-send-timing'
+import { useKeyboardDismiss } from '@/app/letters/use-keyboard-dismiss'
 import PostcardPicker from './postcard-picker'
 import PostcardComposerSlot from './postcard-composer-slot'
 import PostcardEditor from './postcard-editor'
@@ -188,6 +190,30 @@ export default function MomentsComposer({
 
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // ONE Send in flight at a time, even for two taps inside the same
+  // frame (state updates are async; a ref is not). Once the letter is
+  // acknowledged, Send stays pending until this composer is replaced by
+  // the next page — it never becomes actionable again.
+  const submittingRef = useRef(false)
+  const sentRef = useRef(false)
+  // One id per letter, reused for every retry of it: write_letter_once
+  // returns the already-sent letter instead of inserting a second copy
+  // (docs/sql/2026-10-26-letter-send-idempotency.sql).
+  const submissionIdRef = useRef<string | null>(null)
+  const attemptsRef = useRef(0)
+  const timingRef = useRef<{ start: number; ackAt?: number; report: LetterSendTiming } | null>(null)
+  const composerRootRef = useRef<HTMLDivElement | null>(null)
+  useKeyboardDismiss(composerRootRef)
+  // The acknowledged send's timing is reported when this composer
+  // unmounts, i.e. when the next page has actually rendered.
+  useEffect(() => {
+    return () => {
+      const t = timingRef.current
+      if (t?.ackAt === undefined) return
+      const now = performance.now()
+      reportLetterSendTiming({ ...t.report, navigateMs: now - t.ackAt, totalMs: now - t.start })
+    }
+  }, [])
   // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
   // identical field for the full explanation.
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
@@ -598,8 +624,18 @@ export default function MomentsComposer({
   // concatenated with it — see lib/safety/classify.ts's own
   // combineClassifications), closing the Postcard-text bypass. A failed
   // evaluation (status: error) never falls back to an unscreened send.
+  function finishFailedTiming(outcome: LetterSendTiming['outcome']) {
+    const t = timingRef.current
+    if (!t) return
+    reportLetterSendTiming({ ...t.report, outcome, totalMs: performance.now() - t.start })
+    timingRef.current = null
+  }
+
   async function handleSend() {
     if (!editor || !canSend || postcardNeedsMessage) return
+    if (submittingRef.current || sentRef.current) return
+    submittingRef.current = true
+    timingRef.current = startLetterSendTiming()
     setSending(true)
     setError(null)
 
@@ -618,22 +654,33 @@ export default function MomentsComposer({
             backMessage: postcardPayload.back_message as string,
           }
         : null,
+    }, (timing) => {
+      if (!timingRef.current) return
+      timingRef.current.report.evaluateMs = timing.ms
+      timingRef.current.report.evaluateServer = timing.serverTiming
+      timingRef.current.report.evaluateNet = resourceNet('/api/safety/evaluate')
     })
 
     if (outcome.status === 'error') {
       setError(SAFETY_CHECK_FAILED_MESSAGE)
       setSending(false)
+      submittingRef.current = false
+      finishFailedTiming('failed')
       return
     }
     if (outcome.status === 'cannot_send') {
       if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
       else setError(SAFETY_CANNOT_SEND_MESSAGE)
       setSending(false)
+      submittingRef.current = false
+      finishFailedTiming('blocked')
       return
     }
     if (outcome.status === 'warning_required') {
       setPendingWarning({ evaluationId: outcome.evaluationId, copyKey: outcome.copyKey })
       setSending(false)
+      submittingRef.current = false
+      finishFailedTiming('warning')
       return
     }
 
@@ -646,6 +693,9 @@ export default function MomentsComposer({
 
   async function handleAcknowledgeWarning() {
     if (!pendingWarning) return
+    if (submittingRef.current || sentRef.current) return
+    submittingRef.current = true
+    timingRef.current = startLetterSendTiming()
     await sendLetter(pendingWarning.evaluationId, true)
   }
 
@@ -665,9 +715,16 @@ export default function MomentsComposer({
     // forever, which would otherwise permanently disable Send for the
     // rest of this composer's lifetime (submitting is part of
     // canSendLetter's own eligibility check).
+    submissionIdRef.current ??= crypto.randomUUID()
+    const retry = attemptsRef.current > 0
+    attemptsRef.current += 1
+    if (timingRef.current) timingRef.current.report.retry = retry
+    const writeStarted = performance.now()
+    let acknowledged = false
+
     try {
       const supabase = createClient()
-      const { error: sendError } = await supabase.rpc('write_letter', {
+      const letterArgs = {
         p_correspondence_id: correspondenceId,
         p_body: body,
         p_safety_evaluation_id: safetyEvaluationId,
@@ -678,7 +735,22 @@ export default function MomentsComposer({
         p_moments: momentDrafts.map(toMomentRpcPayload),
         p_postcard: postcardPayload,
         p_warning_acknowledged: warningAcknowledged,
+      }
+      let { error: sendError } = await supabase.rpc('write_letter_once', {
+        p_client_submission_id: submissionIdRef.current,
+        ...letterArgs,
       })
+      // Deploy-order guard: until docs/sql/2026-10-26-letter-send-
+      // idempotency.sql is applied, PostgREST reports the function as
+      // missing (PGRST202) — fall back to the original, non-idempotent
+      // write_letter rather than failing every send.
+      if (sendError?.code === 'PGRST202') {
+        ;({ error: sendError } = await supabase.rpc('write_letter', letterArgs))
+      }
+      if (timingRef.current) {
+        timingRef.current.report.writeMs = performance.now() - writeStarted
+        timingRef.current.report.writeNet = resourceNet('/rest/v1/rpc/write_letter_once')
+      }
 
       if (sendError) {
         // Logged in full regardless of environment, so a real failure
@@ -740,6 +812,15 @@ export default function MomentsComposer({
         return
       }
 
+      // Acknowledged: the letter exists. Stay in the pending "Sending…"
+      // state until the next page replaces this composer — Send must not
+      // become actionable again while that page loads.
+      acknowledged = true
+      sentRef.current = true
+      if (timingRef.current) {
+        timingRef.current.report.outcome = 'sent'
+        timingRef.current.ackAt = performance.now()
+      }
       clearLetterEditorDraft(correspondenceId)
       clearLetterPostcardDraft(correspondenceId)
       setPendingWarning(null)
@@ -756,7 +837,11 @@ export default function MomentsComposer({
           (process.env.NODE_ENV === 'development' ? ` (threw: ${message})` : '')
       )
     } finally {
-      setSending(false)
+      if (!acknowledged) {
+        setSending(false)
+        submittingRef.current = false
+        finishFailedTiming('failed')
+      }
     }
   }
 
@@ -792,7 +877,7 @@ export default function MomentsComposer({
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={composerRootRef} className="space-y-4">
       <PhotoSourceInputs
         libraryInputRef={libraryInputRef}
         cameraInputRef={cameraInputRef}

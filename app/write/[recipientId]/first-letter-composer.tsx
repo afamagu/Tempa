@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useEditor, EditorContent } from '@tiptap/react'
+import { useKeyboardDismiss } from '@/app/letters/use-keyboard-dismiss'
 import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -75,6 +76,8 @@ export default function FirstLetterComposer({
   questionPrompt: string | null
 }) {
   const [sending, setSending] = useState(false)
+  const composerRootRef = useRef<HTMLElement | null>(null)
+  useKeyboardDismiss(composerRootRef)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Safety 2, Checkpoint 3 — set only while a `warning_required`
@@ -274,7 +277,7 @@ export default function FirstLetterComposer({
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
+    <main ref={composerRootRef} className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-2xl space-y-8 py-10">
         <div className="space-y-2">
           <p className={sectionLabelClass}>Writing to</p>

@@ -695,3 +695,19 @@ describe('POST /api/safety/evaluate', () => {
     })
   })
 })
+
+describe('POST /api/safety/evaluate — Server-Timing (latency measurement only)', () => {
+  it('a successful evaluation reports per-phase durations and nothing else', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    authorizationRpc.mockResolvedValue({ data: true, error: null })
+    rateLimitCheck.mockResolvedValue({ data: true, error: null })
+    rpcSingle.mockResolvedValue({ data: { evaluation_id: 'eval-t', expires_at: '2026-01-01T00:00:00Z', is_new: true }, error: null })
+    const { POST } = await import('./route')
+
+    const response = await POST(request({ surface: 'first_letter', recipientId: RECIPIENT_ID, questionAnswerId: QUESTION_ANSWER_ID, body: 'Private words here.' }))
+
+    const header = response.headers.get('server-timing') ?? ''
+    expect(header).toMatch(/^auth;dur=[\d.]+, rate_limit;dur=[\d.]+, authorize;dur=[\d.]+, classify;dur=[\d.]+, record;dur=[\d.]+, total;dur=[\d.]+$/)
+    expect(header).not.toContain('Private')
+  })
+})
