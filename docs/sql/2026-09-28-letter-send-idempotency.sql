@@ -2,7 +2,7 @@
 -- TEMPA — LETTER SEND IDEMPOTENCY (one tap = at most one letter)
 -- STATUS: NOT YET APPLIED. For the owner to review and run in the
 -- Supabase SQL editor, then run
--- 2026-10-26-letter-send-idempotency-verify.sql and expect
+-- 2026-09-28-letter-send-idempotency-verify.sql and expect
 -- overall_pass = true. Apply BEFORE deploying the app change that calls
 -- write_letter_once. Forward-only; write_letter itself is NOT changed.
 -- ============================================================

@@ -1,4 +1,4 @@
-// write_letter_once (2026-10-26). CI cannot run Postgres; the SQL
+// write_letter_once (2026-09-28). CI cannot run Postgres; the SQL
 // contract is checked against the tracked text, like the other
 // migration tests.
 
@@ -9,12 +9,12 @@ import path from 'node:path'
 const DIR = path.join(__dirname, '..', '..', 'docs', 'sql')
 const read = (f: string) => readFileSync(path.join(DIR, f), 'utf8').replace(/\r\n/g, '\n')
 const strip = (s: string) => s.replace(/--.*$/gm, '')
-const migration = read('2026-10-26-letter-send-idempotency.sql')
-const verify = read('2026-10-26-letter-send-idempotency-verify.sql')
+const migration = read('2026-09-28-letter-send-idempotency.sql')
+const verify = read('2026-09-28-letter-send-idempotency-verify.sql')
 const code = strip(migration)
 const fn = code.slice(code.indexOf('create or replace function public.write_letter_once('), code.indexOf('$function$;', code.indexOf('$function$')) )
 
-describe('2026-10-26 letter send idempotency', () => {
+describe('2026-09-28 letter send idempotency', () => {
   it('one forward-only transaction, not yet applied, and write_letter itself untouched', () => {
     expect((migration.match(/^begin;/gm) ?? []).length).toBe(1)
     expect((migration.match(/^commit;/gm) ?? []).length).toBe(1)
