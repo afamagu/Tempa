@@ -49,7 +49,14 @@ export type CatalogueItem = {
 
 export type ItemState = 'complimentary' | 'owned' | 'available' | 'unavailable' | 'unknown'
 
-export type MemberContext = { spendEnabled: boolean; giftsEnabled: boolean; checkoutEnabled: boolean; balance: number }
+export type MemberContext = {
+  spendEnabled: boolean
+  giftsEnabled: boolean
+  checkoutEnabled: boolean
+  /** Commerce Checkpoint 5: every checkout gate passes for this member (incl. a test-mode tester). */
+  checkoutAvailable?: boolean
+  balance: number
+}
 
 export type Marketplace = {
   items: CatalogueItem[]
@@ -371,7 +378,7 @@ export async function loadMarketplace(supabase: SupabaseClient, postcards?: Post
       .eq('is_current', true)
     giftVersions = (data ?? []) as RawGiftVersion[]
   }
-  const ctx = context.error ? null : (context.data as { spend_enabled?: boolean; gifts_enabled?: boolean; checkout_enabled?: boolean; balance?: number | string } | null)
+  const ctx = context.error ? null : (context.data as { spend_enabled?: boolean; gifts_enabled?: boolean; checkout_enabled?: boolean; checkout_available?: boolean; balance?: number | string } | null)
   let fallbackBalance = 0
   if (!ctx) {
     const { data } = await supabase.rpc('commerce_my_credit_balance')
@@ -388,7 +395,7 @@ export async function loadMarketplace(supabase: SupabaseClient, postcards?: Post
     entitlements: entitlements.error ? [] : ((entitlements.data ?? []) as RawEntitlement[]),
     // Fail closed: without the context RPC nothing is unlockable from the UI.
     context: ctx
-      ? { spendEnabled: ctx.spend_enabled === true, giftsEnabled: ctx.gifts_enabled === true, checkoutEnabled: ctx.checkout_enabled === true, balance: Number(ctx.balance ?? 0) }
+      ? { spendEnabled: ctx.spend_enabled === true, giftsEnabled: ctx.gifts_enabled === true, checkoutEnabled: ctx.checkout_enabled === true, checkoutAvailable: ctx.checkout_available === true, balance: Number(ctx.balance ?? 0) }
       : { ...EMPTY_CONTEXT, balance: fallbackBalance },
   })
 }

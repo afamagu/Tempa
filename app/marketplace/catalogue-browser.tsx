@@ -144,6 +144,11 @@ export default function CatalogueBrowser({
               <span className="font-medium text-foreground">{balance}</span> Credits
             </p>
           )}
+          {mode === 'browse' && context.checkoutAvailable && (
+            <Link href="/you/credits" className={quietLinkClass} data-testid="get-credits-link">
+              Get Credits
+            </Link>
+          )}
           {onClose && (
             <button type="button" onClick={onClose} aria-label="Close Postcards" className={iconButtonClass}>
               <span aria-hidden="true" className="text-xl leading-none">×</span>

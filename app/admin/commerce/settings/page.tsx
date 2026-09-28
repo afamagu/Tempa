@@ -18,9 +18,19 @@ const SWITCHES: { key: keyof Overview['switches']; label: string; what: string }
  * its own reviewed, verified SQL — never a toggle in this checkpoint.
  * Provider secrets are never stored in the database or shown here.
  */
+type CheckoutConfig = {
+  markets: { provider: string; market: string; currency: string; enabled: boolean }[]
+  testers: { member: string; member_id: string; note: string | null; created_at: string }[]
+  unmatched_events: number
+  needs_attention: number
+}
+
 export default async function CommerceSettingsPage() {
   const supabase = await createClient()
-  const { data, error } = await callAdminCommerce<Overview>(supabase, 'admin_commerce_overview')
+  const [{ data, error }, checkout] = await Promise.all([
+    callAdminCommerce<Overview>(supabase, 'admin_commerce_overview'),
+    callAdminCommerce<CheckoutConfig>(supabase, 'admin_commerce_checkout_config'),
+  ])
   if (error || !data) return <p className="text-[14px] text-red-700">{error?.message}</p>
   return (
     <div className="space-y-5">
@@ -51,6 +61,31 @@ export default async function CommerceSettingsPage() {
           ))}
         </ul>
       </Card>
+      {checkout.data && (
+        <Card
+          title="Checkout eligibility"
+          note="Where each provider may sell Credit packs. A '*' price is only a price fallback — it never makes a market eligible."
+        >
+          {checkout.data.markets.length === 0 ? (
+            <p className={adminTableSecondaryClass}>No markets are eligible.</p>
+          ) : (
+            <ul className="divide-y divide-foreground/10">
+              {checkout.data.markets.map((m) => (
+                <li key={`${m.provider}-${m.market}-${m.currency}`} className="flex items-center justify-between gap-3 py-2.5">
+                  <p className={adminTableTextClass}>
+                    {m.provider} · {m.market} · {m.currency}
+                  </p>
+                  <Pill tone={m.enabled ? 'good' : 'quiet'}>{m.enabled ? 'Eligible' : 'Off'}</Pill>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className={adminTableSecondaryClass}>
+            Test-checkout members: {checkout.data.testers.length === 0 ? 'none' : checkout.data.testers.map((t) => t.member).join(', ')}
+            {' · '}payments needing attention: {checkout.data.needs_attention} · unmatched provider events: {checkout.data.unmatched_events}
+          </p>
+        </Card>
+      )}
     </div>
   )
 }

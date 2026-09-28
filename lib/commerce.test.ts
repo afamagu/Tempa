@@ -15,7 +15,9 @@ import {
   toPurchaseResult,
 } from './commerce'
 
-const SQL = readFileSync(path.join(__dirname, '..', 'docs', 'sql', '2026-10-21-commerce-credit-services.sql'), 'utf8')
+const SQL = ['2026-10-21-commerce-credit-services.sql', '2026-10-26-commerce-checkout-test-mode.sql']
+  .map((f) => readFileSync(path.join(__dirname, '..', 'docs', 'sql', f), 'utf8'))
+  .join('\n')
 
 const fake = (result: { data?: unknown; error?: { message: string; code?: string } | null }) => {
   const rpc = vi.fn().mockResolvedValue({ data: result.data ?? null, error: result.error ?? null })
@@ -24,7 +26,8 @@ const fake = (result: { data?: unknown; error?: { message: string; code?: string
 
 describe('commerce error codes', () => {
   it('every code the SQL can raise has member copy, and vice versa', () => {
-    const raised = new Set([...SQL.matchAll(/commerce_raise\('([a-z_]+)'\)|COMMERCE:([a-z_]+)'/g)].map((m) => m[1] ?? m[2]))
+    // 2026-10-26: the checkout gate returns its reason (`reason := '<code>'`), raised by the caller.
+    const raised = new Set([...SQL.matchAll(/commerce_raise\('([a-z_]+)'\)|COMMERCE:([a-z_]+)'|reason := '([a-z_]+)'/g)].map((m) => m[1] ?? m[2] ?? m[3]))
     const known = new Set(Object.keys(COMMERCE_ERROR_COPY).filter((k) => k !== 'unexpected'))
     expect([...raised].sort()).toEqual([...known].sort())
   })

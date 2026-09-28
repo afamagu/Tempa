@@ -280,6 +280,80 @@ Applied to production 2026-09-27; verifier `overall_pass = true`.
 - **Audit:** every mutation writes `admin_audit_log` (actor, action, target,
   reason, concise before/after; review notes and secrets never included).
 
+## Checkpoint 5 — fiat → Credits checkout, Flutterwave TEST MODE (`2026-10-26-commerce-checkout-test-mode.sql`)
+
+Not yet applied to production. Enables nothing: every switch stays OFF,
+Flutterwave keeps checkout and live mode disabled, no market is eligible and
+no tester is listed.
+
+- **Eligibility registry.** `commerce_provider_markets (provider, market,
+  currency, enabled)`: exact ISO countries only — `*` is rejected by a CHECK,
+  so the price-book fallback can never authorize a sale. The member's market
+  is their profile country (`profiles.country_code`).
+- **Gate order** (`tempa_private.commerce_checkout_gate`): active account →
+  provider checkout enabled → provider NOT in live mode (Checkpoint 5 is
+  test-only; `live_unavailable`) → (`commerce_enabled` AND
+  `fiat_checkout_enabled`) OR the member is in `commerce_checkout_testers` →
+  member market eligible → currency eligible for that market → only then the
+  price: published exact-market row, else the `*` row
+  (`commerce_resolve_pack_price`).
+- **Test-checkout allowlist (owner decision needed before live).** Previews
+  share the production database, so pre-launch payment testing uses
+  `commerce_checkout_testers` instead of switching member checkout on for
+  everyone. Test orders are real `commerce_orders` rows with
+  `payment_mode = 'test'`, and their Credits are real ledger entries for that
+  tester (visible in Admin → Orders & Payments as *test*).
+- **Orders.** `commerce_create_credit_order(pack, currency, key)` — the client
+  never sends an amount, Credits or a price. One order + one payment attempt
+  snapshot the published price row; same key → same order; a different
+  intent on the same key → `idempotency_conflict`; at most 10 unfinished
+  orders per member per 24 h.
+- **Settlement.** `commerce_settle_payment` is executable by `service_role`
+  only and is called by the server only after
+  `GET /v3/transactions/{id}/verify` with the secret key. Each provider event
+  (`webhook:<txn>:<status>`, `return:<txn>:<status>`) is recorded once;
+  the order row is locked; amount AND currency must equal the attempt's
+  expected values exactly (else `mismatch` + `needs_attention`, no Credits);
+  a transaction id can settle only one order; one verified success →
+  exactly one `credit_purchase` via `commerce_append_ledger`
+  (key `order:<id>`). Failed/cancelled → no Credits. A verified success
+  after an earlier failure still credits once (money taken is never lost). A
+  second successful charge for a paid order is flagged, never credited.
+- **App.** `lib/payments/flutterwave.ts` (server-only; refuses any
+  non-`FLWSECK_TEST-` key), `/you/credits` (Get Credits),
+  `/you/credits/return` (verifies with Flutterwave; the query string is only
+  a hint), `POST /api/payments/flutterwave/webhook` (`verif-hash`
+  constant-time check, then API re-verification; the body only names the
+  transaction). Amounts are integer minor units with a fixed currency
+  exponent table; unknown currencies fail closed.
+- **Proven** on PGlite and a genuine PostgreSQL 17.9 server over the
+  production-faithful fixture, including webhook + browser-return settling
+  the same payment concurrently on two connections (one applied, one
+  duplicate, one credit — 10/10 rounds). Every earlier commerce verifier
+  still passes.
+
+### Owner steps to run one test payment (after review; not automatic)
+
+1. Apply `2026-10-26-commerce-checkout-test-mode.sql`, then run the verifier
+   (`overall_pass = true`, every column true right after migration).
+2. Vercel (Preview and/or Production, server-only): `FLUTTERWAVE_SECRET_KEY`
+   = the Flutterwave **test** secret key, `FLUTTERWAVE_WEBHOOK_HASH` = the
+   secret hash you choose in Flutterwave → Settings → Webhooks (test mode).
+3. Flutterwave (test mode) webhook URL:
+   `https://<host>/api/payments/flutterwave/webhook`.
+4. Admin → Commerce: create a Credit pack, give it a published local price
+   (and optionally a `*` fallback price), publish it.
+5. Reviewed SQL (owner-run): enable Flutterwave checkout in test mode,
+   one eligible market/currency, and your own account as a tester —
+   `update public.commerce_payment_providers set checkout_enabled = true
+   where code = 'flutterwave';` · `insert into
+   public.commerce_provider_markets (provider, market, currency, enabled)
+   values ('flutterwave', '<CC>', '<CUR>', true);` · `insert into
+   public.commerce_checkout_testers (user_id, note) values ('<your user id>',
+   'owner test');` — member commerce switches stay OFF.
+6. Undo after testing: set `checkout_enabled = false`, disable the market,
+   delete the tester row.
+
 ### Carried requirements
 
 - **Before `credit_spend_enabled` is ever turned on:** re-run the Checkpoint 2
@@ -302,6 +376,11 @@ Applied to production 2026-09-27; verifier `overall_pass = true`.
   explicit reason and audit semantics (owner decision: not in Checkpoint 4).
 - **Checkpoint 5 (checkout):** enforce the `market='*'` invariant above —
   market, currency and provider eligibility are checked before price
-  resolution; the fallback never authorizes a sale by itself.
+  resolution; the fallback never authorizes a sale by itself. *Implemented in
+  2026-10-26 (see Checkpoint 5).*
+- **Before live payments (Checkpoint 10):** decide how test-mode orders and
+  their Credits are treated at launch (they are marked `payment_mode =
+  'test'`); remove the tester allowlist from the launch path; live keys,
+  live webhook hash and `live_payments_enabled` are a separate gate.
 - **Checkpoint 10 (launch gate):** human country names for Place terms;
   legal review of unused-Credit wording on closure.

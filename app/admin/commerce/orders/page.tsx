@@ -18,12 +18,16 @@ type Order = {
   usd_reference_minor: number
   provider: string
   state: string
+  /** 2026-10-26 (Checkpoint 5): 'test' | 'live' (null only for pre-checkout rows) */
+  mode?: string | null
+  credited?: boolean
   created_at: string
   paid_at: string | null
-  attempts: { reference: string; status: string | null; verification: string; reconciliation: string; expected_amount_minor: number; expected_currency: string; created_at: string }[]
+  attempts: { reference: string; status: string | null; transaction_id?: string | null; verification: string; reconciliation: string; expected_amount_minor: number; expected_currency: string; created_at: string }[]
+  events?: { type: string; outcome: string | null; received_at: string }[]
 }
 
-/** Read-only operational view over the provider-neutral order tables. Checkout, verification and refunds arrive in later checkpoints. */
+/** Read-only operational view over the provider-neutral order tables (Checkpoint 5: test-mode checkout). Refunds and disputes arrive in Checkpoint 6. No keys, card data or payloads exist here to show. */
 export default async function CommerceOrdersPage() {
   const supabase = await createClient()
   const { data, error } = await callAdminCommerce<Order[]>(supabase, 'admin_commerce_orders', { p_limit: 100 })
@@ -31,12 +35,12 @@ export default async function CommerceOrdersPage() {
     <div className="space-y-5">
       <div className="space-y-1">
         <h1 className={sectionTitleClass}>Orders & Payments</h1>
-        <p className={adminMetadataClass}>Credit-pack orders and their payment attempts. Read-only for now — checkout opens with the payments checkpoint; refunds and disputes follow.</p>
+        <p className={adminMetadataClass}>Credit-pack orders, their payment attempts and provider events. Read-only. Credits are only added after the payment is verified with the provider; refunds and disputes follow in a later checkpoint.</p>
       </div>
       {error ? (
         <p className="text-[14px] text-red-700">{error.message}</p>
       ) : (data ?? []).length === 0 ? (
-        <Empty>No orders yet. Fiat checkout is off, so none can be created.</Empty>
+        <Empty>No orders yet.</Empty>
       ) : (
         <Card>
           <ul className="divide-y divide-foreground/10">
@@ -46,7 +50,10 @@ export default async function CommerceOrdersPage() {
                   <p className={adminTableTextClass}>
                     <span className="font-mono text-[14px]">{o.reference}</span> · {o.product} ({formatCredits(o.credits)})
                   </p>
-                  <Pill tone={o.state === 'paid' ? 'good' : o.state === 'failed' || o.state === 'charged_back' ? 'bad' : 'quiet'}>{o.state.replace(/_/g, ' ')}</Pill>
+                  <span className="flex items-center gap-2">
+                    {o.mode === 'test' && <Pill tone="quiet">test</Pill>}
+                    <Pill tone={o.state === 'paid' ? 'good' : o.state === 'failed' || o.state === 'charged_back' ? 'bad' : 'quiet'}>{o.state.replace(/_/g, ' ')}</Pill>
+                  </span>
                 </div>
                 <p className={adminTableSecondaryClass}>
                   <Link href={`/admin/commerce/credits?member=${o.member_id}`} className="hover:underline">
@@ -56,9 +63,16 @@ export default async function CommerceOrdersPage() {
                 </p>
                 {o.attempts.map((a) => (
                   <p key={a.reference} className={adminTableSecondaryClass}>
-                    Attempt {a.reference}: {a.status ?? 'no status'} · verification {a.verification} · reconciliation {a.reconciliation}
+                    Attempt {a.reference}: {a.status ?? 'no status'}
+                    {a.transaction_id ? ` · transaction ${a.transaction_id}` : ''} · verification {a.verification} · reconciliation {a.reconciliation}
                   </p>
                 ))}
+                {(o.events ?? []).length > 0 && (
+                  <p className={adminTableSecondaryClass}>
+                    Events: {o.events!.map((e) => `${e.type} (${e.outcome ?? 'pending'})`).join(' · ')}
+                    {o.credited ? ' · Credits added' : ''}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
