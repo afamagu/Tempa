@@ -83,7 +83,27 @@ function toPostcardJsonb(postcard: ParsedPostcard | null): { postcard_key: strin
  * bounds all seven surfaces' real send/publish throughput too, without
  * needing to touch each of those RPC bodies separately.
  */
+/** Per-phase durations for this request, returned as a standard
+ * `Server-Timing` header (durations only, no content) so the composer's
+ * send-latency report can separate server work from network time. */
+function serverTimer() {
+  const start = performance.now()
+  let last = start
+  const phases: string[] = []
+  return {
+    mark(name: string) {
+      const now = performance.now()
+      phases.push(`${name};dur=${(now - last).toFixed(1)}`)
+      last = now
+    },
+    header() {
+      return [...phases, `total;dur=${(performance.now() - start).toFixed(1)}`].join(', ')
+    },
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const timer = serverTimer()
   const supabase = await createClient()
   const {
     data: { user },
@@ -93,6 +113,7 @@ export async function POST(request: NextRequest) {
   if (authError || !user) {
     return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
   }
+  timer.mark('auth')
 
   let payload: unknown
   try {
@@ -125,6 +146,7 @@ export async function POST(request: NextRequest) {
   if (backstopLimit.data === false || surfaceLimit.data === false) {
     return NextResponse.json({ error: 'Too many requests. Please try again shortly.' }, { status: 429 })
   }
+  timer.mark('rate_limit')
 
   // dispatch_publish has no pre-existing Dispatch id at evaluation time
   // — its context is the authenticated member's own identity, derived
@@ -164,6 +186,7 @@ export async function POST(request: NextRequest) {
   if (!authorized) {
     return NextResponse.json({ error: 'You are not able to write in this context.' }, { status: 403 })
   }
+  timer.mark('authorize')
 
   // Every member-written text field is classified SEPARATELY and
   // combined structurally (combineClassifications), never concatenated
@@ -201,6 +224,7 @@ export async function POST(request: NextRequest) {
     classifications.push(classify(parsed.request.postcard.backMessage))
   }
   const classification = combineClassifications(classifications)
+  timer.mark('classify')
 
   const { data, error } = await service
     .rpc('record_safety_evaluation', {
@@ -229,8 +253,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not evaluate this content right now. Please try again.' }, { status: 500 })
   }
 
+  timer.mark('record')
   const row = data as { evaluation_id: string; expires_at: string; is_new: boolean }
   return NextResponse.json(
-    buildEvaluateResponse(row.evaluation_id, classification.mutationDisposition, classification.reasonCodes, parsed.request.surface)
+    buildEvaluateResponse(row.evaluation_id, classification.mutationDisposition, classification.reasonCodes, parsed.request.surface),
+    { headers: { 'Server-Timing': timer.header() } }
   )
 }

@@ -52,7 +52,15 @@ export type EvaluateOutcome =
  * a composer needs to decide what happens next. Any failure to reach
  * the server, a non-OK status, or a response that doesn't parse as
  * expected all become `'error'` — never silently treated as `'allow'`. */
-export async function evaluateSafety(payload: EvaluatePayload): Promise<EvaluateOutcome> {
+/** Optional latency observer: total client-side duration of the
+ * evaluate request plus the route's own `Server-Timing` header. */
+export type EvaluateTiming = { ms: number; serverTiming: string | null }
+
+export async function evaluateSafety(
+  payload: EvaluatePayload,
+  observe?: (timing: EvaluateTiming) => void
+): Promise<EvaluateOutcome> {
+  const started = performance.now()
   let response: Response
   try {
     response = await fetch('/api/safety/evaluate', {
@@ -64,6 +72,8 @@ export async function evaluateSafety(payload: EvaluatePayload): Promise<Evaluate
     console.error('[safety] evaluateSafety request threw', { message: err instanceof Error ? err.message : String(err) })
     return { status: 'error' }
   }
+
+  observe?.({ ms: performance.now() - started, serverTiming: response.headers?.get?.('server-timing') ?? null })
 
   if (!response.ok) {
     console.error('[safety] evaluateSafety returned a non-OK status', { status: response.status })
