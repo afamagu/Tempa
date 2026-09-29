@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Mindform from '@/app/mindform'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import CountryFlag from '@/app/country-flag'
 import TopicChips from '@/app/board/topic-chips'
 import DispatchBody from '@/app/board/dispatch-body'
@@ -15,51 +16,6 @@ import {
 import { dispatchPostcardToBaseContent, type SharedDispatch } from '@/lib/dispatches'
 import DispatchIdentityLabel, { SponsorCta } from '@/app/board/dispatch-identity-label'
 
-/**
- * The external reader's actual content — factored out from the async
- * page.tsx purely so it stays unit-testable (this codebase never unit-
- * tests async Server Component pages directly; the same reasoning
- * already applies to dispatch-body.tsx/dispatch-reader.tsx for the
- * authenticated reader). One piece of writing, nothing else: no Board/
- * search/Keep/Letterbox/Minds/You navigation, no link to the writer's
- * full profile or their other Dispatches, no follower/view/Keep count,
- * no resume state. This component receives exactly what
- * get_shared_dispatch returned (via lib/dispatches.ts's
- * getSharedDispatch) and renders exactly that — it makes no data access
- * of its own. No swipe, no next Dispatch, no feed continuation: leaving
- * the page is the only "close."
- *
- * Mindform's identifier is the Dispatch's own id, not the author's user
- * id — get_shared_dispatch deliberately never returns the author's id
- * to an anonymous caller, so the same author's Mindform tint will not
- * visually match their in-app one here. A deliberate, accepted
- * consequence of that privacy boundary, not an oversight.
- *
- * Visual rule (Board usability follow-up, 2026-09-09): the writing
- * itself sits on `bg-surface-shell` — the exact token the private-
- * letter reader (letter-body.tsx) already uses for its own darker
- * paper surface — while everything around it (masthead, identity,
- * title, topics, Join CTA) stays on the ordinary page background. Only
- * DispatchBody gets the treatment, matching the authenticated reader
- * (app/board/[dispatchId]/page.tsx) exactly, so the external and
- * authenticated readers feel like the same surface. See the Build
- * Guide's own note on this rule before changing it.
- *
- * Wordmark rule (Board live-test corrections, 2026-09-10): the masthead
- * uses the SAME italic-serif "Tempa" treatment as every other masthead
- * in the app (app-shell.tsx, dispatch-unavailable.tsx) — this used to
- * read "TEMPA" in the small-caps metadata-label style instead, an
- * inconsistent one-off. "Tempa" inside ordinary sentences/buttons below
- * stays plain interface type, never italicized — a wordmark is a
- * masthead treatment, not something sprinkled through UI copy.
- *
- * Positioning (Board live-test corrections, 2026-09-10): the closing
- * CTA is deliberately pen-pal/correspondence-positioned, not a
- * Medium-style "discover more content" line — see the Build Guide's own
- * note on this distinction. The CTA for a signed-out visitor routes to
- * account creation first (/sign-in?intent=join), never a bare "Sign
- * in" that would confuse someone who has never heard of Tempa before.
- */
 export default function SharedDispatchView({
   dispatch,
   isAuthenticated,
@@ -67,9 +23,6 @@ export default function SharedDispatchView({
 }: {
   dispatch: SharedDispatch
   isAuthenticated: boolean
-  /** Public Dispatch web pages — the member's public pseudonym, to invite
-   * an outside reader toward the person who wrote it. Never a profile
-   * link (profiles stay members-only). null keeps the share-link copy. */
   writerInvitation?: string | null
 }) {
   const hasMoments = dispatch.moments.some((m) => m.imageUrl)
@@ -82,7 +35,16 @@ export default function SharedDispatchView({
         <div className="space-y-4">
           {dispatch.identity.kind === 'member' ? (
             <div className="flex items-center gap-3">
-              <Mindform identifier={dispatch.id} size="md" />
+              {dispatch.identity.markUrl ? (
+                <ProfileIdentityMark
+                  identifier={dispatch.id}
+                  markUrl={dispatch.identity.markUrl}
+                  label={`${dispatch.authorPseudonym}'s Mark`}
+                  size="md"
+                />
+              ) : (
+                <Mindform identifier={dispatch.id} size="md" />
+              )}
               <div>
                 <div className="flex items-center gap-1.5">
                   <p className="text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
@@ -92,9 +54,6 @@ export default function SharedDispatchView({
               </div>
             </div>
           ) : (
-            // Official/Sponsored: Tempa emblem + "Tempa", or "Sponsored" +
-            // sponsor. get_shared_dispatch never returns the creating
-            // admin's identity for these rows, and none is shown.
             <div className="space-y-1">
               <DispatchIdentityLabel identity={dispatch.identity} size="md" linkable={false} />
               <p className={metadataTextClass}>{formatDatePlain(dispatch.publishedAt)}</p>
@@ -102,21 +61,9 @@ export default function SharedDispatchView({
           )}
 
           <h1 className={proseHeadingClass}>{dispatch.title}</h1>
-
           {dispatch.topics.length > 0 && <TopicChips topics={dispatch.topics} />}
-
           {hasMoments && <MomentHint dispatchId={dispatch.id} />}
 
-          {/* Dispatch Postcards Checkpoint 2 — the same LetterheadPostcard
-              component the authenticated reader uses, fed exactly the
-              resolved fields get_shared_dispatch already returned (no
-              second fetch, no direct query against dispatch_postcards/
-              postcard_catalog/postcard_versions from this anon-facing
-              page). A signed-out visitor gets the full front/back/
-              Living-Reveal experience — never an additional member-only
-              capability, since LetterheadPostcard/PostcardObject make no
-              Supabase calls of their own. No attached Postcard renders
-              nothing here, same as the authenticated reader. */}
           {dispatch.postcard && (
             <div className="flex justify-end">
               <LetterheadPostcard
