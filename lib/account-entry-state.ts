@@ -29,6 +29,8 @@ type EntryStateRow = {
   onboarding_stage: string | null
   terms_current: boolean | null
   guidelines_current: boolean | null
+  /** Added by 2026-10-29-writing-style.sql; undefined before it. */
+  has_writing_style?: boolean | null
 }
 
 export async function readProxyAccountEntry(supabase: SupabaseClient, userId: string): Promise<ProxyAccountEntry> {
@@ -48,6 +50,9 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
         legalCurrent: Boolean(row.terms_current) && Boolean(row.guidelines_current),
         hasProfile: Boolean(row.has_profile),
         onboardingStage: (row.onboarding_stage as OnboardingStage | null) ?? null,
+        // Only an explicit `false` gates: an older RPC without the column
+        // (undefined) or an unreadable value never interrupts anyone.
+        needsWritingStyle: row.has_writing_style === false,
       },
     }
   }

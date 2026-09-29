@@ -113,6 +113,7 @@ export default function DispatchComposer({
   showPostcardIntro = false,
   publication,
   webChoiceAvailable = false,
+  writingStyleId = null,
 }: {
   publication?: { publishedAs: OfficialPublishedAs; initialSponsor?: SponsorFields | null }
   authorId: string
@@ -123,6 +124,10 @@ export default function DispatchComposer({
   showComposerIntro?: boolean
   showPostcardIntro?: boolean
   webChoiceAvailable?: boolean
+  /** Writing Style — the author's CURRENT style, for Preview only (the
+   * database snapshots the real value at Publish). Ignored for
+   * official/sponsored Dispatches, which speak in Tempa's own voice. */
+  writingStyleId?: string | null
 }) {
   const isEdit = mode === 'edit' && Boolean(existingDispatch)
   const official = publication ?? null
@@ -747,6 +752,7 @@ export default function DispatchComposer({
           publishBlockedReason={publishBlockedReason}
           onEditPostcard={() => setPostcardEditorOpen(true)}
           error={error}
+          writingStyleId={official ? null : writingStyleId}
           webPublic={showWebChoice ? webPublic : undefined}
         />
       )}

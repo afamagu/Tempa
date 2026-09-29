@@ -10,9 +10,10 @@ import {
   primaryButtonClass,
   secondaryButtonClass,
   proseSubheadingClass,
-  proseBodyClass,
   contextQuestionClass,
 } from '@/app/profile/ui'
+import AuthoredProse from '@/app/authored-prose'
+import { WRITING_STYLE_ONBOARDING_HREF } from '@/lib/onboarding'
 import {
   questionSaveConfirmationCopy,
   QUESTION_ANSWER_MAX_CHARS,
@@ -55,6 +56,7 @@ export default function QuestionAnswer({
   isActive = true,
   nextQuestion = null,
   onboarding = false,
+  writingStyleId = null,
 }: {
   userId: string
   questionId: string
@@ -64,6 +66,9 @@ export default function QuestionAnswer({
   isActive?: boolean
   nextQuestion?: LibraryQuestion | null
   onboarding?: boolean
+  /** The member's own current Writing Style, for their published
+   * response (null during onboarding — it is chosen next). */
+  writingStyleId?: string | null
 }) {
   const router = useRouter()
   const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !isActive ? 'view' : 'edit')
@@ -214,11 +219,15 @@ export default function QuestionAnswer({
                 Your response is one of the first ways people can discover you on Tempa. You can answer the other two whenever you feel like it. For now, there are people to meet.
               </p>
               <div className="rounded-md bg-surface-shell p-4 sm:p-5">
-                <p className={`whitespace-pre-wrap ${proseBodyClass}`}>{publishedBody}</p>
+                <AuthoredProse styleId={null}>
+                  <p className="whitespace-pre-wrap">{publishedBody}</p>
+                </AuthoredProse>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/minds" className={primaryButtonClass}>Meet some people</Link>
+              {/* Writing Style comes next in onboarding — shown the words
+                  just written, then on into People. */}
+              <Link href={WRITING_STYLE_ONBOARDING_HREF} className={primaryButtonClass}>Continue</Link>
               {nextQuestion ? (
                 <Link href={`/question/${nextQuestion.id}`} className={secondaryButtonClass}>Answer another Question</Link>
               ) : (
@@ -232,7 +241,9 @@ export default function QuestionAnswer({
               {confirmation && <p className={helperTextClass}>{confirmation}</p>}
               <p className={helperTextClass}>{isActive ? 'Published' : 'This Question is no longer open'}</p>
               <div className="rounded-md bg-surface-shell p-4 sm:p-5">
-                <p className={`whitespace-pre-wrap ${proseBodyClass}`}>{publishedBody}</p>
+                <AuthoredProse styleId={writingStyleId}>
+                  <p className="whitespace-pre-wrap">{publishedBody}</p>
+                </AuthoredProse>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">

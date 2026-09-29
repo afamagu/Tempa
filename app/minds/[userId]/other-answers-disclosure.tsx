@@ -18,6 +18,7 @@ export default function OtherAnswersDisclosure({
   showReport,
   ownerPseudonym,
   isSelf = false,
+  writingStyleId = null,
 }: {
   answers: MyQuestionAnswer[]
   showReport: boolean
@@ -32,6 +33,8 @@ export default function OtherAnswersDisclosure({
   /** True on a member's own profile — "Read your other responses"
    * rather than a third-person pseudonym. */
   isSelf?: boolean
+  /** The owner's current Writing Style. */
+  writingStyleId?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -63,7 +66,14 @@ export default function OtherAnswersDisclosure({
                 <p className="text-[13px] text-muted">Hidden by TEMPA.</p>
               </div>
             ) : (
-              <ProfileAnswer key={a.id} id={a.id} prompt={a.prompt} body={a.body} showReport={showReport} />
+              <ProfileAnswer
+                key={a.id}
+                id={a.id}
+                prompt={a.prompt}
+                body={a.body}
+                showReport={showReport}
+                writingStyleId={writingStyleId}
+              />
             )
           )}
         </div>

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { proseBodyClass, metadataTextClass, iconButtonClass } from '@/app/profile/ui'
+import { metadataTextClass, iconButtonClass } from '@/app/profile/ui'
+import AuthoredProse from '@/app/authored-prose'
 import QuestionInfoIcon from '@/app/question-info-icon'
 import ReportButton from '@/app/report-button'
 
@@ -59,6 +60,7 @@ export default function ProfileAnswer({
   body,
   isPrimary = false,
   showReport,
+  writingStyleId = null,
 }: {
   id: string
   prompt: string
@@ -72,6 +74,8 @@ export default function ProfileAnswer({
    * it explicitly. */
   isPrimary?: boolean
   showReport: boolean
+  /** The writer's CURRENT Writing Style — a profile is who they are now. */
+  writingStyleId?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = isLongAnswer(body)
@@ -95,9 +99,9 @@ export default function ProfileAnswer({
       </div>
 
       <div className="-mt-2 rounded-md bg-surface-shell p-4">
-        <p className={`whitespace-pre-wrap ${proseBodyClass} ${expanded ? '' : PREVIEW_CLAMP_CLASS}`}>
-          {body}
-        </p>
+        <AuthoredProse styleId={writingStyleId}>
+          <p className={`whitespace-pre-wrap ${expanded ? '' : PREVIEW_CLAMP_CLASS}`}>{body}</p>
+        </AuthoredProse>
         {isLong && (
           <button
             type="button"

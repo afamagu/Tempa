@@ -15,7 +15,8 @@ import {
   type IntroductionCard,
   type IntroductionConsumeReason,
 } from '@/lib/member-introductions'
-import { contextQuestionClass, helperTextClass, primaryButtonClass, proseBodyClass, quietLinkClass } from '@/app/profile/ui'
+import { contextQuestionClass, helperTextClass, primaryButtonClass, quietLinkClass } from '@/app/profile/ui'
+import AuthoredProse from '@/app/authored-prose'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 
 type Supabase = ReturnType<typeof createClient>
@@ -261,7 +262,9 @@ export function IntroductionDialog({
           <div className="mt-6 space-y-3">
             {card.prompt && <p className={contextQuestionClass}>{card.prompt}</p>}
             <div className="rounded-md bg-surface-shell p-4">
-              <p className={`whitespace-pre-wrap ${proseBodyClass}`}>{card.body}</p>
+              <AuthoredProse styleId={card.writingStyleId ?? null}>
+                <p className="whitespace-pre-wrap">{card.body}</p>
+              </AuthoredProse>
             </div>
           </div>
         </div>

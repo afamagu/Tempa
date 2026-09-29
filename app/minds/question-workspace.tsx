@@ -5,9 +5,9 @@ import {
   helperTextClass,
   quietLinkClass,
   proseHeadingClass,
-  proseBodyClass,
   contextQuestionClass,
 } from '@/app/profile/ui'
+import AuthoredProse from '@/app/authored-prose'
 import { formatDatePlain } from '@/lib/format-date'
 import type { LibraryQuestion, MyQuestionAnswer } from '@/lib/questions'
 
@@ -33,16 +33,16 @@ function excerpt(text: string, maxChars = 240) {
 // unchanged server-side (see lib/questions.ts's own header comment)
 // purely for backward compatibility with historical data — nothing in
 // the member-facing UI reads or writes is_current anymore.
-function AnsweredQuestionRow({ answer }: { answer: MyQuestionAnswer }) {
+function AnsweredQuestionRow({ answer, writingStyleId }: { answer: MyQuestionAnswer; writingStyleId: string | null }) {
   return (
     <div className="border-b border-foreground/10 py-6 first:pt-0 last:border-b-0">
       <Link href={`/question/${answer.questionId}`} className="block hover:opacity-90">
         <p className={contextQuestionClass}>{answer.prompt}</p>
         <p className={`mt-1 ${helperTextClass}`}>{formatDatePlain(answer.updatedAt)}</p>
         <div className="mt-3 rounded-md bg-surface-shell p-4">
-          <p className={`line-clamp-4 whitespace-pre-wrap ${proseBodyClass}`}>
-            {excerpt(answer.body)}
-          </p>
+          <AuthoredProse styleId={writingStyleId}>
+            <p className="line-clamp-4 whitespace-pre-wrap">{excerpt(answer.body)}</p>
+          </AuthoredProse>
         </div>
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -91,10 +91,13 @@ export default function QuestionWorkspace({
   // always has a real array to work with.
   questions = [],
   answers = [],
+  writingStyleId = null,
 }: {
   tab: 'answers' | 'new'
   questions?: LibraryQuestion[]
   answers?: MyQuestionAnswer[]
+  /** The member's own current Writing Style. */
+  writingStyleId?: string | null
 }) {
   if (tab === 'answers') {
     if (answers.length === 0) {
@@ -110,7 +113,7 @@ export default function QuestionWorkspace({
     return (
       <div className="divide-y divide-foreground/10">
         {answers.map((answer) => (
-          <AnsweredQuestionRow key={answer.id} answer={answer} />
+          <AnsweredQuestionRow key={answer.id} answer={answer} writingStyleId={writingStyleId} />
         ))}
       </div>
     )

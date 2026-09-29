@@ -16,6 +16,7 @@ import {
   listRelatedPublicDispatches,
 } from '@/lib/public-dispatch-discovery'
 import { SITE_URL } from '@/lib/site'
+import { getPublicDispatchWritingStyle } from '@/lib/writing-style-data'
 import { quietLinkClass } from '@/app/profile/ui'
 import SharedDispatchView from '@/app/d/[shareToken]/shared-dispatch-view'
 import PublicDispatchCard from '../public-dispatch-card'
@@ -52,7 +53,10 @@ export default async function PublicDispatchPage({ params }: { params: Promise<{
   // Only steers the closing call to action (members → The Board); never
   // a network call and never a gate on the article itself.
   const hasSession = (await cookies()).getAll().some((c) => /^sb-.+-auth-token/.test(c.name))
-  const related = await listRelatedPublicDispatches(createAnonClient(), d.slug, d.topics, 4)
+  const [related, writingStyleId] = await Promise.all([
+    listRelatedPublicDispatches(createAnonClient(), d.slug, d.topics, 4),
+    getPublicDispatchWritingStyle(createAnonClient(), d.slug),
+  ])
   const breadcrumb = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -70,6 +74,7 @@ export default async function PublicDispatchPage({ params }: { params: Promise<{
         dispatch={d}
         isAuthenticated={hasSession}
         writerInvitation={d.identity.kind === 'member' ? d.identity.name : null}
+        writingStyleId={writingStyleId}
       />
 
       <section className="flex justify-center px-6 pb-14" aria-label="More public Dispatches">

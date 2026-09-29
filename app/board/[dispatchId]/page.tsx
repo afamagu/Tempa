@@ -50,6 +50,7 @@ import BoardShelfCard from '@/app/home/board-shelf-card'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import DispatchIdentityLabel, { SponsorCta } from '../dispatch-identity-label'
 import { dispatchShareText } from '@/lib/dispatch-identity'
+import { getDispatchWritingStyles } from '@/lib/writing-style-data'
 
 function FlagIcon() {
   return (
@@ -184,6 +185,7 @@ export default async function DispatchPage({
     activePartnerIds,
     contactedAnswerIds,
     readingIntroSeen,
+    dispatchWritingStyles,
   ] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getDispatchMoments(supabase, dispatch.id),
@@ -230,6 +232,9 @@ export default async function DispatchPage({
     // wholly separate page that never imports this component at all, so
     // it structurally can't show here.
     hasCompletedGuide(supabase, user.id, 'dispatch_reading'),
+    // Writing Style — the style this Dispatch was PUBLISHED in; changing
+    // the author's profile style later never restyles it.
+    getDispatchWritingStyles(supabase, [dispatch.id]),
   ])
   const webState = isAuthor ? await getDispatchWebState(supabase, dispatch.id) : null
 
@@ -428,6 +433,7 @@ export default async function DispatchPage({
                 body={dispatch.body}
                 moments={moments}
                 initialPosition={initialPosition}
+                writingStyleId={dispatchWritingStyles.get(dispatch.id) ?? null}
               />
             </div>
 

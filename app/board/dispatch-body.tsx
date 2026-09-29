@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { proseBodyClass } from '@/app/profile/ui'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import FormattedText from '@/app/letters/formatted-text'
 import PhotoMomentToken from '@/app/letters/[letterId]/photo-moment-token'
 import PhotoMomentViewer from '@/app/letters/[letterId]/photo-moment-viewer'
 import type { DispatchMoment } from '@/lib/dispatches'
+import AuthoredProse from '@/app/authored-prose'
+import ReadingModeControl, { useReadingMode } from '@/app/reading-mode-control'
+import { composeProse, offersReaderView } from '@/lib/writing-style'
 
 /**
  * Renders a Dispatch's paragraphs with any still-image Moments placed
@@ -28,6 +30,7 @@ export default function DispatchBody({
   body,
   moments,
   paragraphAttrs,
+  writingStyleId = null,
 }: {
   body: string
   moments: DispatchMoment[]
@@ -37,12 +40,21 @@ export default function DispatchBody({
    * integration excerpt, if it ever grows to use this component) isn't
    * forced to supply a no-op. */
   paragraphAttrs?: (index: number) => Record<string, string | number>
+  /** The style this Dispatch was PUBLISHED in (dispatches.
+   * author_writing_style_id) — or, in the composer's Preview, the
+   * author's current style. Null = Tempa's classic prose. */
+  writingStyleId?: string | null
 }) {
   const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string; momentId: string } | null>(null)
+  const [readingMode, setReadingMode] = useReadingMode()
 
   const { isRich, body: cleanBody } = stripRichBodyMarker(body)
   const paragraphs = splitParagraphs(cleanBody)
   const momentByPosition = new Map(moments.map((m) => [m.position, m]))
+  // Writing Style — presentation-only roles (see lib/writing-style.ts).
+  const { roles } = composeProse(paragraphs, isRich)
+  const readerViewOffered = offersReaderView(writingStyleId, cleanBody)
+  const mode = readerViewOffered ? readingMode : 'original'
 
   // Live-test diagnosis (2026-09-10), stage 7: proves whether a Moment
   // that DID reach this component (with a resolved imageUrl) actually
@@ -65,28 +77,40 @@ export default function DispatchBody({
 
   return (
     <>
-      <div className="space-y-4">
+      {readerViewOffered && (
+        <div className="mb-2 flex justify-end">
+          <ReadingModeControl mode={mode} onChange={setReadingMode} />
+        </div>
+      )}
+      <AuthoredProse styleId={writingStyleId} mode={mode} opening measure>
         {paragraphs.map((paragraph, index) => {
           const moment = momentByPosition.get(index)
           return (
-            <p key={index} className={`whitespace-pre-wrap ${proseBodyClass}`} {...(paragraphAttrs?.(index) ?? {})}>
+            <p
+              key={index}
+              className={`wp-block whitespace-pre-wrap${roles[index] === 'opening' ? ' wp-opening' : ''}`}
+              data-wp-role={roles[index]}
+              {...(paragraphAttrs?.(index) ?? {})}
+            >
               <FormattedText text={paragraph} isRich={isRich} />
               {moment?.imageUrl && (
-                <PhotoMomentToken
-                  src={moment.imageUrl}
-                  onOpen={() =>
-                    setOpenPhoto({
-                      src: moment.imageUrl as string,
-                      alt: 'A photo shared in this Dispatch',
-                      momentId: moment.id,
-                    })
-                  }
-                />
+                <span className="wp-interface">
+                  <PhotoMomentToken
+                    src={moment.imageUrl}
+                    onOpen={() =>
+                      setOpenPhoto({
+                        src: moment.imageUrl as string,
+                        alt: 'A photo shared in this Dispatch',
+                        momentId: moment.id,
+                      })
+                    }
+                  />
+                </span>
               )}
             </p>
           )
         })}
-      </div>
+      </AuthoredProse>
 
       {openPhoto && (
         <PhotoMomentViewer

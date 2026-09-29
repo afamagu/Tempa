@@ -19,6 +19,7 @@ import {
   closeReasonForSender,
 } from '@/lib/letters'
 import { hasCompletedGuide } from '@/lib/guide'
+import { getLetterWritingStyles } from '@/lib/writing-style-data'
 import { getBlockScope } from '@/lib/blocking'
 import { hasAcknowledgedCorrespondenceFeature } from '@/lib/acknowledgements'
 import { formatDateTimeFull } from '@/lib/format-date'
@@ -116,6 +117,7 @@ export default async function LetterPage({
     otherPartyBlockScope,
     { data: contactNote },
     { data: onBreakIds },
+    letterWritingStyles,
   ] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, mark_id').in('id', [user.id, otherPartyId]),
     getCorrespondence(supabase, target.correspondenceId),
@@ -137,7 +139,11 @@ export default async function LetterPage({
     // correspondents_on_break only ever answers for people who already
     // share letters with the caller.
     supabase.rpc('correspondents_on_break', { p_user_ids: [otherPartyId] }),
+    // Writing Style — the style this letter was SENT in (snapshot), never
+    // the sender's current choice. Missing = Tempa's classic prose.
+    getLetterWritingStyles(supabase, [target.id]),
   ])
+  const letterWritingStyleId = letterWritingStyles.get(target.id) ?? null
   const otherIsOnBreak = Array.isArray(onBreakIds) && (onBreakIds as unknown[]).length > 0
   const letterPostcard = letterPostcardsByLetterId.get(target.id) ?? null
 
@@ -397,13 +403,14 @@ export default async function LetterPage({
               </div>
             )}
 
-            <div className="mt-4 max-w-[68ch]">
+            <div className="mt-4">
               <LetterReader
                 viewerId={user.id}
                 letterId={target.id}
                 body={target.body}
                 moments={momentsByLetterId.get(target.id) ?? []}
                 photoConsent={targetPhotoConsent}
+                writingStyleId={letterWritingStyleId}
               />
             </div>
 
@@ -422,6 +429,7 @@ export default async function LetterPage({
                 sourceLetterBody={target.body}
                 sourceLetterMoments={momentsByLetterId.get(target.id) ?? []}
                 sourceLetterPhotoConsent={targetPhotoConsent}
+                sourceLetterWritingStyleId={letterWritingStyleId}
               />
             )}
 

@@ -10,7 +10,20 @@ const loads: string[] = []
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }))
 // next/font only works inside the Next compiler; the root layout's
 // metadata/viewport exports are what's under test here.
-vi.mock('next/font/google', () => ({ Geist: () => ({ variable: 'v' }), Newsreader: () => ({ variable: 'v' }) }))
+vi.mock('next/font/google', () => {
+  // The root layout also loads the six Writing Style faces (app/writing-style-fonts.ts).
+  const face = () => ({ variable: 'v', style: { fontFamily: "'Face', 'Face Fallback'" } })
+  return {
+    Geist: () => ({ variable: 'v' }),
+    Newsreader: () => ({ variable: 'v' }),
+    Kalam: face,
+    Patrick_Hand: face,
+    Caveat: face,
+    Lora: face,
+    EB_Garamond: face,
+    Courier_Prime: face,
+  }
+})
 vi.mock('@/lib/dispatches', async (orig) => ({
   ...(await orig<typeof import('@/lib/dispatches')>()),
   getSharedDispatch: async (_s: unknown, token: string) => {

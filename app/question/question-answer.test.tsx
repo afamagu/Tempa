@@ -256,9 +256,8 @@ describe('QuestionAnswer — onboarding mode: post-first-save completion (source
     )
   })
 
-  it('the primary CTA is "Meet some people", linking to /minds (People)', () => {
-    expect(source).toContain('<Link href="/minds" className={primaryButtonClass}>')
-    expect(source).toContain('Meet some people')
+  it('the primary CTA is "Continue", leading to the Writing Style step (then on to People)', () => {
+    expect(source).toContain('<Link href={WRITING_STYLE_ONBOARDING_HREF} className={primaryButtonClass}>Continue</Link>')
   })
 
   it('the secondary CTA "Answer another Question" uses the existing Question infrastructure — the same server-resolved nextQuestion prop the ordinary Next button already uses, never a second lookup', () => {

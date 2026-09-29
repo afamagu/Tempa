@@ -123,6 +123,7 @@ export default function MomentsComposer({
   showPostcardIntro = false,
   viewerId,
   sourceLetter,
+  senderWritingStyleId = null,
 }: {
   correspondenceId: string
   /** Optional contextual ancestry only ("this letter was written in
@@ -202,7 +203,12 @@ export default function MomentsComposer({
       userId: string
       otherPseudonym: string
     }
+    /** The source letter's send-time Writing Style snapshot. */
+    writingStyleId?: string | null
   } | null
+  /** The sender's current Writing Style — shown in Preview, and what the
+   * letter is snapshotted with on send (server-side, by trigger). */
+  senderWritingStyleId?: string | null
 }) {
   const router = useRouter()
   // Two SEPARATE, statically-configured inputs rather than one shared
@@ -1114,6 +1120,7 @@ export default function MomentsComposer({
           postcardCatalogEntry={postcardCatalogEntry}
           senderPseudonym={senderPseudonym}
           recipientPseudonym={recipientPseudonym}
+          writingStyleId={senderWritingStyleId}
           onClose={() => setPreviewMoments(null)}
           onSend={handleSend}
           sending={sending}
@@ -1146,6 +1153,7 @@ export default function MomentsComposer({
           body={sourceLetter.body}
           moments={sourceLetter.moments}
           photoConsent={sourceLetter.photoConsent}
+          writingStyleId={sourceLetter.writingStyleId ?? null}
         />
       )}
     </div>

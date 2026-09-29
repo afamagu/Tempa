@@ -53,6 +53,7 @@ export default function LetterPreview({
   sendBlockedReason,
   onEditPostcard,
   error,
+  writingStyleId = null,
 }: {
   body: string
   moments: Moment[]
@@ -103,6 +104,9 @@ export default function LetterPreview({
    * composer.tsx today). */
   onEditPostcard?: () => void
   error?: string | null
+  /** The sender's CURRENT Writing Style — the one this letter will be
+   * snapshotted with when sent. */
+  writingStyleId?: string | null
 }) {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -140,7 +144,7 @@ export default function LetterPreview({
               onEditRequest={onEditPostcard}
             />
           )}
-          <LetterBody body={body} moments={moments} />
+          <LetterBody body={body} moments={moments} writingStyleId={writingStyleId} />
         </div>
       </div>
 

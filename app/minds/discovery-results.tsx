@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { helperTextClass, primaryButtonClass, proseBodyClass, contextQuestionClass, quietLinkClass } from '@/app/profile/ui'
+import { helperTextClass, primaryButtonClass, contextQuestionClass, quietLinkClass } from '@/app/profile/ui'
+import AuthoredProse from '@/app/authored-prose'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import QuestionInfoIcon from '@/app/question-info-icon'
 
@@ -15,6 +16,9 @@ export type DiscoveryEntry = {
   ageRange: string
   markUrl: string | null
   response: { id: string; body: string; prompt: string }
+  /** The writer's current Writing Style — only the words take it; the
+   * card itself is identical for everyone. */
+  writingStyleId?: string | null
 }
 
 function identityLine(entry: DiscoveryEntry) {
@@ -97,7 +101,9 @@ export default function DiscoveryResults({ entries, returnTo = '/minds' }: { ent
               <QuestionInfoIcon prompt={entry.response.prompt} />
             </div>
             <button type="button" onClick={() => setOpenId(entry.userId)} className="mt-3 block w-full rounded-md bg-surface-shell p-4 text-left" aria-label={`Open ${entry.pseudonym}'s response`}>
-              <p className={`line-clamp-4 whitespace-pre-wrap ${proseBodyClass}`}>{entry.response.body}</p>
+              <AuthoredProse styleId={entry.writingStyleId ?? null}>
+                <p className="line-clamp-4 whitespace-pre-wrap">{entry.response.body}</p>
+              </AuthoredProse>
             </button>
           </div>
         ))}
@@ -118,7 +124,11 @@ export default function DiscoveryResults({ entries, returnTo = '/minds' }: { ent
               <button type="button" onClick={() => setOpenId(null)} aria-label="Close and return to People" className="shrink-0 rounded-full p-2 text-lg leading-none transition-colors hover:bg-foreground/[.04]">×</button>
             </div>
             <div className="border-b border-foreground/10 px-5 py-4"><p className={contextQuestionClass}>{openEntry.response.prompt}</p></div>
-            <div className="flex-1 overflow-y-auto bg-surface-shell px-5 py-5"><p className={`whitespace-pre-wrap ${proseBodyClass}`}>{openEntry.response.body}</p></div>
+            <div className="flex-1 overflow-y-auto bg-surface-shell px-5 py-5">
+              <AuthoredProse styleId={openEntry.writingStyleId ?? null}>
+                <p className="whitespace-pre-wrap">{openEntry.response.body}</p>
+              </AuthoredProse>
+            </div>
             <div className="space-y-3 border-t border-foreground/10 px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1">

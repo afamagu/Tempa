@@ -26,6 +26,7 @@ export default function LetterReader({
   body,
   moments,
   photoConsent,
+  writingStyleId = null,
 }: {
   viewerId: string
   letterId: string
@@ -39,6 +40,8 @@ export default function LetterReader({
     userId: string
     otherPseudonym: string
   }
+  /** Send-time snapshot (letters.author_writing_style_id). */
+  writingStyleId?: string | null
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const savedResumeRef = useRef<{ paragraphIndex: number; charOffset: number | null } | null>(null)
@@ -121,6 +124,7 @@ export default function LetterReader({
         moments={moments}
         photoConsent={photoConsent}
         paragraphAttrs={(index) => ({ 'data-paragraph-index': index })}
+        writingStyleId={writingStyleId}
       />
     </div>
   )

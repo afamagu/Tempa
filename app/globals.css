@@ -127,6 +127,140 @@ body {
   }
 }
 
+/* Writing Style — the typesetting for a member's AUTHORED prose only
+   (letters, Dispatch bodies, Question responses). Every value arrives as
+   a custom property from lib/writing-style.ts via app/authored-prose.tsx;
+   nothing here names a face, so the registry stays the one source of
+   truth. Interface chrome never carries this class. */
+.authored-prose {
+  font-family: var(--wp-family);
+  font-weight: var(--wp-weight);
+  font-size: var(--wp-size-sm);
+  line-height: var(--wp-leading-sm);
+  letter-spacing: var(--wp-tracking);
+  color: var(--foreground);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  overflow-wrap: break-word;
+}
+
+@media (min-width: 640px) {
+  .authored-prose {
+    font-size: var(--wp-size-lg);
+    line-height: var(--wp-leading-lg);
+  }
+}
+
+.authored-prose strong {
+  font-weight: var(--wp-strong);
+}
+
+/* The boundary back to Tempa's interface: Moments, Postcards, photo
+   consent and any other control that sits among a member's paragraphs
+   never inherits the member's style. */
+.authored-prose .wp-interface {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+/* A comfortable measure in the face's own character width — a
+   monospaced Typewriter line and a Freehand line differ naturally. */
+.authored-prose[data-measure] .wp-block {
+  max-width: var(--wp-measure);
+}
+
+/* Excerpts (cards, previews) sit a step smaller than the reading size —
+   Tempa's own prose lands at the long-standing 15px card size. */
+.authored-prose[data-size='compact'] {
+  font-size: calc(var(--wp-size-sm) * 0.79);
+}
+
+@media (min-width: 640px) {
+  .authored-prose[data-size='compact'] {
+    font-size: calc(var(--wp-size-lg) * 0.75);
+  }
+}
+
+/* Paragraph rhythm, relative to the face's own size. */
+.authored-prose .wp-block + .wp-block {
+  margin-top: var(--wp-gap);
+}
+
+.authored-prose .wp-block[data-wp-role='salutation'] + .wp-block {
+  margin-top: calc(var(--wp-gap) * 1.4);
+}
+
+.authored-prose .wp-block + .wp-block[data-wp-role='signoff'] {
+  margin-top: calc(var(--wp-gap) * 1.9);
+}
+
+/* Opening treatments — ::first-letter is purely presentational: the
+   letter stays one text node, so assistive technology reads it exactly
+   once and copy/paste is unchanged. The CSS pseudo-element includes any
+   opening quotation mark with the letter. */
+.authored-prose[data-opening='initial'] .wp-opening::first-letter {
+  font-size: var(--wp-open-size);
+  font-weight: var(--wp-open-weight);
+  line-height: 0;
+}
+
+/* Drop caps are mobile-first: a phone measure gets the style's narrow
+   size/line count (--wp-open-*-sm), wider screens the full one. */
+.authored-prose[data-opening='dropcap'] .wp-opening::first-letter {
+  float: left;
+  font-size: var(--wp-open-size-sm);
+  font-weight: var(--wp-open-weight);
+  line-height: 0.8;
+  margin-top: var(--wp-open-offset);
+  margin-right: var(--wp-open-gap);
+  padding-top: 0.06em;
+}
+
+@media (min-width: 640px) {
+  .authored-prose[data-opening='dropcap'] .wp-opening::first-letter {
+    font-size: var(--wp-open-size);
+  }
+}
+
+/* Where the browser can align a true initial letter to the text grid
+   (Chrome, Edge, Safari), let it — it is exact at any zoom level. */
+@supports (initial-letter: 2) {
+  .authored-prose[data-opening='dropcap'] .wp-opening::first-letter {
+    float: none;
+    initial-letter: var(--wp-open-lines-sm);
+    font-size: inherit;
+    line-height: inherit;
+    margin: 0 var(--wp-open-gap) 0 0;
+    padding: 0;
+  }
+
+  @media (min-width: 640px) {
+    .authored-prose[data-opening='dropcap'] .wp-opening::first-letter {
+      initial-letter: var(--wp-open-lines);
+    }
+  }
+}
+
+@supports (-webkit-initial-letter: 2) and (not (initial-letter: 2)) {
+  .authored-prose[data-opening='dropcap'] .wp-opening::first-letter {
+    float: none;
+    -webkit-initial-letter: var(--wp-open-lines-sm);
+    font-size: inherit;
+    line-height: inherit;
+    margin: 0 var(--wp-open-gap) 0 0;
+    padding: 0;
+  }
+
+  @media (min-width: 640px) {
+    .authored-prose[data-opening='dropcap'] .wp-opening::first-letter {
+      -webkit-initial-letter: var(--wp-open-lines);
+    }
+  }
+}
+
 /* The continuous letter composer's placeholder text (moments-composer.tsx,
    @tiptap/extension-placeholder) — the extension marks the empty first
    paragraph with this class/attribute and expects the placeholder to be

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getEligibleQuestions, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
+import { getMyWritingStyle } from '@/lib/writing-style-data'
 import { sectionTitleClass, secondaryButtonClass, pillClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import QuestionWorkspace from '@/app/minds/question-workspace'
@@ -36,10 +37,11 @@ export default async function YourResponsesPage({
     redirect('/sign-in')
   }
 
-  const [waitingCount, eligibleQuestions, myAnswers] = await Promise.all([
+  const [waitingCount, eligibleQuestions, myAnswers, writingStyleId] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getEligibleQuestions(supabase, user.id),
     getMyAnswers(supabase, user.id),
+    getMyWritingStyle(supabase, user.id),
   ])
 
   return (
@@ -66,6 +68,7 @@ export default async function YourResponsesPage({
             tab={tab === 'new' ? 'new' : 'answers'}
             questions={eligibleQuestions}
             answers={myAnswers}
+            writingStyleId={writingStyleId}
           />
         </div>
       </main>

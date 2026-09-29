@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { proseBodyClass } from '@/app/profile/ui'
 import { splitParagraphs, POSTCARD_CATALOG, type Moment } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import type { PhotoConsentStatus } from '@/lib/letters'
@@ -10,6 +9,9 @@ import FormattedText from '@/app/letters/formatted-text'
 import LockedPhotoMoment from './locked-photo-moment'
 import PhotoMomentToken from './photo-moment-token'
 import PhotoMomentViewer from './photo-moment-viewer'
+import AuthoredProse from '@/app/authored-prose'
+import ReadingModeControl, { useReadingMode } from '@/app/reading-mode-control'
+import { composeProse, offersReaderView } from '@/lib/writing-style'
 
 /**
  * Renders a letter's paragraphs with any Moments placed exactly where
@@ -39,6 +41,7 @@ export default function LetterBody({
   moments,
   photoConsent,
   paragraphAttrs,
+  writingStyleId = null,
 }: {
   body: string
   moments: Moment[]
@@ -63,8 +66,14 @@ export default function LetterBody({
    * postcard Moment sits alongside the text as part of the same
    * paragraph's reading position. */
   paragraphAttrs?: (index: number) => Record<string, string | number>
+  /** The author's Writing Style as SNAPSHOTTED when the letter was sent
+   * (letters.author_writing_style_id) — never their current profile
+   * style. Null/unknown = Tempa's classic prose: letters sent before
+   * Writing Styles existed keep looking exactly as they did. */
+  writingStyleId?: string | null
 }) {
   const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string; momentId: string } | null>(null)
+  const [readingMode, setReadingMode] = useReadingMode()
   // Stripped ONCE against the whole raw body, before paragraph
   // splitting — the rich-body marker only ever sits at position 0 of
   // the whole value (see stripRichBodyMarker's own doc comment), so
@@ -73,47 +82,71 @@ export default function LetterBody({
   const { isRich, body: cleanBody } = stripRichBodyMarker(body)
   const paragraphs = splitParagraphs(cleanBody)
   const momentByPosition = new Map(moments.map((m) => [m.position, m]))
+  // Writing Style — presentation only: roles decide spacing and where the
+  // opening treatment sits; the stored body is never touched.
+  const { roles } = composeProse(paragraphs, isRich)
+  const readerViewOffered = offersReaderView(writingStyleId, cleanBody)
+  const mode = readerViewOffered ? readingMode : 'original'
 
   return (
     <>
-      <div className="space-y-4 rounded-md bg-surface-shell p-4 sm:p-5">
+      {readerViewOffered && (
+        <div className="mb-2 flex justify-end">
+          <ReadingModeControl mode={mode} onChange={setReadingMode} />
+        </div>
+      )}
+      <AuthoredProse
+        styleId={writingStyleId}
+        mode={mode}
+        opening
+        measure
+        className="rounded-md bg-surface-shell px-3.5 py-4 sm:p-5"
+      >
         {paragraphs.map((paragraph, index) => {
           const moment = momentByPosition.get(index)
           const photoUrl = moment?.type === 'photo' ? moment.imageUrl : null
 
           return (
-            <div key={index} {...(paragraphAttrs?.(index) ?? {})}>
-              <p className={`whitespace-pre-wrap ${proseBodyClass}`}>
+            <div key={index} className="wp-block" data-wp-role={roles[index]} {...(paragraphAttrs?.(index) ?? {})}>
+              <p className={`whitespace-pre-wrap${roles[index] === 'opening' ? ' wp-opening' : ''}`}>
                 <FormattedText text={paragraph} isRich={isRich} />
                 {moment?.type === 'photo' && photoUrl && (
-                  <PhotoMomentToken
-                    src={photoUrl}
-                    onOpen={() =>
-                      setOpenPhoto({ src: photoUrl, alt: 'A photo shared in this letter', momentId: moment.id })
-                    }
-                  />
+                  <span className="wp-interface">
+                    <PhotoMomentToken
+                      src={photoUrl}
+                      onOpen={() =>
+                        setOpenPhoto({ src: photoUrl, alt: 'A photo shared in this letter', momentId: moment.id })
+                      }
+                    />
+                  </span>
                 )}
               </p>
               {moment?.type === 'photo' &&
                 !photoUrl &&
                 photoConsent && (
-                  <LockedPhotoMoment
-                    id={`locked-photo-${moment.id}`}
-                    correspondenceId={photoConsent.correspondenceId}
-                    status={photoConsent.status}
-                    requestedBy={photoConsent.requestedBy}
-                    resolvedBy={photoConsent.resolvedBy}
-                    userId={photoConsent.userId}
-                    otherPseudonym={photoConsent.otherPseudonym}
-                  />
+                  <div className="wp-interface">
+                    <LockedPhotoMoment
+                      id={`locked-photo-${moment.id}`}
+                      correspondenceId={photoConsent.correspondenceId}
+                      status={photoConsent.status}
+                      requestedBy={photoConsent.requestedBy}
+                      resolvedBy={photoConsent.resolvedBy}
+                      userId={photoConsent.userId}
+                      otherPseudonym={photoConsent.otherPseudonym}
+                    />
+                  </div>
                 )}
               {moment?.type === 'postcard' && moment.postcardKey && POSTCARD_CATALOG[moment.postcardKey] && (
-                <MomentDisplay type="postcard" postcard={POSTCARD_CATALOG[moment.postcardKey]} />
+                // Postcards keep their own universal typography — never the
+                // letter writer's personal style.
+                <div className="wp-interface">
+                  <MomentDisplay type="postcard" postcard={POSTCARD_CATALOG[moment.postcardKey]} />
+                </div>
               )}
             </div>
           )
         })}
-      </div>
+      </AuthoredProse>
 
       {openPhoto && (
         <PhotoMomentViewer

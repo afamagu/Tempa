@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { sectionTitleClass, sectionLabelClass, helperTextClass } from '@/app/profile/ui'
 import DiscoveryResults, { type DiscoveryEntry } from '@/app/minds/discovery-results'
+import { getMemberWritingStyles } from '@/lib/writing-style-data'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 // No client-side count parameter — the database function fixes this at
@@ -82,10 +83,11 @@ export default async function ClosureRecommendations({
   }
 
   const rows = data as RecommendationRow[]
-  const { data: profiles } = await supabase
-    .from('public_profiles')
-    .select('id, mark_id')
-    .in('id', [...new Set(rows.map((row) => row.user_id))])
+  const userIds = [...new Set(rows.map((row) => row.user_id))]
+  const [{ data: profiles }, writingStyles] = await Promise.all([
+    supabase.from('public_profiles').select('id, mark_id').in('id', userIds),
+    getMemberWritingStyles(supabase, userIds),
+  ])
   const markIdByUserId = new Map((profiles ?? []).map((profile) => [profile.id, profile.mark_id]))
 
   // The recommendation RPC remains response-first and unchanged. Resolve only
@@ -101,6 +103,7 @@ export default async function ClosureRecommendations({
       ? publicProfileMarkUrl(supabase, `${markIdByUserId.get(row.user_id)}.png`)
       : null,
     response: { id: row.answer_id, body: row.body, prompt: row.prompt },
+    writingStyleId: writingStyles.get(row.user_id) ?? null,
   }))
 
   return (

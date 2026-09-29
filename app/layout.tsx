@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 import { Geist, Newsreader } from "next/font/google";
 import "./globals.css";
+import { writingStyleFontFaceVars, writingStyleFontVariables } from "./writing-style-fonts";
 import { BRAND_BACKGROUND, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Interface machinery — navigation, buttons, labels, metadata.
@@ -55,7 +56,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${newsreader.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${newsreader.variable} ${writingStyleFontVariables} h-full antialiased`}
+      style={writingStyleFontFaceVars}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
