@@ -60,6 +60,7 @@ export default function DispatchPreview({
   onEditPostcard,
   error,
   identity,
+  writingStyleId = null,
 }: {
   /** Official/Sponsored Dispatches — previews the PUBLIC identity (Tempa
    * emblem, or Sponsored + sponsor) instead of the admin's own Mark. */
@@ -101,6 +102,9 @@ export default function DispatchPreview({
    * used by the blocked-Publish control's "Write on postcard" link. */
   onEditPostcard?: () => void
   error?: string | null
+  /** The author's current Writing Style — what a member Dispatch is
+   * snapshotted with at Publish. Null for official/sponsored. */
+  writingStyleId?: string | null
 }) {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -157,7 +161,7 @@ export default function DispatchPreview({
           )}
 
           <div className="rounded-md bg-surface-shell p-4 sm:p-6">
-            <DispatchBody body={body} moments={moments} />
+            <DispatchBody body={body} moments={moments} writingStyleId={writingStyleId} />
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { hasCompletedGuide } from '@/lib/guide'
 import DispatchComposer from '../dispatch-composer'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import { getMyWritingStyle } from '@/lib/writing-style-data'
 
 export default async function WriteDispatchPage() {
   const supabase = await createClient()
@@ -19,10 +20,11 @@ export default async function WriteDispatchPage() {
   // can pass the author's CURRENT pseudonym into PostcardEditor's own
   // live draft preview (never a snapshot at draft time; publish_dispatch
   // itself snapshots the real value again, independently, at Publish).
-  const [{ data: profile }, composerIntroSeen, postcardIntroSeen] = await Promise.all([
+  const [{ data: profile }, composerIntroSeen, postcardIntroSeen, writingStyleId] = await Promise.all([
     supabase.from('profiles').select('pseudonym, mark_id').eq('id', user.id).maybeSingle(),
     hasCompletedGuide(supabase, user.id, 'dispatch_composer'),
     hasCompletedGuide(supabase, user.id, 'postcard'),
+    getMyWritingStyle(supabase, user.id),
   ])
 
   return (
@@ -33,6 +35,7 @@ export default async function WriteDispatchPage() {
       showComposerIntro={!composerIntroSeen}
       showPostcardIntro={!postcardIntroSeen}
       webChoiceAvailable={await webChoiceAvailable(supabase)}
+      writingStyleId={writingStyleId}
     />
   )
 }

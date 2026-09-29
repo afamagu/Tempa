@@ -37,6 +37,7 @@ export default function SourceLetterPanel({
   body,
   moments,
   photoConsent,
+  writingStyleId = null,
 }: {
   open: boolean
   onClose: () => void
@@ -53,6 +54,8 @@ export default function SourceLetterPanel({
     userId: string
     otherPseudonym: string
   }
+  /** Send-time snapshot of the source letter. */
+  writingStyleId?: string | null
 }) {
   useEffect(() => {
     if (!open) return
@@ -92,7 +95,14 @@ export default function SourceLetterPanel({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto bg-surface-shell px-5 py-5">
-          <LetterReader viewerId={viewerId} letterId={letterId} body={body} moments={moments} photoConsent={photoConsent} />
+          <LetterReader
+            viewerId={viewerId}
+            letterId={letterId}
+            body={body}
+            moments={moments}
+            photoConsent={photoConsent}
+            writingStyleId={writingStyleId}
+          />
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { genderDisplay } from '@/lib/discovery'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import { getMemberWritingStyles } from '@/lib/writing-style-data'
 
 // Member introductions ("People to meet") — the client-side data layer.
 // Selection, Safety/discovery eligibility, newcomer priority and ranking
@@ -25,6 +26,8 @@ export type IntroductionCard = {
   answerId: string
   prompt: string
   body: string
+  /** The writer's current Writing Style (presentation only). */
+  writingStyleId?: string | null
 }
 
 type IntroductionRow = {
@@ -73,7 +76,9 @@ export async function loadMemberIntroductions(supabase: SupabaseClient): Promise
   try {
     const { data, error } = await supabase.rpc('get_member_introductions', { p_limit: MAX_INTRODUCTIONS })
     if (error || !Array.isArray(data)) return []
-    return toIntroductionCards(data as IntroductionRow[], (markId) => publicProfileMarkUrl(supabase, `${markId}.png`))
+    const cards = toIntroductionCards(data as IntroductionRow[], (markId) => publicProfileMarkUrl(supabase, `${markId}.png`))
+    const styles = await getMemberWritingStyles(supabase, cards.map((c) => c.candidateId))
+    return cards.map((c) => ({ ...c, writingStyleId: styles.get(c.candidateId) ?? null }))
   } catch {
     return []
   }

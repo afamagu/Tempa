@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { letterPreviewText, isRichBody } from './letters'
 import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 import { publicProfileMarkUrl } from './profile-marks'
+import { getDispatchWritingStyles } from './writing-style-data'
+import type { WritingStyleId } from './writing-style'
 import {
   resolveDispatchIdentity,
   toPublishedAs,
@@ -75,6 +77,9 @@ export type DispatchListItem = Dispatch & {
   authorMarkUrl?: string | null
   topics: string[]
   identity: DispatchIdentity
+  /** Writing Style the Dispatch was published in (snapshot); null/absent =
+   * Tempa's classic prose. Presentation only. */
+  writingStyleId?: WritingStyleId | null
 }
 
 /** One Board row, with the per-viewer signal Board ordering needs.
@@ -247,13 +252,15 @@ async function attachTopicsAndAuthors(
   // Publication identity is read in the SAME parallel round (one batched
   // query, never per row) so board_feed_page/search_dispatches keep their
   // existing return shapes. Unreadable -> every row stays 'member'.
-  const [{ data: profiles }, { data: topicRows }, { data: identityRows }] = await Promise.all([
+  const [{ data: profiles }, { data: topicRows }, { data: identityRows }, writingStyles] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, country, mark_id').in('id', authorIds),
     supabase.from('dispatch_topics').select('dispatch_id, topic').in('dispatch_id', dispatchIds),
     supabase
       .from('dispatches')
       .select('id, published_as, sponsor_name, sponsor_cta_label, sponsor_cta_url')
       .in('id', dispatchIds),
+    // Separate, fail-soft read — never widens the identity select above.
+    getDispatchWritingStyles(supabase, dispatchIds),
   ])
   const identityById = new Map(
     ((identityRows ?? []) as {
@@ -297,6 +304,7 @@ async function attachTopicsAndAuthors(
       authorMarkUrl: identity.kind === 'member' ? identity.markUrl : null,
       topics: topicsByDispatchId.get(row.id) ?? [],
       identity,
+      writingStyleId: writingStyles.get(row.id) ?? null,
     }
   })
 }

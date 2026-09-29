@@ -7,6 +7,8 @@ import { formatDatePlain } from '@/lib/format-date'
 import { sectionLabelClass, pageTitleClass, proseSubheadingClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import { getMyWritingStyle } from '@/lib/writing-style-data'
+import { WRITING_STYLES } from '@/lib/writing-style'
 
 const controlClass =
   'flex items-center justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]'
@@ -23,13 +25,14 @@ export default async function YouPage() {
     .maybeSingle()
   if (!profile) redirect('/profile')
 
-  const [waitingCount, markStatus] = await Promise.all([
+  const [waitingCount, markStatus, writingStyleId] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getProfileMarkManagementStatus(supabase).catch(() => ({
       markId: profile.mark_id ?? null,
       canChange: profile.mark_id == null,
       nextChangeAt: null,
     })),
+    getMyWritingStyle(supabase, user.id),
   ])
   const markId = markStatus.markId ?? profile.mark_id ?? null
   const markUrl = markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null
@@ -82,6 +85,13 @@ export default async function YouPage() {
             <div className="grid gap-2 sm:grid-cols-2">
               <Link href={`/minds/${user.id}`} className={controlClass}><span>View your profile</span><span aria-hidden>→</span></Link>
               <Link href="/you/responses" className={controlClass}><span>Your responses</span><span aria-hidden>→</span></Link>
+              <Link href="/you/writing-style" className={controlClass}>
+                <span>Writing style</span>
+                <span className="flex items-center gap-2">
+                  {writingStyleId && <span className="text-[13px] text-muted">{WRITING_STYLES[writingStyleId].name}</span>}
+                  <span aria-hidden>→</span>
+                </span>
+              </Link>
               <Link href="/you/interests" className={controlClass}><span>Reading interests</span><span aria-hidden>→</span></Link>
               <Link href="/you/postcards" className={controlClass}><span>Postcards</span><span aria-hidden>→</span></Link>
               <Link href="/you/keepsakes" className={controlClass}><span>Keepsakes</span><span aria-hidden>→</span></Link>

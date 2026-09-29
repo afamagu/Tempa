@@ -58,6 +58,7 @@ export default function FirstContactResponse({
   sourceLetterBody,
   sourceLetterMoments,
   sourceLetterPhotoConsent,
+  sourceLetterWritingStyleId = null,
 }: {
   letterId: string
   correspondenceId: string
@@ -83,6 +84,8 @@ export default function FirstContactResponse({
     userId: string
     otherPseudonym: string
   }
+  /** The source letter's send-time Writing Style snapshot. */
+  sourceLetterWritingStyleId?: string | null
 }) {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>('choose')
@@ -394,6 +397,7 @@ export default function FirstContactResponse({
         body={sourceLetterBody}
         moments={sourceLetterMoments}
         photoConsent={sourceLetterPhotoConsent}
+        writingStyleId={sourceLetterWritingStyleId}
       />
       <SafetyWarningDialog
         open={pendingWarning !== null}

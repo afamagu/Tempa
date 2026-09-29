@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getQuestionById, getEligibleQuestions, nextEligibleQuestion } from '@/lib/questions'
 import QuestionAnswer from '../question-answer'
+import { getMyWritingStyle } from '@/lib/writing-style-data'
 
 export default async function QuestionWritePage({
   params,
@@ -24,7 +25,7 @@ export default async function QuestionWritePage({
     redirect('/you/responses?tab=new')
   }
 
-  const [{ data: answer }, eligibleQuestions] = await Promise.all([
+  const [{ data: answer }, eligibleQuestions, writingStyleId] = await Promise.all([
     supabase
       .from('question_answers')
       .select('body, updated_at, is_current')
@@ -32,6 +33,7 @@ export default async function QuestionWritePage({
       .eq('user_id', user.id)
       .maybeSingle(),
     getEligibleQuestions(supabase, user.id),
+    getMyWritingStyle(supabase, user.id),
   ])
 
   // "Next" is simply the first other currently-eligible (positioned,
@@ -49,6 +51,7 @@ export default async function QuestionWritePage({
       isFlagship={question.isFlagship}
       initialAnswer={answer?.body ?? null}
       nextQuestion={nextQuestion}
+      writingStyleId={writingStyleId}
     />
   )
 }

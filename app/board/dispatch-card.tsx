@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { metadataTextClass } from '@/app/profile/ui'
 import { formatDatePlain } from '@/lib/format-date'
 import FormattedText from '@/app/letters/formatted-text'
+import AuthoredProse from '@/app/authored-prose'
 import { dispatchExcerpt, dispatchIsRich, type DispatchListItem } from '@/lib/dispatches'
 import DispatchIdentityLabel from './dispatch-identity-label'
 import TopicChips from './topic-chips'
@@ -68,9 +69,13 @@ export default function DispatchCard({
           <div className="min-w-0">
             <p className="text-[16px] font-medium text-foreground">{dispatch.title}</p>
             <div className="mt-2 rounded-md bg-surface-shell p-3 sm:p-4">
-              <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/80">
-                <FormattedText text={dispatchExcerpt(dispatch.body)} isRich={dispatchIsRich(dispatch.body)} />
-              </p>
+              {/* The writer's published style, at excerpt size — the card
+                  itself (shape, colour, metadata) never changes with it. */}
+              <AuthoredProse styleId={dispatch.writingStyleId ?? null} size="compact">
+                <p className="line-clamp-2 whitespace-pre-wrap text-foreground/80">
+                  <FormattedText text={dispatchExcerpt(dispatch.body)} isRich={dispatchIsRich(dispatch.body)} />
+                </p>
+              </AuthoredProse>
             </div>
           </div>
         </div>

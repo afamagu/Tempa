@@ -64,6 +64,7 @@ export default function SharedDispatchView({
   dispatch,
   isAuthenticated,
   writerInvitation = null,
+  writingStyleId = null,
 }: {
   dispatch: SharedDispatch
   isAuthenticated: boolean
@@ -71,6 +72,8 @@ export default function SharedDispatchView({
    * an outside reader toward the person who wrote it. Never a profile
    * link (profiles stay members-only). null keeps the share-link copy. */
   writerInvitation?: string | null
+  /** The style the Dispatch was published in (null = Tempa's classic prose). */
+  writingStyleId?: string | null
 }) {
   const hasMoments = dispatch.moments.some((m) => m.imageUrl)
 
@@ -129,7 +132,7 @@ export default function SharedDispatchView({
           )}
 
           <div className="rounded-md bg-surface-shell p-4 sm:p-6">
-            <DispatchBody body={dispatch.body} moments={dispatch.moments} />
+            <DispatchBody body={dispatch.body} moments={dispatch.moments} writingStyleId={writingStyleId} />
           </div>
 
           {dispatch.identity.kind === 'sponsored' && dispatch.identity.sponsor.ctaUrl && (

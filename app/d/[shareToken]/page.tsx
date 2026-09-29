@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getSharedDispatch } from '@/lib/dispatches'
 import { dispatchShareDescription, dispatchShareTitle } from '@/lib/dispatch-identity'
 import { SITE_NAME } from '@/lib/site'
+import { getSharedDispatchWritingStyle } from '@/lib/writing-style-data'
 import SharedDispatchView from './shared-dispatch-view'
 import DispatchUnavailable from './dispatch-unavailable'
 
@@ -83,5 +84,7 @@ export default async function SharedDispatchPage({
     return <DispatchUnavailable />
   }
 
-  return <SharedDispatchView dispatch={dispatch} isAuthenticated={Boolean(user)} />
+  const writingStyleId = await getSharedDispatchWritingStyle(supabase, shareToken)
+
+  return <SharedDispatchView dispatch={dispatch} isAuthenticated={Boolean(user)} writingStyleId={writingStyleId} />
 }

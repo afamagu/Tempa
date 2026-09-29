@@ -25,6 +25,7 @@ import BlockButton from '@/app/block-button'
 import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
 import ProfileAnswer from './profile-answer'
+import { getMemberWritingStyles } from '@/lib/writing-style-data'
 import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
 import PeopleProfileBack from './people-profile-back'
@@ -94,14 +95,17 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
     getPublishedDispatchesByAuthor(supabase, userId),
     getPinnedDispatch(supabase, userId),
     isSelf ? Promise.resolve(null) : getBlockScope(supabase, userId),
+    getMemberWritingStyles(supabase, [userId]),
   ])
+  // The writer's CURRENT style — profile prose represents who they are now.
+  const writingStyleId = writingStyles.get(userId) ?? null
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
   const primaryAnswer = chooseProfileAnswer(rawAnswers)
@@ -159,6 +163,7 @@ export default async function PublicProfilePage({
                   body={primaryAnswer.body}
                   isPrimary={primaryAnswer.isPrimary}
                   showReport={!isSelf}
+                  writingStyleId={writingStyleId}
                 />
               )}
             </div>
@@ -169,6 +174,7 @@ export default async function PublicProfilePage({
             showReport={!isSelf}
             ownerPseudonym={profile.pseudonym}
             isSelf={isSelf}
+            writingStyleId={writingStyleId}
           />
 
           {pinnedDispatch && (

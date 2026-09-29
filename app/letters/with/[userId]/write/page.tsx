@@ -11,6 +11,7 @@ import {
   resolveReplyToId,
 } from '@/lib/letters'
 import { hasCompletedGuide } from '@/lib/guide'
+import { getLetterWritingStyles, getMyWritingStyle } from '@/lib/writing-style-data'
 import { hasAcknowledgedCorrespondenceFeature } from '@/lib/acknowledgements'
 import type { Moment } from '@/lib/moments'
 import { helperTextClass, secondaryButtonClass, systemHeadingClass } from '@/app/profile/ui'
@@ -148,7 +149,15 @@ export default async function WriteToPersonPage({
     user.id
   )
 
-  const [lockedElsewhere, momentsQualified, postcardIntroSeen, firstPhotoNoticeAcknowledged, sourceLetterMomentsById] =
+  const [
+    lockedElsewhere,
+    momentsQualified,
+    postcardIntroSeen,
+    firstPhotoNoticeAcknowledged,
+    sourceLetterMomentsById,
+    sourceLetterWritingStyles,
+    myWritingStyleId,
+  ] =
     await Promise.all([
       getFirstLockedPhotoLetterMoment(supabase, correspondence.id),
       // Distinct from establishedForViewer above: Write Anytime access to
@@ -173,6 +182,8 @@ export default async function WriteToPersonPage({
       // haven't sent a photo yet (see isFirstPhotoRequest below).
       hasAcknowledgedCorrespondenceFeature(supabase, user.id, correspondence.id, 'first_photo_notice'),
       replyToId ? getMomentsForLetters(supabase, [replyToId]) : Promise.resolve(new Map<string, Moment[]>()),
+      replyToId ? getLetterWritingStyles(supabase, [replyToId]) : Promise.resolve(new Map<string, never>()),
+      getMyWritingStyle(supabase, user.id),
     ])
   const reviewPhotoHref = lockedElsewhere
     ? `/letters/${lockedElsewhere.letterId}#locked-photo-${lockedElsewhere.momentId}`
@@ -195,6 +206,7 @@ export default async function WriteToPersonPage({
         id: replyToId,
         body: replyToLetterRow?.body ?? '',
         moments: sourceLetterMomentsById.get(replyToId) ?? [],
+        writingStyleId: sourceLetterWritingStyles.get(replyToId) ?? null,
         photoConsent: {
           correspondenceId: correspondence.id,
           status: correspondence.photoConsentStatus,
@@ -236,6 +248,7 @@ export default async function WriteToPersonPage({
             showPostcardIntro={!postcardIntroSeen}
             viewerId={user.id}
             sourceLetter={sourceLetter}
+            senderWritingStyleId={myWritingStyleId}
           />
         </div>
       </div>

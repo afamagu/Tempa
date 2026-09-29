@@ -55,7 +55,9 @@ function renderPreview(overrides: Partial<Parameters<typeof LetterPreview>[0]> =
 describe('LetterPreview — K. uses the real production LetterBody', () => {
   it('imports and renders the actual LetterBody component', () => {
     expect(source).toContain("import LetterBody from './letter-body'")
-    expect(source).toContain('<LetterBody body={body} moments={moments} />')
+    // Writing Style — Preview shows the sender's current style, the one
+    // the letter is snapshotted with on send.
+    expect(source).toContain('<LetterBody body={body} moments={moments} writingStyleId={writingStyleId} />')
   })
 
   it('never defines its own paragraph-rendering or Moment-rendering markup — no duplicated reading grammar', () => {

@@ -24,12 +24,15 @@ export default function DispatchReader({
   body,
   moments,
   initialPosition,
+  writingStyleId = null,
 }: {
   viewerId: string
   dispatchId: string
   body: string
   moments: DispatchMoment[]
   initialPosition: number
+  /** Publish-time snapshot (dispatches.author_writing_style_id). */
+  writingStyleId?: string | null
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const lastPassedRef = useRef(initialPosition)
@@ -83,7 +86,12 @@ export default function DispatchReader({
 
   return (
     <div ref={containerRef}>
-      <DispatchBody body={body} moments={moments} paragraphAttrs={(index) => ({ 'data-paragraph-index': index })} />
+      <DispatchBody
+        body={body}
+        moments={moments}
+        paragraphAttrs={(index) => ({ 'data-paragraph-index': index })}
+        writingStyleId={writingStyleId}
+      />
     </div>
   )
 }
