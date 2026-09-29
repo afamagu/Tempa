@@ -3,16 +3,20 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { mapSharedDispatchRow, type SharedDispatch, type SharedDispatchRpcRow } from '@/lib/dispatches'
 import { dispatchShareTitle } from '@/lib/dispatch-identity'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
+import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { SITE_NAME, SITE_URL } from '@/lib/site'
 
 /**
  * Public Dispatch web pages (docs/public-dispatch-web-pages.md).
  *
  * "Published" puts a Dispatch on the Board (members only). "Public on the
- * web" is a separate choice — an author's explicit opt-in for a member
- * Dispatch, the default for official/Sponsored ones — that gives it one
- * permanent article page at /dispatches/{slug}. Every anonymous read goes
- * through get_public_dispatch / list_public_dispatches, which return
+ * web" is a separate choice. New member Dispatches default to public on
+ * the web, with a clear control to turn that off before publishing; an
+ * author's saved choice remains reversible afterward. Existing Dispatches
+ * are never backfilled merely because the default changes. Official /
+ * Sponsored Dispatches are public by default. A web-public Dispatch gets
+ * one permanent article page at /dispatches/{slug}. Every anonymous read
+ * goes through get_public_dispatch / list_public_dispatches, which return
  * nothing unless the Dispatch is public on the web RIGHT NOW (published,
  * moderation-visible, author publicly visible). Nothing here widens that.
  */
@@ -55,16 +59,32 @@ export async function getPublicDispatch(supabase: SupabaseClient, slug: string):
   const { data, error } = await supabase.rpc('get_public_dispatch', { p_slug: slug })
   const row = error ? undefined : ((data ?? []) as PublicDispatchRpcRow[])[0]
   if (!row) return null
-  // The public reader is keyed by the slug; the internal Dispatch id is
-  // never returned by the RPC and never rendered.
+
+  // The public reader is keyed by the slug; the internal Dispatch id and
+  // the author's profile/auth id are never returned by the article RPC.
   const shared = await mapSharedDispatchRow(supabase, {
     ...row,
     dispatch_id: row.web_slug,
     moments: publicMomentIds(row.web_slug, row.moments ?? []),
   })
+
+  // Public-on-the-web member Dispatches may carry the member's actual
+  // Tempa Mark. The companion RPC returns ONLY the already-public,
+  // independently-random Mark id after applying the same web-public gate;
+  // never owner_id, profile data, or the source photograph. If the forward
+  // migration is not live yet, this quietly falls back to the existing
+  // neutral Mindform rather than breaking the article page.
+  let identity = shared.identity
+  if (identity.kind === 'member') {
+    const { data: markId, error: markError } = await supabase.rpc('get_public_dispatch_mark', { p_slug: slug })
+    if (!markError && typeof markId === 'string' && markId.length > 0) {
+      identity = { ...identity, markUrl: publicProfileMarkUrl(supabase, `${markId}.png`) }
+    }
+  }
+
   const datePublished = row.published_at
   const dateModified = row.content_updated_at && row.content_updated_at > row.published_at ? row.content_updated_at : row.published_at
-  return { ...shared, slug: row.web_slug, datePublished, dateModified }
+  return { ...shared, identity, slug: row.web_slug, datePublished, dateModified }
 }
 
 export type PublicDispatchListing = { slug: string; lastModified: string }
@@ -208,8 +228,10 @@ export type SetWebPublicResult =
 
 export const WEB_PUBLIC_COPY = {
   label: 'Public on the web',
-  on: 'Anyone can read this Dispatch on the web. Public Dispatches may appear in search engines.',
-  off: 'Members only — this Dispatch appears on the Tempa Board for members.',
+  on: 'Anyone can read this Dispatch, and search engines may index it. Your real identity and profile stay private; readers see only your Tempa identity — your pseudonym, country and Mark.',
+  off: 'Tempa only — readable by Tempa members, not listed on the open web.',
+  previewOn: 'Public on the web. Anyone can read this Dispatch, and search engines may index it. Your real identity and profile stay private; only your Tempa identity — pseudonym, country and Mark — is shown.',
+  previewOff: 'Tempa only. This Dispatch will be available to Tempa members, not listed on the open web.',
   failed: 'Its web visibility couldn’t be changed. Nothing was changed — please try again.',
   saveRefused: 'Nothing was saved: this Dispatch’s web visibility couldn’t be applied. Please try again.',
   accountRefused: 'Nothing was saved: your account can’t make Dispatches public right now.',

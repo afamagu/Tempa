@@ -37,9 +37,7 @@ export default function TermsPage() {
           If we&rsquo;re unable to confirm you&rsquo;re at least 18, you won&rsquo;t be able to create a Tempa
           profile. Attempting to falsify your date of birth, or otherwise trying to get around this check, is a
           violation of these Terms. Our{' '}
-          <Link href="/privacy" className={quietLinkClass}>
-            Privacy Notice
-          </Link>{' '}
+          <Link href="/privacy" className={quietLinkClass}>Privacy Notice</Link>{' '}
           explains what happens to that information.
         </p>
       </LegalSection>
@@ -47,10 +45,8 @@ export default function TermsPage() {
       <LegalSection heading="3. Accepting these Terms">
         <p>
           Before you can use Tempa, you must agree to these Terms and to our{' '}
-          <Link href="/community-guidelines" className={quietLinkClass}>
-            Community Guidelines
-          </Link>
-          . We keep a durable, versioned record of that acceptance. If we materially change either document, we&rsquo;ll
+          <Link href="/community-guidelines" className={quietLinkClass}>Community Guidelines</Link>.
+          We keep a durable, versioned record of that acceptance. If we materially change either document, we&rsquo;ll
           ask you to review and accept the new version before you continue using Tempa &mdash; accepting an earlier
           version doesn&rsquo;t carry forward to a later one.
         </p>
@@ -61,21 +57,13 @@ export default function TermsPage() {
           <li>
             You&rsquo;re responsible for the information in your profile and for anything that happens through your
             account. Keep your sign-in access to yourself, and let us know at{' '}
-            <a href="mailto:support@jointempa.com" className={quietLinkClass}>
-              support@jointempa.com
-            </a>{' '}
+            <a href="mailto:support@jointempa.com" className={quietLinkClass}>support@jointempa.com</a>{' '}
             if you believe someone else has access to your account.
           </li>
           <li>Don&rsquo;t try to get around our adult-eligibility check, by any means.</li>
           <li>Don&rsquo;t try to get around a block another member has placed, including by creating another account to do so.</li>
-          <li>
-            Don&rsquo;t give us materially false information relevant to eligibility or safety &mdash; for example,
-            your date of birth, or information you provide as part of a report.
-          </li>
-          <li>
-            Choose a pseudonym that doesn&rsquo;t impersonate another real person, brand, or organization, and follow
-            any naming requirements we apply when you create it.
-          </li>
+          <li>Don&rsquo;t give us materially false information relevant to eligibility or safety, for example your date of birth or information you provide as part of a report.</li>
+          <li>Choose a pseudonym that doesn&rsquo;t impersonate another real person, brand, or organization, and follow any naming requirements we apply when you create it.</li>
         </ul>
       </LegalSection>
 
@@ -83,24 +71,37 @@ export default function TermsPage() {
         <p>
           As part of setting up your profile, Tempa generates a unique visual identity for you &mdash; your
           &ldquo;Mark&rdquo; &mdash; from a photograph you choose. That source photograph is processed on your own
-          device; it is not uploaded to Tempa. Only the resulting Mark image is uploaded, and it is stored and shown
-          as part of your member-visible profile, the same as the rest of your profile content.
+          device; it is not uploaded to Tempa. Only the resulting Mark image is uploaded. Your Mark forms part of
+          your Tempa identity and may be shown with content you publish, including a Dispatch that is Public on the web.
         </p>
       </LegalSection>
 
-      <LegalSection heading="6. Member-visible content and private correspondence">
+      <LegalSection heading="6. Dispatch audiences and private correspondence">
         <p>
-          Tempa distinguishes between two kinds of content. Your profile &mdash; including your Mark, your Question
-          answer, and a Dispatch you publish to the Board &mdash; is member-visible, and if you generate a share link
-          for a Dispatch, visible to anyone who holds that link. Marking a Dispatch &ldquo;worth reading&rdquo; is
-          private to you. Letters you exchange with another member are private correspondence between the two of
-          you, and we don&rsquo;t make them visible to other members.
+          Tempa distinguishes private correspondence from published writing. Letters you exchange with another
+          member are private correspondence between the two of you, and we don&rsquo;t make them visible to other
+          members or publish them on the open web.
         </p>
         <p>
-          Private correspondence on Tempa is not end-to-end encrypted. We don&rsquo;t make a practice of reading
-          members&rsquo; private letters; we may access specific content when it&rsquo;s reported to us, when
-          necessary to investigate a safety concern, to provide support you&rsquo;ve requested, to protect the
-          security of Tempa, or when required by law.
+          A Dispatch is published writing. It appears on the Tempa Board for members. For a new Dispatch,
+          <strong> Public on the web is on by default</strong> unless you turn it off before publishing. When it is
+          on, anyone can read that Dispatch without a Tempa account, and search engines may crawl, index, and show it
+          in search results. Tempa shows your chosen Tempa identity with that public Dispatch &mdash; your pseudonym,
+          country, and Mark &mdash; but does not expose your real account identity or member profile through the
+          public Dispatch page. Anything you choose to reveal in the Dispatch itself can, of course, identify you.
+        </p>
+        <p>
+          You can turn Public on the web off before publishing, or later make a web-public Dispatch Tempa-only.
+          Tempa then stops serving the public article and removes it from our sitemap. Search engines and other
+          third parties operate independently, so an already-indexed result, snippet, or cached copy may take time
+          to disappear after they recrawl it. A separate share link, if you create one, may also let anyone holding
+          that link read the Dispatch until you revoke the share.
+        </p>
+        <p>
+          Marking a Dispatch &ldquo;worth reading&rdquo; is private to you. Private correspondence on Tempa is not
+          end-to-end encrypted. We don&rsquo;t make a practice of reading members&rsquo; private letters; we may
+          access specific content when it&rsquo;s reported to us, when necessary to investigate a safety concern,
+          to provide support you&rsquo;ve requested, to protect the security of Tempa, or when required by law.
         </p>
       </LegalSection>
 
@@ -110,8 +111,9 @@ export default function TermsPage() {
           &mdash; your profile, your Mark, a Dispatch, or a letter &mdash; you grant {OPERATOR_NAME} a worldwide,
           non-exclusive, royalty-free licence to host, store, transmit, format, and display that content, and to
           sublicense it to the service providers who help us run Tempa, solely as reasonably necessary to operate
-          Tempa, provide your content to the audience you chose for it (for example, a letter&rsquo;s recipient, or
-          other members for a published Dispatch), secure and moderate the platform, and maintain backups.
+          Tempa, provide your content to its selected audience, secure and moderate the platform, and maintain
+          backups. Depending on your choice, a Dispatch&rsquo;s selected audience may include Tempa members only or,
+          when Public on the web is on, people on the open web and search-engine crawlers.
         </p>
         <p>
           This licence does not transfer ownership of your content to us, and it does not let us publish your private
@@ -124,25 +126,24 @@ export default function TermsPage() {
 
       <LegalSection heading="8. Other members&rsquo; content, and Tempa&rsquo;s own">
         <p>
-          Respect what other members share with you. Don&rsquo;t copy, republish, or redistribute another
-          member&rsquo;s letter, Dispatch, or other content without their permission. Tempa&rsquo;s own branding,
-          software, and design are the intellectual property of {OPERATOR_NAME} or our licensors, and these Terms
-          don&rsquo;t grant you any rights to them beyond what&rsquo;s needed to use Tempa as intended.
+          Respect what other members share with you. Don&rsquo;t copy, republish, or redistribute another member&rsquo;s
+          letter, Dispatch, or other content except where the author has made it publicly available and your use is
+          otherwise permitted by law. Tempa&rsquo;s own branding, software, and design are the intellectual property of
+          {OPERATOR_NAME} or our licensors, and these Terms don&rsquo;t grant you any rights to them beyond what&rsquo;s
+          needed to use Tempa as intended.
         </p>
       </LegalSection>
 
       <LegalSection heading="9. Community Guidelines, reporting, blocking, and prohibited use">
         <p>
           Using Tempa means following our{' '}
-          <Link href="/community-guidelines" className={quietLinkClass}>
-            Community Guidelines
-          </Link>
-          . Tempa supports reporting and blocking, so you can flag content or behavior that concerns you and control
+          <Link href="/community-guidelines" className={quietLinkClass}>Community Guidelines</Link>.
+          Tempa supports reporting and blocking, so you can flag content or behavior that concerns you and control
           who can reach you.
         </p>
         <p>You also agree not to:</p>
         <ul className={legalListClass}>
-          <li>scrape, crawl, or systematically extract data from Tempa;</li>
+          <li>scrape, crawl, or systematically extract data from Tempa, except ordinary access by generally available search engines to pages Tempa expressly makes indexable;</li>
           <li>use bots, scripts, or other automated means to access or interact with Tempa, outside of anything we officially provide for that purpose;</li>
           <li>attempt to interfere with, disrupt, or gain unauthorized access to Tempa&rsquo;s systems or other members&rsquo; accounts;</li>
           <li>introduce malware, or otherwise try to compromise the security or integrity of the service.</li>
@@ -156,20 +157,17 @@ export default function TermsPage() {
       <LegalSection heading="10. Third-party services and links">
         <p>
           Tempa is built using third-party infrastructure providers (see our{' '}
-          <Link href="/privacy" className={quietLinkClass}>
-            Privacy Notice
-          </Link>
-          ). Content on Tempa, including letters and Dispatches, may contain links or references supplied by other
-          members. We don&rsquo;t vet or endorse third-party links or content, and we&rsquo;re not responsible for
-          them.
+          <Link href="/privacy" className={quietLinkClass}>Privacy Notice</Link>).
+          Content on Tempa, including letters and Dispatches, may contain links or references supplied by other
+          members. We don&rsquo;t vet or endorse third-party links or content, and we&rsquo;re not responsible for them.
         </p>
       </LegalSection>
 
       <LegalSection heading="11. Changes to the service">
         <p>
           We&rsquo;re continuing to build Tempa, and we may add, change, or remove features, or suspend the service
-          temporarily for maintenance or other reasons. We don&rsquo;t promise that any particular feature will
-          remain available indefinitely.
+          temporarily for maintenance or other reasons. We don&rsquo;t promise that any particular feature will remain
+          available indefinitely.
         </p>
       </LegalSection>
 
@@ -177,36 +175,33 @@ export default function TermsPage() {
         <p>
           Tempa lets you indicate how you generally write your letters, including with the help of AI-assisted
           writing tools, and what kind of letters you&rsquo;re comfortable receiving. Whatever tools you use to write
-          it, you&rsquo;re responsible for the content of what you send or publish, and it&rsquo;s still subject to
-          these Terms and our Community Guidelines. A declared receiving preference reflects what another member has
-          said they&rsquo;re comfortable with; it isn&rsquo;t a guarantee about the content you&rsquo;ll receive.
+          it, you&rsquo;re responsible for the content of what you send or publish, and it&rsquo;s still subject to these
+          Terms and our Community Guidelines. A declared receiving preference reflects what another member has said
+          they&rsquo;re comfortable with; it isn&rsquo;t a guarantee about the content you&rsquo;ll receive.
         </p>
       </LegalSection>
 
       <LegalSection heading="13. Suspension and termination">
         <p>
           You may stop using Tempa, and request closure of your account, at any time by contacting{' '}
-          <a href="mailto:support@jointempa.com" className={quietLinkClass}>
-            support@jointempa.com
-          </a>
-          . We may suspend or terminate an account that violates these Terms or the Community Guidelines, or where
+          <a href="mailto:support@jointempa.com" className={quietLinkClass}>support@jointempa.com</a>.
+          We may suspend or terminate an account that violates these Terms or the Community Guidelines, or where
           we&rsquo;re required to do so by law.
         </p>
         <p>
           Sections of these Terms that by their nature should survive &mdash; including ownership, the licence
           already granted for content already used as described in Section 7, disclaimers, limitation of liability,
-          indemnity, and governing law &mdash; continue to apply after your account is suspended, terminated, or
-          closed.
+          indemnity, and governing law &mdash; continue to apply after your account is suspended, terminated, or closed.
         </p>
       </LegalSection>
 
       <LegalSection heading="14. Disclaimers">
         <p>
-          Tempa is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis. We work to keep the
-          service running well and to keep members safe, but we don&rsquo;t promise that Tempa will always be
-          uninterrupted, error-free, or free of content you find objectionable, and we don&rsquo;t vouch for the
-          conduct of any member. Nothing in this section limits any right you have under applicable law that
-          can&rsquo;t lawfully be excluded, including statutory consumer-protection rights.
+          Tempa is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis. We work to keep the service
+          running well and to keep members safe, but we don&rsquo;t promise that Tempa will always be uninterrupted,
+          error-free, or free of content you find objectionable, and we don&rsquo;t vouch for the conduct of any member.
+          Nothing in this section limits any right you have under applicable law that can&rsquo;t lawfully be excluded,
+          including statutory consumer-protection rights.
         </p>
       </LegalSection>
 
@@ -222,28 +217,24 @@ export default function TermsPage() {
           Subject to that, and to the fullest extent applicable law does permit: {OPERATOR_NAME} is not liable for
           indirect, incidental, special, or consequential damages arising from your use of Tempa; and our total
           liability for any claim relating to Tempa will not exceed the greater of (a) the amount you have paid us in
-          the twelve months before the claim arose, or (b) US$100 (or the reasonably equivalent amount in your local
-          currency).
+          the twelve months before the claim arose, or (b) US$100 (or the reasonably equivalent amount in your local currency).
         </p>
       </LegalSection>
 
       <LegalSection heading="16. Indemnity">
         <p>
           You agree to indemnify {OPERATOR_NAME} against reasonable claims, losses, and expenses arising from:
-          content you post or send that is unlawful or infringes someone else&rsquo;s rights; your fraud or
-          intentional misuse of Tempa; or your material violation of these Terms or the Community Guidelines. This
-          doesn&rsquo;t apply to the extent a claim arises from {OPERATOR_NAME}&rsquo;s own unlawful conduct, and
-          nothing in this section asks you to indemnify us for anything the law doesn&rsquo;t allow us to pass on to
-          you.
+          content you post or send that is unlawful or infringes someone else&rsquo;s rights; your fraud or intentional
+          misuse of Tempa; or your material violation of these Terms or the Community Guidelines. This doesn&rsquo;t
+          apply to the extent a claim arises from {OPERATOR_NAME}&rsquo;s own unlawful conduct, and nothing in this
+          section asks you to indemnify us for anything the law doesn&rsquo;t allow us to pass on to you.
         </p>
       </LegalSection>
 
       <LegalSection heading="17. Intellectual property complaints">
         <p>
           If you believe content on Tempa infringes your intellectual property rights, contact{' '}
-          <a href="mailto:legal@jointempa.com" className={quietLinkClass}>
-            legal@jointempa.com
-          </a>{' '}
+          <a href="mailto:legal@jointempa.com" className={quietLinkClass}>legal@jointempa.com</a>{' '}
           with enough detail for us to locate and evaluate the content.
         </p>
       </LegalSection>
@@ -266,10 +257,7 @@ export default function TermsPage() {
       <LegalSection heading="20. Contact">
         <p>
           Questions about these Terms can be sent to{' '}
-          <a href="mailto:legal@jointempa.com" className={quietLinkClass}>
-            legal@jointempa.com
-          </a>
-          .
+          <a href="mailto:legal@jointempa.com" className={quietLinkClass}>legal@jointempa.com</a>.
         </p>
       </LegalSection>
     </LegalPageShell>
