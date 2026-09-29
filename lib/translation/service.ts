@@ -53,7 +53,12 @@ function cleanCachePart(value: string, label: string, maxLength: number) {
   return cleaned
 }
 
-function monthlyCharacterLimit() {
+/**
+ * Tempa's own monthly ceiling — the exact value passed to
+ * reserve_translation_characters. Exported so the admin diagnostic reports
+ * the same number the reservation enforces instead of re-parsing the env.
+ */
+export function monthlyCharacterLimit() {
   const raw = process.env.TRANSLATION_MONTHLY_CHARACTER_LIMIT?.trim()
   if (!raw) return DEFAULT_MONTHLY_CHARACTER_LIMIT
 

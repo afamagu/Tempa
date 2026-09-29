@@ -80,7 +80,7 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(contentPageSource).toContain("redirect('/admin/content/questions')")
   })
 
-  it('/admin/system redirects to its one child (Email delivery), same shape as /admin/content before it grew tabs', () => {
+  it('/admin/system redirects to its default child (Email delivery); Translation sits beside it via System tabs', () => {
     expect(systemPageSource).toContain("redirect('/admin/system/email')")
     expect(systemPageSource).not.toContain('isStaff')
     expect(systemPageSource).not.toContain('redirect(\'/sign-in\'')
