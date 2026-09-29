@@ -63,9 +63,14 @@ import DispatchIdentityLabel, { SponsorCta } from '@/app/board/dispatch-identity
 export default function SharedDispatchView({
   dispatch,
   isAuthenticated,
+  writerInvitation = null,
 }: {
   dispatch: SharedDispatch
   isAuthenticated: boolean
+  /** Public Dispatch web pages — the member's public pseudonym, to invite
+   * an outside reader toward the person who wrote it. Never a profile
+   * link (profiles stay members-only). null keeps the share-link copy. */
+  writerInvitation?: string | null
 }) {
   const hasMoments = dispatch.moments.some((m) => m.imageUrl)
 
@@ -135,6 +140,9 @@ export default function SharedDispatchView({
         </div>
 
         <div className="space-y-3 border-t border-foreground/10 pt-6 text-center">
+          {!isAuthenticated && writerInvitation && (
+            <p className="text-[15px] font-medium text-foreground">Join Tempa to write to {writerInvitation}.</p>
+          )}
           {!isAuthenticated && (
             <p className={systemBodyClass}>
               Tempa is a pen-pal experience built around thoughtful letters, shared questions, and glimpses

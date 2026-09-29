@@ -42,6 +42,8 @@ import KeepButton from '../keep-button'
 import ShareDispatchButton from '../share-dispatch-button'
 import DispatchReader from './dispatch-reader'
 import AuthorActionsMenu from './author-actions-menu'
+import WebVisibilityControl from './web-visibility-control'
+import { getDispatchWebState } from '@/lib/public-dispatches'
 import RepliesSection from './replies-section'
 import WorthReadingButton from './worth-reading-button'
 import BoardShelfCard from '@/app/home/board-shelf-card'
@@ -229,6 +231,7 @@ export default async function DispatchPage({
     // it structurally can't show here.
     hasCompletedGuide(supabase, user.id, 'dispatch_reading'),
   ])
+  const webState = isAuthor ? await getDispatchWebState(supabase, dispatch.id) : null
 
   // Each card's OWN trailQuery carries the SAME session plus ITS OWN
   // cursor (BoardShelfCard builds the actual href from dispatch.id +
@@ -374,6 +377,11 @@ export default async function DispatchPage({
             <h1 className={sectionTitleClass}>{dispatch.title}</h1>
 
             {dispatch.topics.length > 0 && <TopicChips topics={dispatch.topics} />}
+
+            {/* Public Dispatch web pages — the author's standing "Members
+                only / Public on the web" control (null state = choice not
+                available yet, nothing rendered). */}
+            {webState && <WebVisibilityControl dispatchId={dispatch.id} initial={webState} />}
 
             {moments.some((m) => m.imageUrl) && <MomentHint dispatchId={dispatch.id} />}
 

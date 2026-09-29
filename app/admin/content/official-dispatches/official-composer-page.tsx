@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { getDispatchWebState, webChoiceAvailable } from '@/lib/public-dispatches'
 import { createClient } from '@/lib/supabase/server'
 import { isStaff } from '@/lib/admin'
 import {
@@ -40,7 +41,7 @@ export default async function OfficialComposerPage({
   if (!(await isStaff(supabase, 'admin'))) redirect('/admin')
 
   if (!dispatchId) {
-    return <DispatchComposer authorId={user.id} publication={{ publishedAs: kind }} />
+    return <DispatchComposer authorId={user.id} publication={{ publishedAs: kind }} webChoiceAvailable={await webChoiceAvailable(supabase)} />
   }
 
   const dispatch = await getDispatchById(supabase, dispatchId)
@@ -67,6 +68,8 @@ export default async function OfficialComposerPage({
         }
       : null
 
+  const webState = await getDispatchWebState(supabase, dispatch.id)
+
   return (
     <DispatchComposer
       authorId={user.id}
@@ -79,7 +82,9 @@ export default async function OfficialComposerPage({
         topics: dispatch.topics,
         moments,
         postcard,
+        webPublic: webState?.webPublic ?? null,
       }}
+      webChoiceAvailable={webState !== null}
     />
   )
 }

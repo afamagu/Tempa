@@ -70,20 +70,24 @@ describe('baseline security headers', () => {
 })
 
 describe('crawl and disclosure files (F-09)', () => {
-  it('robots allows only the public pages and disallows everything else', () => {
+  it('robots allows only the public pages, public Dispatch articles and their render assets; disallows everything else', () => {
     const r = robots()
     const rules = Array.isArray(r.rules) ? r.rules : [r.rules]
     expect(rules).toHaveLength(1)
     expect(rules[0]).toMatchObject({ userAgent: '*', disallow: '/' })
-    expect(rules[0].allow).toEqual([...PUBLIC_INDEXABLE_PATHS])
+    expect(rules[0].allow).toEqual([...PUBLIC_INDEXABLE_PATHS, '/dispatches/', '/_next/'])
+    // share links (/d/…), the member app, /api, /auth and /admin are never allowed
+    for (const p of rules[0].allow as string[]) expect(p).not.toMatch(/^\/(d|api|auth|admin|board|letters|minds|you|profile)(\/|$)/)
     expect(r.sitemap).toBe(`${SITE_URL}/sitemap.xml`)
   })
 
-  it('no member, admin, share or API path is ever invited for indexing', () => {
+  it('no member, admin, share or API path is ever invited for indexing', async () => {
     for (const p of PUBLIC_INDEXABLE_PATHS) {
       expect(p).not.toMatch(/^\/(api|auth|admin|d|home|letters|board|write|you|profile|minds|question|announcement|begin|marketplace|prototypes)(\/|$)/)
     }
-    expect(sitemap().map((e) => e.url)).toEqual(PUBLIC_INDEXABLE_PATHS.map((p) => `${SITE_URL}${p}`))
+    // Without a database the sitemap is the public pages alone (public
+    // Dispatches are covered by tests/security/public-dispatches.test.ts).
+    expect((await sitemap()).map((e) => e.url)).toEqual(PUBLIC_INDEXABLE_PATHS.map((p) => `${SITE_URL}${p}`))
   })
 
   it('security.txt carries the RFC 9116 required fields and has not expired', () => {
@@ -115,8 +119,10 @@ describe('database authorization contracts (docs/sql)', () => {
     expect(count).toBeGreaterThan(50)
   })
 
-  it('anon is granted nothing except the public shared-Dispatch read path', () => {
-    const allowed = new Set(['public.get_shared_dispatch(uuid)', 'public.dispatch_photo_is_externally_shared(text)'])
+  it('anon is granted nothing except the shared-Dispatch and public-Dispatch read paths', () => {
+    // + 2026-10-27: the open-web read paths for Dispatches that are "Public on the web".
+    const allowed = new Set(['public.get_shared_dispatch(uuid)', 'public.dispatch_photo_is_externally_shared(text)',
+      'public.get_public_dispatch(text)', 'public.list_public_dispatches()'])
     let anonGrants = 0
     for (const f of migrations) {
       const sql = stripComments(readFileSync(path.join(sqlDir, f), 'utf8'))
