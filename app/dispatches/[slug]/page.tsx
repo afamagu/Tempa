@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
@@ -10,7 +11,14 @@ import {
   publicDispatchMetadata,
   UNAVAILABLE_DISPATCH_METADATA,
 } from '@/lib/public-dispatches'
+import {
+  PUBLIC_DISPATCH_INDEX_PATH,
+  listRelatedPublicDispatches,
+} from '@/lib/public-dispatch-discovery'
+import { SITE_URL } from '@/lib/site'
+import { quietLinkClass } from '@/app/profile/ui'
 import SharedDispatchView from '@/app/d/[shareToken]/shared-dispatch-view'
+import PublicDispatchCard from '../public-dispatch-card'
 
 /**
  * Public Dispatch web page — /dispatches/{slug} (docs/public-dispatch-
@@ -44,15 +52,43 @@ export default async function PublicDispatchPage({ params }: { params: Promise<{
   // Only steers the closing call to action (members → The Board); never
   // a network call and never a gate on the article itself.
   const hasSession = (await cookies()).getAll().some((c) => /^sb-.+-auth-token/.test(c.name))
+  const related = await listRelatedPublicDispatches(createAnonClient(), d.slug, d.topics, 4)
+  const breadcrumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Dispatches', item: `${SITE_URL}${PUBLIC_DISPATCH_INDEX_PATH}` },
+      { '@type': 'ListItem', position: 2, name: d.title },
+    ],
+  }
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScriptContent(publicDispatchJsonLd(d)) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScriptContent(breadcrumb) }} />
       <SharedDispatchView
         dispatch={d}
         isAuthenticated={hasSession}
         writerInvitation={d.identity.kind === 'member' ? d.identity.name : null}
       />
+
+      <section className="flex justify-center px-6 pb-14" aria-label="More public Dispatches">
+        <div className="w-full max-w-2xl space-y-5 border-t border-foreground/10 pt-7">
+          {related.length > 0 && (
+            <>
+              <h2 className="font-serif text-xl font-medium text-foreground">More public Dispatches</h2>
+              <div>
+                {related.map((dispatch) => (
+                  <PublicDispatchCard key={dispatch.slug} dispatch={dispatch} />
+                ))}
+              </div>
+            </>
+          )}
+          <Link href={PUBLIC_DISPATCH_INDEX_PATH} className={quietLinkClass}>
+            Browse all public Dispatches
+          </Link>
+        </div>
+      </section>
     </>
   )
 }

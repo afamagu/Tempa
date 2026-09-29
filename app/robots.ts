@@ -7,9 +7,10 @@ import { PUBLIC_DISPATCH_PATH } from '@/lib/public-dispatches'
 // the public pages are allowed, everything else is disallowed, so no
 // private route has to be named here.
 //
-// Public Dispatch web pages: /dispatches/ (articles + their generated
-// share images) and /_next/ (the scripts/styles/images a crawler needs to
-// render them) are allowed. Share links (/d/…) stay disallowed/noindex.
+// Public Dispatch web pages: PUBLIC_INDEXABLE_PATHS includes the exact
+// /dispatches hub, while /dispatches/ allows articles + topic collections
+// and their generated share images. /_next/ lets crawlers render public
+// pages. Share links (/d/…) stay disallowed/noindex.
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {

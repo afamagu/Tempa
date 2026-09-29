@@ -14,6 +14,6 @@ export const BRAND_ACCENT = '#5b6b47' // --accent (moss)
 /** Pre-beta security F-09 — the only pages crawlers are invited to index
  * (robots.ts allows exactly these; sitemap.ts lists them). Everything else
  * — the member app, shared Dispatch links (/d/…), /api, /auth, /admin —
- * is disallowed. The logged-out home (/) joins this list with the front
- * door. */
-export const PUBLIC_INDEXABLE_PATHS = ['/sign-in', '/terms', '/privacy', '/community-guidelines', '/safety'] as const
+ * is disallowed. /dispatches is the open-web reading index; its child
+ * article/topic routes are allow-listed separately by robots.ts. */
+export const PUBLIC_INDEXABLE_PATHS = ['/dispatches', '/sign-in', '/terms', '/privacy', '/community-guidelines', '/safety'] as const
