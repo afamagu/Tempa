@@ -21,12 +21,12 @@ import { serverCookieOptions } from '@/lib/supabase/cookie-options'
  * Pre-beta security F-02 — the Proxy also runs on every HTML route (see
  * `config.matcher`) to attach a per-request nonce + Content-Security-
  * Policy. Only the paths in PROTECTED_MATCHERS go through the auth /
- * account-entry gate below; every other route (sign-in, legal pages,
- * shared Dispatches, account-state notices) just gets the CSP headers and
- * no Supabase call, exactly as before.
+ * account-entry gate below; every other route (the public `/` landing
+ * page, sign-in, legal pages, shared Dispatches, account-state notices)
+ * just gets the CSP headers and no Supabase call. The root page itself
+ * still checks auth so an existing member is sent straight into Tempa.
  */
 export const PROTECTED_MATCHERS = [
-  '/',
   '/admin/:path*',
   '/announcement/:path*',
   '/board/:path*',
@@ -41,7 +41,6 @@ export const PROTECTED_MATCHERS = [
 
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_MATCHERS.some((m) => {
-    if (m === '/') return pathname === '/'
     const prefix = m.replace('/:path*', '')
     return pathname === prefix || pathname.startsWith(`${prefix}/`)
   })
