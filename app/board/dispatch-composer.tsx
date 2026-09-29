@@ -78,22 +78,8 @@ import TopicInput from './topic-input'
 import DispatchPreview from './dispatch-preview'
 import { WEB_PUBLIC_COPY, webVisibilityRefusal } from '@/lib/public-dispatches'
 
-// Smoke-test contract completion checkpoint — 70 -> 140, mirroring
-// lib/dispatches.ts's own TITLE_MAX_CHARS and the server-side
-// publish_dispatch/update_dispatch checks exactly (docs/sql/2026-09-28-
-// title-postcard-and-edit-window.sql). Kept as its own constant here
-// (not imported) — the same duplication that already existed at 70,
-// now visibly consistent at 140 and covered by a same-value regression
-// test (dispatch-composer.test.tsx).
 const TITLE_MAX_CHARS = 140
 
-// Publish-failure diagnostic checkpoint (2026-09-08). Development-only:
-// appends the literal Supabase/Postgres error detail to the generic
-// production message, so the actual failure (a RAISE EXCEPTION message,
-// a constraint code, a trigger's message, etc.) is visible on screen
-// during diagnosis instead of only in the console. The production
-// message itself is never altered — this only ever appends, and only
-// in development.
 function formatDevErrorDetail(error: PublishDispatchError): string {
   if (!error) return ''
   const parts = [`${error.code ?? '?'}: ${error.message}`]
@@ -102,11 +88,6 @@ function formatDevErrorDetail(error: PublishDispatchError): string {
   return `\n(${parts.join(' — ')})`
 }
 
-// A client-side approximation of dispatch_visible_length (the live SQL
-// function), for diagnostic logging ONLY — never used to validate or
-// block anything here. Close enough to be useful for comparing against
-// the server's own 10,000-character ceiling when diagnosing a failure;
-// the server's own check remains the actual authority regardless.
 function approximateVisibleBodyLength(body: string): number {
   const { body: withoutMarker } = stripRichBodyMarker(body)
   return withoutMarker.replace(/\*\*/g, '').replace(/_/g, '').length
@@ -118,81 +99,10 @@ export type ExistingDispatchForEditing = {
   body: string
   topics: string[]
   moments: { position: number; imagePath: string; previewUrl: string | null }[]
-  /** Dispatch Postcards Checkpoint 2 — the already-published, IMMUTABLE
-   * Postcard this Dispatch carries, if any. Shown quietly (read-only,
-   * via LetterheadPostcard) in edit mode — never a picker/change/remove
-   * control; update_dispatch itself has no Postcard parameter at all, so
-   * there is no ordinary path to mutate this even if a control existed. */
   postcard: DispatchPostcard | null
-  /** Public Dispatch web pages (2026-10-27) — the current "Public on the
-   * web" state, or null when it can't be read (the choice is then not
-   * offered). */
   webPublic?: boolean | null
 }
 
-/**
- * The Dispatch composer — title, body (Bold/Italic/Emoji via the same
- * shared Tiptap schema every letter composer uses), up to 3 topics,
- * optional still-image Moments, and (Dispatch Postcards Checkpoint 2,
- * CREATE MODE ONLY) an optional single Postcard. The Postcard reuses the
- * exact same PostcardComposerSlot/PostcardPicker/PostcardEditor
- * components the Letter composer already uses — no parallel picker/
- * editor. Selected once, before publish: publish_dispatch resolves the
- * catalogue key to its CURRENT immutable version server-side (never the
- * client), so the choice made here is only ever a draft until Publish
- * actually locks it in. No length UI anywhere for the body: Dispatches
- * carry no product-facing character cap (see dispatchTitleError for the
- * one genuine, visible limit — the title).
- *
- * WRITE → PREVIEW → PUBLISH (create mode only) — same philosophy as
- * moments-composer.tsx's own WRITE → PREVIEW → SEND, adapted rather than
- * copied: the primary action is "Preview Dispatch," never a direct
- * publish. `canPreview` decides whether Preview is reachable at all
- * (title/body/no-photo-mid-upload — the same signal used for previous
- * Publish-button eligibility) and DELIBERATELY excludes the Postcard
- * back-message completeness check, mirroring moments-composer.tsx's own
- * `canSend` exactly: that gate applies at the actual Publish action
- * instead (inside DispatchPreview, as `publishBlockedReason`, with a
- * visible, restrained explanation and a direct link back into the
- * Postcard editor) — never silently. This is the fix for a real live
- * defect: the previous single-button flow folded the Postcard-message
- * gate directly into the Publish button's own `disabled` state with NO
- * visible explanation anywhere in the UI, so an author who opened the
- * new Postcard picker, selected one, and closed the editor without
- * writing a back message was left staring at a permanently disabled
- * "Publish Dispatch" button with no way to understand why. Edit mode is
- * unaffected — it never renders a Postcard picker at all (see
- * existingDispatch.postcard's own read-only display below), so its own
- * `canSubmit` needs no such gate and its "Save changes" button still
- * submits directly, exactly as before.
- *
- * Board usability checkpoint (2026-09-09): also serves editing, via
- * `mode="edit"` + `existingDispatch` — the SAME composer, not a second
- * one, per the explicit instruction to reuse this architecture rather
- * than build a parallel edit form. In edit mode: the editor starts from
- * `dispatchBodyToDoc(existingDispatch.body, existingDispatch.moments)`
- * (reuses markupBodyToLetterDoc for all text/mark reconstruction, adding
- * only Moment reattachment — see that function's own doc comment)
- * instead of an empty document; there is no
- * localStorage draft at all (an in-progress edit of already-published
- * writing isn't a "draft" in the same sense a first-time compose
- * session is, and skipping it avoids ever colliding with — or
- * accidentally overwriting — this author's unrelated new-Dispatch
- * draft); submitting calls update_dispatch (via updateDispatch) instead
- * of publish_dispatch, and always redirects to the SAME Dispatch id,
- * never a new one.
- *
- * Visual rule (Board usability follow-up, 2026-09-09): the writing
- * surface itself is `bg-surface-shell` — the same darker-paper token
- * the private-letter reader (letter-body.tsx) already uses, and the
- * Dispatch reader (app/board/[dispatchId]/page.tsx) already reuses —
- * so composing feels like the same TEMPA paper the piece will be read
- * on. Everything OUTSIDE the editor (title input, topic input, buttons)
- * stays on the ordinary page background; only the writing area itself
- * carries the tint. This is a deliberate divergence from the private-
- * letter composer (moments-composer.tsx), which stays bg-transparent —
- * private-letter styling is untouched by this rule.
- */
 export default function DispatchComposer({
   authorId,
   authorPseudonym = '',
@@ -205,35 +115,14 @@ export default function DispatchComposer({
   webChoiceAvailable = false,
   writingStyleId = null,
 }: {
-  /** Official/Sponsored Dispatches (Admin Content only) — the SAME
-   * composer, publishing through the staff-only publish_official_
-   * dispatch / update_official_dispatch RPCs, which re-check
-   * is_staff('admin') server-side. Omitted for every member. A client
-   * prop can never grant this identity: a non-staff caller is refused by
-   * the database regardless of what this component renders. */
   publication?: { publishedAs: OfficialPublishedAs; initialSponsor?: SponsorFields | null }
   authorId: string
-  /** Dispatch Postcards Checkpoint 2 — the author's CURRENT pseudonym,
-   * resolved server-side by the caller (app/board/write/page.tsx,
-   * app/board/[dispatchId]/edit/page.tsx), same "never a snapshot at
-   * draft time" reasoning as PostcardEditor's own senderPseudonym prop
-   * (lib/moments.ts's resolveLetterPostcardDisplay doc comment). Unused
-   * outside the Postcard editor's own live draft preview. */
   authorPseudonym?: string
   authorMarkUrl?: string | null
   mode?: 'create' | 'edit'
   existingDispatch?: ExistingDispatchForEditing
-  /** Onboarding & First-Use checkpoint — server-resolved
-   * !hasCompletedGuide(...,'dispatch_composer'), passed down rather than
-   * fetched here (this is a client component). Create mode only — a
-   * member editing an existing Dispatch already knows how this works. */
   showComposerIntro?: boolean
-  /** Same pattern, keyed 'postcard' — shown at the point of first
-   * activating the Postcard feature (the "Add a postcard" slot below),
-   * never pre-emptively before that. */
   showPostcardIntro?: boolean
-  /** Public Dispatch web pages (2026-10-27) — server-resolved: whether
-   * the "Public on the web" choice can be offered at all. */
   webChoiceAvailable?: boolean
   /** Writing Style — the author's CURRENT style, for Preview only (the
    * database snapshots the real value at Publish). Ignored for
@@ -243,7 +132,6 @@ export default function DispatchComposer({
   const isEdit = mode === 'edit' && Boolean(existingDispatch)
   const official = publication ?? null
   const isSponsored = official?.publishedAs === 'sponsored'
-  // Official drafts never collide with the admin's own member draft.
   const draftKey = official ? `${authorId}:${official.publishedAs}` : authorId
   const [sponsor, setSponsor] = useState<SponsorFields>(
     official?.initialSponsor ?? { sponsorName: '', ctaLabel: '', ctaUrl: '' }
@@ -257,27 +145,16 @@ export default function DispatchComposer({
   const [topics, setTopics] = useState<string[]>(existingDispatch?.topics ?? [])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // "Published" = on the Board (members). "Public on the web" is a
-  // separate, explicit choice: off by default for members, on by default
-  // for official/Sponsored Dispatches. Sent WITH the save (one database
-  // transaction) — never a separate follow-up call.
-  const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : publication ? true : false
+
+  // New Dispatches are public on the web by default. Editing always
+  // preserves the existing Dispatch's actual state. The choice remains
+  // explicit and reversible before and after publication.
+  const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : true
   const showWebChoice = webChoiceAvailable && initialWebPublic !== null
   const [webPublic, setWebPublic] = useState<boolean>(initialWebPublic === true)
-  // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
-  // pendingWarning/handleCancelWarning/handleAcknowledgeWarning split
-  // exactly: null means no warning is pending (the ordinary case);
-  // set only when /api/safety/evaluate returns warning_required, and
-  // cleared on cancel or on a successful publish/save.
+
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
-  // Phase 1 — a confirmed financial solicitation is not sendable and has
-  // no override; this only ever opens the calm SafetyBlockedDialog.
   const [financialBlocked, setFinancialBlocked] = useState(false)
-  // Account enforcement messaging (pre-beta UX polish batch 1) — see
-  // lib/account-status.ts. publish_dispatch fully blocks restricted,
-  // suspended, and banned alike (all three share one generic RPC
-  // message), so unlike moments-composer.tsx's narrower case, the
-  // three-way accountBlockedMessage applies directly here.
   const [myStatus, setMyStatus] = useState<AccountStatus>('active')
 
   useEffect(() => {
@@ -289,44 +166,20 @@ export default function DispatchComposer({
       cancelled = true
     }
   }, [])
+
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
-
-  // WRITE → PREVIEW → PUBLISH (create mode only) — same null-means-
-  // closed/resolving, array-means-ready convention moments-composer.tsx
-  // already uses for its own `previewMoments`. Never touched in edit
-  // mode (edit mode has no Preview step at all).
   const [previewMoments, setPreviewMoments] = useState<DispatchMoment[] | null>(null)
   const [preparingPreview, setPreparingPreview] = useState(false)
-
-  // Dispatch Postcards Checkpoint 2 — CREATE MODE ONLY. Mirrors moments-
-  // composer.tsx's own Postcard state exactly: held entirely separate
-  // from the editor document, null means nothing attached,
-  // postcardPickerOpen serves both the empty slot's "+ Add a postcard"
-  // and the editor's own "Change postcard." Left permanently unused (and
-  // never rendered) in edit mode — an already-published Dispatch's
-  // Postcard is immutable, shown read-only via existingDispatch.postcard
-  // instead (see the JSX below).
   const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
   const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
   const [activePostcards, setActivePostcards] = useState<PostcardCatalogEntry[]>([])
-  // Post-onboarding corrections checkpoint (Section G) — the Postcard
-  // introduction used to render unconditionally alongside the Dispatch-
-  // writing introduction the moment this composer opened (stacking two
-  // lessons at once). It now only appears once the member genuinely
-  // activates the Postcard slot — see handleAddPostcard below — so
-  // showPostcardIntro (whether it's still unseen, per guide_completions)
-  // and postcardIntroActive (whether the member has actually reached
-  // for it this visit) are deliberately two separate booleans.
   const [postcardIntroActive, setPostcardIntroActive] = useState(false)
 
   function handleAddPostcard() {
-    if (showPostcardIntro) {
-      setPostcardIntroActive(true)
-    } else {
-      setPostcardPickerOpen(true)
-    }
+    if (showPostcardIntro) setPostcardIntroActive(true)
+    else setPostcardPickerOpen(true)
   }
 
   useEffect(() => {
@@ -340,9 +193,6 @@ export default function DispatchComposer({
     }
   }, [isEdit])
 
-  // Restored once on mount, from its own separate key — completely
-  // independent of the editor's own draft restoration above, same
-  // reasoning as moments-composer.tsx's matching effect.
   useEffect(() => {
     if (isEdit) return
     const restored = readDispatchPostcardDraft(draftKey)
@@ -350,9 +200,6 @@ export default function DispatchComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, draftKey])
 
-  // The ONE place a Postcard edit is both applied to state AND
-  // persisted — see moments-composer.tsx's matching function for why
-  // this is deliberately not a useEffect keyed on postcardDraft changing.
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
     setPostcardDraft(next)
     writeDispatchPostcardDraft(draftKey, next)
@@ -376,19 +223,10 @@ export default function DispatchComposer({
   const postcardCatalogEntry = postcardDraft
     ? (activePostcards.find((p) => p.key === postcardDraft.postcardKey) ?? null)
     : null
-
-  // "The front is the atmosphere. The back is written for this
-  // particular sending" — same rule write_letter enforces for a sent
-  // Letter Postcard, applied here to Publish. Draft state may have a
-  // blank back while composing; Publish itself requires a real,
-  // author-written message (mirrored server-side in publish_dispatch).
   const postcardNeedsMessage = Boolean(postcardDraft && postcardDraft.backMessage.trim().length === 0)
 
   const editor = useEditor({
     immediatelyRender: false,
-    // Same Send-button reactivity fix every other letter composer
-    // needs — see moments-composer.tsx's own comment for the full
-    // explanation of why @tiptap/react requires this explicitly.
     shouldRerenderOnTransaction: true,
     extensions: [
       ...baseWritingExtensions(),
@@ -400,12 +238,6 @@ export default function DispatchComposer({
       }),
     ],
     content: isEdit && existingDispatch ? dispatchBodyToDoc(existingDispatch.body, existingDispatch.moments) : EMPTY_LETTER_DOC,
-    // bg-surface-shell (not bg-transparent, unlike the private-letter
-    // composer this schema is otherwise shared with — see
-    // moments-composer.tsx, deliberately left untouched) — the same
-    // paper token the Dispatch/private-letter READERS already use, so
-    // writing a Dispatch feels like the same TEMPA paper it will be
-    // read on. See this file's own top-level doc comment.
     editorProps: {
       attributes: {
         class:
@@ -418,24 +250,11 @@ export default function DispatchComposer({
     },
   })
 
-  // Restored after mount, not as the editor's initial state — same
-  // SSR-hydration-mismatch reasoning as every other composer's draft
-  // restoration here (localStorage doesn't exist during server
-  // rendering, so reading it any earlier than a post-mount effect would
-  // either throw or produce a value the server-rendered markup never
-  // had, i.e. a hydration mismatch). title/topics are ordinary React
-  // state — unlike the editor's own content, there is no non-React
-  // system holding them — so restoring them is a legitimate, one-time,
-  // effect-driven initialization from an external source (the same
-  // category of exception react-hooks/set-state-in-effect exists to
-  // let through), not a case of state that should instead be derived
-  // during render. Never runs in edit mode — see this component's own
-  // doc comment for why editing has no draft at all.
   useEffect(() => {
     if (!editor || isEdit) return
     const draft = readDispatchDraft(draftKey)
     if (draft) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time restore from localStorage, see comment above
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(draft.title)
       setTopics(draft.topics)
       editor.commands.setContent(draft.doc)
@@ -461,36 +280,16 @@ export default function DispatchComposer({
 
   const docJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
   const titleError = dispatchTitleError(title)
-  // aboveMax is always false: Dispatches have no product-level length
-  // limit (see the Build Guide's Dispatches section) — the server-side
-  // 10,000-visible-character ceiling is a defensive backstop only, never
-  // surfaced here.
-
-  // Edit mode's own submit eligibility — "Save changes" still submits
-  // directly, unchanged from before Preview existed. Postcard state is
-  // permanently inert in edit mode (the effects above never populate it
-  // there), so no Postcard gate is needed here at all.
   const canSubmit =
     Boolean(editor) &&
     titleError === null &&
     canSendLetter(docJSON, { aboveMax: false, submitting: publishing }) &&
     !uploadingIndex
-
-  // Create mode's Preview eligibility — deliberately the SAME shape as
-  // moments-composer.tsx's own `canSend`: title/body/no-photo-mid-upload
-  // only. The Postcard back-message completeness gate is intentionally
-  // NOT here — see this file's own top-level doc comment for why folding
-  // it in here (the previous, single-button behavior) was the live bug.
   const canPreview =
     Boolean(editor) &&
     titleError === null &&
     canSendLetter(docJSON, { aboveMax: false, submitting: publishing || preparingPreview }) &&
     !uploadingIndex
-
-  // Shown next to the Preview button ONLY when there is something
-  // concrete and fixable to say — never a generic "can't submit" dead
-  // end. Photo-upload-in-progress already has its own visible "Adding
-  // photo…" line below, so it isn't duplicated here.
   const previewBlockedReason: string | null =
     isEdit || publishing || preparingPreview
       ? null
@@ -500,12 +299,6 @@ export default function DispatchComposer({
           ? 'Write something before you can preview.'
           : null
 
-  // The actual Publish precondition (evaluated inside DispatchPreview in
-  // create mode, or directly by "Save changes" in edit mode) — the ONE
-  // place the Postcard back-message gate now lives, always paired with a
-  // visible reason (DispatchPreview's own publishBlockedReason prop).
-  // Sponsored — the same constraints the database enforces, surfaced
-  // early (the RPC remains the authority).
   const sponsorError: string | null = !isSponsored
     ? null
     : sponsor.sponsorName.trim().length === 0
@@ -527,8 +320,6 @@ export default function DispatchComposer({
         ? sponsorError
         : null
 
-  // Public identity this Dispatch will carry — shown in Preview and used
-  // as the Postcard sender: 'Tempa', the sponsor, or the member.
   const publicIdentity = resolveDispatchIdentity({
     publishedAs: official?.publishedAs ?? 'member',
     authorId,
@@ -549,7 +340,6 @@ export default function DispatchComposer({
     if (!editor) return
     const { state } = editor
     const { doc, schema } = state
-
     let currentIndex = 0
     let targetPos: number | null = null
     doc.forEach((node, offset) => {
@@ -558,7 +348,6 @@ export default function DispatchComposer({
       currentIndex += 1
     })
     if (targetPos === null) return
-
     const momentNode = schema.nodes.photoMoment.create(attrs)
     const tr = state.tr.insert(targetPos, momentNode)
     const mappedSelectionPos = tr.mapping.map(state.selection.from)
@@ -580,10 +369,8 @@ export default function DispatchComposer({
     e.target.value = ''
     pendingTargetRef.current = null
     if (!file || index === null || !editor) return
-
     setUploadingIndex(index)
     setError(null)
-
     try {
       const blob = await processImageForUpload(file)
       const path = `${authorId}/${crypto.randomUUID()}.jpg`
@@ -591,9 +378,7 @@ export default function DispatchComposer({
       const { error: uploadError } = await supabase.storage
         .from('dispatch-photos')
         .upload(path, blob, { contentType: 'image/jpeg' })
-
       if (uploadError) throw uploadError
-
       insertPhotoMomentAtParagraphEnd(index, { imagePath: path, previewUrl: URL.createObjectURL(blob) })
     } catch {
       setError('Could not add that photo. Please try again.')
@@ -602,32 +387,11 @@ export default function DispatchComposer({
     }
   }
 
-  // Dispatch Preview checkpoint — the SAME "prevent double-submission"
-  // guard the button's own `disabled` already provides, reasserted here
-  // defensively: in edit mode, `canSubmit` (already false while
-  // `publishing`); in create mode, `canPreview` plus the Postcard
-  // completeness gate — since Preview's own Publish button is disabled
-  // while `publishing` or `publishBlockedReason`, this can only ever be
-  // reached once per click either way.
-  // Safety 2, Checkpoint 4 — the member's own click (either "Save
-  // changes" in edit mode, or DispatchPreview's own "Publish" in create
-  // mode — both call this same handler, per this file's own onPublish
-  // wiring below). Evaluates FIRST; only ever calls publish_dispatch/
-  // update_dispatch itself once that evaluation resolves to allow
-  // (immediately) or the member explicitly acknowledges a warning
-  // (handleAcknowledgeWarning below). A failed evaluation
-  // (outcome.status === 'error') never falls back to an unscreened
-  // publish — see lib/safety/send-with-safety.ts's own doc comment on
-  // why evaluateSafety is fail-closed by construction.
   async function handleSubmit() {
     const canPublish = isEdit ? canSubmit && !sponsorError : canPreview && !publishBlockedReason
     if (!editor || !canPublish) return
     setPublishing(true)
     setError(null)
-
-    // Official/Sponsored — a staff-authorized content action, never
-    // screened as member-to-member writing; the staff-only RPC itself is
-    // the authority (and refuses any non-staff caller).
     if (official) {
       await performSubmit(null, false)
       return
@@ -636,7 +400,6 @@ export default function DispatchComposer({
     const finalDoc = editor.getJSON() as LetterDocJSON
     const body = docToPlainBody(finalDoc)
     const normalizedTopics = normalizeTopics(topics)
-
     const outcome =
       isEdit && existingDispatch
         ? await evaluateSafety({ surface: 'dispatch_update', dispatchId: existingDispatch.id, title, topics: normalizedTopics, body })
@@ -670,7 +433,6 @@ export default function DispatchComposer({
       setPublishing(false)
       return
     }
-
     await performSubmit(outcome.evaluationId, false)
   }
 
@@ -687,14 +449,6 @@ export default function DispatchComposer({
     if (!editor) return
     setPublishing(true)
     setError(null)
-
-    // Re-read the editor fresh, never a value captured earlier — the
-    // member may have kept editing while a warning dialog was open. If
-    // anything Safety-bound genuinely changed since evaluation, publish_
-    // dispatch/update_dispatch's own fingerprint recheck (tempa_private.
-    // consume_safety_evaluation) rejects it, surfacing as the generic
-    // failure below — a fresh evaluation is then required, exactly as
-    // it should be.
     const finalDoc = editor.getJSON() as LetterDocJSON
     const body = docToPlainBody(finalDoc)
     const moments: DispatchMomentDraft[] = docToMomentDrafts(finalDoc)
@@ -703,12 +457,6 @@ export default function DispatchComposer({
 
     const actionTag = isEdit ? '[board] edit attempt' : '[board] publish attempt'
     if (process.env.NODE_ENV === 'development') {
-      // Safe structural summary only — never the full body, an image's
-      // raw bytes, an auth token, or an email address. Exactly what is
-      // about to be sent, shaped the same way publishDispatch/
-      // updateDispatch will shape it (normalizeTopics is pure/
-      // idempotent, so calling it again here for logging matches the
-      // real payload exactly).
       console.debug(actionTag, {
         titleLength: title.length,
         approximateVisibleBodyLength: approximateVisibleBodyLength(body),
@@ -728,13 +476,6 @@ export default function DispatchComposer({
       : 'Could not publish your Dispatch. Please try again.'
 
     try {
-      // Dispatch Postcards Checkpoint 2 — the draft is passed ONLY on
-      // the create-mode publish call; updateDispatch never accepts a
-      // postcard parameter at all (update_dispatch has no such RPC
-      // argument), so an edit-mode submission cannot touch it even by
-      // accident.
-      // Public Dispatch web pages — the requested web state travels WITH
-      // the save (one database transaction). undefined = choice not offered.
       const requestedWeb = showWebChoice ? webPublic : undefined
       const { data, error: submitError } = official
         ? isEdit && existingDispatch
@@ -788,25 +529,8 @@ export default function DispatchComposer({
           hint: submitError?.hint,
         })
         const devDetail = process.env.NODE_ENV === 'development' ? formatDevErrorDetail(submitError) : ''
-        // Smoke-test contract completion checkpoint (Section G) —
-        // update_dispatch's own edit-window/reply-lock rejection is a
-        // specific, permanent, accurately-worded condition ("Please try
-        // again" would be misleading, same reasoning author-actions-
-        // menu.tsx's own delete-with-Replies guard already established),
-        // so it's shown verbatim rather than folded into the generic
-        // retry copy. This is the safe-rejection path Section G
-        // describes: eligibility can change between page load and Save
-        // (another reply arrives, or the window closes) — the RPC
-        // itself, not this composer, is what actually catches that.
         const editLockMessage = 'This Dispatch can no longer be edited.'
         const momentPlacementMessage = 'Moment position is out of range for this Dispatch.'
-        // Account enforcement messaging (pre-beta UX polish batch 1) —
-        // restricted/suspended/banned all fully block publish_dispatch,
-        // so the caller's own already-known status (never decoded from
-        // the RPC's shared generic message) can replace the generic
-        // retry-implying fallback outright when it applies.
-        // A refused web-visibility request rolled back the whole save:
-        // say so plainly (nothing changed), and stay here.
         const webRefusal = webVisibilityRefusal(submitError?.message)
         if (webRefusal) {
           setError(webRefusal)
@@ -838,16 +562,6 @@ export default function DispatchComposer({
     }
   }
 
-  // WRITE → PREVIEW → PUBLISH (create mode only) — resolves the CURRENT
-  // editor document's Moments into real, displayable Moment[] BEFORE
-  // opening Preview, the same "resolve fresh at the moment Preview is
-  // requested" approach moments-composer.tsx's own handleOpenPreview
-  // uses (docToDraftMomentDescriptors + resolveDraftPreviewMoments,
-  // reused as-is — the only Dispatch-specific addition is
-  // resolveDispatchPhotoUrl, signing against the separate dispatch-
-  // photos bucket instead of letter-photos). previewMoments stays null
-  // (Preview closed/not yet resolving) until this completes, exactly
-  // mirroring that same null-vs-array convention.
   async function handleOpenPreview() {
     if (!editor || preparingPreview) return
     setPreparingPreview(true)
@@ -897,95 +611,39 @@ export default function DispatchComposer({
           <fieldset className="space-y-3 rounded-md border border-foreground/10 p-4" aria-label="Sponsor">
             <label className="block space-y-1">
               <span className={sectionLabelClass}>Sponsor name</span>
-              <input
-                className={inputClass}
-                value={sponsor.sponsorName}
-                maxLength={80}
-                onChange={(e) => setSponsor({ ...sponsor, sponsorName: e.target.value })}
-                placeholder="e.g. Acme Paper Co."
-              />
+              <input className={inputClass} value={sponsor.sponsorName} maxLength={80} onChange={(e) => setSponsor({ ...sponsor, sponsorName: e.target.value })} placeholder="e.g. Acme Paper Co." />
             </label>
             <div className="grid gap-3 sm:grid-cols-[minmax(0,0.4fr)_minmax(0,0.6fr)]">
               <label className="block space-y-1">
                 <span className={sectionLabelClass}>Link label (optional)</span>
-                <input
-                  className={inputClass}
-                  value={sponsor.ctaLabel}
-                  maxLength={40}
-                  onChange={(e) => setSponsor({ ...sponsor, ctaLabel: e.target.value })}
-                  placeholder="Learn more"
-                />
+                <input className={inputClass} value={sponsor.ctaLabel} maxLength={40} onChange={(e) => setSponsor({ ...sponsor, ctaLabel: e.target.value })} placeholder="Learn more" />
               </label>
               <label className="block space-y-1">
                 <span className={sectionLabelClass}>Link (optional, https://)</span>
-                <input
-                  className={inputClass}
-                  type="url"
-                  inputMode="url"
-                  value={sponsor.ctaUrl}
-                  maxLength={500}
-                  onChange={(e) => setSponsor({ ...sponsor, ctaUrl: e.target.value })}
-                  placeholder="https://"
-                />
+                <input className={inputClass} type="url" inputMode="url" value={sponsor.ctaUrl} maxLength={500} onChange={(e) => setSponsor({ ...sponsor, ctaUrl: e.target.value })} placeholder="https://" />
               </label>
             </div>
             {sponsorError && <p className={helperTextClass}>{sponsorError}</p>}
           </fieldset>
         )}
 
-        {/* Onboarding & First-Use checkpoint — shown once, the first
-            time this member attempts to write a Dispatch (create mode
-            only — an author editing an existing Dispatch already knows
-            how this works). Replayable later from You → Tempa Guide. */}
         {!isEdit && showComposerIntro && (
-          <FeatureIntroduction
-            guideKey="dispatch_composer"
-            title="Leave something on the Board"
-            ctaLabel="Start writing"
-          >
+          <FeatureIntroduction guideKey="dispatch_composer" title="Leave something on the Board" ctaLabel="Start writing">
             <p>
-              A Dispatch is public writing. It might be a story from your day, something
-              you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something
-              worth putting into words.
+              A Dispatch is writing offered beyond a private correspondence — a story from your day,
+              something you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something worth putting into words.
             </p>
-            <p>It doesn&rsquo;t need to sound important. It just needs to sound like you.</p>
+            <p>New Dispatches are public on the web by default. You can keep any one on Tempa only before publishing.</p>
           </FeatureIntroduction>
         )}
 
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          maxLength={TITLE_MAX_CHARS}
-          placeholder="What is this about, in one line?"
-          aria-label="Dispatch title"
-          className={inputClass}
-        />
-        {/* Post-onboarding corrections checkpoint (Section J) — a live
-            smoke test found the title limit restrictive with no visible
-            indication of it. Muted at rest; turns to the same red the
-            field's own validation error already uses once at/over the
-            limit — never red from the first character. */}
+        <input type="text" value={title} onChange={(e) => handleTitleChange(e.target.value)} maxLength={TITLE_MAX_CHARS} placeholder="What is this about, in one line?" aria-label="Dispatch title" className={inputClass} />
         <p className={`text-right text-[12px] ${title.length >= TITLE_MAX_CHARS ? 'text-red-600' : helperTextClass}`}>
           {title.length} / {TITLE_MAX_CHARS}
         </p>
 
-        {/* Dispatch Postcards Checkpoint 2 — CREATE MODE ONLY: the same
-            letterhead-position slot the Letter composer uses, sitting
-            between the title and the writing surface, entirely outside
-            the ProseMirror document. EDIT MODE shows the already-
-            published, immutable Postcard instead (if any) — read-only,
-            no picker/change/remove control — via LetterheadPostcard
-            directly, never this slot. */}
         {!isEdit && (
           <>
-            {/* Post-onboarding corrections checkpoint (Section G/H/I) —
-                shown only once the member actually activates the
-                Postcard slot below (handleAddPostcard), never
-                pre-emptively at page load. Its CTA both completes the
-                guide AND opens the real picker, immediately — never just
-                a dismissal wearing a misleading label. Replayable later
-                from You → Tempa Guide. */}
             {postcardIntroActive && !postcardDraft && (
               <FeatureIntroduction
                 guideKey="postcard"
@@ -998,18 +656,10 @@ export default function DispatchComposer({
                 }}
               >
                 <p className="italic">Send a little piece of a place.</p>
-                <p>
-                  Choose a postcard, add a few words to the front, and write something more on
-                  the back — then send it along with your Letter or Dispatch as a small keepsake.
-                </p>
+                <p>Choose a postcard, add a few words to the front, and write something more on the back — then send it along with your Letter or Dispatch as a small keepsake.</p>
               </FeatureIntroduction>
             )}
-            <PostcardComposerSlot
-              draft={postcardDraft}
-              catalogEntry={postcardCatalogEntry}
-              onAdd={handleAddPostcard}
-              onEdit={() => setPostcardEditorOpen(true)}
-            />
+            <PostcardComposerSlot draft={postcardDraft} catalogEntry={postcardCatalogEntry} onAdd={handleAddPostcard} onEdit={() => setPostcardEditorOpen(true)} />
           </>
         )}
 
@@ -1030,14 +680,8 @@ export default function DispatchComposer({
         </div>
 
         {uploadingIndex !== null && <p className={helperTextClass}>Adding photo…</p>}
-
         {openPicker !== null && (
-          <MomentSourceMenu
-            anchorRect={openPicker.anchorRect}
-            onChooseLibrary={() => chooseSource(false)}
-            onChooseCamera={() => chooseSource(true)}
-            onCancel={() => setOpenPicker(null)}
-          />
+          <MomentSourceMenu anchorRect={openPicker.anchorRect} onChooseLibrary={() => chooseSource(false)} onChooseCamera={() => chooseSource(true)} onCancel={() => setOpenPicker(null)} />
         )}
 
         {postcardPickerOpen && (
@@ -1066,22 +710,11 @@ export default function DispatchComposer({
           <TopicInput topics={topics} onChange={handleTopicsChange} />
         </div>
 
-        {/* Dispatch Preview checkpoint — restrained, single-line
-            explanation for WHY Preview isn't available yet, shown only
-            when there's something concrete and fixable to say. Never
-            rendered in edit mode (edit mode has its own direct "Save
-            changes" with no Preview step). */}
         {!isEdit && previewBlockedReason && <p className={helperTextClass}>{previewBlockedReason}</p>}
 
         {showWebChoice && (
           <label className="flex cursor-pointer items-start gap-3 rounded-md border border-foreground/12 p-3">
-            <input
-              type="checkbox"
-              checked={webPublic}
-              onChange={(e) => setWebPublic(e.target.checked)}
-              className="mt-1 h-4 w-4 accent-accent"
-              data-testid="web-public-choice"
-            />
+            <input type="checkbox" checked={webPublic} onChange={(e) => setWebPublic(e.target.checked)} className="mt-1 h-4 w-4 accent-accent" data-testid="web-public-choice" />
             <span className="space-y-0.5">
               <span className="block text-[15px] font-medium text-foreground">{WEB_PUBLIC_COPY.label}</span>
               <span className={`block ${helperTextClass}`}>{webPublic ? WEB_PUBLIC_COPY.on : WEB_PUBLIC_COPY.off}</span>
@@ -1092,31 +725,15 @@ export default function DispatchComposer({
         {error && <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p>}
 
         <div className="flex flex-wrap gap-3">
-          <Link href={backHref} className={secondaryButtonClass}>
-            Back
-          </Link>
+          <Link href={backHref} className={secondaryButtonClass}>Back</Link>
           {isEdit ? (
-            <button type="button" onClick={handleSubmit} disabled={!canSubmit} className={primaryButtonClass}>
-              {publishing ? 'Saving…' : 'Save changes'}
-            </button>
+            <button type="button" onClick={handleSubmit} disabled={!canSubmit} className={primaryButtonClass}>{publishing ? 'Saving…' : 'Save changes'}</button>
           ) : (
-            <button
-              type="button"
-              onClick={handleOpenPreview}
-              disabled={!canPreview || preparingPreview}
-              className={primaryButtonClass}
-            >
-              {preparingPreview ? 'Preparing…' : 'Preview Dispatch'}
-            </button>
+            <button type="button" onClick={handleOpenPreview} disabled={!canPreview || preparingPreview} className={primaryButtonClass}>{preparingPreview ? 'Preparing…' : 'Preview Dispatch'}</button>
           )}
         </div>
       </div>
 
-      {/* WRITE → PREVIEW → PUBLISH (create mode only) — only
-          publishDispatch/publish_dispatch call site remaining for create
-          mode; handleSubmit is passed straight through, never
-          duplicated. Editor/title/topics/Postcard draft all stay exactly
-          as they were underneath — this is purely an overlay. */}
       {!isEdit && previewMoments && (
         <DispatchPreview
           identity={publicIdentity}
@@ -1136,12 +753,10 @@ export default function DispatchComposer({
           onEditPostcard={() => setPostcardEditorOpen(true)}
           error={error}
           writingStyleId={official ? null : writingStyleId}
+          webPublic={showWebChoice ? webPublic : undefined}
         />
       )}
 
-      {/* Safety 2, Checkpoint 4 — the one shared calm interruption,
-          overlays whichever flow triggered it (edit mode's direct "Save
-          changes," or create mode's Preview "Publish"). */}
       <SafetyWarningDialog
         open={pendingWarning !== null}
         copyKey={pendingWarning?.copyKey}

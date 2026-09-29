@@ -19,6 +19,13 @@ describe('central onboarding enforcement', () => {
       expect(source).toContain(`'${route}'`)
     }
   })
+
+  it('leaves `/` public so signed-out visitors can reach the landing page', () => {
+    const matcherStart = source.indexOf('export const PROTECTED_MATCHERS')
+    const matcherEnd = source.indexOf('] as const', matcherStart)
+    const protectedBlock = source.slice(matcherStart, matcherEnd)
+    expect(protectedBlock).not.toContain("  '/',")
+  })
 })
 
 describe('Adult Eligibility + Legal Acceptance Gate — proxy enforcement', () => {
