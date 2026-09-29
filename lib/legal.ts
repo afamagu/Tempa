@@ -3,11 +3,15 @@
 // that needs to know whether a member's acceptance is current imports
 // these constants rather than hardcoding a version.
 //
-// September 29 v2 adds the open-web Dispatch publication model: new
-// Dispatches default to Public on the web with a visible author control
-// and a Preview reminder. This is a material Terms change, so v1
-// acceptance is not silently carried forward.
-export const CURRENT_TERMS_VERSION = '2026-09-launch-v2'
+// EMERGENCY LOGIN HOTFIX (2026-09-29): production's
+// accept_current_legal_documents() RPC still records launch-v1. The
+// application briefly moved this constant to launch-v2 before the matching
+// SQL function update was applied, which trapped returning members in a
+// /begin acceptance loop: the RPC succeeded, wrote v1, router.refresh()
+// then correctly found v2 still missing. Keep the enforced version aligned
+// with the live server authority until the prepared v2 legal-acceptance
+// migration is applied. Do not bump this constant ahead of that migration.
+export const CURRENT_TERMS_VERSION = '2026-09-launch-v1'
 export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-09-launch-v1'
 
 export type LegalDocumentType = 'terms_of_service' | 'community_guidelines'
