@@ -122,7 +122,10 @@ describe('database authorization contracts (docs/sql)', () => {
   it('anon is granted nothing except the shared-Dispatch and public-Dispatch read paths', () => {
     // + 2026-10-27: the open-web read paths for Dispatches that are "Public on the web".
     const allowed = new Set(['public.get_shared_dispatch(uuid)', 'public.dispatch_photo_is_externally_shared(text)',
-      'public.get_public_dispatch(text)', 'public.list_public_dispatches()'])
+      'public.get_public_dispatch(text)', 'public.list_public_dispatches()',
+      // + 2026-10-29: the semantic Writing Style id of a Dispatch those same
+      // two paths already show (same visibility predicates; id only).
+      'public.shared_dispatch_writing_style(uuid)', 'public.public_dispatch_writing_style(text)'])
     let anonGrants = 0
     for (const f of migrations) {
       const sql = stripComments(readFileSync(path.join(sqlDir, f), 'utf8'))
