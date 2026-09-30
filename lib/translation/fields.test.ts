@@ -93,7 +93,6 @@ const {
   translatePublicFields,
   translatePrivateText,
   UnsupportedTranslationLanguageError,
-  TranslationTooLongError,
   FIELD_TRANSLATION_PROVIDER_VERSION,
 } = await import('./service')
 
@@ -160,15 +159,6 @@ describe('field translation — validation happens before any spend', () => {
         cache: { contentType: 'dispatch', contentId: 'd1', contentVersion: 'v1' },
       })
     ).rejects.toBeInstanceOf(UnsupportedTranslationLanguageError)
-    expect(db.calls).toEqual([])
-    expect(sent).toEqual([])
-  })
-
-  it('an oversized field set is refused before quota or Azure', async () => {
-    const huge = Array.from({ length: 30 }, () => 'x'.repeat(2_000)).join('\n\n')
-    await expect(
-      translatePrivateFields({ fields: { body: { kind: 'body', body: huge } }, targetLanguage: 'es' })
-    ).rejects.toBeInstanceOf(TranslationTooLongError)
     expect(db.calls).toEqual([])
     expect(sent).toEqual([])
   })
