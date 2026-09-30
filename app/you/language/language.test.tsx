@@ -69,8 +69,15 @@ describe('/you/language', () => {
     expect(editor).toContain('await saveReadingLanguage(code)')
     const html = render('en', 'ja')
     expect(html).toContain('Translation language')
-    expect(html).toContain('Translating into 日本語')
+    expect(html).toContain('Translating into <span lang="ja" dir="ltr">日本語</span>')
     expect(html).toContain('Use my Tempa language')
     expect(render('en', null)).toContain('Not chosen yet')
+  })
+
+  it('marks only a different translation-language name with that language, not the surrounding interface sentence', () => {
+    const html = render('fr', 'ja')
+    expect(html).toContain('Traduction : <span lang="ja" dir="ltr">日本語</span>')
+    expect(html).not.toContain('<span lang="ja">Traduction')
+    expect(html).not.toContain('<span lang="ja" dir="ltr">Traduction')
   })
 })
