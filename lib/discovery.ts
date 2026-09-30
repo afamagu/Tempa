@@ -1,16 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-// People discovery — ONE bounded primitive shared by People (app/minds)
-// and Home's Recommended minds. Candidate selection, Safety/block
-// visibility, exclusions, filters, per-viewer ordering and pagination all
-// run inside Postgres (public.discover_people — see docs/sql/2026-10-13-
-// prelaunch-performance.sql), under the member's own session. Next.js
-// only ever receives the requested page (at most MAX_DISCOVERY_LIMIT
-// rows) plus two counts, never the member population.
+// Room discovery stays bounded inside Postgres. V2 adds fair-exposure ranking,
+// current-Question preference, Question-focused browsing and Home author
+// exclusions while preserving the old RPC as a rollout fallback for ordinary
+// Read the Room browsing until the forward migration is applied in production.
 
 export const DISCOVERY_BATCH_SIZE = 6
-/** Mirrors the clamp inside discover_people itself. */
 export const MAX_DISCOVERY_LIMIT = 24
+
+export type DiscoverySurface = 'home_room' | 'room' | 'room_question'
 
 export type DiscoveryCandidate = {
   userId: string
@@ -27,16 +25,18 @@ export type DiscoveryCandidate = {
 
 export type DiscoveryPage = {
   candidates: DiscoveryCandidate[]
-  /** Everyone discoverable to this viewer, before filters. */
   eligibleCount: number
-  /** Everyone matching the requested filters. */
   filteredCount: number
+  /** False only when V2 was requested but is unavailable and a legacy fallback was used. */
+  fairRankingApplied: boolean
 }
 
 export type DiscoveryRequest = {
   country?: string
   gender?: string
   ageRange?: string
+  questionId?: string
+  excludeUserIds?: string[]
   offset?: number
   limit?: number
 }
@@ -60,21 +60,9 @@ type RpcResult = {
   entries?: RpcEntry[]
 }
 
-const EMPTY: DiscoveryPage = { candidates: [], eligibleCount: 0, filteredCount: 0 }
+const EMPTY: DiscoveryPage = { candidates: [], eligibleCount: 0, filteredCount: 0, fairRankingApplied: false }
 
-export async function getDiscoveryPage(supabase: SupabaseClient, request: DiscoveryRequest = {}): Promise<DiscoveryPage> {
-  const limit = Math.min(Math.max(1, Math.floor(request.limit ?? DISCOVERY_BATCH_SIZE)), MAX_DISCOVERY_LIMIT)
-  const offset = Math.min(Math.max(0, Math.floor(request.offset ?? 0)), 2147483647) // int4 argument
-
-  const { data, error } = await supabase.rpc('discover_people', {
-    p_country: request.country || null,
-    p_gender: request.gender || null,
-    p_age_range: request.ageRange || null,
-    p_offset: offset,
-    p_limit: limit,
-  })
-  if (error || !data) return EMPTY
-
+function mapRpcResult(data: unknown, limit: number, fairRankingApplied: boolean): DiscoveryPage {
   const result = data as RpcResult
   const seen = new Set<string>()
   const candidates: DiscoveryCandidate[] = []
@@ -95,12 +83,44 @@ export async function getDiscoveryPage(supabase: SupabaseClient, request: Discov
     })
     if (candidates.length === limit) break
   }
-
   return {
     candidates,
     eligibleCount: Number(result.eligible_count ?? 0),
     filteredCount: Number(result.filtered_count ?? 0),
+    fairRankingApplied,
   }
+}
+
+export async function getDiscoveryPage(supabase: SupabaseClient, request: DiscoveryRequest = {}): Promise<DiscoveryPage> {
+  const limit = Math.min(Math.max(1, Math.floor(request.limit ?? DISCOVERY_BATCH_SIZE)), MAX_DISCOVERY_LIMIT)
+  const offset = Math.min(Math.max(0, Math.floor(request.offset ?? 0)), 2147483647)
+
+  const { data: v2Data, error: v2Error } = await supabase.rpc('discover_people_v2', {
+    p_country: request.country || null,
+    p_gender: request.gender || null,
+    p_age_range: request.ageRange || null,
+    p_question_id: request.questionId || null,
+    p_exclude_user_ids: request.excludeUserIds ?? [],
+    p_offset: offset,
+    p_limit: limit,
+  })
+
+  if (!v2Error && v2Data) return mapRpcResult(v2Data, limit, true)
+
+  // A Question-focused result must never silently degrade into generic people,
+  // because Home/Room would then label unrelated writing as answers to the live
+  // Question. Before V2 exists, fail closed for that narrow surface only.
+  if (request.questionId) return EMPTY
+
+  const { data, error } = await supabase.rpc('discover_people', {
+    p_country: request.country || null,
+    p_gender: request.gender || null,
+    p_age_range: request.ageRange || null,
+    p_offset: offset,
+    p_limit: limit,
+  })
+  if (error || !data) return EMPTY
+  return mapRpcResult(data, limit, false)
 }
 
 export function genderDisplay(gender: string | null, genderCustom: string | null) {
