@@ -38,6 +38,7 @@ import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { getDiscoveryPage } from '@/lib/discovery'
+import { getMemberWritingStyles } from '@/lib/writing-style-data'
 
 const WORTH_KNOWING_COUNT = 3
 const HOME_BOARD_COUNT = 3
@@ -72,9 +73,6 @@ export default async function HomePage() {
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
 
-  // Familiarity and serendipity stay useful as selection ingredients, but they
-  // no longer become separate Home departments. Fill any remaining slot from
-  // the ranked Board pool while preventing duplicates.
   const homeBoardItems: typeof boardItems = []
   const seenBoardIds = new Set<string>()
   const preferredBoardItems = [featured[0], fromMindsYouKeep[0], serendipity[0], ...boardItems]
@@ -99,7 +97,8 @@ export default async function HomePage() {
   const hasActiveCorrespondence = hasVisibleReply(allLetters)
   const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null
 
-  const [announcementImageUrl, singleAwaitingSender] = await Promise.all([
+  const recommendedCandidates = recommendedPage.candidates.slice(0, WORTH_KNOWING_COUNT)
+  const [announcementImageUrl, singleAwaitingSender, recommendedWritingStyles] = await Promise.all([
     activeAnnouncement?.heroImagePath
       ? resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath).then((result) => result.url)
       : Promise.resolve(null),
@@ -120,19 +119,19 @@ export default async function HomePage() {
               : null
           )
       : Promise.resolve(null),
+    getMemberWritingStyles(supabase, recommendedCandidates.map((candidate) => candidate.userId)),
   ])
 
-  const recommended: RecommendedMind[] = recommendedPage.candidates
-    .slice(0, WORTH_KNOWING_COUNT)
-    .map((candidate) => ({
-      userId: candidate.userId,
-      pseudonym: candidate.pseudonym,
-      country: candidate.country,
-      markUrl: candidate.markId
-        ? publicProfileMarkUrl(supabase, `${candidate.markId}.png`)
-        : null,
-      responseBody: candidate.body,
-    }))
+  const recommended: RecommendedMind[] = recommendedCandidates.map((candidate) => ({
+    userId: candidate.userId,
+    pseudonym: candidate.pseudonym,
+    country: candidate.country,
+    markUrl: candidate.markId
+      ? publicProfileMarkUrl(supabase, `${candidate.markId}.png`)
+      : null,
+    responseBody: candidate.body,
+    writingStyleId: recommendedWritingStyles.get(candidate.userId) ?? null,
+  }))
 
   // A waiting letter is Tempa's strongest return signal. Discovery yields to it.
   const showWorthKnowing = awaitingReply.length === 0 && recommended.length > 0
