@@ -2,6 +2,7 @@ import Link from 'next/link'
 import TempaEmblem from '@/app/tempa-emblem'
 
 type NavKey = 'home' | 'letters' | 'room' | 'board' | 'you'
+type ShellActiveKey = NavKey | 'minds'
 
 const NAV_ITEMS: { key: NavKey; href: string; label: string }[] = [
   { key: 'home', href: '/home', label: 'Home' },
@@ -40,8 +41,6 @@ function NavIcon({ item, className }: { item: NavKey; className?: string }) {
         </svg>
       )
     case 'room':
-      // The Room is discovery through people's words, not an avatar grid.
-      // A doorway keeps it distinct from Search while still reading as a place.
       return (
         <svg {...common}>
           <path d="M7 20V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V20" />
@@ -78,24 +77,22 @@ function Badge({ count }: { count: number }) {
 }
 
 /**
- * Tempa's persistent primary navigation. Five destinations only:
- * Home (what matters now), Pen pals (established correspondence),
- * The Room (discovery through words), The Board (longer public writing),
- * and You. Focused writing screens deliberately stay outside primary nav.
- *
- * Discovery is never auto-opened globally from this shell. That keeps a
- * returning member's attention available for Arrivals/correspondence instead
- * of competing with a modal every visit.
+ * Tempa's persistent primary navigation. The member-facing destinations are
+ * Home, Pen pals, The Room, The Board and You. `minds` remains an accepted
+ * active value temporarily so older, non-canonical call sites cannot break a
+ * production build while their URLs are redirected to The Room.
  */
 export default function AppShell({
   active,
   waitingLetterCount,
   children,
 }: {
-  active: NavKey
+  active: ShellActiveKey
   waitingLetterCount: number
   children: React.ReactNode
 }) {
+  const activeNav: NavKey = active === 'minds' ? 'room' : active
+
   return (
     <div className="sm:flex sm:min-h-screen">
       <nav className="hidden sm:flex sm:w-56 sm:shrink-0 sm:flex-col sm:border-r sm:border-foreground/10 sm:px-4 sm:py-8">
@@ -105,7 +102,7 @@ export default function AppShell({
         </div>
         <div className="space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = item.key === active
+            const isActive = item.key === activeNav
             return (
               <Link
                 key={item.key}
@@ -129,7 +126,7 @@ export default function AppShell({
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden">
         {NAV_ITEMS.map((item) => {
-          const isActive = item.key === active
+          const isActive = item.key === activeNav
           return (
             <Link
               key={item.key}
