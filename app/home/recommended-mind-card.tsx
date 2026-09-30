@@ -6,32 +6,40 @@ export type RecommendedMind = {
   userId: string
   pseudonym: string
   country: string
-  genderDisplay: string | null
-  ageRange: string
   markUrl?: string | null
+  responseBody: string
 }
 
 /**
- * Compatibility card for Home's existing recommendation shelf while Home is
- * consolidated around Worth Knowing. Its destination is canonical immediately:
- * discovery now lives in The Room, never under the legacy /minds surface.
+ * Home's compact Worth Knowing encounter. The authored words are the reason
+ * to open the person; the Mark and country provide identity/context without
+ * turning discovery into a demographic card carousel.
  */
 export default function RecommendedMindCard({ mind }: { mind: RecommendedMind }) {
   return (
     <Link
       href={`/room/${mind.userId}?source=worth_knowing`}
-      className="flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-md p-2 text-center transition-colors hover:bg-foreground/[.03]"
+      className="group block rounded-lg border border-foreground/10 p-5 transition-colors hover:border-foreground/20 hover:bg-foreground/[.015]"
     >
-      <ProfileIdentityMark
-        identifier={mind.userId}
-        markUrl={mind.markUrl ?? null}
-        label={mind.markUrl ? `${mind.pseudonym}'s Mark` : undefined}
-        size="lg"
-      />
-      <span className="w-full truncate text-[13px] font-medium text-foreground">{mind.pseudonym}</span>
-      <span className={`w-full truncate ${helperTextClass}`}>
-        {[mind.country, mind.genderDisplay].filter(Boolean).join(' · ')}
-      </span>
+      <div className="flex items-center gap-3">
+        <ProfileIdentityMark
+          identifier={mind.userId}
+          markUrl={mind.markUrl ?? null}
+          label={mind.markUrl ? `${mind.pseudonym}'s Mark` : undefined}
+          size="md"
+        />
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold text-foreground">{mind.pseudonym}</p>
+          <p className={helperTextClass}>{mind.country}</p>
+        </div>
+      </div>
+
+      <p className="mt-4 line-clamp-4 whitespace-pre-wrap font-serif text-[17px] leading-7 text-foreground/80">
+        {mind.responseBody}
+      </p>
+      <p className="mt-4 text-[12px] font-medium text-foreground/55 transition-colors group-hover:text-foreground/75">
+        Read {mind.pseudonym} →
+      </p>
     </Link>
   )
 }
