@@ -1,18 +1,17 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getEligibleQuestions, getMyAnswers, needsParticipationGate } from '@/lib/questions'
+import { getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getDiscoveryPage, genderDisplay, DISCOVERY_BATCH_SIZE } from '@/lib/discovery'
 import { hasCompletedGuide } from '@/lib/guide'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { getMemberWritingStyles } from '@/lib/writing-style-data'
-import { pageTitleClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
+import { pageTitleClass, helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from '@/app/minds/filter-disclosure'
 import DiscoveryResults, { type DiscoveryEntry } from './discovery-results'
-import QuestionIncompleteNotice from '@/app/minds/question-incomplete-notice'
 
 const BATCH_SIZE = DISCOVERY_BATCH_SIZE
 
@@ -36,9 +35,12 @@ export default async function RoomPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
 
-  const [waitingCount, eligibleQuestions, myAnswers, introSeen, discovery] = await Promise.all([
+  // Keep the existing three-slot admin data intact for historical safety, but
+  // expose only ONE non-Flagship Question as the live communal Question.
+  // This is deliberately application-level until production SQL state has been
+  // reconciled; no historical Question or answer is deleted to achieve it.
+  const [waitingCount, myAnswers, introSeen, discovery, { data: positionedQuestions }] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
-    getEligibleQuestions(supabase, user.id),
     getMyAnswers(supabase, user.id),
     hasCompletedGuide(supabase, user.id, 'people'),
     getDiscoveryPage(supabase, {
@@ -48,9 +50,20 @@ export default async function RoomPage({
       offset: batch * BATCH_SIZE,
       limit: BATCH_SIZE,
     }),
+    supabase
+      .from('questions')
+      .select('id, prompt, current_position, is_flagship')
+      .not('current_position', 'is', null)
+      .eq('is_active', true)
+      .order('current_position', { ascending: true }),
   ])
 
-  const needsAnswer = needsParticipationGate(eligibleQuestions.length, myAnswers.length)
+  const liveQuestion = (positionedQuestions ?? []).find((question) => !question.is_flagship) ?? null
+  const liveAnswer = liveQuestion
+    ? myAnswers.find((answer) => answer.questionId === liveQuestion.id) ?? null
+    : null
+  const firstAnswer = myAnswers.find((answer) => answer.isPrimary) ?? null
+
   const { candidates: page, eligibleCount, filteredCount } = discovery
   const windowStart = batch * BATCH_SIZE
   const hasMore = windowStart + page.length < filteredCount
@@ -79,30 +92,42 @@ export default async function RoomPage({
   return (
     <AppShell active="room" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
-        <div className="w-full max-w-2xl space-y-8 py-10">
+        <div className="w-full max-w-2xl space-y-10 py-10">
           <header className="space-y-2">
             <h1 className={pageTitleClass}>The Room</h1>
             <p className="max-w-xl font-serif text-xl leading-relaxed text-foreground/80">
-              Read the Room.
-            </p>
-            <p className={helperTextClass}>
-              Take a look around through what people have actually written. Filter when you want more control; write when someone genuinely catches your attention.
+              A question, answered in many different ways.
             </p>
           </header>
 
           {!introSeen && (
-            <FeatureIntroduction guideKey="people" title="Read the Room" ctaLabel="Take a look around">
-              <p>There are no followers to collect here. Read first. If a person&rsquo;s words stay with you, that is a good reason to write.</p>
+            <FeatureIntroduction guideKey="people" title="Read the Room" ctaLabel="Enter the Room">
+              <p>Read first. If a person&rsquo;s words stay with you, that is a good reason to write. There are no followers to collect here.</p>
             </FeatureIntroduction>
           )}
 
-          {needsAnswer && <QuestionIncompleteNotice />}
+          {liveQuestion && (
+            <section aria-labelledby="room-question-heading" className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">This week in The Room</p>
+              <h2 id="room-question-heading" className="mt-3 font-serif text-2xl leading-snug text-foreground sm:text-3xl">
+                {liveQuestion.prompt}
+              </h2>
+              <p className={`mt-3 ${helperTextClass}`}>A few lines is enough.</p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <Link href={`/question/${liveQuestion.id}?source=room`} className={primaryButtonClass}>
+                  {liveAnswer ? 'Read or edit your answer' : 'Answer the Question'}
+                </Link>
+                {liveAnswer && <a href="#read-the-room" className={secondaryButtonClass}>Read the Room</a>}
+              </div>
+            </section>
+          )}
 
-          <section aria-labelledby="read-room-heading" className="space-y-5">
+          <section id="read-the-room" aria-labelledby="read-room-heading" className="space-y-5 scroll-mt-6">
             <div className="flex items-end justify-between gap-4 border-b border-foreground/10 pb-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">Explore</p>
                 <h2 id="read-room-heading" className="mt-1 font-serif text-2xl text-foreground">Read the Room</h2>
+                <p className={`mt-1 ${helperTextClass}`}>Take a look around through what people have actually written.</p>
               </div>
               <FilterDisclosure country={country ?? ''} gender={gender ?? ''} ageRange={age ?? ''} />
             </div>
@@ -130,6 +155,15 @@ export default async function RoomPage({
               </>
             )}
           </section>
+
+          {firstAnswer && (
+            <section className="border-t border-foreground/10 pt-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">The First Question</p>
+              <p className={`mt-2 max-w-xl ${helperTextClass}`}>
+                Everyone enters Tempa through the same question. Your answer remains part of how people first encounter you in the Room.
+              </p>
+            </section>
+          )}
         </div>
       </main>
     </AppShell>
