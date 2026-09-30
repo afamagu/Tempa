@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useTranslations } from 'next-intl'
 import type { Option } from './data'
 import { inputClass } from './ui'
 
@@ -12,6 +11,7 @@ export default function SearchableSelect({
   options,
   placeholder,
   disabled,
+  noMatchesLabel = 'No matches',
 }: {
   id: string
   value: string
@@ -19,20 +19,15 @@ export default function SearchableSelect({
   options: Option[]
   placeholder?: string
   disabled?: boolean
+  noMatchesLabel?: string
 }) {
-  const common = useTranslations('Common')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const selectedLabel = options.find((o) => o.value === value)?.label ?? ''
-
-  const filtered = (
-    query
-      ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
-      : options
-  ).slice(0, 100)
+  const filtered = (query ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())) : options).slice(0, 100)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -54,78 +49,30 @@ export default function SearchableSelect({
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!open) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
-        e.preventDefault()
-        setOpen(true)
-        setHighlighted(0)
+        e.preventDefault(); setOpen(true); setHighlighted(0)
       }
       return
     }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setHighlighted((h) => Math.min(h + 1, filtered.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setHighlighted((h) => Math.max(h - 1, 0))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      const option = filtered[highlighted]
-      if (option) selectOption(option)
-    } else if (e.key === 'Escape') {
-      setOpen(false)
-      setQuery('')
-    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, filtered.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); const option = filtered[highlighted]; if (option) selectOption(option) }
+    else if (e.key === 'Escape') { setOpen(false); setQuery('') }
   }
 
-  return (
-    <div ref={containerRef} className="relative">
-      <input
-        id={id}
-        role="combobox"
-        aria-expanded={open}
-        aria-autocomplete="list"
-        aria-controls={`${id}-listbox`}
-        disabled={disabled}
-        value={open ? query : selectedLabel}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setOpen(true)
-          setHighlighted(0)
-        }}
-        onFocus={() => {
-          setQuery('')
-          setOpen(true)
-          setHighlighted(0)
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        autoComplete="off"
-        className={inputClass}
-      />
-      {open && (
-        <ul
-          id={`${id}-listbox`}
-          role="listbox"
-          className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none"
-        >
-          {filtered.length === 0 && (
-            <li className="px-3 py-2 text-sm text-muted">{common('noMatches')}</li>
-          )}
-          {filtered.map((option, index) => (
-            <li key={option.value} role="option" aria-selected={option.value === value}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => selectOption(option)}
-                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                  index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'
-                }`}
-              >
-                {option.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+  return <div ref={containerRef} className="relative">
+    <input id={id} role="combobox" aria-expanded={open} aria-autocomplete="list" aria-controls={`${id}-listbox`} disabled={disabled}
+      value={open ? query : selectedLabel}
+      onChange={(e) => { setQuery(e.target.value); setOpen(true); setHighlighted(0) }}
+      onFocus={() => { setQuery(''); setOpen(true); setHighlighted(0) }}
+      onKeyDown={handleKeyDown} placeholder={placeholder} autoComplete="off" className={inputClass} />
+    {open && <ul id={`${id}-listbox`} role="listbox" className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none">
+      {filtered.length === 0 && <li className="px-3 py-2 text-sm text-muted">{noMatchesLabel}</li>}
+      {filtered.map((option, index) => <li key={option.value} role="option" aria-selected={option.value === value}>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectOption(option)}
+          className={`w-full text-left px-3 py-2 text-sm transition-colors ${index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'}`}>
+          {option.label}
+        </button>
+      </li>)}
+    </ul>}
+  </div>
 }
