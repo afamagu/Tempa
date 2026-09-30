@@ -12,16 +12,14 @@ export type RecommendedMind = {
 }
 
 /**
- * One Recommended Minds card — Mindform + pseudonym + demographics form
- * ONE accessible link to that person's public profile (never the
- * Minds/Question tutorial, never a write composer) — the normal result
- * of activating another member's identity everywhere Tempa presents
- * one as navigable.
+ * Compatibility card for Home's existing recommendation shelf while Home is
+ * consolidated around Worth Knowing. Its destination is canonical immediately:
+ * discovery now lives in The Room, never under the legacy /minds surface.
  */
 export default function RecommendedMindCard({ mind }: { mind: RecommendedMind }) {
   return (
     <Link
-      href={`/minds/${mind.userId}`}
+      href={`/room/${mind.userId}?source=worth_knowing`}
       className="flex w-24 shrink-0 flex-col items-center gap-1.5 rounded-md p-2 text-center transition-colors hover:bg-foreground/[.03]"
     >
       <ProfileIdentityMark
