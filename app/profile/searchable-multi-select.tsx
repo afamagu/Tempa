@@ -1,30 +1,19 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { Option } from './data'
 import { inputClass } from './ui'
 
-export default function SearchableMultiSelect({
-  id,
-  values,
-  onChange,
-  options,
-  placeholder,
-  allowCustom = false,
-  noMatchesLabel = 'No matches',
-  addValueLabel = (value: string) => `Add “${value}”`,
-  removeValueLabel = (value: string) => `Remove ${value}`,
-}: {
+export default function SearchableMultiSelect({ id, values, onChange, options, placeholder, allowCustom = false }: {
   id: string
   values: string[]
   onChange: (values: string[]) => void
   options: Option[]
   placeholder?: string
   allowCustom?: boolean
-  noMatchesLabel?: string
-  addValueLabel?: (value: string) => string
-  removeValueLabel?: (value: string) => string
 }) {
+  const common = useTranslations('Common')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
@@ -35,10 +24,7 @@ export default function SearchableMultiSelect({
   const alreadyAdded = values.some((v) => v.toLowerCase() === trimmedQuery.toLowerCase())
   const showCustomOption = allowCustom && trimmedQuery.length > 1 && !exactMatch && !alreadyAdded
   const listLength = filtered.length + (showCustomOption ? 1 : 0)
-
-  function displayValue(value: string) {
-    return options.find((option) => option.value === value)?.label ?? value
-  }
+  const displayValue = (value: string) => options.find((option) => option.value === value)?.label ?? value
 
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
@@ -62,16 +48,15 @@ export default function SearchableMultiSelect({
 
   return <div ref={containerRef} className="relative">
     <div className={`${inputClass} flex flex-wrap items-center gap-1.5 py-1.5`}>
-      {values.map((v) => <span key={v} className="inline-flex items-center gap-1 rounded-full border border-foreground/15 bg-foreground/[.03] px-2.5 py-1 text-sm">{displayValue(v)}<button type="button" onClick={() => removeValue(v)} aria-label={removeValueLabel(displayValue(v))} className="text-muted transition-colors hover:text-foreground">×</button></span>)}
+      {values.map((v) => <span key={v} className="inline-flex items-center gap-1 rounded-full border border-foreground/15 bg-foreground/[.03] px-2.5 py-1 text-sm">{displayValue(v)}<button type="button" onClick={() => removeValue(v)} aria-label={common('removeValue', { value: displayValue(v) })} className="text-muted transition-colors hover:text-foreground">×</button></span>)}
       <input id={id} role="combobox" aria-expanded={open} aria-autocomplete="list" aria-controls={`${id}-listbox`} value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); setHighlighted(0) }}
-        onFocus={() => { setOpen(true); setHighlighted(0) }} onClick={() => { setOpen(true); setHighlighted(0) }} onKeyDown={handleKeyDown}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); setHighlighted(0) }} onFocus={() => { setOpen(true); setHighlighted(0) }} onClick={() => { setOpen(true); setHighlighted(0) }} onKeyDown={handleKeyDown}
         placeholder={values.length === 0 ? placeholder : undefined} autoComplete="off" className="min-w-[8ch] flex-1 bg-transparent outline-none text-base py-0.5" />
     </div>
     {open && <ul id={`${id}-listbox`} role="listbox" className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none">
-      {filtered.length === 0 && !showCustomOption && <li className="px-3 py-2 text-sm text-muted">{noMatchesLabel}</li>}
+      {filtered.length === 0 && !showCustomOption && <li className="px-3 py-2 text-sm text-muted">{common('noMatches')}</li>}
       {filtered.map((option, index) => <li key={option.value} role="option" aria-selected={false}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addValue(option.value)} className={`w-full text-left px-3 py-2 text-sm transition-colors ${index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'}`}>{option.label}</button></li>)}
-      {showCustomOption && <li role="option" aria-selected={false}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addValue(trimmedQuery)} className={`w-full text-left px-3 py-2 text-sm transition-colors ${filtered.length === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'}`}>{addValueLabel(trimmedQuery)}</button></li>}
+      {showCustomOption && <li role="option" aria-selected={false}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addValue(trimmedQuery)} className={`w-full text-left px-3 py-2 text-sm transition-colors ${filtered.length === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'}`}>{common('addValue', { value: trimmedQuery })}</button></li>}
     </ul>}
   </div>
 }
