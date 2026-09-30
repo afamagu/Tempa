@@ -1,13 +1,9 @@
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { getFlagshipQuestion } from '@/lib/questions'
 import QuestionAnswer from '@/app/question/question-answer'
 
-/**
- * The First Question is Tempa's one required communal entrance question.
- * Historical Question slots/answers remain intact, but onboarding no longer
- * advertises or chains into two additional Questions.
- */
 export function resolveOnboardingQuestionDestination(state: {
   hasProfile: boolean
   onboardingStage: 'mark' | 'question' | 'complete' | null
@@ -41,8 +37,6 @@ export default async function OnboardingQuestionPage() {
 
   const flagship = await getFlagshipQuestion(supabase)
 
-  // Fail open for onboarding if staff have not configured The First Question;
-  // otherwise the central guard would loop this member here indefinitely.
   if (!flagship) {
     const { error } = await supabase.rpc('complete_flagship_onboarding')
     if (error) return <OnboardingRecoveryError />
@@ -76,12 +70,13 @@ export default async function OnboardingQuestionPage() {
   )
 }
 
-function OnboardingRecoveryError() {
+async function OnboardingRecoveryError() {
+  const t = await getTranslations('Question')
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md space-y-4 text-center">
-        <h1 className="font-serif text-2xl font-medium">One moment</h1>
-        <p className="text-sm text-muted">We couldn&rsquo;t finish this step. Refresh the page to try again.</p>
+        <h1 className="font-serif text-2xl font-medium">{t('recoveryHeading')}</h1>
+        <p className="text-sm text-muted">{t('recoveryBody')}</p>
       </div>
     </main>
   )
