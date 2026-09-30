@@ -75,6 +75,12 @@ export default function ProfileForm({ userId }: { userId: string }) {
   const locale = useLocale()
   const t = useTranslations('ProfileSetup')
   const common = useTranslations('Common')
+  const genderT = useTranslations('ProfileSetup.genderOptions')
+  const intentT = useTranslations('ProfileSetup.intentOptions')
+  const writingT = useTranslations('ProfileSetup.writingOptions')
+  const writingDescriptionT = useTranslations('ProfileSetup.writingDescriptions')
+  const receivingT = useTranslations('ProfileSetup.receivingOptions')
+  const interestT = useTranslations('ProfileSetup.interestOptions')
 
   const [pseudonym, setPseudonym] = useState('')
   const [pseudonymStatus, setPseudonymStatus] = useState<PseudonymStatus>('idle')
@@ -119,24 +125,17 @@ export default function ProfileForm({ userId }: { userId: string }) {
     [languageDisplayNames]
   )
 
-  const genderLabels = t.raw('genderOptions') as Record<string, string>
-  const intentLabels = t.raw('intentOptions') as Record<string, string>
-  const writingLabels = t.raw('writingOptions') as Record<string, string>
-  const writingDescriptions = t.raw('writingDescriptions') as Record<string, string>
-  const receivingLabels = t.raw('receivingOptions') as Record<string, string>
-  const interestLabels = t.raw('interestOptions') as Record<string, string>
-
-  const genderOptions: ChoiceOption[] = GENDER_OPTIONS.map((option) => ({ ...option, label: genderLabels[option.value] ?? option.label }))
-  const intentOptions: ChoiceOption[] = INTENT_OPTIONS.map((option) => ({ ...option, label: intentLabels[option.value] ?? option.label }))
+  const genderOptions: ChoiceOption[] = GENDER_OPTIONS.map((option) => ({ ...option, label: genderT(option.value as never) }))
+  const intentOptions: ChoiceOption[] = INTENT_OPTIONS.map((option) => ({ ...option, label: intentT(option.value as never) }))
   const writingStyleOptions: ChoiceOption[] = WRITING_STYLE_OPTIONS.map((option) => ({
     ...option,
-    label: writingLabels[option.value] ?? option.label,
-    description: writingDescriptions[option.value] ?? option.description,
+    label: writingT(option.value as never),
+    description: writingDescriptionT(option.value as never),
   }))
-  const receivingOptions: ChoiceOption[] = RECEIVING_OPTIONS.map((option) => ({ ...option, label: receivingLabels[option.value] ?? option.label }))
+  const receivingOptions: ChoiceOption[] = RECEIVING_OPTIONS.map((option) => ({ ...option, label: receivingT(option.value as never) }))
   const interestOptions: ChoiceOption[] = INTEREST_TAXONOMY.map((interest) => ({
     value: interest.key,
-    label: interestLabels[interest.key] ?? interest.label,
+    label: interestT(interest.key as never),
   }))
 
   function registerFieldRef(key: RequiredFieldKey) {
