@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getMyAnswers } from '@/lib/questions'
+import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getDiscoveryPage, genderDisplay, DISCOVERY_BATCH_SIZE } from '@/lib/discovery'
 import { hasCompletedGuide } from '@/lib/guide'
@@ -36,11 +36,7 @@ export default async function RoomPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
 
-  // Keep the existing three-slot admin data intact for historical safety, but
-  // expose only ONE non-Flagship Question as the live communal Question.
-  // This is deliberately application-level until production SQL state has been
-  // reconciled; no historical Question or answer is deleted to achieve it.
-  const [waitingCount, myAnswers, introSeen, discovery, { data: positionedQuestions }] = await Promise.all([
+  const [waitingCount, myAnswers, introSeen, discovery, liveQuestion] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getMyAnswers(supabase, user.id),
     hasCompletedGuide(supabase, user.id, 'people'),
@@ -51,15 +47,9 @@ export default async function RoomPage({
       offset: batch * BATCH_SIZE,
       limit: BATCH_SIZE,
     }),
-    supabase
-      .from('questions')
-      .select('id, prompt, current_position, is_flagship')
-      .not('current_position', 'is', null)
-      .eq('is_active', true)
-      .order('current_position', { ascending: true }),
+    getCurrentRoomQuestion(supabase),
   ])
 
-  const liveQuestion = (positionedQuestions ?? []).find((question) => !question.is_flagship) ?? null
   const liveAnswer = liveQuestion
     ? myAnswers.find((answer) => answer.questionId === liveQuestion.id) ?? null
     : null
@@ -152,7 +142,7 @@ export default async function RoomPage({
                 <DiscoveryResults entries={entries} returnTo={currentRoomHref} />
                 {hasMore && (
                   <div className="flex justify-center">
-                    <Link href={moreHref} className={secondaryButtonClass}>Read six more</Link>
+                    <Link href={moreHref} className={secondaryButtonClass}>Keep looking</Link>
                   </div>
                 )}
               </>
