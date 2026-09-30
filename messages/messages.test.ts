@@ -15,7 +15,7 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
 }
 
 const englishKeys = leaves(en).map(([key]) => key).sort()
-const SAMPLE_VALUES = { email: 'support@jointempa.com', seconds: 42, language: '日本語' }
+const SAMPLE_VALUES = { email: 'support@jointempa.com', seconds: 42, name: '日本語' }
 
 describe('interface dictionaries', () => {
   it('every language has exactly the English key structure', () => {
