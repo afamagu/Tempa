@@ -68,12 +68,6 @@ export default function LanguageSettingsEditor({
     })
   }
 
-  const translationSummary = !reading
-    ? t('notChosen')
-    : reading.code === currentLocale
-      ? t('sameAsTempa')
-      : t('currentTranslation', { language: reading.nativeName })
-
   return (
     <div className="space-y-10">
       <section className="space-y-3" aria-labelledby="tempa-language-label">
@@ -155,11 +149,17 @@ export default function LanguageSettingsEditor({
         ) : (
           <div className="space-y-2">
             <p className="text-[15px] text-foreground">
-              {reading && reading.code !== currentLocale ? (
-                <span lang={reading.code}>{translationSummary}</span>
-              ) : (
-                translationSummary
-              )}
+              {!reading
+                ? t('notChosen')
+                : reading.code === currentLocale
+                  ? t('sameAsTempa')
+                  : t.rich('currentTranslation', {
+                      language: () => (
+                        <span lang={reading.code} dir={reading.direction}>
+                          {reading.nativeName}
+                        </span>
+                      ),
+                    })}
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               <button type="button" className={quietLinkClass} disabled={pending} onClick={() => setEditingTranslation(true)}>
