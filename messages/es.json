@@ -6,9 +6,7 @@
     "board": "El Tablón",
     "you": "Tú"
   },
-  "LanguageSwitcher": {
-    "label": "Idioma"
-  },
+  "LanguageSwitcher": { "label": "Idioma" },
   "SignIn": {
     "tagline": "Una forma más humana de conectar",
     "signIn": "Iniciar sesión",
@@ -53,9 +51,7 @@
       "unavailable": "Esta cuenta no se puede usar para iniciar sesión en Tempa. Si crees que se trata de un error, escribe a {email}."
     }
   },
-  "You": {
-    "language": "Idioma"
-  },
+  "You": { "language": "Idioma" },
   "LanguageSettings": {
     "back": "Tú",
     "heading": "Idioma",
@@ -83,5 +79,177 @@
     "noMatch": "Ningún idioma coincide con esa búsqueda.",
     "current": "Actual",
     "languages": "Idiomas"
+  },
+  "LanguageOnboarding": {
+    "heading": "Elige tu idioma de Tempa",
+    "intro": "Este será el idioma de los menús y controles de Tempa, y el predeterminado cuando traduzcas lo que escribe otra persona.",
+    "continue": "Continuar",
+    "saving": "Guardando…",
+    "error": "No se pudo guardar tu idioma. Inténtalo de nuevo.",
+    "changeLater": "Puedes cambiarlo más adelante en Tú → Idioma."
+  },
+  "Common": {
+    "noMatches": "Sin resultados",
+    "addValue": "Añadir «{value}»",
+    "removeValue": "Quitar {value}",
+    "optional": "opcional",
+    "saving": "Guardando…",
+    "continue": "Continuar",
+    "tryAgain": "Reintentar"
+  },
+  "Begin": {
+    "dateFormat": "{day} de {month} de {year}",
+    "months": {
+      "1": "enero", "2": "febrero", "3": "marzo", "4": "abril", "5": "mayo", "6": "junio",
+      "7": "julio", "8": "agosto", "9": "septiembre", "10": "octubre", "11": "noviembre", "12": "diciembre"
+    },
+    "invalidDate": "Introduce una fecha válida.",
+    "checkDobHeading": "Comprueba tu fecha de nacimiento",
+    "youEntered": "Has indicado {date}.",
+    "checkCarefully": "Revísala con atención. Una vez que confirmes tu fecha de nacimiento, no podrás cambiarla mediante esta comprobación de edad.",
+    "confirmDob": "Confirmar fecha de nacimiento",
+    "goBackEdit": "Volver y editar",
+    "dobHeading": "¿Cuándo naciste?",
+    "dobIntro": "Tu fecha de nacimiento nos ayuda a comprobar que Tempa es adecuado para ti y a mantener correctos los datos de edad.",
+    "day": "Día",
+    "month": "Mes",
+    "year": "Año",
+    "beforeBegin": "Antes de empezar",
+    "legalIntro": "Unas pocas normas ayudan a que Tempa siga siendo un espacio reflexivo, privado cuando corresponde y seguro para quienes lo usan.",
+    "agreeLegal": "Acepto los <terms>Términos de servicio</terms> y las <guidelines>Normas de la comunidad</guidelines>.",
+    "privacyExplainer": "Nuestro <privacy>Aviso de privacidad</privacy> explica cómo trata Tempa tu información.",
+    "termsExplainer": "Los <terms>Términos</terms> incluyen disposiciones importantes sobre la responsabilidad por el uso de Tempa, las limitaciones de responsabilidad y la indemnización.",
+    "saveFailed": "No se pudo guardar en este momento. Inténtalo de nuevo.",
+    "continueToTempa": "Continuar a Tempa",
+    "returnSignIn": "Volver al inicio de sesión",
+    "adultsHeading": "Tempa es para adultos",
+    "adultsOnly": "Tempa solo está disponible para personas de 18 años o más.",
+    "returnOn": "Podrás volver a Tempa el {date}.",
+    "cannotAccessUntil": "Hasta entonces, esta cuenta no puede acceder a Tempa.",
+    "reviewHeading": "Tu cuenta está siendo revisada",
+    "reviewBody": "Te avisaremos cuando se resuelva. Gracias por tu paciencia."
+  },
+  "ProfileSetup": {
+    "heading": "Elige tu nombre en Tempa",
+    "intro": "Este es el nombre por el que te conocerán los demás miembros.",
+    "aboutYou": "Sobre ti",
+    "nameLabel": "Nombre en Tempa",
+    "namePlaceholder": "p. ej., Puerto Tranquilo",
+    "nameHelp": "Cómo quieres que te conozcan aquí. Tu nombre, un apodo, iniciales o un seudónimo sirven — entre 3 y 24 caracteres, con letras, números, espacios o guiones.",
+    "pseudonymLength": "Debe tener entre 3 y 24 caracteres.",
+    "pseudonymChars": "Usa solo letras, números, espacios o guiones.",
+    "checking": "Comprobando disponibilidad…",
+    "available": "Disponible",
+    "taken": "Ese nombre ya está en uso.",
+    "country": "País",
+    "searchCountries": "Buscar países",
+    "region": "Región",
+    "selectCountryFirst": "Selecciona primero un país",
+    "searchRegions": "Buscar regiones",
+    "languages": "Idiomas",
+    "searchLanguages": "Buscar idiomas",
+    "gender": "Género",
+    "selfDescribe": "Descríbelo con tus propias palabras",
+    "whatBrings": "¿Qué te trae hasta aquí?",
+    "chooseMany": "Elige todas las opciones que te representen.",
+    "tellMore": "Cuéntanos más",
+    "readingInterests": "¿Sobre qué te gusta leer?",
+    "interestsHelp": "Elige al menos {min}. Puedes cambiarlos cuando quieras.",
+    "correspondence": "Tu correspondencia",
+    "writingQuestion": "¿Cómo sueles escribir tus cartas?",
+    "receivingQuestion": "¿Qué te parece bien recibir?",
+    "checkNameError": "No se pudo comprobar ese nombre en este momento. Inténtalo de nuevo.",
+    "saveError": "No se pudo guardar tu perfil. Inténtalo de nuevo.",
+    "fieldErrors": {
+      "country": "Elige tu país.",
+      "languages": "Añade al menos un idioma.",
+      "intent": "Elige qué te trae a Tempa.",
+      "interests": "Elige al menos {min} temas sobre los que disfrutas leyendo (hasta {max}).",
+      "writingStyle": "Elige cómo sueles escribir tus cartas.",
+      "receiving": "Elige qué te parece bien recibir."
+    },
+    "genderOptions": {
+      "Woman": "Mujer", "Man": "Hombre", "Non-binary": "No binario", "Self-describe": "Describirlo yo", "Prefer not to say": "Prefiero no decirlo"
+    },
+    "intentOptions": {
+      "Meaningful friendship": "Una amistad con sentido", "Long-term correspondence": "Correspondencia a largo plazo", "Thoughtful conversation": "Conversaciones con profundidad", "Cultural exchange": "Intercambio cultural", "Sharing everyday life": "Compartir la vida cotidiana", "Practising a language": "Practicar un idioma", "Meeting people different from me": "Conocer a personas diferentes de mí", "Meeting people who think like me": "Conocer a personas que piensan como yo", "Writing and self-expression": "Escritura y expresión personal", "A little serendipity": "Un poco de serendipia", "Something else": "Otra cosa"
+    },
+    "writingOptions": {
+      "self_written": "Escribo mis cartas yo mismo", "ai_review_only": "Uso la IA solo para revisar", "ai_edit": "A veces uso la IA para editar lo que escribo", "ai_draft": "Uso la IA para ayudarme a redactar"
+    },
+    "writingDescriptions": {
+      "self_written": "No uso IA generativa para escribirlas ni reescribirlas.", "ai_review_only": "Puedo usarla para ortografía, gramática, traducción o corrección después de haber escrito.", "ai_edit": "Puedo usarla para reformular, organizar o mejorar algo que ya he escrito.", "ai_draft": "La IA puede generar parte o la mayor parte del texto que envío."
+    },
+    "receivingOptions": {
+      "any": "Cualquier estilo de escritura", "self_written_or_ai_reviewed": "Escrito por la persona o revisado con IA", "self_written_only": "Solo escrito por la persona"
+    },
+    "interestOptions": {
+      "life-reflections": "Vida y reflexiones", "family-parenting": "Familia y crianza", "friendship": "Amistad", "love-relationships": "Amor y relaciones", "spirituality-faith": "Espiritualidad y fe", "philosophy": "Filosofía", "psychology": "Psicología y naturaleza humana", "books-literature": "Libros y literatura", "writing-poetry": "Escritura y poesía", "art-creativity": "Arte y creatividad", "music": "Música", "film-tv": "Cine y televisión", "travel-places": "Viajes y lugares", "culture-society": "Cultura y sociedad", "history": "Historia", "science-nature": "Ciencia y naturaleza", "technology": "Tecnología", "work-ambition": "Trabajo y ambición", "food-cooking": "Comida y cocina", "health-wellbeing": "Salud y bienestar", "sport-fitness": "Deporte y ejercicio", "everyday-life": "Vida cotidiana"
+    }
+  },
+  "MarkOnboarding": {
+    "label": "Tu Mark",
+    "heading": "Elige una fotografía que signifique algo para ti.",
+    "intro": "Puede ser tú, un lugar, un objeto — cualquier cosa.",
+    "privacy": "Tu fotografía nunca sale de este dispositivo.",
+    "preparing": "Preparando tu Mark…",
+    "finding": "Encontrando tu Mark…",
+    "saving": "Guardando tu Mark…",
+    "preparingAnother": "Preparando otra fotografía…",
+    "chooseImage": "Elige un archivo de imagen.",
+    "tooLarge": "Esa fotografía es demasiado grande. Elige un archivo más pequeño.",
+    "prepareFailed": "No se pudo preparar tu Mark. Inténtalo de nuevo.",
+    "findFailed": "Tempa no pudo encontrar un Mark en esa fotografía.",
+    "saveFailed": "No se pudo guardar tu Mark. Inténtalo de nuevo.",
+    "replaceFailed": "No se pudo reemplazar este Mark. Inténtalo de nuevo.",
+    "choosePhoto": "Elegir fotografía",
+    "tryAgain": "Reintentar",
+    "imageAlt": "Tu Mark generado",
+    "revealHeading": "Este es tu Mark.",
+    "revealBody": "Comenzó con tu fotografía. Los demás solo verán lo que queda.",
+    "revealClosing": "Cada Mark que encuentres empezó de la misma manera.",
+    "continue": "Continuar",
+    "chooseAnother": "Elegir otra fotografía"
+  },
+  "Question": {
+    "firstQuestion": "La Primera Pregunta",
+    "question": "La Pregunta",
+    "oneLastThing": "Una última cosa antes de entrar en La Sala",
+    "onboardingIntro": "Todo el mundo entra en Tempa a través de la misma Primera Pregunta. Tu respuesta será una de las primeras formas en que otras personas podrán descubrirte aquí.",
+    "specificity": "Dales algo a lo que responder. Una opinión concreta, un hábito, una contradicción, una creencia o una curiosidad suele ser más memorable que una lista de cosas que te gustan.",
+    "beginWriting": "Empieza a escribir…",
+    "saveResponse": "Guardar respuesta",
+    "saving": "Guardando…",
+    "saveFailed": "No se pudo guardar tu respuesta. Inténtalo de nuevo.",
+    "roomHeading": "Ya estás en La Sala.",
+    "roomIntro": "Esta es tu Primera Pregunta. Permanece ligada a tu identidad de Tempa y ofrece a otras personas algo real que encontrar antes de decidir si te escriben.",
+    "continue": "Continuar",
+    "published": "Publicado",
+    "closed": "Esta Pregunta ya no está abierta",
+    "enterRoom": "Entrar en La Sala",
+    "backResponses": "Volver a mis respuestas",
+    "editResponse": "Editar respuesta",
+    "unansweredClosed": "Esta Pregunta ya no está abierta y no la has respondido.",
+    "backRoom": "Volver a La Sala",
+    "saveAnyway": "Guardar de todos modos",
+    "recoveryHeading": "Un momento",
+    "recoveryBody": "No pudimos terminar este paso. Actualiza la página para intentarlo de nuevo."
+  },
+  "WritingStyle": {
+    "heading": "Elige cómo se siente tu escritura en la página",
+    "intro": "Tus palabras siguen siendo tuyas. Tempa simplemente les da una voz visual.",
+    "legend": "Cómo se muestra tu escritura",
+    "fallbackSample": "Unas líneas para empezar — tus propias palabras tomarán esta forma.",
+    "preview": "Vista previa · {name}",
+    "choosePreview": "Elige uno para verlo a tamaño completo.",
+    "saveError": "No pudimos guardarlo ahora. Inténtalo de nuevo.",
+    "saved": "Guardado. A partir de ahora tu escritura se mostrará así.",
+    "continue": "Continuar",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "back": "Volver a Tú",
+    "styles": {
+      "ink": "Tinta", "notebook": "Cuaderno", "freehand": "A mano alzada", "literary": "Literario", "correspondence": "Correspondencia", "typewriter": "Máquina de escribir"
+    }
   }
 }
