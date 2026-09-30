@@ -1,14 +1,12 @@
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
 import { WRITING_STYLE_PATH } from '@/lib/onboarding'
 import { getMyWritingStyle } from '@/lib/writing-style-data'
 import { getWritingSample } from '@/lib/writing-style-sample'
-import { WRITING_STYLE_HEADING, WRITING_STYLE_INTRO } from '@/lib/writing-style'
 import WritingStyleChooser from '@/app/writing-style-chooser'
 
-/** Pure: where the step continues to. Only a safe internal path that is
- * not this step itself; anything else lands on Home. */
 export function resolveWritingStyleNext(next: string | undefined): string {
   const safe = sanitizeInternalPath(next)
   if (!safe) return '/home'
@@ -17,18 +15,6 @@ export function resolveWritingStyleNext(next: string | undefined): string {
   return safe
 }
 
-/**
- * Writing Style — onboarding step 4 (after the Flagship Question), and the
- * one-time choice for members who completed onboarding before Writing
- * Styles existed. Both are the same derived condition: onboarding
- * complete, no valid style yet. proxy.ts routes such a member here once
- * (carrying `next`); choosing a style is what ends it — never a local
- * "seen" flag, so refresh, back/forward and a new device all resume here
- * until the choice is saved, and never again afterwards.
- *
- * Guards repeat the central resolver as defense in depth: earlier steps
- * resume where they belong; a member who already has a style is sent on.
- */
 export default async function WritingStyleStepPage({
   searchParams,
 }: {
@@ -36,6 +22,7 @@ export default async function WritingStyleStepPage({
 }) {
   const { next } = await searchParams
   const destination = resolveWritingStyleNext(next)
+  const t = await getTranslations('WritingStyle')
   const supabase = await createClient()
   const {
     data: { user },
@@ -64,8 +51,8 @@ export default async function WritingStyleStepPage({
         <WritingStyleChooser
           mode="onboarding"
           destination={destination}
-          heading={WRITING_STYLE_HEADING}
-          intro={WRITING_STYLE_INTRO}
+          heading={t('heading')}
+          intro={t('intro')}
           sample={sample.text}
           sampleIsOwn={sample.source !== 'fallback'}
         />
