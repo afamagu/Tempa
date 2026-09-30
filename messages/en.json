@@ -69,7 +69,7 @@
     "translationIntro": "The language Tempa translates other people’s writing into when you ask.",
     "sameAsTempa": "Same as Tempa language",
     "notChosen": "Not chosen yet",
-    "currentTranslation": "Translating into {language}",
+    "currentTranslation": "Translating into <language>{language}</language>",
     "chooseDifferent": "Choose a different language",
     "useTempaLanguage": "Use my Tempa language",
     "save": "Save",
