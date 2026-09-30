@@ -36,20 +36,17 @@ import RecommendedMindCard, { type RecommendedMind } from './recommended-mind-ca
 import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
-import KeptDispatchShelf from './kept-dispatch-shelf'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { getDiscoveryPage } from '@/lib/discovery'
 
 const WORTH_KNOWING_COUNT = 3
+const HOME_BOARD_COUNT = 3
 
 export default async function HomePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
 
-  // One independent read round. Worth Knowing deliberately uses the SAME
-  // bounded discovery RPC as The Room; Home is only a smaller presentation of
-  // that pool, never a second recommendation system.
   const [
     { data: profile },
     allLettersRaw,
@@ -74,7 +71,19 @@ export default async function HomePage() {
 
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
-  const [featuredLead, ...featuredSupporting] = featured
+
+  // Familiarity and serendipity stay useful as selection ingredients, but they
+  // no longer become separate Home departments. Fill any remaining slot from
+  // the ranked Board pool while preventing duplicates.
+  const homeBoardItems: typeof boardItems = []
+  const seenBoardIds = new Set<string>()
+  const preferredBoardItems = [featured[0], fromMindsYouKeep[0], serendipity[0], ...boardItems]
+  for (const item of preferredBoardItems) {
+    if (!item || seenBoardIds.has(item.id)) continue
+    homeBoardItems.push(item)
+    seenBoardIds.add(item.id)
+    if (homeBoardItems.length >= HOME_BOARD_COUNT) break
+  }
 
   function trailQueryFor(item: (typeof boardItems)[number]): string {
     return readingTrailSearchParams(
@@ -125,8 +134,7 @@ export default async function HomePage() {
       responseBody: candidate.body,
     }))
 
-  // A waiting letter is Tempa's strongest return signal. Do not place a
-  // discovery invitation in competition with it on the same Home visit.
+  // A waiting letter is Tempa's strongest return signal. Discovery yields to it.
   const showWorthKnowing = awaitingReply.length === 0 && recommended.length > 0
 
   return (
@@ -184,26 +192,16 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {(boardItems.length > 0 || showWorthKnowing) && (
-            <div className="mx-auto mt-14 w-full max-w-4xl">
-              {boardItems.length > 0 && (
-                <>
+          {(homeBoardItems.length > 0 || showWorthKnowing) && (
+            <div className="mx-auto mt-14 w-full max-w-4xl space-y-14">
+              {homeBoardItems.length > 0 && (
+                <section aria-labelledby="home-board-heading">
                   <div className="flex items-center justify-between gap-3">
-                    <p className={sectionLabelClass}>From the Board</p>
+                    <p id="home-board-heading" className={sectionLabelClass}>From the Board</p>
                     <Link href="/board" className={quietLinkClass}>See all</Link>
                   </div>
-
-                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                    {featuredLead && (
-                      <div className="sm:col-span-2">
-                        <BoardShelfCard
-                          dispatch={featuredLead}
-                          trailQuery={trailQueryFor(featuredLead)}
-                          size="lead"
-                        />
-                      </div>
-                    )}
-                    {featuredSupporting.map((dispatch) => (
+                  <div className="mt-3 grid gap-4 md:grid-cols-3">
+                    {homeBoardItems.map((dispatch) => (
                       <BoardShelfCard
                         key={dispatch.id}
                         dispatch={dispatch}
@@ -211,23 +209,11 @@ export default async function HomePage() {
                       />
                     ))}
                   </div>
-
-                  {fromMindsYouKeep.length > 0 && (
-                    <div className="mt-14">
-                      <p className={sectionLabelClass}>From Minds You Keep</p>
-                      <div className="mt-3">
-                        <KeptDispatchShelf
-                          dispatches={fromMindsYouKeep}
-                          trailQueryFor={trailQueryFor}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
+                </section>
               )}
 
               {showWorthKnowing && (
-                <section className={boardItems.length > 0 ? 'mt-14' : ''} aria-labelledby="worth-knowing-heading">
+                <section aria-labelledby="worth-knowing-heading">
                   <div className="flex items-end justify-between gap-3">
                     <div>
                       <p className={sectionLabelClass}>Worth Knowing</p>
@@ -242,21 +228,6 @@ export default async function HomePage() {
                     ))}
                   </div>
                 </section>
-              )}
-
-              {serendipity.length > 0 && (
-                <div className="mt-14">
-                  <p className={sectionLabelClass}>A Little Serendipity</p>
-                  <div className="mt-3 grid gap-4 sm:grid-cols-3">
-                    {serendipity.map((dispatch) => (
-                      <BoardShelfCard
-                        key={dispatch.id}
-                        dispatch={dispatch}
-                        trailQuery={trailQueryFor(dispatch)}
-                      />
-                    ))}
-                  </div>
-                </div>
               )}
             </div>
           )}
