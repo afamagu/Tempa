@@ -1,9 +1,9 @@
 {
   "Nav": {
     "home": "Accueil",
-    "letters": "Lettres",
-    "people": "Personnes",
-    "board": "Tableau",
+    "letters": "Correspondants",
+    "room": "La Salle",
+    "board": "Le Tableau",
     "you": "Vous"
   },
   "LanguageSwitcher": {
