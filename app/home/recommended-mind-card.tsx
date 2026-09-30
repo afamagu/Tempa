@@ -1,19 +1,23 @@
 import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
-import AuthoredProse from '@/app/authored-prose'
 import { helperTextClass } from '@/app/profile/ui'
 
 export type RecommendedMind = {
   userId: string
   pseudonym: string
   country: string
+  genderDisplay?: string | null
+  ageRange?: string
   markUrl?: string | null
-  responseBody: string
-  writingStyleId?: string | null
+  responseBody?: string
 }
 
-/** Home's compact Worth Knowing encounter. The member's own words carry the
- * visual weight; Mark and country stay as quiet identity/context. */
+/**
+ * Home's compact Worth Knowing encounter. Once the Home mapper supplies the
+ * authored response, those words are the reason to open the person; the Mark
+ * and country remain quiet identity/context. The optional legacy fields keep
+ * this component deploy-safe while Home is migrated in the same branch.
+ */
 export default function RecommendedMindCard({ mind }: { mind: RecommendedMind }) {
   return (
     <Link
@@ -33,11 +37,13 @@ export default function RecommendedMindCard({ mind }: { mind: RecommendedMind })
         </div>
       </div>
 
-      <AuthoredProse styleId={mind.writingStyleId ?? null}>
-        <p className="mt-4 line-clamp-4 whitespace-pre-wrap text-[17px] leading-7 text-foreground/80">
+      {mind.responseBody ? (
+        <p className="mt-4 line-clamp-4 whitespace-pre-wrap font-serif text-[17px] leading-7 text-foreground/80">
           {mind.responseBody}
         </p>
-      </AuthoredProse>
+      ) : (
+        <p className={`mt-4 ${helperTextClass}`}>Read what {mind.pseudonym} has shared in The Room.</p>
+      )}
       <p className="mt-4 text-[12px] font-medium text-foreground/55 transition-colors group-hover:text-foreground/75">
         Read {mind.pseudonym} →
       </p>
