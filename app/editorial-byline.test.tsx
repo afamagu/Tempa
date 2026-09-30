@@ -5,7 +5,7 @@ import { resolveDispatchIdentity } from '@/lib/dispatch-identity'
 import DispatchIdentityLabel from './board/dispatch-identity-label'
 import DispatchAuthorLink from './board/dispatch-author-link'
 import RecommendedMindCard from './home/recommended-mind-card'
-import DiscoveryResults from './minds/discovery-results'
+import DiscoveryResults from './room/discovery-results'
 import PublicDispatchCard from './dispatches/public-dispatch-card'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -67,12 +67,12 @@ describe('surfaces', () => {
     }
   })
 
-  it('Recommended minds wraps rather than truncating the disclosure in its narrow card', () => {
+  it('Worth Knowing preserves the byline and Room profile link', () => {
     const html = renderToStaticMarkup(
       <RecommendedMindCard mind={{ userId: 'm-1', pseudonym: 'Lady Larkspur', country: 'UK', genderDisplay: null, ageRange: '35-44', editorialTitle: TITLE }} />
     )
     expect(html).toContain(TITLE)
-    expect(html).toContain('[text-wrap:balance]')
+    expect(html).toContain('href="/room/m-1?source=worth_knowing"')
   })
 
   it('People discovery card', () => {
