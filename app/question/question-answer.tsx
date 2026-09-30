@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import {
   sectionLabelClass,
@@ -14,21 +15,15 @@ import {
 } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
 import { WRITING_STYLE_ONBOARDING_HREF } from '@/lib/onboarding'
-import {
-  questionSaveConfirmationCopy,
-  QUESTION_ANSWER_MAX_CHARS,
-  type LibraryQuestion,
-} from '@/lib/questions'
+import { questionSaveConfirmationCopy, QUESTION_ANSWER_MAX_CHARS, type LibraryQuestion } from '@/lib/questions'
 import { insertAtCursor } from '@/lib/textarea-insert'
 import EmojiPicker from '@/app/letters/emoji-picker'
 import {
   evaluateSafety,
-  SAFETY_CANNOT_SEND_MESSAGE,
-  SAFETY_CHECK_FAILED_MESSAGE,
   SAFETY_FINANCIAL_REQUEST_COPY_KEY,
 } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
-import { ACCOUNT_ACTION_UNAVAILABLE_CODE, ACCOUNT_RESTRICTED_MESSAGE } from '@/lib/account-status'
+import { ACCOUNT_ACTION_UNAVAILABLE_CODE } from '@/lib/account-status'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
@@ -64,14 +59,12 @@ export default function QuestionAnswer({
   initialAnswer: string | null
   isFlagship?: boolean
   isActive?: boolean
-  /** Retained temporarily for call-site compatibility while the old
-   * three-slot Question model is retired. The member-facing flow no
-   * longer chains one Question into another. */
   nextQuestion?: LibraryQuestion | null
   onboarding?: boolean
   writingStyleId?: string | null
 }) {
   void nextQuestion
+  const t = useTranslations('Question')
   const router = useRouter()
   const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !isActive ? 'view' : 'edit')
   const [publishedBody, setPublishedBody] = useState(initialAnswer)
@@ -122,13 +115,13 @@ export default function QuestionAnswer({
     const outcome = await evaluateSafety({ surface: 'question_answer', questionId, body: trimmed })
 
     if (outcome.status === 'error') {
-      setError(SAFETY_CHECK_FAILED_MESSAGE)
+      setError(t('saveFailed'))
       setSaving(false)
       return
     }
     if (outcome.status === 'cannot_send') {
       if (outcome.copyKey === SAFETY_FINANCIAL_REQUEST_COPY_KEY) setFinancialBlocked(true)
-      else setError(SAFETY_CANNOT_SEND_MESSAGE)
+      else setError(t('saveFailed'))
       setSaving(false)
       return
     }
@@ -165,18 +158,9 @@ export default function QuestionAnswer({
     setSaving(false)
 
     if (publishError) {
-      console.error('[question] publish failed', {
-        message: publishError.message,
-        details: publishError.details,
-        hint: publishError.hint,
-        code: publishError.code,
-      })
-      setError(
-        publishError.code === ACCOUNT_ACTION_UNAVAILABLE_CODE
-          ? ACCOUNT_RESTRICTED_MESSAGE
-          : 'Could not save your answer. Please try again.' +
-              (process.env.NODE_ENV === 'development' ? ` (${publishError.message})` : '')
-      )
+      console.error('[question] publish failed', { code: publishError.code })
+      // Localized, restrained copy only; never surface the database message.
+      setError(t('saveFailed'))
       return
     }
 
@@ -193,77 +177,64 @@ export default function QuestionAnswer({
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-2xl space-y-8 py-10">
         <div className="space-y-3">
-          <p className={sectionLabelClass}>{isFlagship ? 'The First Question' : 'The Question'}</p>
+          <p className={sectionLabelClass}>{isFlagship ? t('firstQuestion') : t('question')}</p>
+          {/* The Question prompt is canonical Tempa editorial content from the
+              database, not a member-authored string. This PR localizes the
+              onboarding chrome without machine-translating database content. */}
           <h1 className={promptClass}>{prompt}</h1>
         </div>
 
         {mode === 'view' && publishedBody && onboarding && confirmation ? (
           <div className="space-y-8">
             <div className="space-y-4">
-              <h2 className={proseSubheadingClass}>You&rsquo;re in the Room.</h2>
-              <p className={helperTextClass}>
-                This is your First Question. It stays with your Tempa identity and gives people something real to encounter before they decide to write.
-              </p>
+              <h2 className={proseSubheadingClass}>{t('roomHeading')}</h2>
+              <p className={helperTextClass}>{t('roomIntro')}</p>
               <div className="rounded-md bg-surface-shell p-4 sm:p-5">
-                <AuthoredProse styleId={null}>
-                  <p className="whitespace-pre-wrap">{publishedBody}</p>
-                </AuthoredProse>
+                <AuthoredProse styleId={null}><p className="whitespace-pre-wrap">{publishedBody}</p></AuthoredProse>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href={WRITING_STYLE_ONBOARDING_HREF} className={primaryButtonClass}>Continue</Link>
+              <Link href={WRITING_STYLE_ONBOARDING_HREF} className={primaryButtonClass}>{t('continue')}</Link>
             </div>
           </div>
         ) : mode === 'view' && publishedBody ? (
           <div className="space-y-8">
             <div className="space-y-4">
               {confirmation && <p className={helperTextClass}>{confirmation}</p>}
-              <p className={helperTextClass}>{isActive ? 'Published' : 'This Question is no longer open'}</p>
+              <p className={helperTextClass}>{isActive ? t('published') : t('closed')}</p>
               <div className="rounded-md bg-surface-shell p-4 sm:p-5">
-                <AuthoredProse styleId={writingStyleId}>
-                  <p className="whitespace-pre-wrap">{publishedBody}</p>
-                </AuthoredProse>
+                <AuthoredProse styleId={writingStyleId}><p className="whitespace-pre-wrap">{publishedBody}</p></AuthoredProse>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>
-                {isFlagship ? 'Enter the Room' : 'Back to my responses'}
-              </Link>
-              <button
-                type="button"
-                onClick={() => { setConfirmation(null); setMode('edit') }}
-                className={secondaryButtonClass}
-              >
-                Edit response
-              </button>
+              <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>{isFlagship ? t('enterRoom') : t('backResponses')}</Link>
+              <button type="button" onClick={() => { setConfirmation(null); setMode('edit') }} className={secondaryButtonClass}>{t('editResponse')}</button>
             </div>
           </div>
         ) : mode === 'view' && !isActive ? (
           <div className="space-y-8">
-            <p className={helperTextClass}>This Question is no longer open, and you haven&apos;t answered it.</p>
-            <Link href="/room" className={secondaryButtonClass}>Back to The Room</Link>
+            <p className={helperTextClass}>{t('unansweredClosed')}</p>
+            <Link href="/room" className={secondaryButtonClass}>{t('backRoom')}</Link>
           </div>
         ) : (
           <div className="space-y-4">
             {onboarding && !hadExistingAnswer && (
               <div className="space-y-2 border-l-2 border-clay/50 pl-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">One last thing before you enter The Room</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">{t('oneLastThing')}</p>
                 <div className={`italic ${helperTextClass}`}>
-                  <p>Everyone enters Tempa through the same First Question. Your answer becomes one of the first ways people can discover you here.</p>
-                  <p className="mt-2"><strong className="font-semibold text-foreground/75">Give them something to write to.</strong> A particular opinion, habit, contradiction, belief or curiosity is often more memorable than a list of things you like.</p>
+                  <p>{t('onboardingIntro')}</p>
+                  <p className="mt-2"><strong className="font-semibold text-foreground/75">{t('specificity')}</strong></p>
                 </div>
               </div>
             )}
 
-            <div className="flex items-center gap-1 border-b border-foreground/10 pb-2">
-              <EmojiPicker onSelect={insertEmoji} />
-            </div>
+            <div className="flex items-center gap-1 border-b border-foreground/10 pb-2"><EmojiPicker onSelect={insertEmoji} /></div>
             <textarea
               ref={textareaRef}
               value={body}
               onChange={handleChange}
               rows={16}
-              placeholder="Begin writing…"
+              placeholder={t('beginWriting')}
               className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent"
             />
 
@@ -272,13 +243,9 @@ export default function QuestionAnswer({
 
             <div className="flex flex-wrap gap-3">
               {!(onboarding && !hadExistingAnswer) && (
-                <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>
-                  {isFlagship ? 'Back to The Room' : 'Back to my responses'}
-                </Link>
+                <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>{isFlagship ? t('backRoom') : t('backResponses')}</Link>
               )}
-              <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>
-                {saving ? 'Saving…' : 'Save response'}
-              </button>
+              <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>{saving ? t('saving') : t('saveResponse')}</button>
             </div>
           </div>
         )}
@@ -290,8 +257,8 @@ export default function QuestionAnswer({
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={saving}
-        actionLabel="Save anyway"
-        sendingLabel="Saving…"
+        actionLabel={t('saveAnyway')}
+        sendingLabel={t('saving')}
       />
       <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </main>
