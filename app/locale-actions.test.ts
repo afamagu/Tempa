@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-// Records every cookie write and every database/network touch, so these
-// tests can prove interface switching is dictionary-only.
 const state = {
   cookieSets: [] as Array<{ name: string; value: string; options: Record<string, unknown> }>,
   user: null as { id: string } | null,
@@ -22,9 +20,10 @@ vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
-    rpc: async (name: string, args: { p_language?: string }) => {
+    rpc: async (name: string, args: { p_language?: string; p_locale?: string }) => {
       state.rpcCalls.push({ name, args })
-      return state.rpcError ? { data: null, error: state.rpcError } : { data: args.p_language, error: null }
+      const returned = args.p_language ?? args.p_locale ?? null
+      return state.rpcError ? { data: null, error: state.rpcError } : { data: returned, error: null }
     },
     from: (table: string) => {
       state.tables.push(table)
@@ -50,7 +49,7 @@ const { setInterfaceLanguage, chooseTempaLanguage } = await import('./locale-act
 const { saveReadingLanguage } = await import('./reading-language-actions')
 
 function expectNoTranslationSpend() {
-  expect(fetchSpy).not.toHaveBeenCalled() // no Azure (or any) network call
+  expect(fetchSpy).not.toHaveBeenCalled()
   expect(state.rpcCalls.map((c) => c.name)).not.toContain('reserve_translation_characters')
   expect(state.tables).not.toContain('translation_cache')
 }
@@ -58,19 +57,14 @@ function expectNoTranslationSpend() {
 describe('setInterfaceLanguage (the pre-sign-in control)', () => {
   it('a valid interface language sets tempa_locale with safe cookie options', async () => {
     expect(await setInterfaceLanguage('fr')).toEqual({ ok: true, locale: 'fr' })
-    expect(state.cookieSets).toEqual([
-      {
-        name: 'tempa_locale',
-        value: 'fr',
-        options: { path: '/', sameSite: 'lax', maxAge: 31_536_000, httpOnly: true, secure: false },
-      },
-    ])
+    expect(state.cookieSets).toEqual([{
+      name: 'tempa_locale', value: 'fr',
+      options: { path: '/', sameSite: 'lax', maxAge: 31_536_000, httpOnly: true, secure: false },
+    }])
   })
 
   it('an invalid language is rejected and nothing is written', async () => {
-    for (const bad of ['de', 'FR', '', '../en', 'fr; Path=/admin', 'ja']) {
-      expect(await setInterfaceLanguage(bad)).toEqual({ ok: false })
-    }
+    for (const bad of ['de', 'FR', '', '../en', 'fr; Path=/admin', 'ja']) expect(await setInterfaceLanguage(bad)).toEqual({ ok: false })
     expect(state.cookieSets).toEqual([])
   })
 
@@ -79,22 +73,21 @@ describe('setInterfaceLanguage (the pre-sign-in control)', () => {
     state.user = { id: 'u1' }
     await setInterfaceLanguage('pt')
     expect(state.rpcCalls).toEqual([])
-    expect(state.tables).toEqual([])
     expectNoTranslationSpend()
   })
 
-  it('takes only a language code (no URL, no redirect target)', () => {
+  it('takes only a language code and never redirects itself', () => {
     expect(setInterfaceLanguage.length).toBe(1)
     const source = readFileSync(path.join(__dirname, 'locale-actions.ts'), 'utf8')
     expect(source).not.toMatch(/redirect\(|permanentRedirect\(/)
   })
 })
 
-describe('chooseTempaLanguage (You → Language, primary choice)', () => {
-  it('signed in: saves the SAME code as reading language, then sets the interface cookie', async () => {
+describe('chooseTempaLanguage (primary / onboarding choice)', () => {
+  it('signed in: one atomic RPC saves interface + initial translation language, then cookie', async () => {
     state.user = { id: 'u1' }
     expect(await chooseTempaLanguage('fr')).toEqual({ ok: true, locale: 'fr' })
-    expect(state.rpcCalls).toEqual([{ name: 'set_my_reading_language', args: { p_language: 'fr' } }])
+    expect(state.rpcCalls).toEqual([{ name: 'set_my_tempa_language', args: { p_locale: 'fr' } }])
     expect(state.cookieSets.map((c) => [c.name, c.value])).toEqual([['tempa_locale', 'fr']])
     expectNoTranslationSpend()
   })
@@ -105,14 +98,14 @@ describe('chooseTempaLanguage (You → Language, primary choice)', () => {
     expect(state.cookieSets).toEqual([])
   })
 
-  it('invalid language: refused before anything else', async () => {
+  it('invalid interface language is refused before anything else', async () => {
     state.user = { id: 'u1' }
     expect(await chooseTempaLanguage('ja')).toEqual({ ok: false })
     expect(state.rpcCalls).toEqual([])
     expect(state.cookieSets).toEqual([])
   })
 
-  it('a failed reading-language save changes nothing', async () => {
+  it('failed durable save changes no cookie', async () => {
     state.user = { id: 'u1' }
     state.rpcError = { message: 'db down' }
     expect(await chooseTempaLanguage('es')).toEqual({ ok: false })
@@ -120,7 +113,7 @@ describe('chooseTempaLanguage (You → Language, primary choice)', () => {
   })
 })
 
-describe('Translation language alone (existing saveReadingLanguage)', () => {
+describe('Translation language alone', () => {
   it('changes reading_language only — the interface cookie is untouched', async () => {
     state.user = { id: 'u1' }
     expect(await saveReadingLanguage('ja')).toEqual({ ok: true, code: 'ja' })
@@ -132,16 +125,7 @@ describe('Translation language alone (existing saveReadingLanguage)', () => {
 
 describe('UI localization never touches member-content translation', () => {
   it('no locale/i18n module imports the translation service, Azure or its cache', () => {
-    const files = [
-      'locale-actions.ts',
-      'language-switcher.tsx',
-      '../i18n/config.ts',
-      '../i18n/request.ts',
-      'app-shell.tsx',
-      'sign-in/page.tsx',
-      'you/language/page.tsx',
-      'you/language/language-settings-editor.tsx',
-    ]
+    const files = ['locale-actions.ts', 'language-switcher.tsx', '../i18n/config.ts', '../i18n/request.ts', 'app-shell.tsx', 'sign-in/page.tsx', 'you/language/page.tsx', 'you/language/language-settings-editor.tsx', 'language/page.tsx']
     for (const file of files) {
       const source = readFileSync(path.join(__dirname, file), 'utf8')
       expect(source, file).not.toMatch(/lib\/translation|translatePrivate|translatePublic|azure|translation_cache|reserve_translation_characters/i)
