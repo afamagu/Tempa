@@ -1,5 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
-import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { renderToStaticMarkup as renderRaw } from 'react-dom/server'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
+
+// The page renders inside AppShell, whose navigation labels come from the
+// interface dictionary.
+const renderToStaticMarkup = (node: ReactNode) =>
+  renderRaw(
+    <NextIntlClientProvider locale="en" messages={en}>
+      {node}
+    </NextIntlClientProvider>
+  )
 
 // Post-Phase-2B UX checkpoint — this page previously had no test at all
 // (matching every other app/you/* child page, e.g. app/you/guide/

@@ -6,7 +6,7 @@ Translation in Tempa is a **reading accommodation**, not a translator feature. A
 
 ## The preference
 
-**Reading language** is a private member setting at You → Your presence → Reading language (`/you/reading-language`).
+**Reading language** is a private member setting. Members see it as **Translation language**, a secondary choice inside You → Language (`/you/language`; the old `/you/reading-language` redirects there). Choosing a primary Tempa language also sets the reading language to the same code; the Translation language section lets a member pick a different one from the full registry.
 
 - It means one thing: *the language Tempa translates someone else's writing into when I ask.*
 - It is **optional**. It is not an onboarding step and is never required at signup. A member who hasn't chosen one is asked on their first Translate action (the "Read in…" choice), and that choice is saved.
@@ -14,7 +14,7 @@ Translation in Tempa is a **reading accommodation**, not a translator feature. A
 - It is **private**. It is stored in `public.member_language_preferences`, not on `profiles`, so it never travels through `public_profiles` or any profile RPC. RLS lets a member read only their own row. The only write path is `set_my_reading_language(text)`, which is keyed on `auth.uid()`.
 - Account closure removes it automatically (the row cascades from `profiles`).
 
-SQL (status: **NOT EXECUTED**, review first): `docs/sql/2026-09-30-reading-language.sql`, then `docs/sql/2026-09-30-reading-language-verify.sql` (the verifier ends in `ROLLBACK`).
+SQL: `docs/sql/2026-09-30-reading-language.sql` and its verifier have been executed and verified in production.
 
 ## The language registry
 
@@ -40,12 +40,15 @@ Every code was checked against Azure Translator's live `/languages?scope=transla
 - Paragraph *i* of a translation is paragraph *i* of the original, so Moments, Postcards and reading-position tracking keep their canonical positions.
 - The same reading surface switches in place between original and translation. It does not show two copies one after the other.
 
-## Tempa language (interface localization) is separate — future work
+## Tempa language (interface localization)
 
-**Reading language ≠ Tempa language.** Tempa's own interface (Home, Send, The Board, Notifications, Account & privacy, Back…) will one day be localized from **local message dictionaries**, never through the per-character translation provider.
+**Reading language ≠ Tempa language**, technically. A member still makes one choice (You → Language), which sets both.
 
-That is a separate future project with its own setting (a future *Tempa language*). It is intentionally not built yet:
+- **Tempa language** is Tempa's own menus, buttons and system copy. It comes from reviewed **local dictionaries** (`messages/en.json`, `fr.json`, `es.json`, `pt.json`) via `next-intl`. It is never machine-translated and makes no Azure call. It is instant and works before sign-in (a quiet language control on `/sign-in`).
+  - Interface languages live in `i18n/config.ts`: English, Français, Español and Português, each with a direction. Adding one is a registry entry plus a reviewed dictionary.
+  - Resolution order: an explicit `tempa_locale` cookie (set only by the member's own choice), then a supported `Accept-Language` match used for that render only and never saved, then English. Country or location is never consulted.
+  - URLs never carry a locale. There are no `/fr/…` routes and no `[locale]` segments; `proxy.ts` is unchanged.
+  - Localized so far: `/sign-in`, the root `<html lang dir>`, the primary navigation, the You → Language row and `/you/language`. Other surfaces are migrated one at a time.
+- **Reading language** is the target for translating members' writing through the existing translation service (on demand; the original stays canonical).
 
-- no `interface_locale` column;
-- no i18n framework installed (a library such as `next-intl` may be evaluated then);
-- no locale-prefixed routes, and no translated or indexable `/es/…` public Dispatch pages. The original public Dispatch remains the canonical page for search.
+There are still no translated or indexable `/es/…` public Dispatch pages. The original public Dispatch remains the canonical page for search.

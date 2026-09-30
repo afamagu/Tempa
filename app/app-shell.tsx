@@ -1,19 +1,20 @@
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import TempaEmblem from '@/app/tempa-emblem'
 
 type NavKey = 'home' | 'letters' | 'room' | 'board' | 'you'
 type ShellActiveKey = NavKey | 'minds'
 
-const NAV_ITEMS: { key: NavKey; href: string; label: string }[] = [
-  { key: 'home', href: '/home', label: 'Home' },
-  { key: 'letters', href: '/letters', label: 'Pen pals' },
-  { key: 'room', href: '/room', label: 'The Room' },
-  { key: 'board', href: '/board', label: 'The Board' },
-  { key: 'you', href: '/you', label: 'You' },
+// Labels are interface-dictionary keys (messages/*.json → Nav), shared by
+// the desktop sidebar and mobile bar so the two can never disagree.
+const NAV_ITEMS: { key: NavKey; href: string; label: 'home' | 'letters' | 'room' | 'board' | 'you' }[] = [
+  { key: 'home', href: '/home', label: 'home' },
+  { key: 'letters', href: '/letters', label: 'letters' },
+  { key: 'room', href: '/room', label: 'room' },
+  { key: 'board', href: '/board', label: 'board' },
+  { key: 'you', href: '/you', label: 'you' },
 ]
 
-// Small, restrained line icons — no icon library, just enough shape to
-// be recognizable alongside the text label (icons are never used alone).
 function NavIcon({ item, className }: { item: NavKey; className?: string }) {
   const common = {
     className,
@@ -91,6 +92,7 @@ export default function AppShell({
   waitingLetterCount: number
   children: React.ReactNode
 }) {
+  const t = useTranslations('Nav')
   const activeNav: NavKey = active === 'minds' ? 'room' : active
 
   return (
@@ -114,7 +116,7 @@ export default function AppShell({
                 }`}
               >
                 <NavIcon item={item.key} className="h-5 w-5 shrink-0" />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
                 {item.key === 'letters' && <Badge count={waitingLetterCount} />}
               </Link>
             )
@@ -159,7 +161,7 @@ export default function AppShell({
                   isActive ? 'font-medium text-foreground' : 'text-foreground/50'
                 }`}
               >
-                {item.label}
+                {t(item.label)}
               </span>
             </Link>
           )
