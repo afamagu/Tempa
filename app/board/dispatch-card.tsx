@@ -6,6 +6,7 @@ import AuthoredProse from '@/app/authored-prose'
 import { dispatchExcerpt, dispatchIsRich, type DispatchListItem } from '@/lib/dispatches'
 import DispatchIdentityLabel from './dispatch-identity-label'
 import TopicChips from './topic-chips'
+import EditorialByline from '@/app/editorial-byline'
 
 /**
  * One Dispatch in a Board/profile list — an editorial, writing-desk
@@ -52,8 +53,28 @@ export default function DispatchCard({
   trailQuery?: string
 }) {
   const href = trailQuery ? `/board/${dispatch.id}?${trailQuery}` : `/board/${dispatch.id}`
+  const editorialIdentity = dispatch.identity.kind === 'member' && dispatch.identity.editorialTitle
+    ? dispatch.identity : null
   return (
     <div className="rounded-md border border-foreground/10 p-4 sm:p-5">
+      {editorialIdentity ? (
+        <div data-editorial-card-header="">
+          <div className="flex items-center justify-between gap-3">
+            <DispatchIdentityLabel identity={{ ...editorialIdentity, country: null, editorialTitle: null }} />
+            {keepSlot && <div className="shrink-0">{keepSlot}</div>}
+          </div>
+          <EditorialByline title={editorialIdentity.editorialTitle} className="mt-1" />
+          <p className={`mt-1 flex min-w-0 items-center gap-1.5 ${metadataTextClass}`}>
+            {editorialIdentity.country && (
+              <>
+                <span className="truncate" aria-label={`Country: ${editorialIdentity.country}`}>{editorialIdentity.country}</span>
+                <span className="shrink-0" aria-hidden="true">·</span>
+              </>
+            )}
+            <time className="shrink-0 whitespace-nowrap" dateTime={dispatch.publishedAt}>{formatDatePlain(dispatch.publishedAt)}</time>
+          </p>
+        </div>
+      ) : (
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
           {/* member -> profile link (unchanged); Tempa -> emblem + "Tempa";
@@ -63,6 +84,7 @@ export default function DispatchCard({
         </div>
         {keepSlot && <div className="shrink-0">{keepSlot}</div>}
       </div>
+      )}
 
       <Link href={href} className="mt-2 block transition-colors hover:opacity-80">
         <div>

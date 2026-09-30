@@ -28,9 +28,10 @@ import {
   MAX_INTERESTS,
   isReadingInterestsCountValidForNewProfile,
 } from '@/lib/interests'
+import { isReservedPseudonym, RESERVED_PSEUDONYM_MESSAGE } from '@/lib/reserved-pseudonyms'
 import { setProfileInterests } from '@/lib/profile-interests'
 
-type PseudonymStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken'
+type PseudonymStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken' | 'reserved'
 
 function validatePseudonym(raw: string) {
   const value = raw.trim()
@@ -44,6 +45,9 @@ function validatePseudonym(raw: string) {
       value,
       message: 'Use only letters, numbers, spaces, or hyphens.',
     }
+  }
+  if (isReservedPseudonym(value)) {
+    return { valid: false, value, message: RESERVED_PSEUDONYM_MESSAGE }
   }
   return { valid: true, value, message: '' }
 }
@@ -145,24 +149,24 @@ export default function ProfileForm({ userId }: { userId: string }) {
   }
 
   useEffect(() => {
+    const requestId = ++checkIdRef.current
     const { valid, value } = validatePseudonym(pseudonym)
 
     if (!valid) {
-      setPseudonymStatus(pseudonym.trim() ? 'invalid' : 'idle')
+      setPseudonymStatus(isReservedPseudonym(pseudonym) ? 'reserved' : pseudonym.trim() ? 'invalid' : 'idle')
       setSuggestions([])
       return
     }
 
     setPseudonymStatus('checking')
-    const requestId = ++checkIdRef.current
-
+    let cancelled = false
     const timeout = setTimeout(async () => {
       const supabase = createClient()
       const { data, error } = await supabase.rpc('is_pseudonym_available', {
         candidate: value,
       })
 
-      if (checkIdRef.current !== requestId) return
+      if (cancelled || checkIdRef.current !== requestId) return
 
       if (error) {
         setPseudonymStatus('idle')
@@ -178,13 +182,13 @@ export default function ProfileForm({ userId }: { userId: string }) {
           'suggest_available_pseudonyms',
           { base: value, needed: 3 }
         )
-        if (checkIdRef.current === requestId) {
+        if (!cancelled && checkIdRef.current === requestId) {
           setSuggestions(suggestionData ?? [])
         }
       }
     }, 500)
 
-    return () => clearTimeout(timeout)
+    return () => { clearTimeout(timeout); cancelled = true }
   }, [pseudonym])
 
   function applySuggestion(name: string) {
@@ -218,7 +222,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
     const { valid, value, message } = validatePseudonym(pseudonym)
     if (!valid) {
-      setPseudonymStatus('invalid')
+      setPseudonymStatus(isReservedPseudonym(value) ? 'reserved' : 'invalid')
       setFormError(message)
       pseudonymFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       pseudonymFieldRef.current?.focus()
@@ -310,7 +314,11 @@ export default function ProfileForm({ userId }: { userId: string }) {
         hint: insertError.hint,
         code: insertError.code,
       })
-      if (insertError.code === '23505') {
+      if (insertError.code === '23514' && insertError.message.includes(RESERVED_PSEUDONYM_MESSAGE)) {
+        setPseudonymStatus('reserved')
+        setSuggestions([])
+        setFormError(RESERVED_PSEUDONYM_MESSAGE)
+      } else if (insertError.code === '23505') {
         setPseudonymStatus('taken')
         const { data: suggestionData } = await supabase.rpc(
           'suggest_available_pseudonyms',
@@ -371,7 +379,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 onChange={(e) => setPseudonym(e.target.value)}
                 placeholder="e.g. Quiet Harbor"
                 autoComplete="off"
-                aria-invalid={pseudonymStatus === 'invalid' || pseudonymStatus === 'taken'}
+                aria-invalid={pseudonymStatus === 'invalid' || pseudonymStatus === 'taken' || pseudonymStatus === 'reserved'}
                 className={inputClass}
               />
               <p className={helperTextClass}>
@@ -383,6 +391,9 @@ export default function ProfileForm({ userId }: { userId: string }) {
                 <p className="text-xs text-red-600">
                   {validatePseudonym(pseudonym).message}
                 </p>
+              )}
+              {pseudonymStatus === 'reserved' && formError === null && (
+                <p className="text-xs text-red-600" role="alert">{RESERVED_PSEUDONYM_MESSAGE}</p>
               )}
               {pseudonymStatus === 'checking' && (
                 <p className={helperTextClass}>Checking availability…</p>
@@ -607,7 +618,8 @@ export default function ProfileForm({ userId }: { userId: string }) {
             disabled={
               submitting ||
               pseudonymStatus === 'checking' ||
-              pseudonymStatus === 'taken'
+              pseudonymStatus === 'taken' ||
+              pseudonymStatus === 'reserved'
             }
             className="w-full rounded-md bg-accent text-accent-foreground px-4 py-3 text-base font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
