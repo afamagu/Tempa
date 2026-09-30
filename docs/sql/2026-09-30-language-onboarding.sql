@@ -20,9 +20,6 @@
 
 begin;
 
--- ------------------------------------------------------------
--- 1. TABLE SHAPE
--- ------------------------------------------------------------
 alter table public.member_language_preferences
   alter column reading_language drop not null;
 
@@ -35,18 +32,15 @@ alter table public.member_language_preferences
 
 alter table public.member_language_preferences
   add constraint member_language_preferences_interface_locale_valid
-  check (
-    interface_locale is null
-    or interface_locale in ('en', 'fr', 'es', 'pt')
-  );
+  check (interface_locale is null or interface_locale in ('en', 'fr', 'es', 'pt'));
 
 comment on column public.member_language_preferences.interface_locale is
   'Reviewed Tempa interface locale. Null means no persisted interface choice yet.';
 comment on column public.member_language_preferences.language_confirmed_at is
   'When the member explicitly confirmed the Language onboarding decision. Existing pre-migration profiles are grandfathered without an inferred locale.';
 
--- The old row depended on public.profiles, which made a pre-profile language
--- choice impossible. Move the ownership boundary to the authenticated account.
+-- A preference must be able to exist before profile creation, so ownership
+-- follows the authenticated account rather than the later public profile row.
 alter table public.member_language_preferences
   drop constraint if exists member_language_preferences_user_id_fkey;
 
@@ -54,9 +48,11 @@ alter table public.member_language_preferences
   add constraint member_language_preferences_user_id_fkey
   foreign key (user_id) references auth.users(id) on delete cascade;
 
--- Account closure in Tempa deletes the live profile before auth identity
--- retirement. Keep the original cleanup semantics too.
-create or replace function tempa_private.delete_language_preference_with_profile()
+-- Tempa account closure deletes the profile before retiring the auth identity.
+-- Keep the old cleanup boundary too. This is a public-schema trigger function
+-- only because no private helper schema is assumed to exist; all client
+-- execution is explicitly revoked and it is invoked only by the trigger.
+create or replace function public.delete_language_preference_with_profile()
 returns trigger
 language plpgsql
 security definer
@@ -68,22 +64,16 @@ begin
 end;
 $function$;
 
-revoke all on function tempa_private.delete_language_preference_with_profile()
+revoke all on function public.delete_language_preference_with_profile()
   from public, anon, authenticated;
 
 drop trigger if exists profiles_delete_language_preference on public.profiles;
 create trigger profiles_delete_language_preference
 after delete on public.profiles
-for each row execute function tempa_private.delete_language_preference_with_profile();
+for each row execute function public.delete_language_preference_with_profile();
 
--- ------------------------------------------------------------
--- 2. GRANDFATHER EXISTING MEMBERS
--- ------------------------------------------------------------
--- A profile that already exists at migration time must never be sent
--- backwards through a newly-added onboarding gate. Do not infer a locale;
--- leave interface_locale null so cookie / browser behaviour continues until
--- that member deliberately chooses a Tempa language. Preserve any existing
--- reading_language exactly as-is.
+-- Existing profiles must never be sent backwards through the new gate. Do not
+-- infer a locale and do not overwrite any reading_language already selected.
 insert into public.member_language_preferences (
   user_id,
   reading_language,
@@ -96,13 +86,11 @@ select p.id, null, null, now(), now(), now()
 from public.profiles p
 on conflict (user_id) do update
 set language_confirmed_at = coalesce(
-      public.member_language_preferences.language_confirmed_at,
-      excluded.language_confirmed_at
-    );
+  public.member_language_preferences.language_confirmed_at,
+  excluded.language_confirmed_at
+);
 
--- ------------------------------------------------------------
--- 3. READING-LANGUAGE WRITE PATH (same contract, pre-profile capable)
--- ------------------------------------------------------------
+-- Existing Translation-language write path, made pre-profile capable.
 create or replace function public.set_my_reading_language(p_language text)
 returns text
 language plpgsql
@@ -123,10 +111,7 @@ begin
   end if;
 
   insert into public.member_language_preferences (
-    user_id,
-    reading_language,
-    created_at,
-    updated_at
+    user_id, reading_language, created_at, updated_at
   )
   values (auth.uid(), v_language, now(), now())
   on conflict (user_id)
@@ -140,9 +125,8 @@ $function$;
 revoke all on function public.set_my_reading_language(text) from public, anon;
 grant execute on function public.set_my_reading_language(text) to authenticated;
 
--- ------------------------------------------------------------
--- 4. ATOMIC PRIMARY TEMPA-LANGUAGE CHOICE
--- ------------------------------------------------------------
+-- One authenticated operation establishes the first explicit Tempa language
+-- and its initial default Translation language atomically.
 create or replace function public.set_my_tempa_language(p_locale text)
 returns text
 language plpgsql
