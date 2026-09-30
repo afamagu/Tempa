@@ -12,14 +12,14 @@ export type OnboardingState = {
 }
 
 /** The one-time Writing Style step — step 4 of onboarding for a new
- * member (after the Flagship Question), and the single interruption an
+ * member (after The First Question), and the single interruption an
  * already-onboarded member sees once after release. Derived purely from
  * "complete, but no valid style yet": never a separate stage value, never
  * a local "already seen" flag. */
 export const WRITING_STYLE_PATH = '/profile/writing-style'
 
-/** Where the Flagship Question's completion screen continues to. */
-export const WRITING_STYLE_ONBOARDING_HREF = `${WRITING_STYLE_PATH}?next=%2Fminds`
+/** Where The First Question's completion screen continues to. */
+export const WRITING_STYLE_ONBOARDING_HREF = `${WRITING_STYLE_PATH}?next=%2Froom`
 
 // Routes that must stay reachable before a style is chosen: the step
 // itself, account & privacy (pausing/closing an account is never held
