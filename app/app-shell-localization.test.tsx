@@ -8,7 +8,7 @@ import pt from '@/messages/pt.json'
 import AppShell from './app-shell'
 
 const DICTIONARIES = { en, fr, es, pt } as const
-const HREFS = ['/home', '/letters', '/minds', '/board', '/you']
+const HREFS = ['/home', '/letters', '/room', '/board', '/you']
 
 function render(locale: keyof typeof DICTIONARIES, waitingLetterCount = 0) {
   return renderToStaticMarkup(
@@ -21,10 +21,10 @@ function render(locale: keyof typeof DICTIONARIES, waitingLetterCount = 0) {
 }
 
 const EXPECTED = {
-  en: ['Home', 'Letters', 'People', 'Board', 'You'],
-  fr: ['Accueil', 'Lettres', 'Personnes', 'Tableau', 'Vous'],
-  es: ['Inicio', 'Cartas', 'Personas', 'Tablón', 'Tú'],
-  pt: ['Início', 'Cartas', 'Pessoas', 'Mural', 'Você'],
+  en: ['Home', 'Pen pals', 'The Room', 'The Board', 'You'],
+  fr: ['Accueil', 'Correspondants', 'La Salle', 'Le Tableau', 'Vous'],
+  es: ['Inicio', 'Amigos por carta', 'La Sala', 'El Tablón', 'Tú'],
+  pt: ['Início', 'Amigos por correspondência', 'A Sala', 'O Mural', 'Você'],
 } as const
 
 describe('AppShell navigation is localized from the dictionaries', () => {
@@ -39,9 +39,21 @@ describe('AppShell navigation is localized from the dictionaries', () => {
       }
       for (const href of HREFS) expect((html.match(new RegExp(`href="${href}"`, 'g')) ?? []).length).toBe(2)
       expect(html).not.toMatch(/href="\/(en|fr|es|pt)\//)
-      expect(html).toContain('>Tempa<') // the brand is never translated
+      expect(html).toContain('>Tempa<')
     })
   }
+
+  it('legacy minds active state maps to the canonical Room item', () => {
+    const html = renderToStaticMarkup(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <AppShell active="minds" waitingLetterCount={0}>{null}</AppShell>
+      </NextIntlClientProvider>
+    )
+    const roomIndex = html.indexOf('href="/room"')
+    const tagStart = html.lastIndexOf('<a ', roomIndex)
+    const tagEnd = html.indexOf('</a>', roomIndex)
+    expect(html.slice(tagStart, tagEnd)).toContain('bg-accent/10')
+  })
 
   it('letter badge behaviour is unchanged in every language', () => {
     for (const locale of ['en', 'fr'] as const) {
