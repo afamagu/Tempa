@@ -9,6 +9,8 @@ import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { getMyWritingStyle } from '@/lib/writing-style-data'
 import { WRITING_STYLES } from '@/lib/writing-style'
+import { getMyReadingLanguage } from '@/lib/reading-language-data'
+import { readingLanguage } from '@/lib/reading-languages'
 
 const controlClass =
   'flex items-center justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]'
@@ -25,7 +27,7 @@ export default async function YouPage() {
     .maybeSingle()
   if (!profile) redirect('/profile')
 
-  const [waitingCount, markStatus, writingStyleId] = await Promise.all([
+  const [waitingCount, markStatus, writingStyleId, readingLanguagePreference] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getProfileMarkManagementStatus(supabase).catch(() => ({
       markId: profile.mark_id ?? null,
@@ -33,7 +35,9 @@ export default async function YouPage() {
       nextChangeAt: null,
     })),
     getMyWritingStyle(supabase, user.id),
+    getMyReadingLanguage(supabase, user.id),
   ])
+  const currentReadingLanguage = readingLanguagePreference.ok ? readingLanguage(readingLanguagePreference.code) : null
   const markId = markStatus.markId ?? profile.mark_id ?? null
   const markUrl = markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null
 
@@ -89,6 +93,13 @@ export default async function YouPage() {
                 <span>Writing style</span>
                 <span className="flex items-center gap-2">
                   {writingStyleId && <span className="text-[13px] text-muted">{WRITING_STYLES[writingStyleId].name}</span>}
+                  <span aria-hidden>→</span>
+                </span>
+              </Link>
+              <Link href="/you/reading-language" className={controlClass}>
+                <span>Reading language</span>
+                <span className="flex items-center gap-2">
+                  {currentReadingLanguage && <span className="text-[13px] text-muted">{currentReadingLanguage.name}</span>}
                   <span aria-hidden>→</span>
                 </span>
               </Link>
