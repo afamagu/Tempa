@@ -33,12 +33,6 @@ import {
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 
-// Length-policy audit (2026-09-05): was a locally hard-coded 4000,
-// independent of the Question-answer cap — now the SAME canonical
-// constant (see its own doc comment, lib/questions.ts) so the two
-// values can never silently drift. A stranger's unsolicited first
-// letter is capped the same as their Minds answer, and only for that
-// reason — this is not a coincidence to be re-derived independently.
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
 
@@ -46,24 +40,8 @@ function charLength(text: string) {
   return Array.from(text).length
 }
 
-/**
- * The very first letter to someone — always text-only (no Moments;
- * that rule is about photo/postcard eligibility, not editor
- * technology). Built on the SAME shared Tiptap schema as the other two
- * letter composers (writing-extensions.ts) so Bold/Italic/Emoji work
- * identically everywhere a member writes to another person.
- *
- * Draft persistence (added in the writing-essentials compatibility
- * audit — this composer previously had none at all): reuses the exact
- * same rich-JSON draft architecture the Write Anytime composer already
- * has (lib/letter-editor-draft.ts), scoped by recipientId rather than
- * correspondenceId, since no correspondence exists yet before Letter 1
- * is sent. A different recipientId is a genuinely different
- * localStorage key, so a draft begun for one recipient can never
- * surface in a different recipient's composer. Cleared only on a
- * successful send to THIS recipient — never touches any other
- * recipient's own draft.
- */
+/** The very first letter to someone. Drafts are local to this recipient and
+ * sending remains governed by the existing safety evaluation + RPC path. */
 export default function FirstLetterComposer({
   recipientId,
   recipientPseudonym,
@@ -80,20 +58,8 @@ export default function FirstLetterComposer({
   useKeyboardDismiss(composerRootRef)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Safety 2, Checkpoint 3 — set only while a `warning_required`
-  // disposition is waiting on the member's own explicit choice
-  // (SafetyWarningDialog below). Never set for `allow` (proceeds
-  // immediately) or `cannot_send` (blocks inline, no dialog at all).
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
-  // Phase 1 — a confirmed financial solicitation is not sendable and has
-  // no override; this only ever opens the calm SafetyBlockedDialog.
   const [financialBlocked, setFinancialBlocked] = useState(false)
-  // Account enforcement messaging (pre-beta UX polish batch 1) — the
-  // CALLER's own status only (see getMyAccountStatus's own doc
-  // comment), fetched once on mount purely so a blocked send can show
-  // calm, accurate copy instead of the generic retry-implying fallback.
-  // Never used to gate rendering the composer itself — send_first_letter
-  // remains the actual authority on whether the attempt succeeds.
   const [myStatus, setMyStatus] = useState<AccountStatus>('active')
 
   useEffect(() => {
@@ -108,17 +74,6 @@ export default function FirstLetterComposer({
 
   const editor = useEditor({
     immediatelyRender: false,
-    // Root cause of the Send-button regression: @tiptap/react's
-    // useEditor() does NOT re-render its host component on typing/
-    // formatting by default — the editor mutates the contenteditable
-    // DOM directly via ProseMirror, entirely outside React's render
-    // cycle, which is exactly why typing/Bold/Italic/Emoji all LOOKED
-    // like they worked while canSend (computed from editor.getJSON()
-    // in the render body) stayed frozen at its first-render value.
-    // shouldRerenderOnTransaction is Tiptap's own officially supported
-    // opt-in for this — re-renders on every transaction (content AND
-    // selection), which is also what keeps the toolbar's Bold/Italic
-    // aria-pressed state correctly in sync as the caret moves.
     shouldRerenderOnTransaction: true,
     extensions: [...baseWritingExtensions(), Placeholder.configure({ placeholder: 'Begin writing…' })],
     content: EMPTY_LETTER_DOC,
@@ -133,32 +88,18 @@ export default function FirstLetterComposer({
     },
   })
 
-  // Restored after mount, not as the editor's initial `content` — same
-  // SSR-hydration-mismatch reasoning as moments-composer.tsx. Keyed by
-  // recipientId, so navigating between two different first-contact
-  // composers never shows the wrong draft.
   useEffect(() => {
     if (!editor) return
     const draft = readFirstContactDraft(recipientId)
     if (draft) editor.commands.setContent(draft)
   }, [editor, recipientId])
 
-  // The SAME editor.getJSON() call feeds the button's enable state,
-  // the character count, and (in handleSend) the actual submitted
-  // body — one canonical source, never a separately-maintained string.
   const docJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
   const charCount = charLength(docToPlainBody(docJSON))
   const aboveMax = charCount > MAX_CHARS
   const canSend = Boolean(editor) && canSendLetter(docJSON, { aboveMax, submitting: sending })
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
 
-  // Safety 2, Checkpoint 3 — the member's own click. Evaluates FIRST;
-  // only ever calls send_first_letter itself once that evaluation
-  // resolves to allow (immediately) or the member explicitly
-  // acknowledges a warning (handleAcknowledgeWarning below). A failed
-  // evaluation (outcome.status === 'error') never falls back to an
-  // unscreened send — see lib/safety/send-with-safety.ts's own doc
-  // comment on why evaluateSafety is fail-closed by construction.
   async function handleSend() {
     if (!editor || !canSend) return
     setSending(true)
@@ -200,20 +141,8 @@ export default function FirstLetterComposer({
     if (!editor) return
     setSending(true)
     setError(null)
-
-    // Re-read the editor fresh, never a value captured earlier — the
-    // member may have kept typing while a warning dialog was open. If
-    // the body genuinely changed since evaluation, send_first_letter's
-    // own fingerprint recheck (tempa_private.consume_safety_evaluation)
-    // rejects it, surfacing as the generic failure below — a fresh
-    // evaluation is then required, exactly as it should be.
     const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
 
-    // try/finally so a thrown rejection (never just an RPC-level
-    // {error} response, already handled below) can't leave `sending`
-    // stuck true forever — canSendLetter treats submitting as part of
-    // its own eligibility check, so a stuck `sending` would otherwise
-    // permanently disable Send.
     try {
       const supabase = createClient()
       const { error: sendError } = await supabase.rpc('send_first_letter', {
@@ -232,15 +161,6 @@ export default function FirstLetterComposer({
         if (sendError.code === '23505') {
           setError(`You've already written to ${recipientPseudonym}.`)
         } else {
-          // restricted/suspended/banned all fully block a first-contact
-          // letter (send_first_letter), sharing one deliberately vague
-          // RPC message with "recipient does not exist"/blocked-pair so
-          // none of those is distinguishable from the others (see that
-          // RPC's own comment) — accountBlockedMessage only ever fires
-          // here from the caller's OWN already-known status, never by
-          // decoding that shared message, so it can't affect what a
-          // genuinely unrelated failure (recipient truly gone, or
-          // blocked) still shows.
           setError(accountBlockedMessage(myStatus) ?? 'Could not send your letter. Please try again.')
         }
         return
@@ -268,8 +188,8 @@ export default function FirstLetterComposer({
           <p className="text-lg leading-relaxed">
             Your letter to {recipientPseudonym} has been sent.
           </p>
-          <Link href="/minds" className={secondaryButtonClass}>
-            Back to People
+          <Link href="/room" className={secondaryButtonClass}>
+            Back to The Room
           </Link>
         </div>
       </main>
@@ -282,14 +202,6 @@ export default function FirstLetterComposer({
         <div className="space-y-2">
           <p className={sectionLabelClass}>Writing to</p>
           <h1 className={proseSubheadingClass}>{recipientPseudonym}</h1>
-          {/* Explicit framing — a live-test report described this
-              screen as "answering a Question" (it isn't; it's a letter
-              to recipientPseudonym, prompted by THEIR answer). This
-              screen and the Question-answer screen (app/question/
-              question-answer.tsx) both show a Question prompt, which
-              is exactly what made them easy to conflate — this label
-              is the fix, not a button-text change, since "Send letter"
-              is correct for what this screen actually does. */}
           {questionPrompt && (
             <div className="space-y-1">
               <p className={helperTextClass}>In response to their answer to:</p>
@@ -312,8 +224,8 @@ export default function FirstLetterComposer({
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex flex-wrap gap-3">
-            <Link href="/minds" className={secondaryButtonClass}>
-              Back to People
+            <Link href="/room" className={secondaryButtonClass}>
+              Back to The Room
             </Link>
             <button
               type="button"

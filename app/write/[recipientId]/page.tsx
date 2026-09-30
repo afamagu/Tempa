@@ -1,8 +1,20 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { closeReasonForSender, getFirstContact, isEffectivelyExpired, isEstablishedForViewer, resolveFirstContactDisplayStatus } from '@/lib/letters'
-import { sectionLabelClass, helperTextClass, secondaryButtonClass, closureTextClass, quietLinkClass } from '@/app/profile/ui'
+import {
+  closeReasonForSender,
+  getFirstContact,
+  isEffectivelyExpired,
+  isEstablishedForViewer,
+  resolveFirstContactDisplayStatus,
+} from '@/lib/letters'
+import {
+  sectionLabelClass,
+  helperTextClass,
+  secondaryButtonClass,
+  closureTextClass,
+  quietLinkClass,
+} from '@/app/profile/ui'
 import FirstLetterComposer from './first-letter-composer'
 import ClosureRecommendations from '@/app/letters/closure-recommendations'
 
@@ -11,23 +23,16 @@ export default async function WriteToPage({
   searchParams,
 }: {
   params: Promise<{ recipientId: string }>
-  searchParams: Promise<{ a?: string }>
+  searchParams: Promise<{ a?: string; source?: string }>
 }) {
   const { recipientId } = await params
   const { a: answerId } = await searchParams
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/sign-in')
 
-  if (!user) {
-    redirect('/sign-in')
-  }
-
-  if (recipientId === user.id) {
-    redirect('/minds')
-  }
+  if (recipientId === user.id) redirect('/room')
 
   const { data: recipient } = await supabase
     .from('public_profiles')
@@ -35,28 +40,16 @@ export default async function WriteToPage({
     .eq('id', recipientId)
     .maybeSingle()
 
-  if (!recipient) {
-    redirect('/minds')
-  }
+  if (!recipient) redirect('/room')
 
   const existing = await getFirstContact(supabase, user.id, recipientId)
 
   if (existing) {
-    // getFirstContact's row is always the genuine original first-contact
-    // letter for this exact sender->recipient direction (never an
-    // ordinary Write-Anytime quill letter, which reply_to_id=null could
-    // otherwise be confused with) — established=false is safe and
-    // correct here regardless of whether the correspondence later
-    // became established, since isEffectivelyExpired's own
-    // status === 'sent' check already excludes an established
-    // (status='replied') row from the expiry branch either way.
     const expired = isEffectivelyExpired(existing, false)
-    // existing.status may already say 'replied' before Mail Call has
-    // actually delivered that reply to this viewer (see
-    // resolveFirstContactDisplayStatus's own doc comment) — only ask
-    // isEstablishedForViewer when it could possibly matter.
     const establishedForViewer =
-      existing.status === 'replied' ? await isEstablishedForViewer(supabase, existing.correspondenceId) : false
+      existing.status === 'replied'
+        ? await isEstablishedForViewer(supabase, existing.correspondenceId)
+        : false
     const effectiveStatus = expired
       ? 'closed'
       : resolveFirstContactDisplayStatus(existing.status, establishedForViewer)
@@ -69,21 +62,16 @@ export default async function WriteToPage({
 
           {effectiveStatus === 'sent' && (
             <p className={helperTextClass}>
-              You&apos;ve already written to {recipient.pseudonym}. Your
-              letter is waiting for a reply.
+              You&apos;ve already written to {recipient.pseudonym}. Your letter is waiting for a reply.
             </p>
           )}
           {effectiveStatus === 'replied' && (
-            <p className={helperTextClass}>
-              {recipient.pseudonym} replied to your letter.
-            </p>
+            <p className={helperTextClass}>{recipient.pseudonym} replied to your letter.</p>
           )}
           {effectiveStatus === 'closed' &&
             (effectiveClosedBy === 'recipient' ? (
               <div className="space-y-2">
-                <p className={closureTextClass}>
-                  {recipient.pseudonym} passed on this letter.
-                </p>
+                <p className={closureTextClass}>{recipient.pseudonym} passed on this letter.</p>
                 <p className={closureTextClass}>{closeReasonForSender(existing.closeReason)}</p>
               </div>
             ) : (
@@ -95,16 +83,9 @@ export default async function WriteToPage({
               </div>
             ))}
 
-          {/* Two intentionally different exits: "Your letters" for the
-              correspondence-management context, and a direct link back
-              to the profile this screen was almost certainly reached
-              from — this used to be the only screen in this flow with
-              no way back to where the member actually came from. */}
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-            <Link href="/letters" className={secondaryButtonClass}>
-              Your letters
-            </Link>
-            <Link href={`/minds/${recipientId}`} className={quietLinkClass}>
+            <Link href="/letters" className={secondaryButtonClass}>Your letters</Link>
+            <Link href={`/room/${recipientId}`} className={quietLinkClass}>
               Back to {recipient.pseudonym}&apos;s profile
             </Link>
           </div>
@@ -119,19 +100,10 @@ export default async function WriteToPage({
     )
   }
 
-  // No first contact yet — a real originating answer is required to
-  // start one; without it there's nothing legitimate to compose against,
-  // so send the member back to Discovery rather than showing a composer
-  // that could only fail on submit.
-  if (!answerId) {
-    redirect('/minds')
-  }
+  // A first contact must originate from something the recipient actually wrote.
+  // The Room is now the canonical place to recover that context.
+  if (!answerId) redirect('/room')
 
-  // Initiating a first letter is never gated on having answered a
-  // Question yourself — that used to redirect here into the Question
-  // flow, discarding this destination entirely. Answering is
-  // encouraged elsewhere (a non-blocking indicator on /minds), never a
-  // requirement for writing to someone you've already found.
   const { data: answer } = await supabase
     .from('question_answers')
     .select('id, user_id, questions(prompt)')
@@ -139,9 +111,7 @@ export default async function WriteToPage({
     .eq('user_id', recipientId)
     .maybeSingle()
 
-  if (!answer) {
-    redirect('/minds')
-  }
+  if (!answer) redirect('/room')
 
   const question = Array.isArray(answer.questions) ? answer.questions[0] : answer.questions
 
