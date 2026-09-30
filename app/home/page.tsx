@@ -20,6 +20,8 @@ import {
   readingTrailSearchParams,
 } from '@/lib/dispatches'
 import { getCurrentRoomQuestion, getMyAnswers, getQuestionAnswerEncounters } from '@/lib/questions'
+import { getDiscoveryPage, type DiscoveryCandidate } from '@/lib/discovery'
+import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
 import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
 import {
@@ -77,9 +79,6 @@ export default async function HomePage() {
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
 
-  // Prefer three different writers on Home. If the pool is genuinely too
-  // small, fill remaining positions from unused Dispatches rather than making
-  // Home look empty.
   const homeBoardItems: typeof boardItems = []
   const seenBoardIds = new Set<string>()
   const seenBoardAuthors = new Set<string>()
@@ -116,26 +115,66 @@ export default async function HomePage() {
   const hasActiveCorrespondence = hasVisibleReply(allLetters)
   const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null
 
-  const primaryRoomAnswers = currentRoomQuestion
-    ? await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
+  // Prefer V2 so Home participates in the same unseen/underexposure fairness
+  // ledger as The Room. Before production SQL is applied, fall back to the
+  // existing exact-Question helper rather than hiding the conversation.
+  let roomCandidates: DiscoveryCandidate[] = []
+  if (currentRoomQuestion) {
+    const preferred = await getDiscoveryPage(supabase, {
+      questionId: currentRoomQuestion.id,
+      excludeUserIds: [...seenBoardAuthors],
+      limit: HOME_ROOM_ANSWER_COUNT,
+    })
+    roomCandidates = preferred.candidates
+
+    if (roomCandidates.length < HOME_ROOM_ANSWER_COUNT && preferred.fairRankingApplied) {
+      const fallback = await getDiscoveryPage(supabase, {
+        questionId: currentRoomQuestion.id,
+        limit: HOME_ROOM_ANSWER_COUNT,
+      })
+      const seen = new Set(roomCandidates.map((candidate) => candidate.userId))
+      for (const candidate of fallback.candidates) {
+        if (seen.has(candidate.userId)) continue
+        roomCandidates.push(candidate)
+        seen.add(candidate.userId)
+        if (roomCandidates.length >= HOME_ROOM_ANSWER_COUNT) break
+      }
+    }
+
+    if (!preferred.fairRankingApplied) {
+      const legacyPreferred = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
         excludeUserIds: [...seenBoardAuthors],
         limit: HOME_ROOM_ANSWER_COUNT,
       })
-    : []
-
-  const roomAnswers = [...primaryRoomAnswers]
-  if (currentRoomQuestion && roomAnswers.length < HOME_ROOM_ANSWER_COUNT) {
-    const fallback = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
-      limit: HOME_ROOM_ANSWER_COUNT,
-    })
-    const seen = new Set(roomAnswers.map((answer) => answer.userId))
-    for (const answer of fallback) {
-      if (seen.has(answer.userId)) continue
-      roomAnswers.push(answer)
-      seen.add(answer.userId)
-      if (roomAnswers.length >= HOME_ROOM_ANSWER_COUNT) break
+      const legacyAnswers = [...legacyPreferred]
+      if (legacyAnswers.length < HOME_ROOM_ANSWER_COUNT) {
+        const legacyFallback = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
+          limit: HOME_ROOM_ANSWER_COUNT,
+        })
+        const seen = new Set(legacyAnswers.map((answer) => answer.userId))
+        for (const answer of legacyFallback) {
+          if (seen.has(answer.userId)) continue
+          legacyAnswers.push(answer)
+          seen.add(answer.userId)
+          if (legacyAnswers.length >= HOME_ROOM_ANSWER_COUNT) break
+        }
+      }
+      roomCandidates = legacyAnswers.map((answer) => ({
+        userId: answer.userId,
+        pseudonym: answer.pseudonym,
+        country: answer.country ?? '',
+        gender: null,
+        genderCustom: null,
+        ageRange: '',
+        markId: answer.markId,
+        answerId: answer.answerId,
+        body: answer.body,
+        prompt: currentRoomQuestion.prompt,
+      }))
     }
   }
+
+  await recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')
 
   const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
     activeAnnouncement?.heroImagePath
@@ -161,10 +200,10 @@ export default async function HomePage() {
     getEditorialBylines(supabase),
   ])
 
-  const homeRoomAnswers: HomeRoomAnswer[] = roomAnswers.map((answer) => ({
+  const homeRoomAnswers: HomeRoomAnswer[] = roomCandidates.map((answer) => ({
     userId: answer.userId,
     pseudonym: answer.pseudonym,
-    country: answer.country,
+    country: answer.country || null,
     markUrl: answer.markId ? publicProfileMarkUrl(supabase, `${answer.markId}.png`) : null,
     editorialTitle: editorialTitleFor(editorialBylines, answer.pseudonym),
     body: answer.body,
@@ -247,9 +286,7 @@ export default async function HomePage() {
 
                   {homeRoomAnswers.length > 0 && (
                     <div className="space-y-4">
-                      <div>
-                        <p className={sectionLabelClass}>See what people said</p>
-                      </div>
+                      <p className={sectionLabelClass}>See what people said</p>
                       <div className="grid gap-4 md:grid-cols-3">
                         {homeRoomAnswers.map((answer) => (
                           <RoomAnswerCard key={answer.userId} answer={answer} />
@@ -277,11 +314,7 @@ export default async function HomePage() {
                   </div>
                   <div className="mt-3 grid gap-4 md:grid-cols-3">
                     {homeBoardItems.map((dispatch) => (
-                      <BoardShelfCard
-                        key={dispatch.id}
-                        dispatch={dispatch}
-                        trailQuery={trailQueryFor(dispatch)}
-                      />
+                      <BoardShelfCard key={dispatch.id} dispatch={dispatch} trailQuery={trailQueryFor(dispatch)} />
                     ))}
                   </div>
                 </section>
@@ -291,10 +324,7 @@ export default async function HomePage() {
 
           {activeAnnouncement && (
             <div className="mx-auto mt-14 w-full max-w-md">
-              <AnnouncementTeaser
-                announcement={activeAnnouncement}
-                imageUrl={announcementImageUrl}
-              />
+              <AnnouncementTeaser announcement={activeAnnouncement} imageUrl={announcementImageUrl} />
             </div>
           )}
         </div>
