@@ -42,8 +42,7 @@ describe('QuestionAnswer — localized current behaviour', () => {
 
   it('does not allow a brand-new answer to an inactive Question', () => {
     const html = renderQuestion({ isActive: false })
-    expect(html).toContain('This Question is no longer open')
-    expect(html).toContain("you haven&#x27;t answered it")
+    expect(html).toContain(en.Question.unansweredClosed)
     expect(html).not.toContain('<textarea')
     expect(html).toContain('href="/room"')
   })
