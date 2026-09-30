@@ -42,12 +42,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function useCalendarDate() {
   const t = useTranslations('Begin')
-  const months = t.raw('months') as Record<string, string>
-  return (dob: DateOfBirth) => t('dateFormat', { day: dob.day, month: months[String(dob.month)] ?? String(dob.month), year: dob.year })
+  const monthT = useTranslations('Begin.months')
+  return (dob: DateOfBirth) => t('dateFormat', { day: dob.day, month: monthT(String(dob.month) as never), year: dob.year })
 }
 
 function DobStep() {
   const t = useTranslations('Begin')
+  const monthT = useTranslations('Begin.months')
   const common = useTranslations('Common')
   const formatDate = useCalendarDate()
   const router = useRouter()
@@ -58,7 +59,6 @@ function DobStep() {
   const [confirmedDob, setConfirmedDob] = useState<DateOfBirth | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const months = t.raw('months') as Record<string, string>
 
   function handleContinue(e: FormEvent) {
     e.preventDefault()
@@ -97,7 +97,7 @@ function DobStep() {
     <form onSubmit={handleContinue} className="space-y-5">
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5"><label htmlFor="dob-day" className="block text-[13px] font-medium text-foreground">{t('day')}</label><input id="dob-day" inputMode="numeric" autoComplete="bday-day" value={day} onChange={(e) => setDay(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} placeholder="13" className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-[15px] outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25" /></div>
-        <div className="space-y-1.5"><label htmlFor="dob-month" className="block text-[13px] font-medium text-foreground">{t('month')}</label><select id="dob-month" autoComplete="bday-month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-[15px] outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25"><option value="" disabled>{t('month')}</option>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{months[String(n)]}</option>)}</select></div>
+        <div className="space-y-1.5"><label htmlFor="dob-month" className="block text-[13px] font-medium text-foreground">{t('month')}</label><select id="dob-month" autoComplete="bday-month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-[15px] outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25"><option value="" disabled>{t('month')}</option>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{monthT(String(n) as never)}</option>)}</select></div>
         <div className="space-y-1.5"><label htmlFor="dob-year" className="block text-[13px] font-medium text-foreground">{t('year')}</label><input id="dob-year" inputMode="numeric" autoComplete="bday-year" value={year} onChange={(e) => setYear(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} placeholder="1990" className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-[15px] outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25" /></div>
       </div>
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
