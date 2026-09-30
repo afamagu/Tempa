@@ -11,77 +11,39 @@ import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 function BackArrowIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
       <path d="M11 5 4 12l7 7" />
       <path d="M4 12h16" />
     </svg>
   )
 }
 
-/**
- * "See all Dispatches" — every published Dispatch by one writer,
- * newest first, no popularity ranking (the exact same
- * getPublishedDispatchesByAuthor pool the profile's own restrained
- * 3-preview section already draws from, just unrestricted here).
- * Reuses the Board's own DispatchCard row grammar rather than
- * inventing a second list presentation. Selecting one opens the normal
- * authenticated Dispatch reader — there is no separate "public" reader.
- */
-export default async function AuthorDispatchesPage({
-  params,
-}: {
-  params: Promise<{ userId: string }>
-}) {
+export default async function AuthorDispatchesPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params
   const supabase = await createClient()
-  const {
-    data: { user: viewer },
-  } = await supabase.auth.getUser()
-
-  if (!viewer) {
-    redirect('/sign-in')
-  }
+  const { data: { user: viewer } } = await supabase.auth.getUser()
+  if (!viewer) redirect('/sign-in')
 
   const [{ data: profile }, waitingCount] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, mark_id').eq('id', userId).maybeSingle(),
     getWaitingLetterCount(supabase, viewer.id),
   ])
-
-  if (!profile) {
-    notFound()
-  }
+  if (!profile) notFound()
 
   const dispatches = await getPublishedDispatchesByAuthor(supabase, userId)
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
 
   return (
-    <AppShell active="minds" waitingLetterCount={waitingCount}>
+    <AppShell active="room" waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
-          <Link
-            href={`/minds/${userId}`}
-            className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
-          >
+          <Link href={`/room/${userId}`} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
             <BackArrowIcon />
             {profile.pseudonym}
           </Link>
 
           <div className="flex items-center gap-3">
-            <ProfileIdentityMark
-              identifier={profile.id}
-              markUrl={markUrl}
-              label={markUrl ? `${profile.pseudonym}'s Mark` : undefined}
-              size="md"
-            />
+            <ProfileIdentityMark identifier={profile.id} markUrl={markUrl} label={markUrl ? `${profile.pseudonym}'s Mark` : undefined} size="md" />
             <h1 className={sectionTitleClass}>{profile.pseudonym}&rsquo;s Dispatches</h1>
           </div>
 
@@ -89,9 +51,7 @@ export default async function AuthorDispatchesPage({
             <p className={helperTextClass}>No Dispatches yet.</p>
           ) : (
             <div className="space-y-4">
-              {dispatches.map((dispatch) => (
-                <DispatchCard key={dispatch.id} dispatch={dispatch} />
-              ))}
+              {dispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}
             </div>
           )}
         </div>

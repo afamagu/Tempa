@@ -7,26 +7,24 @@ import { quietLinkClass } from '@/app/profile/ui'
 
 export default function PeopleProfileBack({ returnTo }: { returnTo?: string | null }) {
   const router = useRouter()
-  const destination = sanitizeInternalPath(returnTo) ?? '/minds'
+  const destination = sanitizeInternalPath(returnTo) ?? '/room'
 
   return (
     <Link
       href={destination}
       onClick={(event) => {
-        // When this profile was reached from People, browser history is
-        // the best path back because it restores the exact list DOM and
-        // scroll position. The href remains a safe deterministic fallback
-        // for a reload/new tab or any history edge case.
+        // History restores the exact Room discovery state/scroll position;
+        // href remains the deterministic fallback for reload/new-tab cases.
         if (returnTo && window.history.length > 1) {
           event.preventDefault()
           router.back()
         }
       }}
       className={`inline-flex items-center gap-2 ${quietLinkClass}`}
-      aria-label="Back to People"
+      aria-label="Back to The Room"
     >
       <span aria-hidden="true">←</span>
-      <span>People</span>
+      <span>The Room</span>
     </Link>
   )
 }
