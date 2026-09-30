@@ -51,7 +51,9 @@ describe('interface dictionaries', () => {
         expect(placeholders(value), `${locale}:${key}`).toEqual(placeholders(enLeaves.get(key)!))
         const out = key === 'SignIn.checkEmail'
           ? String(t.markup(key as never, { ...SAMPLE_VALUES, strong: (chunks: string) => `<b>${chunks}</b>` } as never))
-          : String(t(key as never, SAMPLE_VALUES as never))
+          : key === 'LanguageSettings.currentTranslation'
+            ? String(t.markup(key as never, { ...SAMPLE_VALUES, language: (chunks: string) => `<span>${chunks}</span>` } as never))
+            : String(t(key as never, SAMPLE_VALUES as never))
         expect(out, `${locale}:${key}`).not.toBe(key)
         expect(out, `${locale}:${key}`).not.toContain('{')
         expect(out, `${locale}:${key}`).not.toMatch(/undefined/)
