@@ -154,9 +154,10 @@ export default function LanguageSettingsEditor({
                 : reading.code === currentLocale
                   ? t('sameAsTempa')
                   : t.rich('currentTranslation', {
-                      language: () => (
+                      name: reading.nativeName,
+                      language: (chunks) => (
                         <span lang={reading.code} dir={reading.direction}>
-                          {reading.nativeName}
+                          {chunks}
                         </span>
                       ),
                     })}
