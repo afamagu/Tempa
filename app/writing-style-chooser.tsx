@@ -37,6 +37,7 @@ export default function WritingStyleChooser({
   intro: string
 }) {
   const t = useTranslations('WritingStyle')
+  const styleT = useTranslations('WritingStyle.styles')
   const router = useRouter()
   const groupName = useId()
   const previewId = useId()
@@ -46,14 +47,13 @@ export default function WritingStyleChooser({
   const [error, setError] = useState<string | null>(null)
   const [justSaved, setJustSaved] = useState(false)
 
-  const styleNames = t.raw('styles') as Record<string, string>
   const cardExcerpt = previewExcerpt(sample, CARD_EXCERPT_CHARS) ?? sample
   const previewParagraphs = splitParagraphs(sample)
   const { roles } = composeProse(previewParagraphs)
   const unchanged = mode === 'settings' && selected === saved
 
   function styleName(styleId: WritingStyleId) {
-    return styleNames[styleId] ?? WRITING_STYLES[styleId].name
+    return styleT(styleId as never) || WRITING_STYLES[styleId].name
   }
 
   async function handleSave() {
