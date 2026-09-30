@@ -1,0 +1,57 @@
+name: PR55 language-first verification
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
+      NEXT_PUBLIC_SITE_ORIGIN: https://jointempa.com
+      AZURE_TRANSLATOR_KEY: test-translator-key
+      AZURE_TRANSLATOR_ENDPOINT: https://api.cognitive.microsofttranslator.com
+      TRANSLATION_MONTHLY_CHARACTER_LIMIT: '1800000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Focused tests
+        run: >-
+          npx vitest run
+          lib/account-entry.test.ts
+          app/locale-actions.test.ts
+          messages/messages.test.ts
+          app/profile/profile-form.test.tsx
+          app/profile/searchable-multi-select.test.tsx
+          app/profile/mark/your-mark-step.test.tsx
+          app/question/question-answer.test.tsx
+          app/profile/writing-style
+          i18n
+      - name: Generate Next types
+        run: npx next typegen
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: ESLint touched implementation
+        run: >-
+          npx eslint
+          app/language
+          app/begin
+          app/profile
+          app/question/question-answer.tsx
+          app/writing-style-chooser.tsx
+          app/locale-actions.ts
+          lib/account-entry.ts
+          lib/account-entry-state.ts
+          lib/post-auth-destination.ts
+          lib/reading-language-data.ts
+          proxy.ts
+      - name: Production build
+        run: npm run build
