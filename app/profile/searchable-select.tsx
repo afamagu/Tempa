@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { Option } from './data'
 import { inputClass } from './ui'
 
@@ -19,6 +20,7 @@ export default function SearchableSelect({
   placeholder?: string
   disabled?: boolean
 }) {
+  const common = useTranslations('Common')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
@@ -106,7 +108,7 @@ export default function SearchableSelect({
           className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none"
         >
           {filtered.length === 0 && (
-            <li className="px-3 py-2 text-sm text-muted">No matches</li>
+            <li className="px-3 py-2 text-sm text-muted">{common('noMatches')}</li>
           )}
           {filtered.map((option, index) => (
             <li key={option.value} role="option" aria-selected={option.value === value}>
