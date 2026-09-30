@@ -4,17 +4,8 @@ import { sectionTitleClass, sectionLabelClass } from '@/app/profile/ui'
 import { adminMetadataClass } from '@/app/admin/admin-ui'
 import CurrentQuestionSlot from './current-question-slot'
 import QuestionRow from './question-row'
+import RoomQuestionControl from './room-question-control'
 
-/**
- * Flagship Simplification correction — replaces the prior library-
- * centric screen entirely. TEMPA has exactly THREE current Questions;
- * this page shows exactly those three slots as the main (and only
- * prominent) operating surface, each with one "Edit Question" action
- * and one Flagship radio. Everything else — every historical/replaced
- * Question — lives behind a collapsed "View Question history"
- * disclosure below: secondary, never presented as an operational
- * choice.
- */
 export default async function AdminQuestionsPage() {
   const supabase = await createClient()
   const { data: questions, error } = await listQuestions(supabase)
@@ -24,6 +15,13 @@ export default async function AdminQuestionsPage() {
       .filter((q): q is AdminQuestion & { currentPosition: 1 | 2 | 3 } => q.currentPosition !== null)
       .map((q) => [q.currentPosition, q])
   )
+  const currentRoomQuestions = questions.filter(
+    (q) => q.isActive && !q.isFlagship && q.currentPosition !== null
+  )
+  const currentRoomQuestion = currentRoomQuestions.length === 1 ? currentRoomQuestions[0] : null
+  const roomCandidates = questions
+    .filter((q) => q.isActive && !q.isFlagship)
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   const history = questions
     .filter((q) => q.currentPosition === null)
     .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
@@ -33,21 +31,33 @@ export default async function AdminQuestionsPage() {
       <div className="space-y-1">
         <h1 className={sectionTitleClass}>Questions</h1>
         <p className={adminMetadataClass}>
-          TEMPA offers exactly three current Questions. Exactly one is Flagship — it alone defines every
-          member&rsquo;s primary Minds answer.
+          The First Question is Tempa&rsquo;s permanent introduction. Separately, choose exactly one active Question for this week in The Room.
         </p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
+      {currentRoomQuestions.length > 1 && (
+        <p className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700">
+          More than one non-Flagship Question is positioned. Choose the current Room Question below to repair this state safely.
+        </p>
+      )}
 
       <div className="space-y-3">
-        <p className={sectionLabelClass}>Current Questions</p>
-        <div className="space-y-3">
+        <p className={sectionLabelClass}>Current Room Question</p>
+        <RoomQuestionControl current={currentRoomQuestion} candidates={roomCandidates} />
+      </div>
+
+      <details className="space-y-3">
+        <summary className={`cursor-pointer ${sectionLabelClass}`}>Legacy Question slots</summary>
+        <div className="mt-3 space-y-3">
+          <p className={adminMetadataClass}>
+            Kept for compatibility with the existing Question administration model. The member-facing Room uses only the First Question and the one current Room Question above.
+          </p>
           {([1, 2, 3] as const).map((position) => (
             <CurrentQuestionSlot key={position} position={position} question={bySlot.get(position) ?? null} />
           ))}
         </div>
-      </div>
+      </details>
 
       <details className="space-y-3">
         <summary className={`cursor-pointer ${sectionLabelClass}`}>View Question history ({history.length})</summary>
