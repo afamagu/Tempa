@@ -15,7 +15,25 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
 }
 
 const englishKeys = leaves(en).map(([key]) => key).sort()
-const SAMPLE_VALUES = { email: 'support@jointempa.com', seconds: 42, name: '日本語' }
+const SAMPLE_VALUES = {
+  email: 'support@jointempa.com',
+  seconds: 42,
+  name: '日本語',
+  value: 'French',
+  min: 3,
+  max: 12,
+  day: 13,
+  month: 'September',
+  year: 2026,
+  date: '13 September 2026',
+}
+const RICH_TAGS = {
+  strong: (chunks: string) => `<strong>${chunks}</strong>`,
+  language: (chunks: string) => `<span>${chunks}</span>`,
+  terms: (chunks: string) => `<a>${chunks}</a>`,
+  guidelines: (chunks: string) => `<a>${chunks}</a>`,
+  privacy: (chunks: string) => `<a>${chunks}</a>`,
+}
 
 describe('interface dictionaries', () => {
   it('every language has exactly the English key structure', () => {
@@ -33,8 +51,14 @@ describe('interface dictionaries', () => {
     }
   })
 
-  it('translations are genuinely translated (not English copied over), except shared names', () => {
-    const allowedSame = new Set(['SignIn.continueWithGoogle', 'SignIn.or'])
+  it('translations are genuinely translated (not English copied over), except shared/language-neutral values', () => {
+    const allowedSame = new Set([
+      'SignIn.continueWithGoogle',
+      'SignIn.or',
+      // Day-month-year order is intentionally shared by English and French;
+      // the localized month names still make the rendered date local.
+      'Begin.dateFormat',
+    ])
     for (const locale of ['fr', 'es', 'pt'] as const) {
       const translated = new Map(leaves(DICTIONARIES[locale] as Tree))
       const identical = leaves(en).filter(([key, value]) => !allowedSame.has(key) && translated.get(key) === value)
@@ -49,11 +73,9 @@ describe('interface dictionaries', () => {
       for (const [key, value] of leaves(dictionary as Tree)) {
         const placeholders = (s: string) => Array.from(s.matchAll(/\{(\w+)\}/g), (m) => m[1]).sort()
         expect(placeholders(value), `${locale}:${key}`).toEqual(placeholders(enLeaves.get(key)!))
-        const out = key === 'SignIn.checkEmail'
-          ? String(t.markup(key as never, { ...SAMPLE_VALUES, strong: (chunks: string) => `<b>${chunks}</b>` } as never))
-          : key === 'LanguageSettings.currentTranslation'
-            ? String(t.markup(key as never, { ...SAMPLE_VALUES, language: (chunks: string) => `<span>${chunks}</span>` } as never))
-            : String(t(key as never, SAMPLE_VALUES as never))
+        const out = /<\/?[a-z][^>]*>/i.test(value)
+          ? String(t.markup(key as never, { ...SAMPLE_VALUES, ...RICH_TAGS } as never))
+          : String(t(key as never, SAMPLE_VALUES as never))
         expect(out, `${locale}:${key}`).not.toBe(key)
         expect(out, `${locale}:${key}`).not.toContain('{')
         expect(out, `${locale}:${key}`).not.toMatch(/undefined/)
