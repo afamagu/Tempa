@@ -14,24 +14,15 @@ const renderToStaticMarkup = (node: ReactNode) =>
     </NextIntlClientProvider>
   )
 
-const NAV_KEYS = ['home', 'letters', 'minds', 'board', 'you'] as const
+const NAV_KEYS = ['home', 'letters', 'room', 'board', 'you'] as const
 const NAV_HREFS: Record<(typeof NAV_KEYS)[number], string> = {
   home: '/home',
   letters: '/letters',
-  minds: '/minds',
+  room: '/room',
   board: '/board',
   you: '/you',
 }
 
-// Home Phase 1B — the mobile bottom nav's active-location treatment.
-// Only the mobile bar (`sm:hidden`) is targeted by this pass; the
-// desktop sidebar already had its own `bg-accent/10 font-medium`
-// active styling from before and is deliberately left untouched here.
-// Isolates the mobile `<nav>` block specifically (rather than matching
-// against the whole document) since the SAME NavIcon/label pair — and
-// the SAME href — also appears once in the desktop sidebar, which would
-// otherwise produce two matches per nav item and make "exactly one
-// active" assertions ambiguous.
 function mobileNavHtml(html: string): string {
   const start = html.indexOf('<nav class="fixed inset-x-0 bottom-0')
   expect(start).toBeGreaterThan(-1)
@@ -46,10 +37,6 @@ function desktopSidebarHtml(html: string): string {
   return html.slice(start, end)
 }
 
-// Brand asset correction (2026-09-24) — a compact emblem + the existing
-// italic-serif "Tempa" wordmark, desktop sidebar only. No tagline, no
-// full master lockup, and the mobile bottom bar (a tab bar with no
-// header row at all) deliberately gets no branding forced into it.
 describe('AppShell — compact sidebar branding', () => {
   it('renders the emblem asset alongside the existing italic "Tempa" wordmark in the desktop sidebar only', () => {
     const html = renderToStaticMarkup(<AppShell active="home" waitingLetterCount={0}>{null}</AppShell>)
@@ -73,28 +60,33 @@ describe('AppShell — compact sidebar branding', () => {
   })
 })
 
-// Onboarding & First-Use checkpoint (Section E) — the primary
-// user-visible navigation/discovery noun is now "People," never "Minds"
-// — the route itself (`/minds`) is deliberately unchanged (see this
-// component's own doc comment and app/minds/page.tsx).
-describe('AppShell — People rename (Onboarding & First-Use checkpoint)', () => {
-  it('the "minds" nav item is labeled People, not Minds, in both the desktop sidebar and mobile bar', () => {
+describe('AppShell — canonical Room navigation', () => {
+  it('uses the current member-facing labels and canonical routes', () => {
     const html = renderToStaticMarkup(
-      <AppShell active="minds" waitingLetterCount={0}>
+      <AppShell active="room" waitingLetterCount={0}>
         <div>content</div>
       </AppShell>
     )
-    expect(html).not.toContain('>Minds<')
-    expect((html.match(/>People</g) ?? []).length).toBe(2)
+    expect((html.match(/>Pen pals</g) ?? []).length).toBe(2)
+    expect((html.match(/>The Room</g) ?? []).length).toBe(2)
+    expect((html.match(/>The Board</g) ?? []).length).toBe(2)
+    expect(html).toContain('href="/room"')
+    expect(html).not.toContain('href="/minds"')
   })
 
-  it('the underlying route stays /minds — only the visible label changed', () => {
+  it('maps the temporary legacy minds active key to The Room', () => {
     const html = renderToStaticMarkup(
       <AppShell active="minds" waitingLetterCount={0}>
         <div>content</div>
       </AppShell>
     )
-    expect(html).toContain('href="/minds"')
+    const mobileNav = mobileNavHtml(html)
+    const hrefIndex = mobileNav.indexOf('href="/room"')
+    const tagStart = mobileNav.lastIndexOf('<a ', hrefIndex)
+    const anchorEnd = mobileNav.indexOf('</a>', hrefIndex)
+    const anchor = mobileNav.slice(tagStart, anchorEnd)
+    expect(anchor).toContain('aria-current="page"')
+    expect(anchor).toContain('bg-accent/10')
   })
 })
 
@@ -110,22 +102,15 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
     for (const key of NAV_KEYS) {
       const hrefIndex = mobileNav.indexOf(`href="${NAV_HREFS[key]}"`)
       expect(hrefIndex).toBeGreaterThan(-1)
-      // React's SSR serializer does NOT preserve JSX attribute
-      // declaration order (it renders aria-current before class before
-      // href here) — so the full tag must be captured from its own
-      // opening `<a`, never merely from the href attribute onward.
       const tagStart = mobileNav.lastIndexOf('<a ', hrefIndex)
       const anchorEnd = mobileNav.indexOf('</a>', hrefIndex)
       const anchor = mobileNav.slice(tagStart, anchorEnd)
 
       if (key === activeKey) {
         expect(anchor).toContain('aria-current="page"')
-        // The soft olive lozenge (accent, never verdigris).
         expect(anchor).toContain('bg-accent/10')
         expect(anchor).not.toContain('verdigris')
-        // The icon itself reads stronger olive.
         expect(anchor).toContain('text-accent')
-        // The label gets modest emphasis — weight, not a new color.
         expect(anchor).toContain('font-medium')
       } else {
         expect(anchor).not.toContain('aria-current')
@@ -146,7 +131,7 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
     expect(mobileNav).not.toMatch(/animate-|scale-|bounce|pulse/)
   })
 
-  it('preserves the existing navigation hrefs unchanged', () => {
+  it('preserves the canonical navigation hrefs', () => {
     const html = renderToStaticMarkup(
       <AppShell active="board" waitingLetterCount={0}>
         <div>content</div>
