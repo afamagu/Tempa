@@ -1,9 +1,9 @@
 {
   "Nav": {
     "home": "Início",
-    "letters": "Cartas",
-    "people": "Pessoas",
-    "board": "Mural",
+    "letters": "Amigos por correspondência",
+    "room": "A Sala",
+    "board": "O Mural",
     "you": "Você"
   },
   "LanguageSwitcher": {
