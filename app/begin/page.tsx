@@ -7,20 +7,9 @@ import type { OnboardingStage } from '@/lib/onboarding'
 import BeginFlow from './begin-flow'
 import { signOutAndReturnToSignIn } from './sign-out-action'
 
-/**
- * Adult Eligibility + Legal Acceptance Gate — the account-entry
- * surface, deliberately outside AppShell (Section on /begin's own
- * styling: no app navigation, no giant corporate card, quiet and
- * editorial). Reached either by proxy.ts/auth/callback redirecting an
- * authenticated-but-incomplete account here with `?next=<requested>`,
- * or by a direct visit. Performs its own authenticated server-state
- * check rather than being forced through the Proxy matcher — simpler,
- * and avoids any possibility of a matcher-driven redirect loop since
- * `/begin` is never itself one of proxy.ts's matched paths.
- *
- * The terminal states' real sign-out action lives in its own module,
- * ./sign-out-action.ts — see that file's own doc comment.
- */
+/** Adult eligibility + legal acceptance gate. Language confirmation is now
+ * earlier in account entry, so a direct /begin visit also yields to /language
+ * until that first decision has been explicitly confirmed. */
 export default async function BeginPage({
   searchParams,
 }: {
@@ -40,7 +29,12 @@ export default async function BeginPage({
     redirect(`/sign-in?next=${encodeURIComponent(signInNext)}`)
   }
 
-  const [{ data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: eligibility },
+    { data: legalRows },
+    languageResult,
+  ] = await Promise.all([
     supabase.from('profiles').select('id, onboarding_stage').eq('id', user.id).maybeSingle(),
     supabase
       .from('account_eligibility')
@@ -48,6 +42,11 @@ export default async function BeginPage({
       .eq('user_id', user.id)
       .maybeSingle(),
     supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id),
+    supabase
+      .from('member_language_preferences')
+      .select('language_confirmed_at')
+      .eq('user_id', user.id)
+      .maybeSingle(),
   ])
 
   const eligibilityStatus = (eligibility?.status as EligibilityStatus | undefined) ?? null
@@ -57,10 +56,14 @@ export default async function BeginPage({
       documentVersion: r.document_version as string,
     }))
   )
+  const languageConfirmed = languageResult.error
+    ? undefined
+    : Boolean((languageResult.data as { language_confirmed_at?: string | null } | null)?.language_confirmed_at)
 
   const destination = resolveAccountEntryDestination(
     {
       authenticated: true,
+      languageConfirmed,
       eligibilityStatus,
       eligibleOn: eligibility?.eligible_on ?? null,
       legalCurrent,
@@ -70,8 +73,6 @@ export default async function BeginPage({
     next ?? '/home'
   )
 
-  // The gate is already satisfied (or a race/refresh caught up) —
-  // never linger on /begin once there is nothing left to do here.
   if (destination !== '/begin') {
     redirect(destination)
   }
