@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import EditorialByline from '@/app/editorial-byline'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { helperTextClass } from '@/app/profile/ui'
 
@@ -9,6 +10,7 @@ export type RecommendedMind = {
   genderDisplay?: string | null
   ageRange?: string
   markUrl?: string | null
+  editorialTitle?: string | null
   responseBody?: string
 }
 
@@ -33,6 +35,7 @@ export default function RecommendedMindCard({ mind }: { mind: RecommendedMind })
         />
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold text-foreground">{mind.pseudonym}</p>
+          <EditorialByline title={mind.editorialTitle} />
           <p className={helperTextClass}>{mind.country}</p>
         </div>
       </div>

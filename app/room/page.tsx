@@ -5,6 +5,7 @@ import { getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getDiscoveryPage, genderDisplay, DISCOVERY_BATCH_SIZE } from '@/lib/discovery'
 import { hasCompletedGuide } from '@/lib/guide'
+import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { getMemberWritingStyles } from '@/lib/writing-style-data'
 import { pageTitleClass, helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
@@ -70,9 +71,11 @@ export default async function RoomPage({
   const poolExhausted = filteredCount > 0 && page.length === 0
   const writingStyles = await getMemberWritingStyles(supabase, page.map((candidate) => candidate.userId))
 
+  const editorialBylines = await getEditorialBylines(supabase)
   const entries: DiscoveryEntry[] = page.map((candidate) => ({
     userId: candidate.userId,
     pseudonym: candidate.pseudonym,
+    editorialTitle: editorialTitleFor(editorialBylines, candidate.pseudonym),
     country: candidate.country,
     genderDisplay: genderDisplay(candidate.gender, candidate.genderCustom),
     ageRange: candidate.ageRange,

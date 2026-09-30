@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { helperTextClass, primaryButtonClass, contextQuestionClass, quietLinkClass } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import EditorialByline from '@/app/editorial-byline'
 import QuestionInfoIcon from '@/app/question-info-icon'
 
 export type DiscoveryEntry = {
@@ -17,6 +18,7 @@ export type DiscoveryEntry = {
   markUrl: string | null
   response: { id: string; body: string; prompt: string }
   writingStyleId?: string | null
+  editorialTitle?: string | null
 }
 
 function identityLine(entry: DiscoveryEntry) {
@@ -95,6 +97,7 @@ export default function DiscoveryResults({ entries, returnTo = '/room' }: { entr
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-semibold text-foreground">{entry.pseudonym}</p>
+                      <EditorialByline title={entry.editorialTitle} />
                       <p className={helperTextClass}>{identityLine(entry)}</p>
                     </div>
                     <QuestionInfoIcon prompt={entry.response.prompt} />
@@ -119,6 +122,7 @@ export default function DiscoveryResults({ entries, returnTo = '/room' }: { entr
                 <IdentityMark entry={openEntry} size="md" />
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold text-foreground">{openEntry.pseudonym}</p>
+                  <EditorialByline title={openEntry.editorialTitle} />
                   <p className={helperTextClass}>{identityLine(openEntry)}</p>
                 </div>
               </div>

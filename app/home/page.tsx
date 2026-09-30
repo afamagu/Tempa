@@ -37,6 +37,7 @@ import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 import { getDiscoveryPage } from '@/lib/discovery'
 
 const WORTH_KNOWING_COUNT = 3
@@ -99,7 +100,7 @@ export default async function HomePage() {
   const hasActiveCorrespondence = hasVisibleReply(allLetters)
   const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null
 
-  const [announcementImageUrl, singleAwaitingSender] = await Promise.all([
+  const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
     activeAnnouncement?.heroImagePath
       ? resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath).then((result) => result.url)
       : Promise.resolve(null),
@@ -120,6 +121,7 @@ export default async function HomePage() {
               : null
           )
       : Promise.resolve(null),
+    getEditorialBylines(supabase),
   ])
 
   const recommended: RecommendedMind[] = recommendedPage.candidates
@@ -132,6 +134,7 @@ export default async function HomePage() {
         ? publicProfileMarkUrl(supabase, `${candidate.markId}.png`)
         : null,
       responseBody: candidate.body,
+      editorialTitle: editorialTitleFor(editorialBylines, candidate.pseudonym),
     }))
 
   // A waiting letter is Tempa's strongest return signal. Discovery yields to it.

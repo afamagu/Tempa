@@ -35,6 +35,7 @@ import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import EditorialByline from '@/app/editorial-byline'
 import ReportButton from '@/app/report-button'
 import MomentHint from '../moment-hint'
 import TopicChips from '../topic-chips'
@@ -326,6 +327,10 @@ export default async function DispatchPage({
                       <p className="truncate text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
                       {dispatch.authorCountry && <span className="truncate text-[13px] text-muted">· {dispatch.authorCountry}</span>}
                     </div>
+                    <EditorialByline
+                      title={dispatch.identity.kind === 'member' ? dispatch.identity.editorialTitle : null}
+                      className="mb-0.5"
+                    />
                     <p className={metadataTextClass}>{formatDateTimeFull(dispatch.publishedAt)}</p>
                   </div>
                 </Link>
