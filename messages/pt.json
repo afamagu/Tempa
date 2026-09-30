@@ -69,7 +69,7 @@
     "translationIntro": "O idioma para o qual o Tempa traduz o que outras pessoas escrevem quando você pede.",
     "sameAsTempa": "O mesmo idioma do Tempa",
     "notChosen": "Ainda não escolhido",
-    "currentTranslation": "Tradução: {language}",
+    "currentTranslation": "Tradução: <language>{language}</language>",
     "chooseDifferent": "Escolher outro idioma",
     "useTempaLanguage": "Usar meu idioma do Tempa",
     "save": "Salvar",
