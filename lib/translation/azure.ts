@@ -39,18 +39,26 @@ function translatorConfig() {
  * Thin server-only Azure Translator adapter. No SDK dependency, no browser key,
  * and no Tempa persistence policy lives here: callers decide whether a result
  * is eligible for the PUBLIC translation cache before invoking this adapter.
+ *
+ * `texts` is sent verbatim as `[{ Text }, ...]` — the service reserves quota
+ * against exactly these strings, so nothing may be added or altered here.
+ * `textType: 'html'` is only ever used with Tempa-generated markup
+ * (lib/translation/provider-html.ts); the response is still untrusted and is
+ * sanitized by the caller.
  */
-export async function translateWithAzure(input: {
-  text: string
+export async function translateTextsWithAzure(input: {
+  texts: readonly string[]
   targetLanguage: string
   sourceLanguage?: string
-}): Promise<AzureTranslationResult> {
+  textType: 'plain' | 'html'
+}): Promise<AzureTranslationResult[]> {
   const { key, region, endpoint } = translatorConfig()
   const query = new URLSearchParams({
     'api-version': '3.0',
     to: input.targetLanguage,
   })
   if (input.sourceLanguage) query.set('from', input.sourceLanguage)
+  if (input.textType === 'html') query.set('textType', 'html')
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json; charset=UTF-8',
@@ -63,9 +71,9 @@ export async function translateWithAzure(input: {
     response = await fetch(`${endpoint}/translate?${query.toString()}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify([{ Text: input.text }]),
+      body: JSON.stringify(input.texts.map((text) => ({ Text: text }))),
       cache: 'no-store',
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(input.texts.length > 1 ? 20_000 : 12_000),
     })
   } catch {
     throw new TranslationProviderError('Azure Translator could not be reached.')
@@ -85,15 +93,35 @@ export async function translateWithAzure(input: {
     throw new TranslationProviderError('Azure Translator returned an unreadable response.')
   }
 
-  const first = payload[0]
-  const translation = first?.translations?.[0]?.text
-  if (typeof translation !== 'string') {
+  if (!Array.isArray(payload) || payload.length !== input.texts.length) {
     throw new TranslationProviderError('Azure Translator returned no translation.')
   }
 
-  return {
-    translatedText: translation,
-    detectedLanguage:
-      typeof first?.detectedLanguage?.language === 'string' ? first.detectedLanguage.language : null,
-  }
+  return payload.map((item) => {
+    const translation = item?.translations?.[0]?.text
+    if (typeof translation !== 'string') {
+      throw new TranslationProviderError('Azure Translator returned no translation.')
+    }
+    return {
+      translatedText: translation,
+      detectedLanguage:
+        typeof item?.detectedLanguage?.language === 'string' ? item.detectedLanguage.language : null,
+    }
+  })
+}
+
+/** One plain-text string — the original v1 call shape, kept for
+ * translatePrivateText / translatePublicText (and so the Admin diagnostic). */
+export async function translateWithAzure(input: {
+  text: string
+  targetLanguage: string
+  sourceLanguage?: string
+}): Promise<AzureTranslationResult> {
+  const [result] = await translateTextsWithAzure({
+    texts: [input.text],
+    targetLanguage: input.targetLanguage,
+    sourceLanguage: input.sourceLanguage,
+    textType: 'plain',
+  })
+  return result
 }
