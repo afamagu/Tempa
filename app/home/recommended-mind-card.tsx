@@ -6,14 +6,17 @@ export type RecommendedMind = {
   userId: string
   pseudonym: string
   country: string
+  genderDisplay?: string | null
+  ageRange?: string
   markUrl?: string | null
-  responseBody: string
+  responseBody?: string
 }
 
 /**
- * Home's compact Worth Knowing encounter. The authored words are the reason
- * to open the person; the Mark and country provide identity/context without
- * turning discovery into a demographic card carousel.
+ * Home's compact Worth Knowing encounter. Once the Home mapper supplies the
+ * authored response, those words are the reason to open the person; the Mark
+ * and country remain quiet identity/context. The optional legacy fields keep
+ * this component deploy-safe while Home is migrated in the same branch.
  */
 export default function RecommendedMindCard({ mind }: { mind: RecommendedMind }) {
   return (
@@ -34,9 +37,13 @@ export default function RecommendedMindCard({ mind }: { mind: RecommendedMind })
         </div>
       </div>
 
-      <p className="mt-4 line-clamp-4 whitespace-pre-wrap font-serif text-[17px] leading-7 text-foreground/80">
-        {mind.responseBody}
-      </p>
+      {mind.responseBody ? (
+        <p className="mt-4 line-clamp-4 whitespace-pre-wrap font-serif text-[17px] leading-7 text-foreground/80">
+          {mind.responseBody}
+        </p>
+      ) : (
+        <p className={`mt-4 ${helperTextClass}`}>Read what {mind.pseudonym} has shared in The Room.</p>
+      )}
       <p className="mt-4 text-[12px] font-medium text-foreground/55 transition-colors group-hover:text-foreground/75">
         Read {mind.pseudonym} →
       </p>
