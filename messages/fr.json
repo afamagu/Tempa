@@ -69,7 +69,7 @@
     "translationIntro": "La langue dans laquelle Tempa traduit les écrits des autres lorsque vous le demandez.",
     "sameAsTempa": "Identique à la langue de Tempa",
     "notChosen": "Pas encore choisie",
-    "currentTranslation": "Traduction : <language>{language}</language>",
+    "currentTranslation": "Traduction : <language>{name}</language>",
     "chooseDifferent": "Choisir une autre langue",
     "useTempaLanguage": "Utiliser ma langue Tempa",
     "save": "Enregistrer",
