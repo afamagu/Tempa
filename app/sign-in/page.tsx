@@ -2,16 +2,20 @@
 
 import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import { sanitizeInternalPath } from '@/lib/safe-redirect'
 import { SIGNED_OUT_PARAM } from '@/lib/local-drafts'
-import { CREATE_NEW_ACCOUNT_LABEL, signInRefusal } from '@/lib/sign-in-refusals'
+import { signInRefusal } from '@/lib/sign-in-refusals'
+import { SUPPORT_EMAIL } from '@/lib/legal'
+import LanguageSwitcher from '@/app/language-switcher'
 import ClearLocalDrafts from '@/app/clear-local-drafts'
 import TempaEmblem from '@/app/tempa-emblem'
 import TurnstileWidget, { type TurnstileWidgetHandle } from './turnstile-widget'
 import GoogleIdentityButton from './google-identity-button'
 import { googleSignInDestination } from './google-destination-action'
-import { googleIdentityClientId, signInWithGoogleIdToken } from '@/lib/google-identity'
+import { GOOGLE_CAPTCHA_FAILED, googleIdentityClientId, signInWithGoogleIdToken } from '@/lib/google-identity'
+import type en from '@/messages/en.json'
 
 /**
  * Board live-test corrections (2026-09-10): an external Dispatch's
@@ -39,8 +43,16 @@ import { googleIdentityClientId, signInWithGoogleIdToken } from '@/lib/google-id
  */
 
 /**
+ * Every sign-in error the member can see, as a stable semantic key. The
+ * words live in the interface dictionaries (messages/*.json →
+ * SignIn.errors), so localization never touches the decision logic below
+ * and a provider's own error text can never become visible copy.
+ */
+export type SignInErrorKey = keyof typeof en.SignIn.errors
+
+/**
  * Pre-beta email auth bot protection (2026-09-15) — maps a Supabase Auth
- * error to a restrained, TEMPA-facing message. Deliberately never
+ * error to a restrained, TEMPA-facing message key. Deliberately never
  * forwards the SDK's own `error.message` verbatim to the client: Supabase
  * itself is careful not to reveal whether a given email already has an
  * account, but a raw provider string could still leak internal detail
@@ -50,20 +62,20 @@ import { googleIdentityClientId, signInWithGoogleIdToken } from '@/lib/google-id
  * matching this codebase's own established pattern (e.g.
  * resolvePostBlockNavigation in block-button.tsx).
  */
-export function getAuthErrorMessage(error: { message?: string; status?: number } | null | undefined): string {
-  if (!error) return ''
+export function getAuthErrorKey(error: { message?: string; status?: number } | null | undefined): SignInErrorKey | null {
+  if (!error) return null
 
   const message = (error.message ?? '').toLowerCase()
 
   if (message.includes('captcha')) {
-    return "We couldn't verify you're not a robot. Please try again."
+    return 'captchaFailed'
   }
 
   if (message.includes('rate limit') || error.status === 429) {
-    return 'Too many attempts. Please wait a few minutes and try again.'
+    return 'rateLimited'
   }
 
-  return 'Something went wrong. Please try again.'
+  return 'generic'
 }
 
 /**
@@ -79,30 +91,30 @@ export function getAuthErrorMessage(error: { message?: string; status?: number }
  * the effect below — fragments do not exist during SSR).
  *
  * Deliberately never forwards `error_description` verbatim to the
- * client for the same reason getAuthErrorMessage never forwards a raw
+ * client for the same reason getAuthErrorKey never forwards a raw
  * SDK message — only a hand-picked, restrained TEMPA-facing string per
  * KNOWN error_code, with the same generic fallback as everywhere else
  * for anything unrecognized.
  */
 /**
  * Cross-browser magic-link fix (2026-09-24) — extracted into its own
- * pure function for direct testability, matching getAuthErrorMessage/
- * getAuthErrorMessageFromFragment's own established pattern in this
+ * pure function for direct testability, matching getAuthErrorKey/
+ * getAuthErrorKeyFromFragment's own established pattern in this
  * file. `link_expired` is set by app/auth/confirm/verify-magic-link-
  * action.ts's own redirect when Supabase's verifyOtp itself rejects an
  * expired/already-consumed/malformed token — deliberately the SAME
- * restrained copy getAuthErrorMessageFromFragment already uses for
+ * restrained copy getAuthErrorKeyFromFragment already uses for
  * GoTrue's own `otp_expired` fragment case (a different code path
  * detecting the same underlying situation), never a raw provider error.
  */
-export function getInitialErrorMessage(errorParam: string | null): string {
+export function getInitialErrorKey(errorParam: string | null): SignInErrorKey | null {
   if (errorParam === 'link_expired') {
-    return 'This sign-in link is no longer valid. Request a new link and use the newest email.'
+    return 'linkExpired'
   }
   if (errorParam === 'auth_failed') {
-    return 'Something went wrong signing you in. Please try again.'
+    return 'signInFailed'
   }
-  return ''
+  return null
 }
 
 /** GoTrue's refusal of a banned identity (a Google sign-in carries no
@@ -112,30 +124,36 @@ export function isRefusedAccountFragment(hash: string): boolean {
   return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash).get('error_code') === 'user_banned'
 }
 
-export function getAuthErrorMessageFromFragment(hash: string): string {
-  if (!hash) return ''
+export function getAuthErrorKeyFromFragment(hash: string): SignInErrorKey | null {
+  if (!hash) return null
 
   const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash)
   const errorCode = params.get('error_code')
 
   if (errorCode === 'otp_expired') {
-    return 'This sign-in link is no longer valid. Request a new link and use the newest email.'
+    return 'linkExpired'
   }
 
   if (params.get('error')) {
-    return 'Something went wrong signing you in. Please try again.'
+    return 'signInFailed'
   }
 
-  return ''
+  return null
+}
+
+/** lib/google-identity.ts's restrained result → its message key. */
+export function googleResultErrorKey(message: string): SignInErrorKey {
+  return message === GOOGLE_CAPTCHA_FAILED ? 'googleCaptchaFailed' : 'googleSignInFailed'
 }
 
 function SignInForm() {
+  const t = useTranslations('SignIn')
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(
     'idle'
   )
-  const [errorMessage, setErrorMessage] = useState(() => getInitialErrorMessage(searchParams.get('error')))
+  const [errorKey, setErrorKey] = useState<SignInErrorKey | null>(() => getInitialErrorKey(searchParams.get('error')))
   const [googleLoading, setGoogleLoading] = useState(false)
   const [joinIntent, setJoinIntent] = useState(() => searchParams.get('intent') === 'join')
   // A refused account (deleted / permanently banned / unattributable),
@@ -170,17 +188,17 @@ function SignInForm() {
   // established precedent).
   useEffect(() => {
     if (searchParams.get('error') !== 'auth_failed') return
-    const message = getAuthErrorMessageFromFragment(window.location.hash)
+    const message = getAuthErrorKeyFromFragment(window.location.hash)
     if (!message) return
     if (isRefusedAccountFragment(window.location.hash)) {
       // A refused account, not a generic failure (see isRefusedAccountFragment).
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read from window.location.hash, see comment above
       setRefusal(signInRefusal('account_unavailable'))
-      setErrorMessage('')
+      setErrorKey(null)
       window.history.replaceState(null, '', window.location.pathname + '?error=account_unavailable')
       return
     }
-    setErrorMessage(message)
+    setErrorKey(message)
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -210,7 +228,7 @@ function SignInForm() {
   // hammering; Supabase's own server-side rate limiting on signInWithOtp
   // remains the actual enforcement regardless of what this UI allows.
   const [resending, setResending] = useState(false)
-  const [resendError, setResendError] = useState('')
+  const [resendError, setResendError] = useState<SignInErrorKey | null>(null)
   const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null)
   const [resendCooldown, setResendCooldown] = useState(0)
 
@@ -241,12 +259,12 @@ function SignInForm() {
     // this state, but a form can still be submitted via Enter in some
     // browsers/assistive tech even while its submit button is disabled.
     if (turnstileEnabled && !captchaToken) {
-      setErrorMessage('Please complete the verification check, then try again.')
+      setErrorKey('verificationRequired')
       return
     }
 
     setStatus('sending')
-    setErrorMessage('')
+    setErrorKey(null)
 
     const supabase = createClient()
 
@@ -269,14 +287,15 @@ function SignInForm() {
 
       if (error) {
         setStatus('error')
-        setErrorMessage(getAuthErrorMessage(error))
+        setErrorKey(getAuthErrorKey(error))
       } else {
         setStatus('sent')
         setCooldownEndsAt(Date.now() + 60_000)
       }
     } catch {
+      // Please check your connection — a distinct, restrained message.
       setStatus('error')
-      setErrorMessage('Something went wrong. Please check your connection and try again.')
+      setErrorKey('connection')
     } finally {
       // A Turnstile token is single-use — always reacquire a fresh one
       // after any submission attempt, success or failure, so a retry
@@ -291,12 +310,12 @@ function SignInForm() {
     if (resending || resendCooldown > 0) return
 
     if (turnstileEnabled && !captchaToken) {
-      setResendError('Please complete the verification check, then try again.')
+      setResendError('verificationRequired')
       return
     }
 
     setResending(true)
-    setResendError('')
+    setResendError(null)
 
     const supabase = createClient()
 
@@ -314,12 +333,12 @@ function SignInForm() {
       })
 
       if (error) {
-        setResendError(getAuthErrorMessage(error))
+        setResendError(getAuthErrorKey(error))
       } else {
         setCooldownEndsAt(Date.now() + 60_000)
       }
     } catch {
-      setResendError('Something went wrong. Please check your connection and try again.')
+      setResendError('connection')
     } finally {
       setCaptchaToken(null)
       turnstileRef.current?.reset()
@@ -330,8 +349,8 @@ function SignInForm() {
   function handleUseDifferentEmail() {
     setStatus('idle')
     setEmail('')
-    setErrorMessage('')
-    setResendError('')
+    setErrorKey(null)
+    setResendError(null)
     setCooldownEndsAt(null)
     setResendCooldown(0)
     setCaptchaToken(null)
@@ -360,7 +379,7 @@ function SignInForm() {
   async function completeGoogleSignIn(credential: string, rawNonce: string, token: string | null) {
     if (googleSubmittedRef.current) return
     googleSubmittedRef.current = true
-    setErrorMessage('')
+    setErrorKey(null)
     setPendingGoogle(null)
     setGoogleLoading(true)
     const result = await signInWithGoogleIdToken(createClient(), { credential, rawNonce, captchaToken: token })
@@ -375,7 +394,7 @@ function SignInForm() {
         return
       }
       setGoogleRetryNeeded(true)
-      setErrorMessage(result.message)
+      setErrorKey(googleResultErrorKey(result.message))
       return
     }
     const destination = await googleSignInDestination(nextPath).catch(() => '/home')
@@ -387,7 +406,7 @@ function SignInForm() {
     if (googleSubmittedRef.current) return
     if (turnstileEnabled && !captchaToken) {
       setPendingGoogle({ credential, rawNonce })
-      setErrorMessage('Complete the security check below to finish signing in with Google.')
+      setErrorKey('googleSecurityCheckPending')
       return
     }
     void completeGoogleSignIn(credential, rawNonce, captchaToken)
@@ -402,7 +421,7 @@ function SignInForm() {
   }, [pendingGoogle, captchaToken])
 
   async function handleGoogleSignIn() {
-    setErrorMessage('')
+    setErrorKey(null)
     setGoogleLoading(true)
 
     const supabase = createClient()
@@ -415,15 +434,20 @@ function SignInForm() {
 
     if (error) {
       setGoogleLoading(false)
-      setErrorMessage('Could not start Google sign-in. Please try again.')
+      setErrorKey('googleStartFailed')
     }
     // On success the browser navigates away to Google, so there's no
     // further local state to set here.
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
+    <main className="relative min-h-screen flex flex-col items-center justify-center gap-4 p-8">
       {signedOut && <ClearLocalDrafts />}
+      {/* Tempa's interface language, choosable before signing in. Outside
+          the form; changes only the tempa_locale cookie, keeps the URL. */}
+      <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
+        <LanguageSwitcher />
+      </div>
       {/* Brand asset correction (2026-09-24) — /sign-in is the app's one
           real logged-out landing surface (the root route always
           redirects here or onward; there is no separate marketing
@@ -437,29 +461,27 @@ function SignInForm() {
         <TempaEmblem size={72} priority className="h-[60px] w-[60px] sm:h-[72px] sm:w-[72px]" />
         <div className="text-center">
           <p className="font-serif text-2xl italic text-foreground">Tempa</p>
-          <p className="mt-0.5 text-[12px] text-muted">A more human way to connect</p>
+          <p className="mt-0.5 text-[12px] text-muted">{t('tagline')}</p>
         </div>
       </div>
 
       <div className="max-w-sm w-full space-y-5 rounded-md border border-foreground/12 p-6">
         <h1 className="font-serif text-2xl font-medium">
-          {joinIntent ? 'Create your Tempa account' : 'Sign in'}
+          {joinIntent ? t('createAccountHeading') : t('signIn')}
         </h1>
 
         {useGoogleIdentity && googleClientId ? (
           googleLoading ? (
-            <p className="py-2.5 text-center text-sm text-muted">Signing you in…</p>
+            <p className="py-2.5 text-center text-sm text-muted">{t('signingYouIn')}</p>
           ) : gisUnavailable ? (
-            <p className="py-2.5 text-center text-sm text-muted">
-              Google sign-in isn&apos;t available right now. You can still sign in with your email below.
-            </p>
+            <p className="py-2.5 text-center text-sm text-muted">{t('googleUnavailable')}</p>
           ) : googleRetryNeeded ? (
             <button
               type="button"
               onClick={() => window.location.reload()}
               className="w-full rounded-md border border-foreground/15 px-3 py-2.5 text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
             >
-              Try Google again
+              {t('tryGoogleAgain')}
             </button>
           ) : (
             <GoogleIdentityButton
@@ -476,21 +498,23 @@ function SignInForm() {
             disabled={googleLoading}
             className="w-full rounded-md bg-accent text-accent-foreground px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
-            {googleLoading ? 'Redirecting…' : 'Continue with Google'}
+            {googleLoading ? t('redirecting') : t('continueWithGoogle')}
           </button>
         )}
 
         <div className="flex items-center gap-3 text-xs text-muted">
           <div className="h-px flex-1 bg-foreground/10" />
-          or
+          {t('or')}
           <div className="h-px flex-1 bg-foreground/10" />
         </div>
 
         {status === 'sent' ? (
           <div className="space-y-3">
             <p className="text-sm">
-              Check <span className="font-medium">{email}</span> for a magic
-              link to sign in.
+              {t.rich('checkEmail', {
+                email,
+                strong: (chunks) => <span className="font-medium">{chunks}</span>,
+              })}
             </p>
 
             {/* A fresh Turnstile challenge for Resend — the initial
@@ -520,21 +544,21 @@ function SignInForm() {
                 className="font-medium underline decoration-foreground/30 underline-offset-4 hover:text-foreground disabled:cursor-default disabled:text-muted disabled:no-underline"
               >
                 {resending
-                  ? 'Resending…'
+                  ? t('resending')
                   : resendCooldown > 0
-                    ? `Resend magic link (${resendCooldown}s)`
-                    : 'Resend magic link'}
+                    ? t('resendCountdown', { seconds: resendCooldown })
+                    : t('resend')}
               </button>
               <button
                 type="button"
                 onClick={handleUseDifferentEmail}
                 className="text-muted underline decoration-foreground/30 underline-offset-4 hover:text-foreground"
               >
-                Use a different email
+                {t('useDifferentEmail')}
               </button>
             </div>
 
-            {resendError && <p className="text-sm text-red-600">{resendError}</p>}
+            {resendError && <p className="text-sm text-red-600">{t(`errors.${resendError}`)}</p>}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -543,7 +567,9 @@ function SignInForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t('emailPlaceholder')}
+              aria-label={t('emailLabel')}
+              autoComplete="email"
               className="w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent"
             />
 
@@ -571,7 +597,7 @@ function SignInForm() {
                     }}
                     className="text-xs text-muted underline decoration-foreground/30 underline-offset-4 hover:text-foreground"
                   >
-                    Verification check didn&apos;t load. Try again.
+                    {t('verificationRetry')}
                   </button>
                 )}
               </div>
@@ -582,18 +608,18 @@ function SignInForm() {
               disabled={status === 'sending' || (turnstileEnabled && !captchaToken)}
               className="w-full rounded-md border border-foreground/15 px-3 py-2 text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-foreground/[.03] disabled:opacity-50"
             >
-              {status === 'sending' ? 'Sending…' : 'Send magic link'}
+              {status === 'sending' ? t('sending') : t('sendMagicLink')}
             </button>
           </form>
         )}
 
-        {errorMessage && (
-          <p className="text-sm text-red-600">{errorMessage}</p>
+        {errorKey && (
+          <p className="text-sm text-red-600">{t(`errors.${errorKey}`)}</p>
         )}
 
         {refusal && (
           <div className="space-y-3" role="status">
-            <p className="text-sm text-foreground">{refusal.message}</p>
+            <p className="text-sm text-foreground">{t(`refusals.${refusal.kind}`, { email: SUPPORT_EMAIL })}</p>
             {refusal.offerNewAccount && (
               <button
                 type="button"
@@ -604,7 +630,7 @@ function SignInForm() {
                 }}
                 className="w-full rounded-md border border-foreground/15 px-3 py-2 text-sm font-medium transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]"
               >
-                {CREATE_NEW_ACCOUNT_LABEL}
+                {t('createNewAccount')}
               </button>
             )}
           </div>
@@ -612,24 +638,24 @@ function SignInForm() {
 
         {refusal?.hideJoinInvitations ? null : joinIntent ? (
           <p className="text-center text-sm text-muted">
-            Already have an account?{' '}
+            {t('alreadyHaveAccount')}{' '}
             <button
               type="button"
               onClick={() => setJoinIntent(false)}
               className="underline decoration-foreground/30 underline-offset-4 hover:text-foreground"
             >
-              Sign in
+              {t('signIn')}
             </button>
           </p>
         ) : (
           <p className="text-center text-sm text-muted">
-            New to Tempa?{' '}
+            {t('newToTempa')}{' '}
             <button
               type="button"
               onClick={() => setJoinIntent(true)}
               className="underline decoration-foreground/30 underline-offset-4 hover:text-foreground"
             >
-              Create an account
+              {t('createAnAccount')}
             </button>
           </p>
         )}

@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { renderToStaticMarkup as renderRaw } from 'react-dom/server'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
 import AppShell from './app-shell'
+
+// AppShell's labels come from the interface dictionary; these tests render
+// it in English (localized renders: app/app-shell-localization.test.tsx).
+const renderToStaticMarkup = (node: ReactNode) =>
+  renderRaw(
+    <NextIntlClientProvider locale="en" messages={en}>
+      {node}
+    </NextIntlClientProvider>
+  )
 
 const NAV_KEYS = ['home', 'letters', 'minds', 'board', 'you'] as const
 const NAV_HREFS: Record<(typeof NAV_KEYS)[number], string> = {

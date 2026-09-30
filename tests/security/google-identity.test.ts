@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import en from '@/messages/en.json'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -143,7 +144,9 @@ describe('sign-in page wiring', () => {
     expect(page).toContain('onUnavailable={() => setGisUnavailable(true)}')
     // GIS unavailable → a note; email sign-in stays; no signInWithOAuth.
     const gisBranch = page.slice(page.indexOf('{useGoogleIdentity && googleClientId ? ('), page.indexOf('<GoogleIdentityButton'))
-    expect(gisBranch).toContain("Google sign-in isn&apos;t available right now. You can still sign in with your email below.")
+    // Copy is localized (messages/*.json); the English wording is unchanged.
+    expect(gisBranch).toContain("t('googleUnavailable')")
+    expect(en.SignIn.googleUnavailable).toBe("Google sign-in isn't available right now. You can still sign in with your email below.")
     expect(gisBranch).not.toContain('handleGoogleSignIn')
     // The redirect flow exists only in the not-configured branch.
     expect(page).toContain('signInWithOAuth({')

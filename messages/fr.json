@@ -1,0 +1,87 @@
+{
+  "Nav": {
+    "home": "Accueil",
+    "letters": "Lettres",
+    "people": "Personnes",
+    "board": "Tableau",
+    "you": "Vous"
+  },
+  "LanguageSwitcher": {
+    "label": "Langue"
+  },
+  "SignIn": {
+    "tagline": "Une façon plus humaine de créer du lien",
+    "signIn": "Se connecter",
+    "createAccountHeading": "Créez votre compte Tempa",
+    "continueWithGoogle": "Continuer avec Google",
+    "redirecting": "Redirection…",
+    "signingYouIn": "Connexion en cours…",
+    "googleUnavailable": "La connexion avec Google n’est pas disponible pour le moment. Vous pouvez toujours vous connecter avec votre adresse e-mail ci-dessous.",
+    "tryGoogleAgain": "Réessayer avec Google",
+    "or": "ou",
+    "emailLabel": "Adresse e-mail",
+    "emailPlaceholder": "vous@exemple.com",
+    "sendMagicLink": "Envoyer un lien de connexion",
+    "sending": "Envoi…",
+    "checkEmail": "Un lien de connexion a été envoyé à <strong>{email}</strong>.",
+    "resend": "Renvoyer le lien",
+    "resending": "Nouvel envoi…",
+    "resendCountdown": "Renvoyer le lien ({seconds} s)",
+    "useDifferentEmail": "Utiliser une autre adresse",
+    "verificationRetry": "La vérification ne s’est pas chargée. Réessayer.",
+    "alreadyHaveAccount": "Vous avez déjà un compte ?",
+    "newToTempa": "Nouveau sur Tempa ?",
+    "createAnAccount": "Créer un compte",
+    "createNewAccount": "Créer un nouveau compte",
+    "errors": {
+      "captchaFailed": "Nous n’avons pas pu vérifier que vous n’êtes pas un robot. Veuillez réessayer.",
+      "rateLimited": "Trop de tentatives. Patientez quelques minutes, puis réessayez.",
+      "generic": "Un problème est survenu. Veuillez réessayer.",
+      "connection": "Un problème est survenu. Vérifiez votre connexion, puis réessayez.",
+      "linkExpired": "Ce lien de connexion n’est plus valide. Demandez-en un nouveau et utilisez l’e-mail le plus récent.",
+      "signInFailed": "Un problème est survenu pendant la connexion. Veuillez réessayer.",
+      "verificationRequired": "Veuillez terminer la vérification, puis réessayer.",
+      "googleStartFailed": "Impossible de lancer la connexion avec Google. Veuillez réessayer.",
+      "googleSignInFailed": "Impossible de se connecter avec Google. Veuillez réessayer.",
+      "googleCaptchaFailed": "Veuillez refaire la vérification de sécurité, puis continuer avec Google.",
+      "googleSecurityCheckPending": "Terminez la vérification de sécurité ci-dessous pour finaliser la connexion avec Google."
+    },
+    "refusals": {
+      "deleted": "Ce compte a été supprimé et ne peut pas être restauré. Si vous souhaitez revenir sur Tempa, vous devrez créer un nouveau compte.",
+      "banned": "Ce compte a été définitivement exclu de Tempa et ne peut plus être utilisé pour se connecter. Si vous pensez qu’il s’agit d’une erreur, écrivez à {email}.",
+      "deletedUnavailable": "Ce compte a été supprimé et ne peut pas être restauré. Il n’est pas possible d’en créer un nouveau avec pour le moment. Si vous pensez qu’il s’agit d’une erreur, écrivez à {email}.",
+      "unavailable": "Ce compte ne peut pas être utilisé pour se connecter à Tempa. Si vous pensez qu’il s’agit d’une erreur, écrivez à {email}."
+    }
+  },
+  "You": {
+    "language": "Langue"
+  },
+  "LanguageSettings": {
+    "back": "Vous",
+    "heading": "Langue",
+    "intro": "Choisissez la langue que vous utilisez sur Tempa. Les menus et commandes de Tempa s’afficheront dans cette langue, qui sera aussi votre langue par défaut pour traduire les écrits des autres.",
+    "optionsLabel": "Langue de Tempa",
+    "current": "Actuelle",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré.",
+    "error": "Impossible d’enregistrer pour le moment. Veuillez réessayer.",
+    "translationHeading": "Langue de traduction",
+    "translationIntro": "La langue dans laquelle Tempa traduit les écrits des autres lorsque vous le demandez.",
+    "sameAsTempa": "Identique à la langue de Tempa",
+    "notChosen": "Pas encore choisie",
+    "currentTranslation": "Traduction : {language}",
+    "chooseDifferent": "Choisir une autre langue",
+    "useTempaLanguage": "Utiliser ma langue Tempa",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "loadError": "Impossible de charger vos paramètres de langue pour le moment. Veuillez réessayer.",
+    "tryAgain": "Réessayer"
+  },
+  "LanguagePicker": {
+    "search": "Rechercher une langue",
+    "suggested": "Suggérée par cet appareil",
+    "noMatch": "Aucune langue ne correspond à cette recherche.",
+    "current": "Actuelle",
+    "languages": "Langues"
+  }
+}

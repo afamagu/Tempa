@@ -1,0 +1,87 @@
+{
+  "Nav": {
+    "home": "Início",
+    "letters": "Cartas",
+    "people": "Pessoas",
+    "board": "Mural",
+    "you": "Você"
+  },
+  "LanguageSwitcher": {
+    "label": "Idioma"
+  },
+  "SignIn": {
+    "tagline": "Um jeito mais humano de se conectar",
+    "signIn": "Entrar",
+    "createAccountHeading": "Crie sua conta no Tempa",
+    "continueWithGoogle": "Continuar com o Google",
+    "redirecting": "Redirecionando…",
+    "signingYouIn": "Entrando…",
+    "googleUnavailable": "O acesso com o Google não está disponível no momento. Você ainda pode entrar com seu e-mail abaixo.",
+    "tryGoogleAgain": "Tentar de novo com o Google",
+    "or": "ou",
+    "emailLabel": "E-mail",
+    "emailPlaceholder": "voce@exemplo.com",
+    "sendMagicLink": "Enviar link de acesso",
+    "sending": "Enviando…",
+    "checkEmail": "Enviamos um link de acesso para <strong>{email}</strong>.",
+    "resend": "Reenviar link",
+    "resending": "Reenviando…",
+    "resendCountdown": "Reenviar link ({seconds} s)",
+    "useDifferentEmail": "Usar outro e-mail",
+    "verificationRetry": "A verificação não carregou. Tente de novo.",
+    "alreadyHaveAccount": "Já tem uma conta?",
+    "newToTempa": "Primeira vez no Tempa?",
+    "createAnAccount": "Criar uma conta",
+    "createNewAccount": "Criar uma nova conta",
+    "errors": {
+      "captchaFailed": "Não conseguimos confirmar que você não é um robô. Tente de novo.",
+      "rateLimited": "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+      "generic": "Algo deu errado. Tente de novo.",
+      "connection": "Algo deu errado. Verifique sua conexão e tente de novo.",
+      "linkExpired": "Este link de acesso não é mais válido. Peça um novo link e use o e-mail mais recente.",
+      "signInFailed": "Algo deu errado ao entrar. Tente de novo.",
+      "verificationRequired": "Conclua a verificação e tente de novo.",
+      "googleStartFailed": "Não foi possível iniciar o acesso com o Google. Tente de novo.",
+      "googleSignInFailed": "Não foi possível entrar com o Google. Tente de novo.",
+      "googleCaptchaFailed": "Conclua a verificação de segurança novamente e continue com o Google.",
+      "googleSecurityCheckPending": "Conclua a verificação de segurança abaixo para terminar de entrar com o Google."
+    },
+    "refusals": {
+      "deleted": "Esta conta foi excluída e não pode ser restaurada. Se quiser voltar ao Tempa, você precisará criar uma nova conta.",
+      "banned": "Esta conta foi banida permanentemente do Tempa e não pode mais ser usada para entrar. Se você acredita que isso é um engano, escreva para {email}.",
+      "deletedUnavailable": "Esta conta foi excluída e não pode ser restaurada. No momento, não é possível criar uma nova conta com ela. Se você acredita que isso é um engano, escreva para {email}.",
+      "unavailable": "Esta conta não pode ser usada para entrar no Tempa. Se você acredita que isso é um engano, escreva para {email}."
+    }
+  },
+  "You": {
+    "language": "Idioma"
+  },
+  "LanguageSettings": {
+    "back": "Você",
+    "heading": "Idioma",
+    "intro": "Escolha o idioma que você usa no Tempa. Os menus e controles do Tempa vão usar este idioma, que também será o padrão para traduzir o que outras pessoas escrevem.",
+    "optionsLabel": "Idioma do Tempa",
+    "current": "Atual",
+    "saving": "Salvando…",
+    "saved": "Salvo.",
+    "error": "Não foi possível salvar agora. Tente de novo.",
+    "translationHeading": "Idioma de tradução",
+    "translationIntro": "O idioma para o qual o Tempa traduz o que outras pessoas escrevem quando você pede.",
+    "sameAsTempa": "O mesmo idioma do Tempa",
+    "notChosen": "Ainda não escolhido",
+    "currentTranslation": "Tradução: {language}",
+    "chooseDifferent": "Escolher outro idioma",
+    "useTempaLanguage": "Usar meu idioma do Tempa",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "loadError": "Não foi possível carregar suas configurações de idioma agora. Tente de novo.",
+    "tryAgain": "Tentar de novo"
+  },
+  "LanguagePicker": {
+    "search": "Buscar idiomas",
+    "suggested": "Sugerido por este dispositivo",
+    "noMatch": "Nenhum idioma corresponde a essa busca.",
+    "current": "Atual",
+    "languages": "Idiomas"
+  }
+}

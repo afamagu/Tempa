@@ -7,6 +7,7 @@ import {
   suggestReadingLanguage,
   type ReadingLanguage,
 } from '@/lib/reading-languages'
+import { useTranslations } from 'next-intl'
 import { helperTextClass, inputClass } from '@/app/profile/ui'
 
 /**
@@ -29,6 +30,7 @@ export default function ReadingLanguagePicker({
   disabled?: boolean
 }) {
   const [query, setQuery] = useState('')
+  const t = useTranslations('LanguagePicker')
   const [suggested, setSuggested] = useState<string | null>(null)
   const searchId = useId()
   const listId = useId()
@@ -47,14 +49,14 @@ export default function ReadingLanguagePicker({
   return (
     <div className="space-y-3">
       <label htmlFor={searchId} className="sr-only">
-        Search languages
+        {t('search')}
       </label>
       <input
         id={searchId}
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search languages"
+        placeholder={t('search')}
         autoComplete="off"
         spellCheck={false}
         aria-controls={listId}
@@ -64,14 +66,14 @@ export default function ReadingLanguagePicker({
 
       {suggestion && (
         <div className="space-y-1.5">
-          <p className={helperTextClass}>Suggested from this device</p>
+          <p className={helperTextClass}>{t('suggested')}</p>
           <LanguageOption language={suggestion} selected={false} disabled={disabled} onSelect={onSelect} />
         </div>
       )}
 
       <ul
         id={listId}
-        aria-label="Languages"
+        aria-label={t('languages')}
         className="max-h-[min(60vh,28rem)] space-y-1 overflow-y-auto overscroll-contain rounded-md border border-foreground/10 p-1"
       >
         {results.map((language) => (
@@ -84,7 +86,7 @@ export default function ReadingLanguagePicker({
             />
           </li>
         ))}
-        {results.length === 0 && <li className={`${helperTextClass} px-3 py-2.5`}>No language matches that search.</li>}
+        {results.length === 0 && <li className={`${helperTextClass} px-3 py-2.5`}>{t('noMatch')}</li>}
       </ul>
     </div>
   )
@@ -101,6 +103,7 @@ function LanguageOption({
   disabled: boolean
   onSelect: (code: string) => void
 }) {
+  const t = useTranslations('LanguagePicker')
   return (
     <button
       type="button"
@@ -119,7 +122,7 @@ function LanguageOption({
           <span className="block text-[13px] text-muted">{language.name}</span>
         )}
       </span>
-      {selected && <span className="shrink-0 text-[13px] text-muted">Current</span>}
+      {selected && <span className="shrink-0 text-[13px] text-muted">{t('current')}</span>}
     </button>
   )
 }

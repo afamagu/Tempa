@@ -1,15 +1,18 @@
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import TempaEmblem from '@/app/tempa-emblem'
 import MemberIntroductions from '@/app/member-introductions'
 
 type NavKey = 'home' | 'letters' | 'minds' | 'board' | 'you'
 
-const NAV_ITEMS: { key: NavKey; href: string; label: string }[] = [
-  { key: 'home', href: '/home', label: 'Home' },
-  { key: 'letters', href: '/letters', label: 'Letters' },
-  { key: 'minds', href: '/minds', label: 'People' },
-  { key: 'board', href: '/board', label: 'Board' },
-  { key: 'you', href: '/you', label: 'You' },
+// Labels are interface-dictionary keys (messages/*.json → Nav), shared by
+// the desktop sidebar and the mobile bar so the two can never disagree.
+const NAV_ITEMS: { key: NavKey; href: string; label: 'home' | 'letters' | 'people' | 'board' | 'you' }[] = [
+  { key: 'home', href: '/home', label: 'home' },
+  { key: 'letters', href: '/letters', label: 'letters' },
+  { key: 'minds', href: '/minds', label: 'people' },
+  { key: 'board', href: '/board', label: 'board' },
+  { key: 'you', href: '/you', label: 'you' },
 ]
 
 // Small, restrained line icons — no icon library, just enough shape to
@@ -101,6 +104,7 @@ export default function AppShell({
   waitingLetterCount: number
   children: React.ReactNode
 }) {
+  const t = useTranslations('Nav')
   return (
     <div className="sm:flex sm:min-h-screen">
       <nav className="hidden sm:flex sm:w-56 sm:shrink-0 sm:flex-col sm:border-r sm:border-foreground/10 sm:px-4 sm:py-8">
@@ -127,7 +131,7 @@ export default function AppShell({
                 }`}
               >
                 <NavIcon item={item.key} className="h-5 w-5 shrink-0" />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
                 {item.key === 'letters' && <Badge count={waitingLetterCount} />}
               </Link>
             )
@@ -188,7 +192,7 @@ export default function AppShell({
                   isActive ? 'font-medium text-foreground' : 'text-foreground/50'
                 }`}
               >
-                {item.label}
+                {t(item.label)}
               </span>
             </Link>
           )
