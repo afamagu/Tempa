@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getDiscoveryPage, genderDisplay, DISCOVERY_BATCH_SIZE } from '@/lib/discovery'
+import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
 import { hasCompletedGuide } from '@/lib/guide'
 import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
@@ -16,39 +17,48 @@ import DiscoveryResults, { type DiscoveryEntry } from './discovery-results'
 
 const BATCH_SIZE = DISCOVERY_BATCH_SIZE
 
-function buildQuery(params: { country?: string; gender?: string; age?: string; batch?: string }) {
+function buildQuery(params: { country?: string; gender?: string; age?: string; batch?: string; question?: string }) {
   const query = new URLSearchParams()
   if (params.country) query.set('country', params.country)
   if (params.gender) query.set('gender', params.gender)
   if (params.age) query.set('age', params.age)
   if (params.batch) query.set('batch', params.batch)
+  if (params.question) query.set('question', params.question)
   return query.toString()
 }
 
 export default async function RoomPage({
   searchParams,
 }: {
-  searchParams: Promise<{ country?: string; gender?: string; age?: string; batch?: string }>
+  searchParams: Promise<{ country?: string; gender?: string; age?: string; batch?: string; question?: string }>
 }) {
-  const { country, gender, age, batch: batchParam } = await searchParams
+  const { country, gender, age, batch: batchParam, question: requestedQuestionId } = await searchParams
   const batch = Math.max(0, Number(batchParam) || 0)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
 
-  const [waitingCount, myAnswers, introSeen, discovery, liveQuestion] = await Promise.all([
+  const [waitingCount, myAnswers, introSeen, liveQuestion] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getMyAnswers(supabase, user.id),
     hasCompletedGuide(supabase, user.id, 'people'),
-    getDiscoveryPage(supabase, {
-      country,
-      gender,
-      ageRange: age,
-      offset: batch * BATCH_SIZE,
-      limit: BATCH_SIZE,
-    }),
     getCurrentRoomQuestion(supabase),
   ])
+
+  // Question-focused browsing is intentionally limited to the one live Room
+  // Question. Old/stale arbitrary Question ids do not create a shadow feed.
+  const focusedQuestionId = liveQuestion && requestedQuestionId === liveQuestion.id
+    ? liveQuestion.id
+    : undefined
+
+  const discovery = await getDiscoveryPage(supabase, {
+    country,
+    gender,
+    ageRange: age,
+    questionId: focusedQuestionId,
+    offset: batch * BATCH_SIZE,
+    limit: BATCH_SIZE,
+  })
 
   const liveAnswer = liveQuestion
     ? myAnswers.find((answer) => answer.questionId === liveQuestion.id) ?? null
@@ -56,6 +66,8 @@ export default async function RoomPage({
   const firstAnswer = myAnswers.find((answer) => answer.isPrimary) ?? null
 
   const { candidates: page, eligibleCount, filteredCount } = discovery
+  await recordRoomExposureOpportunities(user.id, page, focusedQuestionId ? 'room_question' : 'room')
+
   const windowStart = batch * BATCH_SIZE
   const hasMore = windowStart + page.length < filteredCount
   const poolExhausted = filteredCount > 0 && page.length === 0
@@ -78,9 +90,21 @@ export default async function RoomPage({
     writingStyleId: writingStyles.get(candidate.userId) ?? null,
   }))
 
-  const currentQuery = buildQuery({ country, gender, age, batch: batch > 0 ? String(batch) : undefined })
+  const currentQuery = buildQuery({
+    country,
+    gender,
+    age,
+    batch: batch > 0 ? String(batch) : undefined,
+    question: focusedQuestionId,
+  })
   const currentRoomHref = currentQuery ? `/room?${currentQuery}` : '/room'
-  const moreHref = `/room?${buildQuery({ country, gender, age, batch: String(batch + 1) })}`
+  const moreHref = `/room?${buildQuery({
+    country,
+    gender,
+    age,
+    batch: String(batch + 1),
+    question: focusedQuestionId,
+  })}`
 
   return (
     <AppShell active="room" waitingLetterCount={waitingCount}>
@@ -110,7 +134,11 @@ export default async function RoomPage({
                 <Link href={`/question/${liveQuestion.id}?source=room`} className={primaryButtonClass}>
                   {liveAnswer ? 'Read or edit your answer' : 'Answer the Question'}
                 </Link>
-                {liveAnswer && <a href="#read-the-room" className={secondaryButtonClass}>Read the Room</a>}
+                {focusedQuestionId ? (
+                  <Link href="/room#read-the-room" className={secondaryButtonClass}>Find someone worth writing to</Link>
+                ) : liveAnswer ? (
+                  <a href="#read-the-room" className={secondaryButtonClass}>Read the Room</a>
+                ) : null}
               </div>
             </section>
           )}
@@ -118,9 +146,17 @@ export default async function RoomPage({
           <section id="read-the-room" aria-labelledby="read-room-heading" className="space-y-5 scroll-mt-6">
             <div className="flex items-end justify-between gap-4 border-b border-foreground/10 pb-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">Explore</p>
-                <h2 id="read-room-heading" className="mt-1 font-serif text-2xl text-foreground">Read the Room</h2>
-                <p className={`mt-1 ${helperTextClass}`}>Take a look around through what people have actually written.</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">
+                  {focusedQuestionId ? 'This week' : 'Explore'}
+                </p>
+                <h2 id="read-room-heading" className="mt-1 font-serif text-2xl text-foreground">
+                  {focusedQuestionId ? 'See what people said' : 'Read the Room'}
+                </h2>
+                <p className={`mt-1 ${helperTextClass}`}>
+                  {focusedQuestionId
+                    ? 'Different people, answering the same question.'
+                    : 'Take a look around through what people have actually written.'}
+                </p>
               </div>
               <FilterDisclosure country={country ?? ''} gender={gender ?? ''} ageRange={age ?? ''} />
             </div>
@@ -129,13 +165,20 @@ export default async function RoomPage({
               <div className="space-y-2 py-2">
                 <p className={helperTextClass}>
                   {poolExhausted
-                    ? "You've read everyone in this part of the Room for now."
+                    ? focusedQuestionId
+                      ? "You've seen the available answers to this Question for now."
+                      : "You've read everyone in this part of the Room for now."
                     : eligibleCount === 0
-                      ? "There's no one new to read right now."
+                      ? focusedQuestionId
+                        ? 'No other answers are available yet.'
+                        : "There's no one new to read right now."
                       : 'No one matches those filters right now.'}
                 </p>
                 {!poolExhausted && eligibleCount > 0 && <p className={helperTextClass}>Try widening your filters.</p>}
-                {!poolExhausted && eligibleCount === 0 && <p className={helperTextClass}>The Room will change as more people arrive.</p>}
+                {!poolExhausted && eligibleCount === 0 && !focusedQuestionId && <p className={helperTextClass}>The Room will change as more people arrive.</p>}
+                {focusedQuestionId && (
+                  <Link href="/room#read-the-room" className={secondaryButtonClass}>Find someone worth writing to</Link>
+                )}
               </div>
             ) : (
               <>
