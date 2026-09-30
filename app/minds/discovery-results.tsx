@@ -7,6 +7,7 @@ import { helperTextClass, primaryButtonClass, contextQuestionClass, quietLinkCla
 import AuthoredProse from '@/app/authored-prose'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import QuestionInfoIcon from '@/app/question-info-icon'
+import EditorialByline from '@/app/editorial-byline'
 
 export type DiscoveryEntry = {
   userId: string
@@ -19,6 +20,8 @@ export type DiscoveryEntry = {
   /** The writer's current Writing Style — only the words take it; the
    * card itself is identical for everyone. */
   writingStyleId?: string | null
+  /** House accounts only ("Tempa House Columnist"). */
+  editorialTitle?: string | null
 }
 
 function identityLine(entry: DiscoveryEntry) {
@@ -95,6 +98,7 @@ export default function DiscoveryResults({ entries, returnTo = '/minds' }: { ent
                 <IdentityMark entry={entry} />
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold text-foreground">{entry.pseudonym}</p>
+                  <EditorialByline title={entry.editorialTitle} className="mb-0.5" />
                   <p className={helperTextClass}>{identityLine(entry)}</p>
                 </div>
               </button>
@@ -118,6 +122,7 @@ export default function DiscoveryResults({ entries, returnTo = '/minds' }: { ent
                 <IdentityMark entry={openEntry} size="md" />
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold text-foreground">{openEntry.pseudonym}</p>
+                  <EditorialByline title={openEntry.editorialTitle} className="mb-0.5" />
                   <p className={helperTextClass}>{identityLine(openEntry)}</p>
                 </div>
               </div>

@@ -151,6 +151,35 @@ describe('JSON-LD (BlogPosting)', () => {
       .toEqual({ '@type': 'Organization', name: 'Paper Co' })
   })
 
+  it('a house account is attributed as "Lady Larkspur, Tempa House Columnist" — metadata and JSON-LD', async () => {
+    const rpc = vi.fn(async (name: string) =>
+      name === 'editorial_bylines'
+        ? { data: [{ pseudonym_key: 'ladylarkspur', editorial_title: 'Tempa House Columnist' }], error: null }
+        : { data: [rpcRow({ author_pseudonym: 'Lady Larkspur', author_country: 'United Kingdom' })], error: null }
+    )
+    const storage = { from: () => ({ createSignedUrls: async () => ({ data: [], error: null }) }) }
+    const d = (await getPublicDispatch({ rpc, storage } as never, SLUG)) as PublicDispatch
+    expect(d.identity).toMatchObject({ kind: 'member', name: 'Lady Larkspur', editorialTitle: 'Tempa House Columnist' })
+
+    const m = publicDispatchMetadata(d)
+    expect(m.authors).toEqual([{ name: 'Lady Larkspur, Tempa House Columnist' }])
+    expect(m.openGraph).toMatchObject({ authors: ['Lady Larkspur, Tempa House Columnist'] })
+
+    expect(publicDispatchJsonLd(d).author).toEqual({
+      '@type': 'Person',
+      name: 'Lady Larkspur, Tempa House Columnist',
+      jobTitle: 'Tempa House Columnist',
+      worksFor: { '@type': 'Organization', name: 'Tempa', url: 'https://jointempa.com' },
+    })
+  })
+
+  it('an ordinary member gets no authors metadata and a plain Person author (unchanged)', async () => {
+    const d = await load()
+    expect(publicDispatchMetadata(d)).not.toHaveProperty('authors')
+    expect(publicDispatchMetadata(d).openGraph).not.toHaveProperty('authors')
+    expect(publicDispatchJsonLd(d).author).toEqual({ '@type': 'Person', name: 'Alice Quill' })
+  })
+
   it('script content can never close the script element', () => {
     const out = jsonLdScriptContent({ headline: '</script><script>alert(1)</script>' })
     expect(out).not.toContain('<')

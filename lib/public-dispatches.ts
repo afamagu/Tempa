@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { mapSharedDispatchRow, type SharedDispatch, type SharedDispatchRpcRow } from '@/lib/dispatches'
 import { dispatchShareTitle } from '@/lib/dispatch-identity'
+import { editorialAuthorName } from '@/lib/editorial-byline'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { SITE_NAME, SITE_URL } from '@/lib/site'
@@ -133,8 +134,19 @@ export function publicDispatchImageUrl(slug: string): string {
 }
 
 /** Server metadata for an available public Dispatch. */
+/** The author as search engines see it — "Lady Larkspur, Tempa House
+ * Columnist" for a house account; a member's own pseudonym otherwise. */
+export function publicDispatchAuthorName(d: Pick<PublicDispatch, 'identity'>): string {
+  return d.identity.kind === 'member'
+    ? editorialAuthorName(d.identity.name, d.identity.editorialTitle)
+    : d.identity.name
+}
+
 export function publicDispatchMetadata(d: PublicDispatch): Metadata {
   const title = publicDispatchTitle(d)
+  // Named explicitly only for a house account, so search engines read the
+  // disclosure; every other Dispatch's metadata is unchanged.
+  const editorialAuthor = d.identity.kind === 'member' && d.identity.editorialTitle ? publicDispatchAuthorName(d) : null
   const description = dispatchDescription(d.body) || title
   const url = publicDispatchUrl(d.slug)
   return {
@@ -142,6 +154,7 @@ export function publicDispatchMetadata(d: PublicDispatch): Metadata {
     description,
     alternates: { canonical: url },
     robots: { index: true, follow: true },
+    ...(editorialAuthor ? { authors: [{ name: editorialAuthor }] } : {}),
     openGraph: {
       type: 'article',
       siteName: SITE_NAME,
@@ -150,6 +163,7 @@ export function publicDispatchMetadata(d: PublicDispatch): Metadata {
       url,
       publishedTime: d.datePublished,
       modifiedTime: d.dateModified,
+      ...(editorialAuthor ? { authors: [editorialAuthor] } : {}),
     },
     twitter: { card: 'summary_large_image', title, description },
   }
@@ -173,7 +187,13 @@ export function publicDispatchJsonLd(d: PublicDispatch): Record<string, unknown>
   }
   const author =
     d.identity.kind === 'member'
-      ? { '@type': 'Person', name: d.identity.name }
+      ? {
+          '@type': 'Person',
+          name: publicDispatchAuthorName(d),
+          ...(d.identity.editorialTitle
+            ? { jobTitle: d.identity.editorialTitle, worksFor: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL } }
+            : {}),
+        }
       : d.identity.kind === 'sponsored'
         ? { '@type': 'Organization', name: d.identity.name }
         : { '@type': 'Organization', name: SITE_NAME, url: SITE_URL }

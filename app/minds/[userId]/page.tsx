@@ -26,6 +26,8 @@ import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
 import ProfileAnswer from './profile-answer'
 import { getMemberWritingStyles } from '@/lib/writing-style-data'
+import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
+import EditorialByline from '@/app/editorial-byline'
 import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
 import PeopleProfileBack from './people-profile-back'
@@ -95,7 +97,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -103,9 +105,11 @@ export default async function PublicProfilePage({
     getPinnedDispatch(supabase, userId),
     isSelf ? Promise.resolve(null) : getBlockScope(supabase, userId),
     getMemberWritingStyles(supabase, [userId]),
+    getEditorialBylines(supabase),
   ])
   // The writer's CURRENT style — profile prose represents who they are now.
   const writingStyleId = writingStyles.get(userId) ?? null
+  const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
   const primaryAnswer = chooseProfileAnswer(rawAnswers)
@@ -139,6 +143,7 @@ export default async function PublicProfilePage({
             />
             <div className="min-w-0">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
+              <EditorialByline title={editorialTitle} rule className="mb-2" />
               {demographics && <p className={metadataTextClass}>{demographics}</p>}
               {languages.length > 0 && <p className={`mt-1 ${metadataTextClass}`}>Speaks {languages.join(', ')}</p>}
               {intent.length > 0 && (

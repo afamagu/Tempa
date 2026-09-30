@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publicProfileMarkUrl } from './profile-marks'
+import { editorialTitleFor, getEditorialBylines } from './editorial-byline'
 
 /**
  * Board Experience Phase 2B — Replies. "Let someone respond thoughtfully
@@ -19,6 +20,8 @@ export type Reply = {
   authorPseudonym: string
   authorCountry: string | null
   authorMarkUrl?: string | null
+  /** House accounts only ("Tempa House Columnist"); see lib/editorial-byline.ts. */
+  authorEditorialTitle?: string | null
   body: string
   parentReplyId: string | null
   /** Null for a top-level Reply. For a Reply-to-Reply, the top-level
@@ -165,10 +168,10 @@ export async function getDispatchReplies(supabase: SupabaseClient, dispatchId: s
   const replyToIds = [...new Set(typedRows.map((r) => r.reply_to_user_id).filter((id): id is string => id !== null))]
   const allProfileIds = [...new Set([...authorIds, ...replyToIds])]
 
-  const { data: profiles } = await supabase
-    .from('public_profiles')
-    .select('id, pseudonym, country, mark_id')
-    .in('id', allProfileIds)
+  const [{ data: profiles }, editorialBylines] = await Promise.all([
+    supabase.from('public_profiles').select('id, pseudonym, country, mark_id').in('id', allProfileIds),
+    getEditorialBylines(supabase),
+  ])
 
   const profileById = new Map(
     (profiles ?? []).map((p) => [p.id, p as { id: string; pseudonym: string; country: string | null; mark_id: string | null }])
@@ -184,6 +187,7 @@ export async function getDispatchReplies(supabase: SupabaseClient, dispatchId: s
       authorMarkUrl: profileById.get(row.author_id)?.mark_id
         ? publicProfileMarkUrl(supabase, `${profileById.get(row.author_id)!.mark_id}.png`)
         : null,
+      authorEditorialTitle: editorialTitleFor(editorialBylines, profileById.get(row.author_id)?.pseudonym) ?? undefined,
       body: row.body,
       parentReplyId: row.parent_reply_id,
       rootReplyId: row.root_reply_id,

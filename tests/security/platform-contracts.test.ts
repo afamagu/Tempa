@@ -125,7 +125,10 @@ describe('database authorization contracts (docs/sql)', () => {
       'public.get_public_dispatch(text)', 'public.list_public_dispatches()',
       // + 2026-10-29: the semantic Writing Style id of a Dispatch those same
       // two paths already show (same visibility predicates; id only).
-      'public.shared_dispatch_writing_style(uuid)', 'public.public_dispatch_writing_style(text)'])
+      'public.shared_dispatch_writing_style(uuid)', 'public.public_dispatch_writing_style(text)',
+      // + 2026-09-30: house-account disclosure ("Tempa House Columnist") shown
+      // on those same public pages — canonical pseudonym key + title only.
+      'public.editorial_bylines()'])
     let anonGrants = 0
     for (const f of migrations) {
       const sql = stripComments(readFileSync(path.join(sqlDir, f), 'utf8'))

@@ -33,6 +33,11 @@
      general-purpose third brand color, and never reused for any other
      feature's own identity the way --accent/--clay already are not. */
   --verdigris: #3F6F6B;
+  /* Tempa's brand plum — the same value the landing page has always used
+     (app/landing-page.module.css), promoted here unchanged so the app can
+     share it. Reserved for Tempa speaking in its own name: the editorial
+     byline beneath a house account's pseudonym (app/editorial-byline.tsx). */
+  --plum: #8b568c;
   color-scheme: light;
 }
 
@@ -44,6 +49,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-clay: var(--clay);
   --color-verdigris: var(--verdigris);
+  --color-plum: var(--plum);
   --color-surface-shell: var(--surface-shell);
   --font-sans: var(--font-geist-sans);
   --font-serif: var(--font-newsreader);

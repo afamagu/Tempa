@@ -3,6 +3,7 @@ import { letterPreviewText, isRichBody } from './letters'
 import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
 import { publicProfileMarkUrl } from './profile-marks'
 import { getDispatchWritingStyles } from './writing-style-data'
+import { editorialTitleFor, getEditorialBylines } from './editorial-byline'
 import type { WritingStyleId } from './writing-style'
 import {
   resolveDispatchIdentity,
@@ -252,7 +253,7 @@ async function attachTopicsAndAuthors(
   // Publication identity is read in the SAME parallel round (one batched
   // query, never per row) so board_feed_page/search_dispatches keep their
   // existing return shapes. Unreadable -> every row stays 'member'.
-  const [{ data: profiles }, { data: topicRows }, { data: identityRows }, writingStyles] = await Promise.all([
+  const [{ data: profiles }, { data: topicRows }, { data: identityRows }, writingStyles, editorialBylines] = await Promise.all([
     supabase.from('public_profiles').select('id, pseudonym, country, mark_id').in('id', authorIds),
     supabase.from('dispatch_topics').select('dispatch_id, topic').in('dispatch_id', dispatchIds),
     supabase
@@ -261,6 +262,7 @@ async function attachTopicsAndAuthors(
       .in('id', dispatchIds),
     // Separate, fail-soft read — never widens the identity select above.
     getDispatchWritingStyles(supabase, dispatchIds),
+    getEditorialBylines(supabase),
   ])
   const identityById = new Map(
     ((identityRows ?? []) as {
@@ -292,6 +294,7 @@ async function attachTopicsAndAuthors(
       authorPseudonym: profile?.pseudonym,
       authorCountry: profile?.country,
       authorMarkUrl: profile?.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null,
+      authorEditorialTitle: editorialTitleFor(editorialBylines, profile?.pseudonym),
       sponsorName: ident?.sponsor_name,
       sponsorCtaLabel: ident?.sponsor_cta_label,
       sponsorCtaUrl: ident?.sponsor_cta_url,
@@ -1791,6 +1794,9 @@ export async function mapSharedDispatchRow(supabase: SupabaseClient, row: Shared
     mappedMoments.map((m) => ({ id: m.id, position: m.position, hasImageUrl: Boolean(m.imageUrl) }))
   )
 
+  // Fail-soft; only a member identity ever uses it (resolveDispatchIdentity).
+  const editorialBylines = await getEditorialBylines(supabase)
+
   const postcardJson = row.postcard ?? null
   const postcard: DispatchPostcard | null = postcardJson
     ? {
@@ -1828,6 +1834,7 @@ export async function mapSharedDispatchRow(supabase: SupabaseClient, row: Shared
       authorId: '',
       authorPseudonym: row.author_pseudonym,
       authorCountry: row.author_country ?? null,
+      authorEditorialTitle: editorialTitleFor(editorialBylines, row.author_pseudonym),
       sponsorName: row.sponsor_name ?? row.author_pseudonym,
       sponsorCtaLabel: row.sponsor_cta_label,
       sponsorCtaUrl: row.sponsor_cta_url,

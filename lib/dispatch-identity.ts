@@ -23,7 +23,16 @@ export type DispatchSponsor = {
 }
 
 export type DispatchIdentity =
-  | { kind: 'member'; authorId: string; name: string; country: string | null; markUrl: string | null }
+  | {
+      kind: 'member'
+      authorId: string
+      name: string
+      country: string | null
+      markUrl: string | null
+      /** "Tempa House Columnist" for a house account run by Tempa itself
+       * (lib/editorial-byline.ts); absent/null for every ordinary member. */
+      editorialTitle?: string | null
+    }
   | { kind: 'tempa'; name: 'Tempa' }
   | { kind: 'sponsored'; name: string; sponsor: DispatchSponsor }
 
@@ -57,6 +66,7 @@ export function resolveDispatchIdentity(input: {
   authorPseudonym: string | null | undefined
   authorCountry: string | null | undefined
   authorMarkUrl?: string | null
+  authorEditorialTitle?: string | null
   sponsorName?: string | null
   sponsorCtaLabel?: string | null
   sponsorCtaUrl?: string | null
@@ -77,6 +87,9 @@ export function resolveDispatchIdentity(input: {
     name: input.authorPseudonym || 'A member',
     country: input.authorCountry ?? null,
     markUrl: input.authorMarkUrl ?? null,
+    // Only house accounts carry the key, so an ordinary member's identity
+    // is exactly what it was before editorial bylines existed.
+    ...(input.authorEditorialTitle ? { editorialTitle: input.authorEditorialTitle } : {}),
   }
 }
 

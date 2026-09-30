@@ -7,6 +7,7 @@ import { getDiscoveryPage, genderDisplay, DISCOVERY_BATCH_SIZE } from '@/lib/dis
 import { hasCompletedGuide } from '@/lib/guide'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { getMemberWritingStyles } from '@/lib/writing-style-data'
+import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 import { pageTitleClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
@@ -57,7 +58,10 @@ export default async function MindsPage({
   const poolExhausted = filteredCount > 0 && page.length === 0
 
   // One batched, fail-soft lookup for this page's writers only.
-  const writingStyles = await getMemberWritingStyles(supabase, page.map((c) => c.userId))
+  const [writingStyles, editorialBylines] = await Promise.all([
+    getMemberWritingStyles(supabase, page.map((c) => c.userId)),
+    getEditorialBylines(supabase),
+  ])
 
   const entries: DiscoveryEntry[] = page.map((candidate) => ({
     userId: candidate.userId,
@@ -72,6 +76,7 @@ export default async function MindsPage({
       prompt: candidate.prompt,
     },
     writingStyleId: writingStyles.get(candidate.userId) ?? null,
+    editorialTitle: editorialTitleFor(editorialBylines, candidate.pseudonym),
   }))
 
   const currentQuery = buildQuery({ country, gender, age, batch: batch > 0 ? String(batch) : undefined })

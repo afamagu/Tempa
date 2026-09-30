@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { formatDatePlain } from '@/lib/format-date'
+import EditorialByline from '@/app/editorial-byline'
 import {
   publicDispatchPreviewByline,
   publicDispatchPreviewDescription,
@@ -12,10 +13,13 @@ export default function PublicDispatchCard({ dispatch }: { dispatch: PublicDispa
 
   return (
     <article className="space-y-2 border-b border-foreground/10 py-6 first:pt-0 last:border-b-0 last:pb-0">
-      <p className="text-[13px] text-muted">
-        {publicDispatchPreviewByline(dispatch)} <span aria-hidden="true">·</span>{' '}
-        <time dateTime={dispatch.publishedAt}>{formatDatePlain(dispatch.publishedAt)}</time>
-      </p>
+      <div>
+        <p className="text-[13px] text-muted">
+          {publicDispatchPreviewByline(dispatch)} <span aria-hidden="true">·</span>{' '}
+          <time dateTime={dispatch.publishedAt}>{formatDatePlain(dispatch.publishedAt)}</time>
+        </p>
+        <EditorialByline title={dispatch.identity.kind === 'member' ? dispatch.identity.editorialTitle : null} />
+      </div>
       <h2 className="font-serif text-[22px] font-medium leading-snug tracking-tight text-foreground sm:text-2xl">
         <Link
           href={publicDispatchPreviewPath(dispatch)}

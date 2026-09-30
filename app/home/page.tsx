@@ -34,6 +34,7 @@ import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import KeptDispatchShelf from './kept-dispatch-shelf'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 import { getDiscoveryPage, genderDisplay } from '@/lib/discovery'
 
 const RECOMMENDED_COUNT = 6
@@ -128,7 +129,7 @@ export default async function HomePage() {
   // "audit context, don't indiscriminately linkify" principle). Resolved
   // alongside the announcement image URL — the two only depend on the
   // round above, not on each other.
-  const [announcementImageUrl, singleAwaitingSender] = await Promise.all([
+  const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
     activeAnnouncement?.heroImagePath
       ? resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath).then((r) => r.url)
       : Promise.resolve(null),
@@ -147,6 +148,8 @@ export default async function HomePage() {
               : null
           )
       : Promise.resolve(null),
+    // Usually already in hand — the Board shelf above read it on this client.
+    getEditorialBylines(supabase),
   ])
 
   // A small, compact taste of People — not a second Discovery surface,
@@ -160,6 +163,7 @@ export default async function HomePage() {
     genderDisplay: genderDisplay(c.gender, c.genderCustom),
     ageRange: c.ageRange,
     markUrl: c.markId ? publicProfileMarkUrl(supabase, `${c.markId}.png`) : null,
+    editorialTitle: editorialTitleFor(editorialBylines, c.pseudonym),
   }))
 
   return (

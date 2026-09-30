@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { helperTextClass } from '@/app/profile/ui'
+import EditorialByline from '@/app/editorial-byline'
 
 export type RecommendedMind = {
   userId: string
@@ -9,6 +10,8 @@ export type RecommendedMind = {
   genderDisplay: string | null
   ageRange: string
   markUrl?: string | null
+  /** House accounts only ("Tempa House Columnist"). */
+  editorialTitle?: string | null
 }
 
 /**
@@ -31,6 +34,8 @@ export default function RecommendedMindCard({ mind }: { mind: RecommendedMind })
         size="lg"
       />
       <span className="w-full truncate text-[13px] font-medium text-foreground">{mind.pseudonym}</span>
+      {/* Borrows 4px of the card's padding each side so "Tempa House" holds one line. */}
+      <EditorialByline title={mind.editorialTitle} wrap className="-mx-1 w-[calc(100%+0.5rem)]" />
       <span className={`w-full truncate ${helperTextClass}`}>
         {[mind.country, mind.genderDisplay].filter(Boolean).join(' · ')}
       </span>
