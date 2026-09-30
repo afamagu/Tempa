@@ -13,7 +13,7 @@ import { isInterfaceLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, type Interface
 
 export type LocaleActionResult = { ok: true; locale: InterfaceLocale } | { ok: false }
 
-export function localeCookieOptions() {
+function localeCookieOptions() {
   return {
     path: '/',
     sameSite: 'lax' as const,
@@ -23,7 +23,7 @@ export function localeCookieOptions() {
   }
 }
 
-export async function writeLocaleCookie(locale: InterfaceLocale) {
+async function writeLocaleCookie(locale: InterfaceLocale) {
   const store = await cookies()
   store.set(LOCALE_COOKIE, locale, localeCookieOptions())
 }
