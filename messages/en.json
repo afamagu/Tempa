@@ -1,9 +1,9 @@
 {
   "Nav": {
     "home": "Home",
-    "letters": "Letters",
-    "people": "People",
-    "board": "Board",
+    "letters": "Pen pals",
+    "room": "The Room",
+    "board": "The Board",
     "you": "You"
   },
   "LanguageSwitcher": {
