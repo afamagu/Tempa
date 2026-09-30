@@ -1,17 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isInterfaceLocale, type InterfaceLocale } from '@/i18n/config'
 import type { OnboardingStage } from '@/lib/onboarding'
 import type { AccountEntryState, EligibilityStatus } from '@/lib/account-entry'
 import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION, isLegalCurrent } from '@/lib/legal'
 
 // proxy.ts's account-entry read. The existing current_account_entry_state RPC
-// remains untouched. Language confirmation is deliberately read from its
-// private preference table alongside that RPC so this PR does not rewrite the
-// already-sensitive account-state function merely to add one gate. A missing
-// migration fails open (undefined) rather than trapping every member.
+// remains untouched. Language state is read alongside it so saved interface
+// language can win over a stale/missing device cookie on authenticated pages.
+// A missing migration fails open (undefined) for safe deploy ordering.
 
 export type ProxyAccountEntry = {
   accountStatus: string
   state: AccountEntryState
+  interfaceLocale?: InterfaceLocale
 }
 
 type EntryStateRow = {
@@ -32,20 +33,28 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
     }),
     supabase
       .from('member_language_preferences')
-      .select('language_confirmed_at')
+      .select('language_confirmed_at, interface_locale')
       .eq('user_id', userId)
       .maybeSingle(),
   ])
 
   const { data, error } = entryResult
   const row = (Array.isArray(data) ? data[0] : data) as EntryStateRow | null | undefined
+  const languageRow = languageResult.data as {
+    language_confirmed_at?: string | null
+    interface_locale?: unknown
+  } | null
   const languageConfirmed = languageResult.error
     ? undefined
-    : Boolean((languageResult.data as { language_confirmed_at?: string | null } | null)?.language_confirmed_at)
+    : Boolean(languageRow?.language_confirmed_at)
+  const interfaceLocale = !languageResult.error && isInterfaceLocale(languageRow?.interface_locale)
+    ? languageRow.interface_locale
+    : undefined
 
   if (!error && row) {
     return {
       accountStatus: row.account_status ?? 'active',
+      interfaceLocale,
       state: {
         authenticated: true,
         languageConfirmed,
@@ -59,13 +68,14 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
     }
   }
 
-  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed)
+  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale)
 }
 
 async function readLegacyProxyAccountEntry(
   supabase: SupabaseClient,
   userId: string,
-  languageConfirmed: boolean | undefined
+  languageConfirmed: boolean | undefined,
+  interfaceLocale: InterfaceLocale | undefined
 ): Promise<ProxyAccountEntry> {
   const [{ data: accountStatus }, { data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
     supabase.rpc('current_account_status'),
@@ -76,6 +86,7 @@ async function readLegacyProxyAccountEntry(
 
   return {
     accountStatus: (accountStatus as string | null) ?? 'active',
+    interfaceLocale,
     state: {
       authenticated: true,
       languageConfirmed,
