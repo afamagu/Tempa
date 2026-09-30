@@ -1,14 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
 import { listQuestions, type AdminQuestion } from '@/lib/admin-questions'
+import { listRoomQuestionSuggestions } from '@/lib/admin-room-question-suggestions'
 import { sectionTitleClass, sectionLabelClass } from '@/app/profile/ui'
 import { adminMetadataClass } from '@/app/admin/admin-ui'
 import CurrentQuestionSlot from './current-question-slot'
 import QuestionRow from './question-row'
 import RoomQuestionControl from './room-question-control'
+import SuggestionQueue from './suggestion-queue'
 
 export default async function AdminQuestionsPage() {
   const supabase = await createClient()
-  const { data: questions, error } = await listQuestions(supabase)
+  const [questionResult, suggestionResult] = await Promise.all([
+    listQuestions(supabase),
+    listRoomQuestionSuggestions(supabase),
+  ])
+  const { data: questions, error } = questionResult
+  const { data: suggestions, error: suggestionError } = suggestionResult
 
   const bySlot = new Map<1 | 2 | 3, AdminQuestion>(
     questions
@@ -46,6 +53,17 @@ export default async function AdminQuestionsPage() {
         <p className={sectionLabelClass}>Current Room Question</p>
         <RoomQuestionControl current={currentRoomQuestion} candidates={roomCandidates} />
       </div>
+
+      <details className="space-y-3" open={suggestions.some((suggestion) => suggestion.status === 'pending')}>
+        <summary className={`cursor-pointer ${sectionLabelClass}`}>Member suggestions ({suggestions.length})</summary>
+        <div className="mt-3 space-y-3">
+          <p className={adminMetadataClass}>
+            Private editorial submissions. Members cannot vote on them or publish them directly; Tempa can refine wording before creating a Question.
+          </p>
+          {suggestionError && <p className="text-sm text-red-600">{suggestionError.message}</p>}
+          <SuggestionQueue suggestions={suggestions} />
+        </div>
+      </details>
 
       <details className="space-y-3">
         <summary className={`cursor-pointer ${sectionLabelClass}`}>Legacy Question slots</summary>
