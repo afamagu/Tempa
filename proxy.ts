@@ -16,6 +16,7 @@ import { serverCookieOptions } from '@/lib/supabase/cookie-options'
 export const PROTECTED_MATCHERS = [
   '/admin/:path*',
   '/announcement/:path*',
+  '/begin/:path*',
   '/board/:path*',
   '/home/:path*',
   '/language/:path*',
@@ -57,21 +58,16 @@ export async function proxy(request: NextRequest) {
     return res
   }
 
-  if (!isProtectedPath(request.nextUrl.pathname)) {
-    return withCsp(withCspRequest())
-  }
+  if (!isProtectedPath(request.nextUrl.pathname)) return withCsp(withCspRequest())
 
   let response = withCspRequest()
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookieOptions: serverCookieOptions(),
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = withCspRequest()
@@ -81,10 +77,7 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     const signInUrl = new URL('/sign-in', request.url)
     signInUrl.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`)
@@ -93,9 +86,6 @@ export async function proxy(request: NextRequest) {
 
   const { accountStatus, state, interfaceLocale } = await readProxyAccountEntry(supabase, user.id)
 
-  // Persisted authenticated preference wins over a stale/missing device
-  // cookie. Mutate both the downstream request and outgoing response so the
-  // current Server Component render and future requests agree immediately.
   if (interfaceLocale && request.cookies.get(LOCALE_COOKIE)?.value !== interfaceLocale) {
     request.cookies.set(LOCALE_COOKIE, interfaceLocale)
     response = withCspRequest()
@@ -108,29 +98,25 @@ export async function proxy(request: NextRequest) {
     })
   }
 
-  if (accountStatus === 'banned') {
-    return withCsp(NextResponse.redirect(new URL('/account-unavailable', request.url)))
-  }
-  if (accountStatus === 'deactivated') {
-    return withCsp(NextResponse.redirect(new URL('/account-paused', request.url)))
-  }
-  if (accountStatus === 'closed') {
-    return withCsp(NextResponse.redirect(new URL('/account-deleted', request.url)))
-  }
+  if (accountStatus === 'banned') return withCsp(NextResponse.redirect(new URL('/account-unavailable', request.url)))
+  if (accountStatus === 'deactivated') return withCsp(NextResponse.redirect(new URL('/account-paused', request.url)))
+  if (accountStatus === 'closed') return withCsp(NextResponse.redirect(new URL('/account-deleted', request.url)))
 
   const requestedDestination = `${request.nextUrl.pathname}${request.nextUrl.search}`
   const destination = resolveAccountEntryDestination(state, requestedDestination)
 
   if (destination === '/begin') {
+    // /begin itself is now protected so a saved authenticated locale is
+    // synchronized before the DOB/legal UI renders. Let that route through
+    // when it is already the required gate; otherwise preserve the original
+    // requested page in `next` for the normal post-gate return.
+    if (request.nextUrl.pathname === '/begin') return withCsp(response)
     const beginUrl = new URL('/begin', request.url)
     beginUrl.searchParams.set('next', requestedDestination)
     return withCsp(NextResponse.redirect(beginUrl))
   }
 
-  if (destination !== requestedDestination) {
-    return withCsp(NextResponse.redirect(new URL(destination, request.url)))
-  }
-
+  if (destination !== requestedDestination) return withCsp(NextResponse.redirect(new URL(destination, request.url)))
   return withCsp(response)
 }
 
