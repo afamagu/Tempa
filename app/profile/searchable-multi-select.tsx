@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { Option } from './data'
 import { inputClass } from './ui'
 
@@ -19,6 +20,7 @@ export default function SearchableMultiSelect({
   placeholder?: string
   allowCustom?: boolean
 }) {
+  const common = useTranslations('Common')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
@@ -45,10 +47,6 @@ export default function SearchableMultiSelect({
   const listLength = filtered.length + (showCustomOption ? 1 : 0)
 
   useEffect(() => {
-    // Pointer events cover touch, pen and mouse consistently. The old
-    // mousedown-only listener could leave the listbox open on phones,
-    // covering the next onboarding field until the member happened to
-    // tap elsewhere.
     function handlePointerDown(e: PointerEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
@@ -60,12 +58,7 @@ export default function SearchableMultiSelect({
   }, [])
 
   function addValue(value: string) {
-    if (!values.includes(value)) {
-      onChange([...values, value])
-    }
-    // A selection completes the interaction. Close immediately so the
-    // dropdown never obscures the field below on a small screen; tapping
-    // the control again still lets the member add more languages.
+    if (!values.includes(value)) onChange([...values, value])
     setOpen(false)
     setQuery('')
     setHighlighted(0)
@@ -76,11 +69,8 @@ export default function SearchableMultiSelect({
   }
 
   function selectAtIndex(index: number) {
-    if (index < filtered.length) {
-      addValue(filtered[index].value)
-    } else if (showCustomOption) {
-      addValue(trimmedQuery)
-    }
+    if (index < filtered.length) addValue(filtered[index].value)
+    else if (showCustomOption) addValue(trimmedQuery)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -121,7 +111,7 @@ export default function SearchableMultiSelect({
             <button
               type="button"
               onClick={() => removeValue(v)}
-              aria-label={`Remove ${v}`}
+              aria-label={common('removeValue', { value: v })}
               className="text-muted transition-colors hover:text-foreground"
             >
               ×
@@ -144,9 +134,6 @@ export default function SearchableMultiSelect({
             setOpen(true)
             setHighlighted(0)
           }}
-          // After a selection the input keeps focus (options preventDefault
-          // on mousedown), so a second tap fires no focus event — reopen on
-          // click so the member can add another language.
           onClick={() => {
             setOpen(true)
             setHighlighted(0)
@@ -164,7 +151,7 @@ export default function SearchableMultiSelect({
           className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none"
         >
           {filtered.length === 0 && !showCustomOption && (
-            <li className="px-3 py-2 text-sm text-muted">No matches</li>
+            <li className="px-3 py-2 text-sm text-muted">{common('noMatches')}</li>
           )}
           {filtered.map((option, index) => (
             <li key={option.value} role="option" aria-selected={false}>
@@ -190,7 +177,7 @@ export default function SearchableMultiSelect({
                   filtered.length === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'
                 }`}
               >
-                Add &ldquo;{trimmedQuery}&rdquo;
+                {common('addValue', { value: trimmedQuery })}
               </button>
             </li>
           )}
