@@ -36,6 +36,10 @@ export default function SearchableMultiSelect({
   const showCustomOption = allowCustom && trimmedQuery.length > 1 && !exactMatch && !alreadyAdded
   const listLength = filtered.length + (showCustomOption ? 1 : 0)
 
+  function displayValue(value: string) {
+    return options.find((option) => option.value === value)?.label ?? value
+  }
+
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) { setOpen(false); setQuery('') }
@@ -58,7 +62,7 @@ export default function SearchableMultiSelect({
 
   return <div ref={containerRef} className="relative">
     <div className={`${inputClass} flex flex-wrap items-center gap-1.5 py-1.5`}>
-      {values.map((v) => <span key={v} className="inline-flex items-center gap-1 rounded-full border border-foreground/15 bg-foreground/[.03] px-2.5 py-1 text-sm">{v}<button type="button" onClick={() => removeValue(v)} aria-label={removeValueLabel(v)} className="text-muted transition-colors hover:text-foreground">×</button></span>)}
+      {values.map((v) => <span key={v} className="inline-flex items-center gap-1 rounded-full border border-foreground/15 bg-foreground/[.03] px-2.5 py-1 text-sm">{displayValue(v)}<button type="button" onClick={() => removeValue(v)} aria-label={removeValueLabel(displayValue(v))} className="text-muted transition-colors hover:text-foreground">×</button></span>)}
       <input id={id} role="combobox" aria-expanded={open} aria-autocomplete="list" aria-controls={`${id}-listbox`} value={query}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); setHighlighted(0) }}
         onFocus={() => { setOpen(true); setHighlighted(0) }} onClick={() => { setOpen(true); setHighlighted(0) }} onKeyDown={handleKeyDown}
