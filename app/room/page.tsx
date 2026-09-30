@@ -14,6 +14,7 @@ import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from '@/app/minds/filter-disclosure'
 import DiscoveryResults, { type DiscoveryEntry } from './discovery-results'
+import QuestionSuggestionForm from './question-suggestion-form'
 
 const BATCH_SIZE = DISCOVERY_BATCH_SIZE
 
@@ -45,8 +46,6 @@ export default async function RoomPage({
     getCurrentRoomQuestion(supabase),
   ])
 
-  // Question-focused browsing is intentionally limited to the one live Room
-  // Question. Old/stale arbitrary Question ids do not create a shadow feed.
   const focusedQuestionId = liveQuestion && requestedQuestionId === liveQuestion.id
     ? liveQuestion.id
     : undefined
@@ -200,6 +199,8 @@ export default async function RoomPage({
               </p>
             </section>
           )}
+
+          <QuestionSuggestionForm />
         </div>
       </main>
     </AppShell>
