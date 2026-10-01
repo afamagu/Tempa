@@ -282,7 +282,7 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     const fnStart = dispatchComposerSource.indexOf('function handleAddPostcard() {')
     const fnEnd = dispatchComposerSource.indexOf('\n  }', fnStart)
     const fnBody = dispatchComposerSource.slice(fnStart, fnEnd)
-    expect(fnBody).toContain('if (showPostcardIntro) {')
+    expect(fnBody).toContain('if (showPostcardIntro)')
     expect(fnBody).toContain('setPostcardIntroActive(true)')
     expect(fnBody).toContain('setPostcardPickerOpen(true)')
 

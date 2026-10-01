@@ -409,7 +409,7 @@ export function docToMomentDrafts(doc: LetterDocJSON): MomentDraft[] {
  * where the writer placed it instead of jumping below the next passage.
  * A Moment can never be silently dropped for landing "out of range".
  */
-function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] {
+export function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] {
   const survivingRawIndices: number[] = []
   paragraphs.forEach((paragraph, rawIndex) => {
     if (paragraphPlainText(paragraph).trim().length > 0) survivingRawIndices.push(rawIndex)

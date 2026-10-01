@@ -79,6 +79,7 @@ import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
 import DispatchPreview from './dispatch-preview'
 import { WEB_PUBLIC_COPY, webVisibilityRefusal } from '@/lib/public-dispatches'
+import { dispatchMomentPlacementError, isDispatchMomentCollision, dispatchMomentMoveTargets, moveOverlappingDispatchPhoto } from '@/lib/dispatch-moment-placement'
 
 const TITLE_MAX_CHARS = 140
 
@@ -172,6 +173,7 @@ export default function DispatchComposer({
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
   const [previewMoments, setPreviewMoments] = useState<DispatchMoment[] | null>(null)
+  const [movePhotoTarget, setMovePhotoTarget] = useState('')
   const [preparingPreview, setPreparingPreview] = useState(false)
   const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
@@ -392,6 +394,11 @@ export default function DispatchComposer({
   async function handleSubmit() {
     const canPublish = isEdit ? canSubmit && !sponsorError : canPreview && !publishBlockedReason
     if (!editor || !canPublish) return
+    const placementError = dispatchMomentPlacementError(editor.getJSON() as LetterDocJSON)
+    if (placementError) {
+      setError(placementError)
+      return
+    }
     setPublishing(true)
     setError(null)
     if (official) {
@@ -452,6 +459,12 @@ export default function DispatchComposer({
     setPublishing(true)
     setError(null)
     const finalDoc = editor.getJSON() as LetterDocJSON
+    const placementError = dispatchMomentPlacementError(finalDoc)
+    if (placementError) {
+      setError(placementError)
+      setPublishing(false)
+      return
+    }
     const body = docToPlainBody(finalDoc)
     const moments: DispatchMomentDraft[] = docToMomentDrafts(finalDoc)
       .filter((m) => m.type === 'photo')
@@ -534,6 +547,10 @@ export default function DispatchComposer({
         const editLockMessage = 'This Dispatch can no longer be edited.'
         const momentPlacementMessage = 'Moment position is out of range for this Dispatch.'
         const webRefusal = webVisibilityRefusal(submitError?.message)
+        if (isDispatchMomentCollision(submitError)) {
+          setError('Two photos occupy the same written passage. Your draft is saved. Return to editing and move one photo to a different paragraph containing text, then preview again.')
+          return
+        }
         if (webRefusal) {
           setError(webRefusal)
           return
@@ -566,6 +583,12 @@ export default function DispatchComposer({
 
   async function handleOpenPreview() {
     if (!editor || preparingPreview) return
+    const placementError = dispatchMomentPlacementError(editor.getJSON() as LetterDocJSON)
+    if (placementError) {
+      setError(placementError)
+      return
+    }
+    setError(null)
     setPreparingPreview(true)
     try {
       const descriptors = docToDraftMomentDescriptors(editor.getJSON() as LetterDocJSON)
@@ -579,6 +602,24 @@ export default function DispatchComposer({
     } finally {
       setPreparingPreview(false)
     }
+  }
+
+  const placementProblem = editor ? dispatchMomentPlacementError(editor.getJSON() as LetterDocJSON) : null
+  const moveTargets = editor && placementProblem ? dispatchMomentMoveTargets(editor.getJSON() as LetterDocJSON) : []
+
+  function handleMoveOverlappingPhoto() {
+    if (!editor || movePhotoTarget === '') return
+    const moved = moveOverlappingDispatchPhoto(editor.getJSON() as LetterDocJSON, Number(movePhotoTarget))
+    if (!moved) {
+      setMovePhotoTarget('')
+      setError('That passage is no longer available. Choose another passage for this photo.')
+      return
+    }
+    editor.commands.setContent(moved)
+    persistDraft(title, topics)
+    setMovePhotoTarget('')
+    setPreviewMoments(null)
+    setError(dispatchMomentPlacementError(moved))
   }
 
   const backHref = isEdit && existingDispatch
@@ -725,6 +766,20 @@ export default function DispatchComposer({
         )}
 
         {error && <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p>}
+        {placementProblem && (
+          <div className="space-y-3 rounded-md border border-foreground/15 p-4">
+            <p className={helperTextClass}>Two photos share a written passage. Choose where to place the overlapping photo. Both photos and all your writing will be kept.</p>
+            <label className="block space-y-1 text-sm">
+              <span>Move the overlapping photo to</span>
+              <select value={movePhotoTarget} onChange={e => setMovePhotoTarget(e.target.value)} className={`${inputClass} w-full`}>
+                <option value="">Choose a written passage</option>
+                {moveTargets.map(t => <option key={t.rawIndex} value={t.rawIndex}>{t.label}</option>)}
+              </select>
+            </label>
+            {moveTargets.length === 0 && <p className={helperTextClass}>Add a paragraph containing text to make room for this photo.</p>}
+            <button type="button" onClick={handleMoveOverlappingPhoto} disabled={movePhotoTarget === '' || publishing || preparingPreview} className={secondaryButtonClass}>Move photo</button>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Link href={backHref} className={secondaryButtonClass}>Back</Link>
