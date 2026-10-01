@@ -121,7 +121,7 @@ export default async function PublicProfilePage({
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
 
   return (
-    <AppShell active="room" waitingLetterCount={waitingCount}>
+    <AppShell active={isSelf ? 'you' : 'room'} waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center p-6">
         <div className="w-full max-w-2xl space-y-8 py-10">
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}

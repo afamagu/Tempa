@@ -28,7 +28,7 @@ export default async function QuestionWritePage({
   const [{ data: answer }, writingStyleId] = await Promise.all([
     supabase
       .from('question_answers')
-      .select('body, updated_at, is_current')
+      .select('body, updated_at, is_current, moderation_status')
       .eq('question_id', question.id)
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -43,6 +43,7 @@ export default async function QuestionWritePage({
       isActive={question.isActive}
       isFlagship={question.isFlagship}
       initialAnswer={answer?.body ?? null}
+      editable={question.isActive && answer?.moderation_status !== 'hidden'}
       nextQuestion={null}
       writingStyleId={writingStyleId}
     />

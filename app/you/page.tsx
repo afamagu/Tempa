@@ -88,7 +88,7 @@ export default async function YouPage() {
             <p className={sectionLabelClass}>Your presence</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Link href={`/minds/${user.id}`} className={controlClass}><span>View your profile</span><span aria-hidden>→</span></Link>
-              <Link href="/you/responses" className={controlClass}><span>Your responses</span><span aria-hidden>→</span></Link>
+              <Link href="/you/archive" className={controlClass}><span>Your archive</span><span aria-hidden>→</span></Link>
               <Link href="/you/writing-style" className={controlClass}>
                 <span>Writing style</span>
                 <span className="flex items-center gap-2">
