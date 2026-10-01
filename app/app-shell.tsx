@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
+import MemberIntroductions from '@/app/member-introductions'
 import TempaEmblem from '@/app/tempa-emblem'
 
 type NavKey = 'home' | 'letters' | 'room' | 'board' | 'you'
@@ -125,6 +126,8 @@ export default function AppShell({
       </nav>
 
       <div className="flex-1 pb-16 sm:pb-0">{children}</div>
+
+      <MemberIntroductions enabled={activeNav === 'home'} />
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden">
         {NAV_ITEMS.map((item) => {

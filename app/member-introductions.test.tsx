@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
+import { stopIntroductionPresence } from '@/lib/introduction-visit'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { readFileSync } from 'node:fs'
@@ -8,13 +11,14 @@ import path from 'node:path'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const push = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/home' }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => state.pathname }))
 
 type Call = { fn: string; args: Record<string, unknown> }
 const state = {
   calls: [] as Call[],
   rows: [] as unknown[],
   fail: false,
+  pathname: '/home',
   sessionPayload: { session_id: 'visit-1' } as Record<string, string>,
 }
 const token = () => `h.${btoa(JSON.stringify(state.sessionPayload))}.s`
@@ -38,18 +42,18 @@ const { default: MemberIntroductions } = await import('./member-introductions')
 const row = (id: string) => ({
   candidate_id: id, pseudonym: `Name ${id}`, country: 'Kenya', gender: 'Woman', gender_custom: null, age_range: '25-34',
   mark_id: null, languages: ['English'], intent: ['Cultural exchange'], shared_languages: ['English'], shared_intents: [],
-  answer_id: `ans-${id}`, prompt: 'A question', body: 'Line one\n'.repeat(80),
+  priority_tier: 0, answer_id: `ans-${id}`, prompt: 'A question', body: 'Line one\n'.repeat(80),
 })
 
 let container: HTMLDivElement
 let root: Root
 
-async function mount() {
+async function mount(enabled = true) {
   container = document.createElement('div')
   container.id = 'app'
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => root.render(<MemberIntroductions />))
+  await act(async () => root.render(<NextIntlClientProvider locale="en" messages={en}><MemberIntroductions enabled={enabled} /></NextIntlClientProvider>))
   // idle callback fallback (setTimeout 300) + async RPCs
   await act(async () => { await vi.advanceTimersByTimeAsync(400) })
   await act(async () => { await vi.runOnlyPendingTimersAsync() })
@@ -82,16 +86,21 @@ async function swipe(dx: number, dy = 0) {
 }
 
 beforeEach(() => {
+  stopIntroductionPresence()
   vi.useFakeTimers()
-  sessionStorage.clear()
+  localStorage.clear()
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   push.mockReset()
   state.calls = []
   state.rows = ['A', 'B', 'C'].map(row)
   state.fail = false
+  state.pathname = '/home'
   state.sessionPayload = { session_id: 'visit-1' }
 })
 afterEach(async () => {
   await unmount()
+  stopIntroductionPresence()
+  vi.restoreAllMocks()
   vi.useRealTimers()
   document.body.innerHTML = ''
   document.body.style.overflow = ''
@@ -179,7 +188,7 @@ describe('Member introductions — presented vs consumed', () => {
     await click(button('Write to Name A'))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(called('consume_member_introduction')).toEqual([{ p_candidate_id: 'A', p_reason: 'write' }])
-    expect(push).toHaveBeenCalledWith('/write/A?a=ans-A')
+    expect(push).toHaveBeenCalledWith('/write/A?a=ans-A&source=member_introduction&returnTo=%2Fhome')
     const consumeOrder = state.calls.findIndex((c) => c.fn === 'consume_member_introduction')
     expect(consumeOrder).toBeGreaterThan(-1)
   })
@@ -189,8 +198,8 @@ describe('Member introductions — presented vs consumed', () => {
     await click(button(/View Name A.s profile/))
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(called('consume_member_introduction')).toEqual([{ p_candidate_id: 'A', p_reason: 'profile' }])
-    // no returnTo, so the profile's "← People" goes to /minds, never history-back to Home
-    expect(push).toHaveBeenCalledWith('/minds/A')
+    // Canonical profile preserves Home as the deterministic return destination.
+    expect(push).toHaveBeenCalledWith('/room/A?returnTo=%2Fhome')
     expect(dialog()).toBeNull()
   })
 })
@@ -233,6 +242,85 @@ describe('Member introductions — presentation contract', () => {
   })
   it('is mounted once in AppShell (not in onboarding, admin or compose)', () => {
     const shell = readFileSync(path.join(__dirname, 'app-shell.tsx'), 'utf8')
-    expect(shell).toContain('<MemberIntroductions />')
+    expect(shell).toContain("<MemberIntroductions enabled={activeNav === 'home'} />")
+  })
+})
+
+
+describe('Member introductions — long-return and navigation gates', () => {
+  it('a short absence does not fetch again', async () => {
+    await mount(); await click(button('Close introductions'))
+    const before = called('get_member_introductions').length
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60 * 1000) })
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(called('get_member_introductions')).toHaveLength(before)
+    expect(dialog()).toBeNull()
+  })
+  it('after twenty minutes away, only never-presented newcomers return', async () => {
+    await mount(); await click(button('Close introductions'))
+    state.rows = [ { ...row('A'), priority_tier: 2 }, { ...row('B'), priority_tier: 1 }, row('NEW') ]
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60 * 1000) })
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(current()).toBe('Name NEW')
+    expect(document.body.textContent).toContain('People to meet · 1 of 1')
+  })
+  it('a long return without unseen newcomers produces no overlay', async () => {
+    await mount(); await click(button('Close introductions'))
+    state.rows = [{ ...row('A'), priority_tier: 2 }]
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    await act(async () => { await vi.advanceTimersByTimeAsync(20 * 60 * 1000) })
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(dialog()).toBeNull()
+  })
+  it('active use of another menu does not count as an absence', async () => {
+    await mount(); await click(button('Close introductions')); await unmount()
+    state.pathname = '/letters'; await mount(false)
+    await act(async () => { await vi.advanceTimersByTimeAsync(25 * 60 * 1000) })
+    await unmount(); state.pathname = '/home'; await mount()
+    expect(dialog()).toBeNull()
+    expect(called('get_member_introductions')).toHaveLength(1)
+  })
+  it('an active focused composer does not count as an absence', async () => {
+    await mount(); await click(button('Close introductions')); await unmount()
+    await act(async () => { await vi.advanceTimersByTimeAsync(25 * 60 * 1000) })
+    await mount()
+    expect(dialog()).toBeNull()
+    expect(called('get_member_introductions')).toHaveLength(1)
+  })
+  it('a profile with Home active in its nav never opens the overlay', async () => {
+    state.pathname = '/room/A'; await mount()
+    expect(dialog()).toBeNull()
+    expect(called('get_member_introductions')).toHaveLength(0)
+  })
+  it('the name opens the canonical profile with its Home return path', async () => {
+    await mount()
+    const name = [...dialog()!.querySelectorAll('button')].find(b => b.textContent === 'Name A')!
+    await click(name)
+    expect(push).toHaveBeenCalledWith('/room/A?returnTo=%2Fhome')
+  })
+  it('focus wraps within the introduction and Escape restores the background', async () => {
+    await mount()
+    const buttons = [...dialog()!.querySelectorAll('button')]
+    buttons.at(-1)!.focus(); await key('Tab')
+    expect(document.activeElement).toBe(buttons[0])
+    await key('Escape')
+    expect(document.getElementById('app')!.hasAttribute('inert')).toBe(false)
+  })
+})
+
+describe('Member introductions — identity and focus', () => {
+  it('the Mark opens the same profile as the name', async () => {
+    await mount()
+    const markButton = dialog()!.querySelector<HTMLButtonElement>('button[aria-label="View Name A’s profile"]')!
+    await click(markButton)
+    expect(push).toHaveBeenCalledWith('/room/A?returnTo=%2Fhome')
+  })
+  it('closing restores the original focused control', async () => {
+    const original = document.createElement('button'); document.body.append(original); original.focus()
+    await mount(); await click(button('Close introductions'))
+    expect(document.activeElement).toBe(original)
+    original.remove()
   })
 })

@@ -420,5 +420,18 @@
     "reviewNote": "Las sugerencias se revisan antes de convertirse en una pregunta de la Room.",
     "invalidSuggestion": "Escribe la pregunta que te gustaría que la gente respondiera.",
     "suggestFailed": "No se pudo enviar tu sugerencia. Inténtalo de nuevo."
+  },
+  "MemberIntroductions": {
+    "progress": "Personas por conocer · {current} de {total}",
+    "close": "Cerrar presentaciones",
+    "viewProfile": "Ver el perfil de {name}",
+    "speaks": "Habla {languages}",
+    "inCommon": "En común:",
+    "hereFor": "Aquí para:",
+    "finish": "Terminar presentaciones",
+    "nextPerson": "Siguiente persona",
+    "done": "Listo",
+    "next": "Siguiente →",
+    "writeTo": "Escribir a {name}"
   }
 }

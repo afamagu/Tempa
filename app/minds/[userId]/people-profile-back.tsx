@@ -9,7 +9,7 @@ export default function PeopleProfileBack({ returnTo }: { returnTo?: string | nu
   const router = useRouter()
   const destination = sanitizeInternalPath(returnTo) ?? '/room'
 
-  const label = destination.startsWith('/letters/discover') ? 'Discover' : 'The Room'
+  const label = destination === '/home' ? 'Home' : destination.startsWith('/letters/discover') ? 'Discover' : 'The Room'
 
   return (
     <Link
@@ -17,7 +17,7 @@ export default function PeopleProfileBack({ returnTo }: { returnTo?: string | nu
       onClick={(event) => {
         // History restores the exact Room discovery state/scroll position;
         // href remains the deterministic fallback for reload/new-tab cases.
-        if (returnTo && window.history.length > 1) {
+        if (sanitizeInternalPath(returnTo) && destination !== '/home' && window.history.length > 1) {
           event.preventDefault()
           router.back()
         }

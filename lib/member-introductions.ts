@@ -45,6 +45,7 @@ type IntroductionRow = {
   answer_id: string
   prompt: string | null
   body: string
+  priority_tier?: number
 }
 
 export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId: string) => string): IntroductionCard[] {
@@ -72,11 +73,11 @@ export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId
 }
 
 /** Never throws: any failure means "nothing to show" (fail open). */
-export async function loadMemberIntroductions(supabase: SupabaseClient): Promise<IntroductionCard[]> {
+export async function loadMemberIntroductions(supabase: SupabaseClient, newcomersOnly = false): Promise<IntroductionCard[]> {
   try {
     const { data, error } = await supabase.rpc('get_member_introductions', { p_limit: MAX_INTRODUCTIONS })
     if (error || !Array.isArray(data)) return []
-    const cards = toIntroductionCards(data as IntroductionRow[], (markId) => publicProfileMarkUrl(supabase, `${markId}.png`))
+    const cards = toIntroductionCards((data as IntroductionRow[]).filter(row => !newcomersOnly || row.priority_tier === 0), (markId) => publicProfileMarkUrl(supabase, `${markId}.png`))
     const styles = await getMemberWritingStyles(supabase, cards.map((c) => c.candidateId))
     return cards.map((c) => ({ ...c, writingStyleId: styles.get(c.candidateId) ?? null }))
   } catch {
@@ -99,7 +100,7 @@ export async function consumeIntroduction(
   reason: IntroductionConsumeReason,
   timeoutMs = 1500
 ): Promise<void> {
-  const call = Promise.resolve(
+  const call = Promise.resolve().then(() =>
     supabase.rpc('consume_member_introduction', { p_candidate_id: candidateId, p_reason: reason })
   ).then(
     () => undefined,

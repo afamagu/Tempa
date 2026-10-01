@@ -16,19 +16,17 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
     expect(source).not.toContain('Back to Minds')
   })
 
-  it('both "Back" links say "Back to People", still pointing at the unchanged /minds route', () => {
-    const matches = source.match(/Back to People/g) ?? []
-    expect(matches.length).toBe(2)
-    // The internal route itself is deliberately unchanged — only the
-    // user-visible label moved.
-    expect(source).toContain('href="/minds"')
-    expect((source.match(/href="\/minds"/g) ?? []).length).toBe(2)
+  it('both Back links use the explicit return context for introductions and default to The Room', () => {
+    expect(source).toContain("backHref = '/room'")
+    expect(source).toContain("backLabel = 'The Room'")
+    expect((source.match(/href=\{backHref\}/g) ?? []).length).toBe(2)
+    expect((source.match(/Back to \{backLabel\}/g) ?? []).length).toBe(2)
   })
 
   it('the Sent screen (rendered when sent === true) is the one with "Back to People", not just the pre-send toolbar', () => {
     const sentBlockStart = source.indexOf('if (sent) {')
     const sentBlockEnd = source.indexOf('\n  }\n', sentBlockStart)
-    expect(source.slice(sentBlockStart, sentBlockEnd)).toContain('Back to People')
+    expect(source.slice(sentBlockStart, sentBlockEnd)).toContain('Back to {backLabel}')
   })
 })
 
