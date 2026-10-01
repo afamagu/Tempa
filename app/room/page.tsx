@@ -1,3 +1,4 @@
+import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
@@ -130,6 +131,7 @@ export default async function RoomPage({
               <h2 id="room-question-heading" className="mt-3 font-serif text-2xl leading-snug text-foreground sm:text-3xl">
                 {liveQuestion.prompt}
               </h2>
+              <RoomQuestionCredit questionId={liveQuestion.id} />
               <p className={`mt-3 ${helperTextClass}`}>{t('fewLines')}</p>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <Link href={`/question/${liveQuestion.id}?source=room`} className={primaryButtonClass}>

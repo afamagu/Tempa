@@ -12,6 +12,9 @@ export type AdminRoomQuestionSuggestion = {
   editorialNotes: string | null
   publishedQuestionId: string | null
   createdAt: string
+  memberQuestionId?: string
+  moderationStatus?: string
+  withdrawn?: boolean
 }
 
 export async function listRoomQuestionSuggestions(
@@ -31,6 +34,8 @@ export async function listRoomQuestionSuggestions(
     created_at: string
   }[]
 
+  const { data: questionDetails } = await supabase.rpc('admin_member_question_details')
+  const details = (questionDetails ?? []) as { suggestion_id: string; question_id: string; moderation_status: string; withdrawn: boolean }[]
   return {
     data: rows.map((row) => ({
       id: row.id,
@@ -41,6 +46,9 @@ export async function listRoomQuestionSuggestions(
       editorialNotes: row.editorial_notes,
       publishedQuestionId: row.published_question_id,
       createdAt: row.created_at,
+      memberQuestionId: details.find(q => q.suggestion_id === row.id)?.question_id,
+      moderationStatus: details.find(q => q.suggestion_id === row.id)?.moderation_status,
+      withdrawn: details.find(q => q.suggestion_id === row.id)?.withdrawn,
     })),
     error: null,
   }

@@ -1,0 +1,24 @@
+# Member questions: profile, private letters and Room selection
+
+New Room suggestions disclose publication on the member's profile. Public text is classified on an authenticated server action using the existing classifier's public-surface policy. Session identity, exact text, both rate checks and warning acknowledgement are verified on the server. Only a service-role RPC can create the public row; client-supplied classification and direct inserts are denied. Escalated questions await admin review and remain owner-only meanwhile. Three new submissions per rolling day remain the existing limit.
+
+Earlier private editorial suggestions remain private. Their author may explicitly publish each from their own profile; the server re-reads the owned stored text before classification. Private editorial notes never appear in the public RPC. Owners can hide/show a question, withdraw it, or change Room credit consent. Withdrawal hides it and stops future selection; an already selected Room question and sent letters remain intact, while its attribution disappears. Removing a question does not erase private correspondence.
+
+Profile questions appear before the member's answers, three at a time with More questions. The visitor's action opens the actual first-letter or established private composer with the question as separate context. A real current active answer remains the existing first-contact eligibility/Safety anchor; a member-question UUID is never placed in an answer foreign key. An existing pending first contact opens its acceptance/reading route instead of starting another. People without an eligible answer cannot receive a new first contact through this feature. Established pairs retain Write Anytime, delivery rules, photo consent, Postcards and send idempotency. Question drafts have independent text/photo/Postcard keys and remount on source changes. Back returns to the originating profile, then its validated Discover/Home/Room destination. Nothing is automatically sent.
+
+The database wrapper calls the existing send_first_letter/write_letter_once functions unchanged and records the question snapshot in the same transaction. Denied or failed sends roll back metadata. Established retries require the same sender, correspondence and question; ordinary or unrelated submissions cannot be retroactively relabelled. A successful retry still resolves after the source question is withdrawn. Context is readable only through the delivered participant letter view. Private composers have no @picker.
+
+Admin suggestions include a final-prompt preview and explicit Select as the Room question action. Selection, approval, source linkage and current-slot update are atomic, idempotent and admin-gated. The existing live admin_make_current_room_question function preserves the Flagship slot. Room/Home/question-writing views show a restrained current Mark/name attribution only with consent and a visible author. Profile visibility can remain off after Room selection. Admin may separately approve/hide profile publication. There is no scheduled rotation and no email dispatch or configuration change.
+
+## Release order
+
+1. Run docs/sql/2026-10-01-member-question-profiles.sql in the production SQL editor.
+2. Run docs/sql/2026-10-01-member-question-profiles-verify.sql. Require MEMBER_QUESTIONS_READY and every boolean true.
+3. Merge the implementation PR and require the normal deployment to succeed.
+4. Authenticated phone acceptance: submit a normal question, view another account's profile, write privately, refresh an unsent draft, send, read the saved question context, return through the profile to Discover; test established and pending correspondence too. Owner hide/show/remove/credit and admin preview/select should reflect in a second member session. Existing private suggestions must stay private until opted in.
+
+## Validation
+
+- PGlite execution of repeatable migration and verifier, actual supplied live admin-function fixtures, publication grants, warn/deny, own/public RLS, legacy ownership, blocked/deactivated authors, owner visibility/withdrawal, consent withdrawal, atomic selection and Flagship preservation, delivered-participant context, failed-send rollback and scoped retries. Base letter senders are test delegation stubs; these tests do not replace the existing sender/Safety test suites.
+- 1,036 passing focused Vitest tests for submission acknowledgement/denial, server-derived identity and public classification, rate failure, owner/visitor links, pending contact, first/established composer Safety ordering, draft persistence, letter lifecycle, private sharing and navigation.
+- TypeScript and production build pass; ESLint has no errors (two image warnings, including the existing composer image). Authenticated production phone acceptance remains a post-deployment check; no claim is made that it has already occurred.

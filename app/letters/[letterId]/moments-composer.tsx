@@ -112,6 +112,8 @@ import LetterPreview from './letter-preview'
  */
 export default function MomentsComposer({
   correspondenceId,
+  memberQuestionId,
+  memberQuestionPrompt,
   replyToId,
   momentsQualified,
   canSendPhoto,
@@ -127,6 +129,8 @@ export default function MomentsComposer({
   senderWritingStyleId = null,
 }: {
   correspondenceId: string
+  memberQuestionId?: string
+  memberQuestionPrompt?: string
   /** Optional contextual ancestry only ("this letter was written in
    * response to that one") — never a turn-taking lock. Passed through
    * to write_letter's p_reply_to_id unchanged; omitted entirely for the
@@ -212,6 +216,7 @@ export default function MomentsComposer({
   senderWritingStyleId?: string | null
 }) {
   const router = useRouter()
+  const draftKey = memberQuestionId ? `${correspondenceId}:mq:${memberQuestionId}` : correspondenceId
   // Two SEPARATE, statically-configured inputs rather than one shared
   // input with `capture` toggled on/off right before each click. The
   // latter is a known-unreliable pattern: several mobile browsers decide
@@ -377,7 +382,7 @@ export default function MomentsComposer({
       },
     },
     onUpdate({ editor: current }) {
-      writeLetterEditorDraft(correspondenceId, current.getJSON() as LetterDocJSON)
+      writeLetterEditorDraft(draftKey, current.getJSON() as LetterDocJSON)
     },
   })
 
@@ -389,7 +394,7 @@ export default function MomentsComposer({
   // correctness, same as the previous composer.
   useEffect(() => {
     if (!editor) return
-    const richDraft = readLetterEditorDraft(correspondenceId)
+    const richDraft = readLetterEditorDraft(draftKey)
     if (richDraft) {
       // Pre-migration audit correction (2026-09-14), Part 2 — a draft
       // saved before Letter-Level Postcards V1 may still carry an old
@@ -415,7 +420,7 @@ export default function MomentsComposer({
               revealLine: '',
               backMessage: '',
             }
-            writeLetterPostcardDraft(correspondenceId, migrated)
+            writeLetterPostcardDraft(draftKey, migrated)
             return migrated
           })
         })
@@ -428,10 +433,10 @@ export default function MomentsComposer({
     // plain-text-only draft format at the moment this shipped, so it
     // isn't silently lost — that format never stored Moments, so there
     // is nothing to restore beyond the words themselves.
-    const legacyDraft = readLetterDraft(correspondenceId)
+    const legacyDraft = readLetterDraft(draftKey)
     if (legacyDraft) {
       editor.commands.setContent(plainBodyToLetterDoc(legacyDraft))
-      clearLetterDraft(correspondenceId)
+      clearLetterDraft(draftKey)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])
@@ -450,7 +455,7 @@ export default function MomentsComposer({
   // but keeps this a genuine one-time hydration read rather than the
   // synchronous-setState-in-effect pattern React's own lint rule flags.
   useEffect(() => {
-    const restored = readLetterPostcardDraft(correspondenceId)
+    const restored = readLetterPostcardDraft(draftKey)
     queueMicrotask(() => setPostcardDraft(restored))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -482,7 +487,7 @@ export default function MomentsComposer({
   // writeLetterPostcardDraft's own doc comment).
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
     setPostcardDraft(next)
-    writeLetterPostcardDraft(correspondenceId, next)
+    writeLetterPostcardDraft(draftKey, next)
   }
 
   // The SAME editor.getJSON() call feeds the button's enable state and
@@ -805,7 +810,8 @@ export default function MomentsComposer({
         p_postcard: postcardPayload,
         p_warning_acknowledged: warningAcknowledged,
       }
-      let { error: sendError } = await supabase.rpc('write_letter_once', {
+      let { error: sendError } = await supabase.rpc(memberQuestionId ? 'write_letter_from_member_question_once' : 'write_letter_once', {
+        ...(memberQuestionId ? { p_member_question_id: memberQuestionId } : {}),
         p_client_submission_id: submissionIdRef.current,
         ...letterArgs,
       })
@@ -813,7 +819,7 @@ export default function MomentsComposer({
       // idempotency.sql is applied, PostgREST reports the function as
       // missing (PGRST202) — fall back to the original, non-idempotent
       // write_letter rather than failing every send.
-      if (sendError?.code === 'PGRST202') {
+      if (!memberQuestionId && sendError?.code === 'PGRST202') {
         ;({ error: sendError } = await supabase.rpc('write_letter', letterArgs))
       }
       if (timingRef.current) {
@@ -890,8 +896,8 @@ export default function MomentsComposer({
         timingRef.current.report.outcome = 'sent'
         timingRef.current.ackAt = performance.now()
       }
-      clearLetterEditorDraft(correspondenceId)
-      clearLetterPostcardDraft(correspondenceId)
+      clearLetterEditorDraft(draftKey)
+      clearLetterPostcardDraft(draftKey)
       setPendingWarning(null)
       router.push(cancelHref)
     } catch (err) {
@@ -947,6 +953,7 @@ export default function MomentsComposer({
 
   return (
     <div ref={composerRootRef} className="space-y-4">
+      {memberQuestionPrompt && <div className="space-y-2 border-l-2 border-accent/40 pl-4"><p className="text-sm text-foreground/60">A question from {recipientPseudonym}</p><p className="whitespace-pre-wrap font-serif text-lg leading-relaxed">{memberQuestionPrompt}</p></div>}
       <PhotoSourceInputs
         libraryInputRef={libraryInputRef}
         cameraInputRef={cameraInputRef}

@@ -1,3 +1,4 @@
+import { introductionReturnPath } from '@/lib/introduction-navigation'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -56,17 +57,22 @@ export default async function WriteToPersonPage({
   searchParams,
 }: {
   params: Promise<{ userId: string }>
-  searchParams: Promise<{ replyTo?: string }>
+  searchParams: Promise<{ replyTo?: string; mq?: string; returnTo?: string }>
 }) {
   const { userId: otherUserId } = await params
-  const { replyTo } = await searchParams
+  const { replyTo, mq, returnTo } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/sign-in')
+    const query = new URLSearchParams()
+    if (replyTo) query.set('replyTo', replyTo)
+    if (mq) query.set('mq', mq)
+    const safeReturn = introductionReturnPath(returnTo)
+    if (safeReturn) query.set('returnTo', safeReturn)
+    redirect(`/sign-in?next=${encodeURIComponent(`/letters/with/${otherUserId}/write${query.size ? `?${query}` : ''}`)}`)
   }
 
   if (otherUserId === user.id) {
@@ -91,7 +97,9 @@ export default async function WriteToPersonPage({
     notFound()
   }
 
-  const cancelHref = `/letters/with/${otherUserId}`
+  const cancelHref = introductionReturnPath(returnTo) ?? `/letters/with/${otherUserId}`
+  const { data: memberQuestion } = mq ? await supabase.from('member_questions').select('id, body').eq('id', mq).eq('author_id', otherUserId).eq('is_profile_visible', true).eq('moderation_status', 'visible').is('withdrawn_at', null).maybeSingle() : { data: null }
+  if (mq && !memberQuestion) redirect(cancelHref)
 
   // correspondence (found above) confirms established_at is set in the
   // DATABASE — a necessary but not sufficient condition. This viewer
@@ -235,7 +243,10 @@ export default async function WriteToPersonPage({
       <div className="flex-1 px-4 py-6 sm:px-6">
         <div className="mx-auto w-full max-w-2xl">
           <MomentsComposer
+            key={`${correspondence.id}:${memberQuestion?.id ?? 'ordinary'}`}
             correspondenceId={correspondence.id}
+            memberQuestionId={memberQuestion?.id}
+            memberQuestionPrompt={memberQuestion?.body}
             replyToId={replyToId}
             momentsQualified={momentsQualified}
             canSendPhoto={canSendPhoto}

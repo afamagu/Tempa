@@ -37,7 +37,7 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
 describe('FirstLetterComposer — Safety-gated send (Checkpoint 3)', () => {
   it('evaluates via evaluateSafety before ever calling send_first_letter', () => {
     const evaluateIndex = source.indexOf('evaluateSafety({')
-    const rpcIndex = source.indexOf("supabase.rpc('send_first_letter'")
+    const rpcIndex = source.indexOf("supabase.rpc(memberQuestionId ? 'send_first_letter_from_member_question'")
     expect(evaluateIndex, 'expected a call to evaluateSafety').toBeGreaterThan(-1)
     expect(rpcIndex, 'expected a call to send_first_letter').toBeGreaterThan(-1)
     expect(evaluateIndex).toBeLessThan(rpcIndex)

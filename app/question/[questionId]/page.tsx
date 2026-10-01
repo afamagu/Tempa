@@ -1,3 +1,4 @@
+import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getQuestionById } from '@/lib/questions'
@@ -36,6 +37,8 @@ export default async function QuestionWritePage({
   ])
 
   return (
+    <>
+    <div className="mx-auto max-w-2xl px-6 pt-4"><RoomQuestionCredit questionId={question.id} /></div>
     <QuestionAnswer
       userId={user.id}
       questionId={question.id}
@@ -47,5 +50,6 @@ export default async function QuestionWritePage({
       nextQuestion={null}
       writingStyleId={writingStyleId}
     />
+    </>
   )
 }

@@ -1,3 +1,4 @@
+import ProfileQuestions from '@/app/member-questions/profile-questions'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -105,6 +106,12 @@ export default async function PublicProfilePage({
     getEditorialBylines(supabase),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, viewer.id, userId),
   ])
+  const [{ data: memberQuestions }, { data: legacyQuestions }, { data: eligibleAnswers }, incomingFirstContact] = await Promise.all([
+    supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
+    isSelf ? supabase.rpc('my_unpublished_question_suggestions') : Promise.resolve({ data: [] }),
+    supabase.from('question_answers').select('id, questions!inner(is_active)').eq('user_id', userId).eq('is_current', true).eq('moderation_status', 'visible').eq('questions.is_active', true).limit(1),
+    isSelf ? Promise.resolve(null) : getFirstContact(supabase, userId, viewer.id),
+  ])
   const writingStyleId = writingStyles.get(userId) ?? null
   const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
@@ -147,6 +154,11 @@ export default async function PublicProfilePage({
               )}
             </div>
           </div>
+
+          <ProfileQuestions key={`${userId}:${JSON.stringify(memberQuestions ?? [])}`} ownerId={userId} name={profile.pseudonym} own={isSelf} initial={memberQuestions ?? []} legacy={legacyQuestions ?? []}
+            writeHref={isSelf ? null : alreadyCorresponding ? `/letters/with/${userId}/write` : firstContact || (incomingFirstContact?.status === 'sent') ? null : eligibleAnswers?.[0] ? `/write/${userId}?a=${eligibleAnswers[0].id}` : null}
+            pendingLetterHref={!alreadyCorresponding && (firstContact || incomingFirstContact?.status === 'sent') ? `/letters/${firstContact?.id ?? incomingFirstContact?.id}` : undefined}
+            returnTo={profileReturn ?? `/room/${userId}`} />
 
           {primaryAnswer && (
             <div className="space-y-6">
