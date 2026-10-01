@@ -24,8 +24,7 @@ describe('Home — Arrivals, Room conversation, Board, announcement', () => {
   })
 
   it('uses the same live Question for answer cards, CTA and more-answer browsing', () => {
-    expect(source).toContain('questionId: currentRoomQuestion.id')
-    expect(source).toContain('getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id')
+    expect(source).toContain('getHomeQuestionAnswers(supabase, user.id, currentRoomQuestion)')
     expect(source).toContain('/question/${currentRoomQuestion.id}?source=home_room')
     expect(source).toContain('/room?question=${currentRoomQuestion.id}')
     expect(source).not.toContain('<RecommendedMindCard')
@@ -35,14 +34,11 @@ describe('Home — Arrivals, Room conversation, Board, announcement', () => {
     expect(source).toContain('seenBoardAuthors.has(item.authorId)')
     expect(source).toContain('seenBoardIds.has(item.id)')
     expect(source).toContain('homeBoardItems.length < HOME_BOARD_COUNT')
-    expect(source).toContain('excludeUserIds: [...seenBoardAuthors]')
   })
 
   it('bounds Home answers at three and records only the selected candidates', () => {
-    expect(source).toContain('const HOME_ROOM_ANSWER_COUNT = 3')
-    expect(source).toContain('limit: 24')
-    expect(source).toContain('!readIds.has(candidate.answerId)')
-    expect(source).toContain('slice(0, HOME_ROOM_ANSWER_COUNT)')
+    expect(source).toContain('homeRoomAnswers.length > 0')
+    expect(source).not.toContain('getDiscoveryPage')
     expect(source).toContain("recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')")
   })
 
@@ -54,6 +50,6 @@ describe('Home — Arrivals, Room conversation, Board, announcement', () => {
 
   it('puts new copy through the interface dictionaries', () => {
     expect(source).toContain("getTranslations('RoomEngagement')")
-    for (const key of ['thisWeek','readEdit','answerQuestion','peopleSaid','moreAnswers','findWriter']) expect(source).toContain(`t('${key}')`)
+    for (const key of ['thisWeek','readEdit','answerQuestion','peopleSaid','moreAnswers']) expect(source).toContain(`t('${key}')`)
   })
 })

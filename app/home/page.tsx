@@ -21,8 +21,8 @@ import {
   partitionHomeSections,
   readingTrailSearchParams,
 } from '@/lib/dispatches'
-import { getCurrentRoomQuestion, getMyAnswers, getQuestionAnswerEncounters } from '@/lib/questions'
-import { getDiscoveryPage, type DiscoveryCandidate } from '@/lib/discovery'
+import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
+import { getHomeQuestionAnswers } from '@/lib/home-question-answers'
 import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
 import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
@@ -47,7 +47,6 @@ import AnnouncementTeaser from './announcement-teaser'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 
-const HOME_ROOM_ANSWER_COUNT = 3
 const HOME_BOARD_COUNT = 3
 
 export default async function HomePage() {
@@ -119,74 +118,9 @@ export default async function HomePage() {
   const hasActiveCorrespondence = hasVisibleReply(allLetters)
   const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null
 
-  // Prefer V2 so Home participates in the same unseen/underexposure fairness
-  // ledger as The Room. Before production SQL is applied, fall back to the
-  // existing exact-Question helper rather than hiding the conversation.
-  let roomCandidates: DiscoveryCandidate[] = []
-  if (currentRoomQuestion) {
-    const preferred = await getDiscoveryPage(supabase, {
-      questionId: currentRoomQuestion.id,
-      excludeUserIds: [...seenBoardAuthors],
-      limit: 24,
-    })
-    roomCandidates = preferred.candidates
-
-    if (roomCandidates.length < HOME_ROOM_ANSWER_COUNT && preferred.fairRankingApplied) {
-      const fallback = await getDiscoveryPage(supabase, {
-        questionId: currentRoomQuestion.id,
-        limit: 24,
-      })
-      const seen = new Set(roomCandidates.map((candidate) => candidate.userId))
-      for (const candidate of fallback.candidates) {
-        if (seen.has(candidate.userId)) continue
-        roomCandidates.push(candidate)
-        seen.add(candidate.userId)
-        if (roomCandidates.length >= 24) break
-      }
-    }
-
-    if (!preferred.fairRankingApplied) {
-      const legacyPreferred = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
-        excludeUserIds: [...seenBoardAuthors],
-        limit: 24,
-      })
-      const legacyAnswers = [...legacyPreferred]
-      if (legacyAnswers.length < HOME_ROOM_ANSWER_COUNT) {
-        const legacyFallback = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
-          limit: 24,
-        })
-        const seen = new Set(legacyAnswers.map((answer) => answer.userId))
-        for (const answer of legacyFallback) {
-          if (seen.has(answer.userId)) continue
-          legacyAnswers.push(answer)
-          seen.add(answer.userId)
-          if (legacyAnswers.length >= HOME_ROOM_ANSWER_COUNT) break
-        }
-      }
-      roomCandidates = legacyAnswers.map((answer) => ({
-        userId: answer.userId,
-        pseudonym: answer.pseudonym,
-        country: answer.country ?? '',
-        gender: null,
-        genderCustom: null,
-        ageRange: '',
-        markId: answer.markId,
-        answerId: answer.answerId,
-        body: answer.body,
-        prompt: currentRoomQuestion.prompt,
-      }))
-    }
-  }
-
-  if (!currentRoomQuestion) {
-    const discovery = await getDiscoveryPage(supabase, { limit: 24 })
-    roomCandidates = discovery.candidates
-  }
-
-  // Read history is separate from exposure and introductions. Never refill with read answers.
-  const { data: readRows, error: readError } = roomCandidates.length ? await supabase.from('member_answer_reads').select('answer_id').eq('viewer_id', user.id).in('answer_id', roomCandidates.map(candidate => candidate.answerId)) : { data: [], error: null }
-  const readIds = new Set((readRows ?? []).map(row => row.answer_id as string))
-  roomCandidates = readError ? [] : roomCandidates.filter(candidate => !readIds.has(candidate.answerId)).slice(0, HOME_ROOM_ANSWER_COUNT)
+  const roomCandidates = currentRoomQuestion
+    ? await getHomeQuestionAnswers(supabase, user.id, currentRoomQuestion)
+    : []
   await recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')
 
   const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
@@ -311,24 +245,11 @@ export default async function HomePage() {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  {homeRoomAnswers.length > 0 && <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <Link href={`/room?question=${currentRoomQuestion.id}`} className={secondaryButtonClass}>
                       {t('moreAnswers')}
                     </Link>
-                    <Link href="/letters/discover" className={quietLinkClass}>
-                      {t('findWriter')} →
-                    </Link>
-                  </div>
-                </section>
-              )}
-
-              {!currentRoomQuestion && (
-                <section aria-labelledby="home-people-heading" className="space-y-4">
-                  <h2 id="home-people-heading" className={sectionLabelClass}>{t('findWriter')}</h2>
-                  {homeRoomAnswers.length > 0 && <div className="grid gap-4 md:grid-cols-3">
-                    {homeRoomAnswers.map((answer) => <RoomAnswerCard key={answer.userId} answer={answer} />)}
                   </div>}
-                  <Link href="/letters/discover" className={quietLinkClass}>{t('findWriter')} →</Link>
                 </section>
               )}
 

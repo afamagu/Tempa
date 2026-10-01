@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Home",
-    "letters": "Letters",
+    "letters": "Letterbox",
     "room": "The Room",
     "board": "The Board",
     "you": "You"
@@ -85,7 +85,7 @@
     "languages": "Languages"
   },
   "Letters": {
-    "heading": "Letters",
+    "heading": "Letterbox",
     "penPals": "Pen Pals",
     "discover": "Discover People"
   },
@@ -388,7 +388,7 @@
     "thisWeek": "This week in The Room",
     "readEdit": "Read or edit your answer",
     "answerQuestion": "Answer the Question",
-    "peopleSaid": "See what people said",
+    "peopleSaid": "See how others answered",
     "moreAnswers": "See more answers →",
     "findWriter": "Find someone worth writing to",
     "readMember": "Read {name} →",
