@@ -12,9 +12,9 @@
  * friendship"), shown on the public profile under an "Interests" label
  * (app/minds/[userId]/interests-disclosure.tsx). This is a SEPARATE,
  * unrelated concept — deliberately never shown on any public profile —
- * so every user-facing surface for THIS feature says "reading interests"
- * / "what you love reading about," never a bare "Interests" label, to
- * avoid colliding with that existing one.
+ * Discovery now uses these same signup selections for internal compatibility
+ * and its Interests filter, separate from the public Looking for intentions.
+ * Raw saved lists remain owner-only and are not returned on profile cards.
  */
 
 export type InterestOption = { key: string; label: string }

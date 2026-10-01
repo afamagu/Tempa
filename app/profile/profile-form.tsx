@@ -412,6 +412,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
             <p className={sectionLabelClass}>{t('readingInterests')}</p>
             <div className="space-y-1.5" ref={registerFieldRef('interests')}>
               <p className={helperTextClass}>{t('interestsHelp', { min: MIN_RECOMMENDED_INTERESTS })}</p>
+              <p className={helperTextClass}>{t('interestDiscoveryHelp')}</p>
               <ChoiceGroup ariaLabel={t('readingInterests')} options={interestOptions} selected={readingInterests} onToggle={toggleInterest} layout="pill" />
               {fieldErrors.interests && <p className="text-xs text-red-600" role="alert">{fieldErrors.interests}</p>}
             </div>

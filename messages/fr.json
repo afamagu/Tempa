@@ -91,7 +91,7 @@
   },
   "Discovery": {
     "intro": "Trouvez quelqu’un à qui vous aimeriez écrire.",
-    "search": "Rechercher un pseudonyme",
+    "search": "Rechercher",
     "searchButton": "Rechercher",
     "filters": "Filtres",
     "country": "Pays",
@@ -115,7 +115,13 @@
     "windowEnd": "Lancez une nouvelle recherche pour continuer.",
     "suggested": "Suggestions pour vous",
     "previousPeople": "Personnes précédentes",
-    "nextPeople": "Personnes suivantes"
+    "nextPeople": "Personnes suivantes",
+    "interest": "Centres d’intérêt",
+    "browse": "Découvrir des personnes",
+    "suggestedHelp": "Des personnes avec des centres d’intérêt et des motivations en commun.",
+    "retry": "Réessayer",
+    "loadingPeople": "Recherche de personnes…",
+    "matchingHelp": "Vos centres d’intérêt vous aident aussi à découvrir des personnes. Votre liste enregistrée ne figure pas sur votre profil."
   },
   "Correspondents": {
     "heading": "Vos correspondants",
@@ -301,7 +307,8 @@
       "sport-fitness": "Sport et forme",
       "everyday-life": "Vie quotidienne"
     },
-    "reserved": "Ce nom est réservé."
+    "reserved": "Ce nom est réservé.",
+    "interestDiscoveryHelp": "Vos centres d’intérêt vous aident aussi à découvrir des personnes. Votre liste enregistrée ne figure pas sur votre profil."
   },
   "MarkOnboarding": {
     "label": "Votre Mark",

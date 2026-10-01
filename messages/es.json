@@ -91,7 +91,7 @@
   },
   "Discovery": {
     "intro": "Encuentra a alguien a quien valga la pena escribir.",
-    "search": "Buscar por seudónimo",
+    "search": "Buscar",
     "searchButton": "Buscar",
     "filters": "Filtros",
     "country": "País",
@@ -115,7 +115,13 @@
     "windowEnd": "Inicia una nueva búsqueda para seguir explorando.",
     "suggested": "Sugerencias para ti",
     "previousPeople": "Personas anteriores",
-    "nextPeople": "Personas siguientes"
+    "nextPeople": "Personas siguientes",
+    "interest": "Intereses",
+    "browse": "Descubrir personas",
+    "suggestedHelp": "Personas con intereses y motivos para estar aquí en común.",
+    "retry": "Intentar de nuevo",
+    "loadingPeople": "Buscando personas…",
+    "matchingHelp": "Tus intereses también te ayudan a descubrir personas. Tu lista guardada no se muestra en tu perfil."
   },
   "Correspondents": {
     "heading": "Tus corresponsales",
@@ -301,7 +307,8 @@
       "sport-fitness": "Deporte y ejercicio",
       "everyday-life": "Vida cotidiana"
     },
-    "reserved": "Ese nombre está reservado."
+    "reserved": "Ese nombre está reservado.",
+    "interestDiscoveryHelp": "Tus intereses también te ayudan a descubrir personas. Tu lista guardada no se muestra en tu perfil."
   },
   "MarkOnboarding": {
     "label": "Tu Mark",

@@ -40,6 +40,10 @@ export type DiscoveryRequest = {
   intent?: string
   search?: string
   profileLed?: boolean
+  interest?: string
+  peopleMode?: 'browse' | 'suggested'
+  browseSeed?: string
+  afterUserId?: string
   country?: string
   gender?: string
   ageRange?: string
@@ -109,6 +113,17 @@ function mapRpcResult(data: unknown, limit: number, fairRankingApplied: boolean)
 export async function getDiscoveryPage(supabase: SupabaseClient, request: DiscoveryRequest = {}): Promise<DiscoveryPage> {
   const limit = Math.min(Math.max(1, Math.floor(Number.isFinite(request.limit) ? request.limit! : DISCOVERY_BATCH_SIZE)), MAX_DISCOVERY_LIMIT)
   const offset = Math.min(Math.max(0, Math.floor(Number.isFinite(request.offset) ? request.offset! : 0)), 2147483647)
+
+  if (request.peopleMode) {
+    const { data, error } = await supabase.rpc('discover_profile_people', {
+      p_country: request.country || null, p_gender: request.gender || null,
+      p_age_range: request.ageRange || null, p_language: request.language || null,
+      p_intent: request.intent || null, p_interest: request.interest || null,
+      p_search: request.search || null, p_exclude_user_ids: request.excludeUserIds ?? [],
+      p_seed: request.browseSeed || '', p_after_user_id: request.afterUserId || null, p_suggested: request.peopleMode === 'suggested', p_limit: limit,
+    })
+    return error || !data ? { ...EMPTY, unavailable: true } : mapRpcResult(data, limit, true)
+  }
 
   // Profile-led search/filtering is performed inside Postgres under the
   // caller's RLS context, never by downloading the profile population.

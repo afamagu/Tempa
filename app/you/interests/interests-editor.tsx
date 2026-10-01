@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { setProfileInterests } from '@/lib/profile-interests'
@@ -15,6 +16,7 @@ import { helperTextClass } from '@/app/profile/ui'
  * edit-later surface needs that a one-shot onboarding form doesn't.
  */
 export default function InterestsEditor({ initialSelectedKeys }: { initialSelectedKeys: string[] }) {
+  const t = useTranslations('ProfileSetup')
   const router = useRouter()
   const [selected, setSelected] = useState<string[]>(initialSelectedKeys)
   const [saving, setSaving] = useState(false)
@@ -50,6 +52,7 @@ export default function InterestsEditor({ initialSelectedKeys }: { initialSelect
         <p className={helperTextClass}>
           Pick a few ({MIN_RECOMMENDED_INTERESTS}+ works best, up to {MAX_INTERESTS}).
         </p>
+        <p className={helperTextClass}>{t('interestDiscoveryHelp')}</p>
         <ChoiceGroup
           ariaLabel="What do you love reading about?"
           options={INTEREST_TAXONOMY.map((i) => ({ value: i.key, label: i.label }))}
