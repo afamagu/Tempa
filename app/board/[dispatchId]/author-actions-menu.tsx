@@ -18,73 +18,32 @@ function KebabIcon() {
   )
 }
 
-/**
- * The Dispatch author's restrained actions control — one icon-only
- * trigger opening a bottom sheet, rather than four large buttons
- * cluttering the reading header (Board usability checkpoint,
- * 2026-09-09). Same bottom-sheet grammar as the composer's own photo-
- * source picker (dispatch-composer.tsx) — deliberately reused rather
- * than inventing a dropdown/click-outside pattern this codebase doesn't
- * otherwise have. Delete uses an inline confirm swap within the same
- * sheet (the established pattern — see app/letters/remove-from-
- * letterbox.tsx), never a native window.confirm().
- *
- * Edit/Share/Stop-sharing/Pin/Delete are all re-validated author-side by
- * their own RPCs regardless of anything this component does — it exists
- * for a restrained presentation, not as the actual authorization
- * boundary.
- *
- * Board live-test corrections (2026-09-10): two changes from the
- * checkpoint that first shipped this menu. (1) Item order/spacing —
- * live testing found the mobile sheet cramped and hierarchy unclear;
- * the fixed order is now Edit, Pin/Unpin, Share/Stop-sharing, a divider,
- * then destructive Delete, then a quiet full-width Cancel, each with
- * real separation. (2) A "Share externally" action now appears here
- * too when nothing is currently shared — previously the ONLY way to
- * start sharing was the separate, always-visible ShareDispatchButton
- * next to this menu, so this menu's own language ("Stop sharing
- * externally" with nothing to start it) was inconsistent. Sharing again
- * after a stop always produces a brand-new token (share_dispatch's own
- * get-or-create semantics — see lib/dispatches.ts) — the old link never
- * resurrects.
- *
- * Desktop gets a restrained anchored popover instead of a full-width
- * mobile sheet (sm: breakpoint) — same content, just not an oversized
- * sheet on a pointer-driven layout with room to spare.
- */
+/** The Dispatch author's restrained actions control. Every mutation is
+ * still re-validated server-side; these booleans only keep the UI from
+ * advertising actions the current read already knows cannot succeed. */
 export default function AuthorActionsMenu({
   dispatchId,
   initialShareToken,
   initialIsPinned,
   momentImagePaths,
   editable,
+  deletable = true,
   allowPin = true,
   editHref,
 }: {
   dispatchId: string
   initialShareToken: string | null
   initialIsPinned: boolean
-  /** This Dispatch's own Moment storage paths, fetched by the reader
-   * page BEFORE deletion — once delete_dispatch succeeds the
-   * dispatch_moments rows naming these paths are already gone, so the
-   * caller must already hold them to clean up storage afterward. */
   momentImagePaths: string[]
-  /**
-   * Smoke-test contract completion checkpoint — server-resolved
-   * canEditDispatch (lib/dispatches.ts): "the product should not tease
-   * an unavailable action." This is a UI HINT only, not the authority —
-   * update_dispatch re-checks both the 30-minute window and the reply
-   * lock itself, fresh, on every save, regardless of what this prop
-   * says. A stale `true` here (e.g. a reply landed after this page
-   * rendered) simply means Save fails safely with a restrained error;
-   * it never means an ineligible edit can succeed.
-   */
   editable: boolean
-  /** Official/Sponsored Dispatches — false: a Tempa or Sponsored
-   * Dispatch is never pinned to the creating admin's own profile. */
+  /** False once this read can already see a Reply. delete_dispatch is
+   * still the authority and permanently refuses deletion after ANY Reply
+   * has ever existed, including a later-hidden/tombstoned one. */
+  deletable?: boolean
+  /** Official/Sponsored Dispatches are never pinned to the creating
+   * admin's member profile. */
   allowPin?: boolean
-  /** Official/Sponsored Dispatches edit through Admin Content (staff-only
-   * update_official_dispatch), never the member edit path. */
+  /** Official/Sponsored Dispatches edit through Admin Content. */
   editHref?: string
 }) {
   const router = useRouter()
@@ -165,18 +124,13 @@ export default function AuthorActionsMenu({
   }
 
   async function handleDelete() {
-    if (busy) return
+    if (busy || !deletable) return
     setBusy(true)
     setError(null)
     try {
       const supabase = createClient()
       const { error: deleteError } = await deleteDispatch(supabase, dispatchId)
       if (deleteError) {
-        // Board Experience Phase 2B pre-SQL correction: a Dispatch with
-        // Replies cannot be deleted at all right now (see delete_
-        // dispatch's own guard) — "Please try again" would be
-        // misleading for that specific, permanent condition, so it gets
-        // its own coherent message instead of the generic retry copy.
         setError(
           deleteError.message === 'This Dispatch cannot be deleted while it still has Replies.'
             ? deleteError.message
@@ -185,13 +139,6 @@ export default function AuthorActionsMenu({
         return
       }
       if (momentImagePaths.length > 0) {
-        // Best-effort cleanup — the Dispatch is already gone from the
-        // Board and profile regardless of whether this succeeds. A
-        // failure here leaves an orphaned image in the author's own
-        // private storage folder: not a security issue (still private,
-        // still only reachable under that same author-scoped storage
-        // policy), just untidy. See the Build Guide's own note on this
-        // known, explicitly recorded gap.
         await supabase.storage.from('dispatch-photos').remove(momentImagePaths)
       }
       router.push('/board')
@@ -210,10 +157,6 @@ export default function AuthorActionsMenu({
 
       {open && (
         <>
-          {/* Mobile: a bottom sheet. Desktop (sm:): a restrained anchored
-              popover under the trigger instead — same content, not an
-              oversized full-width sheet where there's room for a small
-              menu. */}
           <div
             className="fixed inset-x-0 bottom-0 z-50 rounded-t-lg border-t border-foreground/10 bg-background p-4 shadow-lg
               sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 sm:rounded-lg sm:border sm:p-3"
@@ -248,14 +191,20 @@ export default function AuthorActionsMenu({
 
                 <div className="my-1 border-t border-foreground/10" />
 
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(true)}
-                  disabled={busy}
-                  className={destructiveButtonClass}
-                >
-                  Delete Dispatch
-                </button>
+                {deletable ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    disabled={busy}
+                    className={destructiveButtonClass}
+                  >
+                    Delete Dispatch
+                  </button>
+                ) : (
+                  <p className={`px-1 py-2 ${helperTextClass}`}>
+                    This Dispatch has responses and can no longer be deleted.
+                  </p>
+                )}
 
                 <button type="button" onClick={closeMenu} className={`w-full py-2 text-center ${helperTextClass}`}>
                   Cancel
@@ -286,12 +235,6 @@ export default function AuthorActionsMenu({
             )}
           </div>
 
-          {/* Desktop-only backdrop to close the popover on an outside
-              click — the mobile sheet relies on Cancel/an action instead,
-              matching this codebase's existing bottom-sheet convention.
-              A plain div, not a button: purely a click target, never
-              meant to be reachable by keyboard/AT (Cancel/Escape-less
-              popover dismissal is a pointer-only convenience here). */}
           <div role="presentation" onClick={closeMenu} className="fixed inset-0 z-40 hidden sm:block" />
         </>
       )}
