@@ -926,16 +926,13 @@ anywhere in the composer. Enforced client-side (immediate `maxLength` + `dispatc
 lib/dispatches.ts) and authoritatively server-side inside `publish_dispatch`.
 
 **Body — no visible counter, no visible maximum-length messaging, no "getting long" warning
-anywhere.** Server/database hard maximum: 10,000 **member-visible** characters, not encoded storage.
-Rich-body encoding (the same Bold/Italic marker/delimiter system every letter and Question answer
-already uses — see §16) can make the stored string longer than what a member actually typed; a naive
-`char_length(body)` check would therefore falsely reject legitimate long-form writing the moment it
-used any formatting. `public.dispatch_visible_length()` strips the invisible rich-body marker and the
-`**`/`_` delimiters before counting, so the 10,000 ceiling is measured against what the member sees,
-not what's stored. This function's own doc comment records one deliberate, known approximation (an
-escaped literal `\*\*`/`\_` is slightly undercounted) — which can only ever make the check MORE
-permissive, never less, so it can never cause a legitimate submission to be falsely rejected, the
-actual requirement.
+anywhere.** Long-form Dispatches have no product-level composer cap. The database retains a
+200,000 member-visible-character technical ceiling, and the Safety endpoint separately bounds
+encoded request bodies at 200,000 characters. The obsolete 10,000 database ceiling rejected
+legitimate long-form articles even though the composer allowed them; apply
+`docs/sql/2026-10-01-dispatch-body-ceiling.sql` and its verifier to replace it.
+`public.dispatch_visible_length()` still excludes the rich-body marker and Bold/Italic delimiters.
+Existing content, Safety consumption, title/topic/Postcard checks, and web visibility are unchanged.
 
 **Topics — 0 to 3 plain tags per Dispatch**, stored in a normalized child table
 (`public.dispatch_topics`) rather than an array column, so case-insensitive dedup and search-by-topic
