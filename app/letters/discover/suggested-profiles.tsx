@@ -28,10 +28,10 @@ export default function SuggestedProfiles({ entries, returnTo }: { entries: Disc
     })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
+  }, [entries.length])
   return <section aria-label={t('suggested')} className="space-y-3">
     <div className="flex items-center justify-between gap-3">
-      <h2 className="font-serif text-xl">{t('suggested')}</h2>
+      <div><h2 className="font-serif text-2xl">{t('suggested')}</h2><p className="mt-1 text-sm text-muted">{t('suggestedHelp')}</p></div>
       <div className="flex gap-2">
         <button type="button" disabled={atStart} onClick={() => move(-1)} aria-label={t('previousPeople')} className="rounded-full border border-foreground/15 px-3 py-2 disabled:opacity-30">←</button>
         <button type="button" disabled={atEnd} onClick={() => move(1)} aria-label={t('nextPeople')} className="rounded-full border border-foreground/15 px-3 py-2 disabled:opacity-30">→</button>

@@ -91,7 +91,7 @@
   },
   "Discovery": {
     "intro": "Find someone worth writing to.",
-    "search": "Search by pseudonym",
+    "search": "Search",
     "searchButton": "Search",
     "filters": "Filters",
     "country": "Country",
@@ -115,7 +115,13 @@
     "windowEnd": "Start a new search to keep exploring.",
     "suggested": "Suggested for you",
     "previousPeople": "Previous people",
-    "nextPeople": "Next people"
+    "nextPeople": "Next people",
+    "interest": "Interests",
+    "browse": "Discover people",
+    "suggestedHelp": "People with shared interests and reasons for being here.",
+    "retry": "Try again",
+    "loadingPeople": "Finding people…",
+    "matchingHelp": "Your interests also help you discover people. Your saved list is not shown on your profile."
   },
   "Correspondents": {
     "heading": "Your correspondents",
@@ -301,7 +307,8 @@
       "sport-fitness": "Sport & Fitness",
       "everyday-life": "Everyday Life"
     },
-    "reserved": "That name is reserved."
+    "reserved": "That name is reserved.",
+    "interestDiscoveryHelp": "Your interests also help you discover people. Your saved list is not shown on your profile."
   },
   "MarkOnboarding": {
     "label": "Your Mark",

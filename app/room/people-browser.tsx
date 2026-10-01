@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import type { DiscoveryRequest } from '@/lib/discovery'
-import SuggestedProfiles from '@/app/letters/discover/suggested-profiles'
 import DiscoveryResults, { type DiscoveryEntry } from './discovery-results'
 import { loadMorePeople } from './discovery-actions'
 import { secondaryButtonClass } from '@/app/profile/ui'
@@ -38,10 +37,7 @@ export default function PeopleBrowser({ initialEntries, initialHasMore, request,
   }
   return (
     <div className="space-y-6">
-      {profileLed ? <>
-        <SuggestedProfiles entries={initialEntries.slice(0, 6)} returnTo={returnTo} />
-        {entries.length > initialEntries.length && <DiscoveryResults entries={entries.slice(initialEntries.length)} returnTo={returnTo} profileLed />}
-      </> : <DiscoveryResults entries={entries} returnTo={returnTo} />}
+      <DiscoveryResults entries={entries} returnTo={returnTo} profileLed={profileLed} />
       {error && <p role="alert" className="text-sm text-foreground/70">{error}</p>}
       {hasMore && entries.length < 600 && <div className="flex justify-center"><button type="button" disabled={pending} onClick={more} className={secondaryButtonClass}>{pending ? t('loading') : t('more')}</button></div>}
       {hasMore && entries.length >= 600 && <p role="status" className="text-center text-sm text-foreground/55">{t('windowEnd')}</p>}
