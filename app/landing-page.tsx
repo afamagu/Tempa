@@ -52,7 +52,7 @@ function LetterCard({ hero = false }: { hero?: boolean }) {
       ) : (
         <>
           <p>I read your piece about callings twice — once on the bus, and once again at midnight, because it wouldn’t leave me alone.</p>
-          <p>The second time, I was sitting at the window where the rain hasn’t stopped all week.</p>
+          <p>The second time, I was sitting at <em>the window where the rain hasn’t stopped all week.</em><button type="button" popoverTarget="landing-moment" className={styles.momentTrigger} aria-label="Open the Moment photograph"><Image src="/landing/moment-photo.webp" width={25} height={30} className={styles.inlineMoment} alt="" /></button></p>
           <p>You said a calling is built, badly at first. I think I’ve been waiting to feel certain before starting anything. Can I ask what you built first?</p>
           <p className={styles.signature}>— Someone who read your Dispatch</p>
         </>
@@ -175,7 +175,7 @@ export default function LandingPage() {
       </section>
 
       <section className={`${styles.section} ${styles.momentSection}`}>
-        <Image width={327} height={540} sizes="(max-width: 699px) 40vw, 280px" className={styles.momentPhoto} src="/landing/moment-photo.webp" alt="Rain on a window overlooking a green neighbourhood" loading="lazy" />
+        <button type="button" popoverTarget="landing-moment" className={styles.momentTrigger} style={{order:2}} aria-label="Open the Moment photograph"><Image width={327} height={540} sizes="(max-width: 699px) 40vw, 280px" className={styles.momentPhoto} src="/landing/moment-photo.webp" alt="Rain on a window overlooking a green neighbourhood" loading="lazy" /></button>
         <div className={styles.sectionCopy}>
           <p className={styles.eyebrow}>A MOMENT</p>
           <p>A photograph placed exactly where the story needs it — so the reader can stand where you stood, <em>for a second.</em></p>
@@ -228,6 +228,10 @@ export default function LandingPage() {
         <Link className={styles.primaryButton} href={JOIN_HREF}>Enter Tempa</Link>
       </section>
 
+      <div id="landing-moment" popover="auto" role="dialog" aria-label="The Moment photograph" className={styles.momentDialog}>
+        <button type="button" popoverTarget="landing-moment" popoverTargetAction="hide" aria-label="Close photograph">Close ×</button>
+        <Image src="/landing/moment-photo.webp" width={327} height={540} alt="Rain on a window overlooking a green neighbourhood" />
+      </div>
       <footer className={styles.footer}>
         <span>Tempa</span>
         <nav aria-label="Legal links">
