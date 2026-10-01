@@ -72,12 +72,12 @@ export default async function BoardPage({
   const [waitingCount, keptUserIds, searchResults, boardFeedResult, introSeen] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getKeptUserIds(supabase, user.id),
-    query ? searchDispatches(supabase, query) : Promise.resolve(null),
+    query ? searchDispatches(supabase, query).then(items => ({ items, failed: false })).catch(() => ({ items: [], failed: true })) : Promise.resolve(null),
     query ? Promise.resolve(null) : getBoardFeedPage(supabase, { sessionStartedAt: s!, seed: seed!, cursor: null }),
     hasCompletedGuide(supabase, user.id, 'board'),
   ])
 
-  const dispatches: DispatchListItem[] = query ? searchResults! : boardFeedResult!.items
+  const dispatches: DispatchListItem[] = query ? searchResults!.items : boardFeedResult!.items
 
   // Board list Moment preview (Board live-test corrections, 2026-09-10):
   // the same batched first-Moment lookup Home's shelf already uses (see
@@ -115,15 +115,13 @@ export default async function BoardPage({
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <DispatchSearch initialQuery={query} />
-            {!query && (
+            <DispatchSearch key={query} initialQuery={query} sessionStartedAt={s} seed={seed} />
               <Link href="/board" className={quietLinkClass}>
                 Refresh the Board
               </Link>
-            )}
           </div>
 
-          {dispatches.length === 0 ? (
+          {searchResults?.failed ? (<p role="alert" className={helperTextClass}>Search is temporarily unavailable. Please try Search again, or clear it to return to the Board.</p>) : dispatches.length === 0 ? (
             <div className="space-y-2">
               {query ? (
                 <p className={helperTextClass}>No Dispatches match &ldquo;{query}&rdquo;.</p>

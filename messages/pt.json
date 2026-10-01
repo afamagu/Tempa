@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Início",
-    "letters": "Cartas",
+    "letters": "Caixa de cartas",
     "room": "A Sala",
     "board": "O Mural",
     "you": "Você"
@@ -85,7 +85,7 @@
     "languages": "Idiomas"
   },
   "Letters": {
-    "heading": "Cartas",
+    "heading": "Caixa de cartas",
     "penPals": "Amigos por correspondência",
     "discover": "Descobrir pessoas"
   },
@@ -388,7 +388,7 @@
     "thisWeek": "Esta semana na Room",
     "readEdit": "Ler ou editar a sua resposta",
     "answerQuestion": "Responder à pergunta",
-    "peopleSaid": "Ver o que as pessoas disseram",
+    "peopleSaid": "Veja como outras pessoas responderam",
     "moreAnswers": "Ver mais respostas →",
     "findWriter": "Encontrar alguém a quem escrever",
     "readMember": "Ler {name} →",

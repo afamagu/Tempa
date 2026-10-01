@@ -751,7 +751,8 @@ export async function searchDispatches(
   const trimmed = query.trim()
   if (trimmed.length === 0) return []
 
-  const { data: rows } = await supabase.rpc('search_dispatches', { p_query: trimmed })
+  const { data: rows, error } = await supabase.rpc('search_dispatches', { p_query: trimmed })
+  if (error) throw new Error('Dispatch search unavailable')
   return attachTopicsAndAuthors(supabase, (rows ?? []) as DispatchRow[])
 }
 

@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Inicio",
-    "letters": "Cartas",
+    "letters": "Buzón",
     "room": "La Sala",
     "board": "El Tablón",
     "you": "Tú"
@@ -85,7 +85,7 @@
     "languages": "Idiomas"
   },
   "Letters": {
-    "heading": "Cartas",
+    "heading": "Buzón",
     "penPals": "Amigos por carta",
     "discover": "Descubrir personas"
   },
@@ -388,7 +388,7 @@
     "thisWeek": "Esta semana en la Room",
     "readEdit": "Leer o editar tu respuesta",
     "answerQuestion": "Responder a la pregunta",
-    "peopleSaid": "Ver lo que dijeron",
+    "peopleSaid": "Mira cómo respondieron los demás",
     "moreAnswers": "Ver más respuestas →",
     "findWriter": "Encontrar a alguien a quien escribir",
     "readMember": "Leer a {name} →",

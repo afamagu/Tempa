@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Accueil",
-    "letters": "Lettres",
+    "letters": "Boîte aux lettres",
     "room": "La Salle",
     "board": "Le Tableau",
     "you": "Vous"
@@ -85,7 +85,7 @@
     "languages": "Langues"
   },
   "Letters": {
-    "heading": "Lettres",
+    "heading": "Boîte aux lettres",
     "penPals": "Correspondants",
     "discover": "Découvrir des personnes"
   },
@@ -388,7 +388,7 @@
     "thisWeek": "Cette semaine dans la Room",
     "readEdit": "Lire ou modifier votre réponse",
     "answerQuestion": "Répondre à la question",
-    "peopleSaid": "Lire les réponses",
+    "peopleSaid": "Découvrez les réponses des autres",
     "moreAnswers": "Voir plus de réponses →",
     "findWriter": "Trouver quelqu’un à qui écrire",
     "readMember": "Lire {name} →",
