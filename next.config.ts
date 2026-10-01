@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
   // Permanent compatibility redirects. Product language can evolve without
@@ -46,4 +47,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Tempa interface language (next-intl) WITHOUT locale routing: the plugin
+// only points next-intl at i18n/request.ts. It adds no redirects, rewrites,
+// headers or locale path prefixes — nextConfig above is passed through as is.
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
+export default withNextIntl(nextConfig);

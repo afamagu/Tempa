@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import { primaryButtonClass, secondaryButtonClass, helperTextClass, inputClass } from '@/app/profile/ui'
 
 export default function QuestionSuggestionForm() {
+  const t = useTranslations('RoomEngagement')
   const [open, setOpen] = useState(false)
   const [question, setQuestion] = useState('')
   const [credit, setCredit] = useState(false)
@@ -13,41 +15,47 @@ export default function QuestionSuggestionForm() {
   const [sent, setSent] = useState(false)
 
   async function submit() {
+    if (busy) return
     const value = question.trim()
     if (value.length < 10) {
-      setError('Write the question you would genuinely like to hear people answer.')
+      setError(t('invalidSuggestion'))
       return
     }
     setBusy(true)
     setError(null)
-    const { error: submitError } = await createClient().rpc('submit_room_question_suggestion', {
-      p_question: value,
-      p_credit_if_used: credit,
-    })
-    setBusy(false)
-    if (submitError) {
-      setError(submitError.message || 'Could not send your suggestion. Please try again.')
-      return
+    try {
+      const { error: submitError } = await createClient().rpc('submit_room_question_suggestion', {
+        p_question: value,
+        p_credit_if_used: credit,
+      })
+      if (submitError) {
+        setError(t('suggestFailed'))
+        return
+      }
+      setSent(true)
+      setQuestion('')
+    } catch {
+      setError(t('suggestFailed'))
+    } finally {
+      setBusy(false)
     }
-    setSent(true)
-    setQuestion('')
   }
 
   if (sent) {
     return (
       <div className="border-t border-foreground/10 pt-6">
-        <p className="font-serif text-lg text-foreground">Thank you. Tempa will read it.</p>
-        <p className={`mt-1 ${helperTextClass}`}>Suggestions are reviewed before they can become a Room Question.</p>
+        <p className="font-serif text-lg text-foreground">{t('thanks')}</p>
+        <p className={`mt-1 ${helperTextClass}`}>{t('reviewNote')}</p>
       </div>
     )
   }
 
   return (
     <section className="border-t border-foreground/10 pt-6">
-      <p className="font-serif text-lg text-foreground">Have a question for The Room?</p>
+      <p className="font-serif text-lg text-foreground">{t('suggestHeading')}</p>
       {!open ? (
         <button type="button" onClick={() => setOpen(true)} className={`${secondaryButtonClass} mt-3`}>
-          Suggest one →
+          {t('suggestOne')}
         </button>
       ) : (
         <div className="mt-4 space-y-3">
@@ -57,21 +65,21 @@ export default function QuestionSuggestionForm() {
             rows={4}
             maxLength={500}
             className={inputClass}
-            placeholder="What would you genuinely want to hear different people answer?"
+            placeholder={t('suggestPlaceholder')} aria-label={t('suggestHeading')}
             autoFocus
           />
           <label className="flex items-start gap-2 text-sm text-foreground/75">
             <input type="checkbox" checked={credit} onChange={(event) => setCredit(event.target.checked)} className="mt-1" />
-            <span>Credit me if Tempa uses this question.</span>
+            <span>{t('creditMe')}</span>
           </label>
-          <p className={helperTextClass}>Tempa may edit the wording before using a suggestion. Suggestions are not published automatically.</p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          <p className={helperTextClass}>{t('suggestNote')}</p>
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setOpen(false); setError(null) }} disabled={busy} className={secondaryButtonClass}>
-              Cancel
+              {t('cancel')}
             </button>
             <button type="button" onClick={submit} disabled={busy} className={primaryButtonClass}>
-              {busy ? 'Sending…' : 'Send suggestion'}
+              {busy ? t('sending') : t('sendSuggestion')}
             </button>
           </div>
         </div>

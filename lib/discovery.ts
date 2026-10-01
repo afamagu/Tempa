@@ -29,6 +29,7 @@ export type DiscoveryPage = {
   filteredCount: number
   /** False only when V2 was requested but is unavailable and a legacy fallback was used. */
   fairRankingApplied: boolean
+  browseStartedAt: string | null
 }
 
 export type DiscoveryRequest = {
@@ -36,6 +37,7 @@ export type DiscoveryRequest = {
   gender?: string
   ageRange?: string
   questionId?: string
+  browseStartedAt?: string
   excludeUserIds?: string[]
   offset?: number
   limit?: number
@@ -55,12 +57,13 @@ type RpcEntry = {
 }
 
 type RpcResult = {
+  browse_started_at?: string
   eligible_count?: number
   filtered_count?: number
   entries?: RpcEntry[]
 }
 
-const EMPTY: DiscoveryPage = { candidates: [], eligibleCount: 0, filteredCount: 0, fairRankingApplied: false }
+const EMPTY: DiscoveryPage = { candidates: [], eligibleCount: 0, filteredCount: 0, fairRankingApplied: false, browseStartedAt: null }
 
 function mapRpcResult(data: unknown, limit: number, fairRankingApplied: boolean): DiscoveryPage {
   const result = data as RpcResult
@@ -88,12 +91,13 @@ function mapRpcResult(data: unknown, limit: number, fairRankingApplied: boolean)
     eligibleCount: Number(result.eligible_count ?? 0),
     filteredCount: Number(result.filtered_count ?? 0),
     fairRankingApplied,
+    browseStartedAt: fairRankingApplied ? result.browse_started_at ?? null : null,
   }
 }
 
 export async function getDiscoveryPage(supabase: SupabaseClient, request: DiscoveryRequest = {}): Promise<DiscoveryPage> {
-  const limit = Math.min(Math.max(1, Math.floor(request.limit ?? DISCOVERY_BATCH_SIZE)), MAX_DISCOVERY_LIMIT)
-  const offset = Math.min(Math.max(0, Math.floor(request.offset ?? 0)), 2147483647)
+  const limit = Math.min(Math.max(1, Math.floor(Number.isFinite(request.limit) ? request.limit! : DISCOVERY_BATCH_SIZE)), MAX_DISCOVERY_LIMIT)
+  const offset = Math.min(Math.max(0, Math.floor(Number.isFinite(request.offset) ? request.offset! : 0)), 2147483647)
 
   const { data: v2Data, error: v2Error } = await supabase.rpc('discover_people_v2', {
     p_country: request.country || null,
@@ -103,6 +107,7 @@ export async function getDiscoveryPage(supabase: SupabaseClient, request: Discov
     p_exclude_user_ids: request.excludeUserIds ?? [],
     p_offset: offset,
     p_limit: limit,
+    p_browse_started_at: request.browseStartedAt || null,
   })
 
   if (!v2Error && v2Data) return mapRpcResult(v2Data, limit, true)

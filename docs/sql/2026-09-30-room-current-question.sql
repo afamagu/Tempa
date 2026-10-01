@@ -20,9 +20,12 @@ begin
   if auth.uid() is null then
     raise exception 'Authentication required.';
   end if;
-  if not public.is_staff('admin') then
+  if not coalesce(public.is_staff('admin'), false) then
     raise exception 'Not authorized.';
   end if;
+
+  -- Serialize editorial selections before locking individual Question rows.
+  perform pg_advisory_xact_lock(hashtext('tempa-current-room-question'));
 
   select q.prompt, q.is_active, q.is_flagship
     into v_prompt, v_active, v_flagship
@@ -82,7 +85,20 @@ begin
 end;
 $function$;
 
-revoke all on function public.admin_make_current_room_question(uuid) from public;
+revoke all on function public.admin_make_current_room_question(uuid) from public, anon;
 grant execute on function public.admin_make_current_room_question(uuid) to authenticated;
+
+-- Preserve the Question members already see (the lowest positioned active
+-- non-Flagship Question), while retiring extra legacy Room positions. This
+-- never changes prompts, answers or the First Question, and invents no Question.
+with current_room as (
+  select id from public.questions
+  where is_active and not is_flagship and current_position is not null
+  order by current_position limit 1
+)
+update public.questions q set current_position = null
+where not q.is_flagship and q.current_position is not null
+  and exists (select 1 from current_room)
+  and q.id <> (select id from current_room);
 
 commit;

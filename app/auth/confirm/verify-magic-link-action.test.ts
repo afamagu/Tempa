@@ -12,11 +12,15 @@ const mockVerifyOtp = vi.fn()
 const mockProfileMaybeSingle = vi.fn()
 const mockEligibilityMaybeSingle = vi.fn()
 const mockLegalAcceptances = vi.fn()
+const mockLanguagePreference = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { verifyOtp: mockVerifyOtp },
     from: (table: string) => {
+      if (table === 'member_language_preferences') {
+        return { select: () => ({ eq: () => ({ maybeSingle: mockLanguagePreference }) }) }
+      }
       if (table === 'profiles') {
         return { select: () => ({ eq: () => ({ maybeSingle: mockProfileMaybeSingle }) }) }
       }
@@ -43,6 +47,8 @@ beforeEach(() => {
   mockVerifyOtp.mockReset()
   mockProfileMaybeSingle.mockReset()
   mockEligibilityMaybeSingle.mockReset()
+  mockLanguagePreference.mockReset()
+  mockLanguagePreference.mockResolvedValue({ data: { language_confirmed_at: '2026-09-30T00:00:00Z' }, error: null })
   mockLegalAcceptances.mockReset()
 
   // Default: gate already satisfied, same convention as route.test.ts.
@@ -321,5 +327,16 @@ describe('verifyMagicLink — a refused account is never shown as an expired lin
     mockServiceRpc.mockResolvedValue({ data: null, error: { code: 'x', message: 'down' } })
     await redirectPath(verifyMagicLink('secret-token-hash-'.padEnd(56, 'z'), 'email', null))
     expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('secret-token-hash')
+  })
+})
+
+
+describe('Email confirmation — language-first entry', () => {
+  it('sends an unconfirmed account to Language before DOB/legal', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: null })
+    mockLanguagePreference.mockResolvedValue({ data: null, error: null })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: null })
+    expect(await redirectPath(verifyMagicLink('tok', 'magiclink', null))).toBe('/language')
   })
 })

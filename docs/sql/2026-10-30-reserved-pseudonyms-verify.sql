@@ -83,6 +83,13 @@ begin
   perform set_config('request.jwt.claims', claims, true);
 end
 $verify$;
+do $assert$
+begin
+  if exists(select 1 from reserved_verify where pass is distinct from true) then
+    raise exception 'Reserved-pseudonym verification failed. Inspect checks; no probes persist.';
+  end if;
+end
+$assert$;
 select n, check_name, pass from reserved_verify
 union all select 999, 'OVERALL', bool_and(pass) from reserved_verify order by n;
 rollback;

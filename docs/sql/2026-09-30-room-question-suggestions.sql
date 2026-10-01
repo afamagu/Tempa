@@ -45,7 +45,20 @@ begin
   if char_length(v_prompt) < 10 then raise exception 'Please write a complete question.'; end if;
   if char_length(v_prompt) > 500 then raise exception 'Question is too long.'; end if;
 
+  if public.current_account_status() is distinct from 'active' then
+    raise exception 'Account cannot submit suggestions.';
+  end if;
+
   select p.pseudonym into v_pseudonym from public.profiles p where p.id = auth.uid();
+
+  if v_pseudonym is null then raise exception 'Complete your profile first.'; end if;
+
+  -- Serialize submissions from one account before enforcing the daily limit.
+  perform pg_advisory_xact_lock(hashtext(auth.uid()::text || ':room-suggestion'));
+  if (select count(*) from public.room_question_suggestions
+      where submitted_by = auth.uid() and created_at >= now() - interval '1 day') >= 3 then
+    raise exception 'Suggestion limit reached. Please try again tomorrow.';
+  end if;
 
   insert into public.room_question_suggestions (
     submitted_by, proposed_question, credit_if_used, pseudonym_snapshot
@@ -76,14 +89,15 @@ security definer
 set search_path to 'pg_catalog'
 as $function$
 begin
-  if not public.is_staff('admin') then raise exception 'Not authorized.'; end if;
+  if not coalesce(public.is_staff('admin'), false) then raise exception 'Not authorized.'; end if;
   return query
     select s.id, s.proposed_question, s.credit_if_used, s.pseudonym_snapshot,
            s.status, s.editorial_notes, s.published_question_id, s.created_at
     from public.room_question_suggestions s
     order by
       case s.status when 'pending' then 0 when 'shortlisted' then 1 when 'scheduled' then 2 when 'used' then 3 else 4 end,
-      s.created_at desc;
+      s.created_at desc
+    limit 200;
 end;
 $function$;
 
@@ -105,8 +119,8 @@ declare
   v_actor_pseudonym text;
   v_prompt text;
 begin
-  if not public.is_staff('admin') then raise exception 'Not authorized.'; end if;
-  if p_status not in ('pending', 'shortlisted', 'scheduled', 'declined', 'used') then
+  if not coalesce(public.is_staff('admin'), false) then raise exception 'Not authorized.'; end if;
+  if p_status is null or p_status not in ('pending', 'shortlisted', 'scheduled', 'declined', 'used') then
     raise exception 'Invalid suggestion status.';
   end if;
 

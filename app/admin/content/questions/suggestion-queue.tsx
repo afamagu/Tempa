@@ -36,7 +36,7 @@ function SuggestionRow({ suggestion }: { suggestion: AdminRoomQuestionSuggestion
     setBusy(true)
     setError(null)
     const { error: actionError } = await updateRoomQuestionSuggestion(
-      createClient(), suggestion.id, status, notes
+      createClient(), suggestion.id, status, notes, suggestion.publishedQuestionId
     )
     setBusy(false)
     if (actionError) {

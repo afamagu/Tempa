@@ -74,20 +74,20 @@ insert into private.room_discovery_config (singleton, new_member_window_days, ne
 values (true, 7, 6)
 on conflict (singleton) do nothing;
 
+alter table private.room_discovery_config enable row level security;
+
 revoke all on private.room_discovery_config from public, anon, authenticated;
 
 -- Narrow privileged helper. It validates that the requested viewer is the
--- authenticated caller and returns only rank facts for the supplied bounded
--- candidate set. It does not expose a public profile statistic endpoint.
+-- authenticated caller and returns only relative rank and the caller’s own encounter time for the supplied
+-- candidate set. Global exposure counts and account creation dates never leave the helper.
 create or replace function public.room_discovery_rank_facts(
   p_viewer uuid,
   p_candidate_ids uuid[]
 )
 returns table (
   candidate_id uuid,
-  seen_bucket integer,
-  weekly_exposure_count bigint,
-  new_member_below_floor integer,
+  fair_rank bigint,
   last_served_at timestamptz
 )
 language sql
@@ -108,13 +108,14 @@ as $function$
   )
   select
     i.candidate_id,
-    case when me.viewer_id is null then 0 else 1 end as seen_bucket,
-    coalesce(cw.distinct_viewers, 0) as weekly_exposure_count,
-    case
-      when au.created_at >= now() - make_interval(days => cfg.new_member_window_days)
-       and coalesce(cw.distinct_viewers, 0) < cfg.new_member_floor_distinct_viewers
-      then 1 else 0
-    end as new_member_below_floor,
+    dense_rank() over (order by
+      case when me.viewer_id is null then 0 else 1 end,
+      case when me.viewer_id is not null then me.last_served_at end asc nulls first,
+      coalesce(cw.distinct_viewers, 0),
+      case when au.created_at >= now() - make_interval(days => cfg.new_member_window_days)
+        and coalesce(cw.distinct_viewers, 0) < cfg.new_member_floor_distinct_viewers
+        then 1 else 0 end desc
+    ) as fair_rank,
     me.last_served_at
   from ids i
   cross join guard g
@@ -149,10 +150,10 @@ declare
   v_week date := date_trunc('week', now())::date;
   v_counted uuid;
 begin
-  if auth.role() <> 'service_role' then
+  if auth.role() is distinct from 'service_role' then
     raise exception 'service role required';
   end if;
-  if p_surface not in ('home_room', 'room', 'room_question') then
+  if p_surface is null or p_surface not in ('home_room', 'room', 'room_question') then
     raise exception 'invalid Room exposure surface';
   end if;
 
@@ -210,7 +211,8 @@ create or replace function public.discover_people_v2(
   p_question_id uuid default null,
   p_exclude_user_ids uuid[] default array[]::uuid[],
   p_offset integer default 0,
-  p_limit integer default 6
+  p_limit integer default 6,
+  p_browse_started_at timestamptz default null
 )
 returns jsonb
 language sql
@@ -219,7 +221,9 @@ security invoker
 set search_path = pg_catalog, public
 as $function$
   with viewer as (
-    select auth.uid() as id
+    select auth.uid() as id,
+      case when p_browse_started_at between now() - interval '1 day' and now()
+        then p_browse_started_at else now() end as browse_started_at
   ),
   flagship as (
     select q.id from public.questions q where q.is_flagship = true limit 1
@@ -314,28 +318,31 @@ as $function$
     ) rf
   ),
   ranked as materialized (
-    select f.*, rf.seen_bucket, rf.weekly_exposure_count,
-           rf.new_member_below_floor, rf.last_served_at
+    select f.*, rf.fair_rank, rf.last_served_at
     from filtered f
     join facts rf on rf.candidate_id = f.user_id
+    -- Recording the previous page moves it down the live ranking. Exclude
+    -- pages served during this browse, then take the next front-of-pool page;
+    -- OFFSET against that moving ranking would skip unseen people.
+    where p_browse_started_at is null
+       or rf.last_served_at is null
+       or rf.last_served_at < (select browse_started_at from viewer)
   ),
   page as (
     select r.*
     from ranked r
     order by
-      r.seen_bucket asc,
-      case when r.seen_bucket = 1 then r.last_served_at end asc nulls first,
-      r.weekly_exposure_count asc,
-      r.new_member_below_floor desc,
+      r.fair_rank asc,
       r.current_question_relevance desc,
       r.stable_hash,
       r.user_id
-    offset greatest(coalesce(p_offset, 0), 0)
+    offset case when p_browse_started_at is not null then 0 else greatest(coalesce(p_offset, 0), 0) end
     limit least(greatest(coalesce(p_limit, 6), 1), 24)
   )
   select jsonb_build_object(
     'eligible_count', (select count(*) from eligible),
-    'filtered_count', (select count(*) from filtered),
+    'filtered_count', (select count(*) from ranked),
+    'browse_started_at', (select browse_started_at from viewer),
     'entries', coalesce(
       (
         select jsonb_agg(
@@ -352,10 +359,7 @@ as $function$
             'prompt', q.prompt
           )
           order by
-            pg.seen_bucket asc,
-            case when pg.seen_bucket = 1 then pg.last_served_at end asc nulls first,
-            pg.weekly_exposure_count asc,
-            pg.new_member_below_floor desc,
+            pg.fair_rank asc,
             pg.current_question_relevance desc,
             pg.stable_hash,
             pg.user_id
@@ -368,8 +372,8 @@ as $function$
   )
 $function$;
 
-revoke all on function public.discover_people_v2(text, text, text, uuid, uuid[], integer, integer) from public, anon;
-grant execute on function public.discover_people_v2(text, text, text, uuid, uuid[], integer, integer) to authenticated;
+revoke all on function public.discover_people_v2(text, text, text, uuid, uuid[], integer, integer, timestamptz) from public, anon;
+grant execute on function public.discover_people_v2(text, text, text, uuid, uuid[], integer, integer, timestamptz) to authenticated;
 
 -- Admin/Pulse operational aggregate. Raw member-level exposure state remains
 -- private. This is service-role only until the existing Admin surface is wired.

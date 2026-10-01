@@ -15,7 +15,7 @@ describe('central onboarding enforcement', () => {
   })
 
   it('covers authenticated member surfaces, including direct navigation around onboarding', () => {
-    for (const route of ['/home/:path*', '/letters/:path*', '/minds/:path*', '/profile/:path*', '/question/:path*', '/write/:path*', '/you/:path*']) {
+    for (const route of ['/home/:path*', '/letters/:path*', '/minds/:path*', '/profile/:path*', '/question/:path*', '/room/:path*', '/language/:path*', '/write/:path*', '/you/:path*']) {
       expect(source).toContain(`'${route}'`)
     }
   })

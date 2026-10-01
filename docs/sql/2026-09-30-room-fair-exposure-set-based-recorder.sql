@@ -28,10 +28,10 @@ declare
   v_candidates uuid[] := array[]::uuid[];
   v_counted_ids uuid[] := array[]::uuid[];
 begin
-  if auth.role() <> 'service_role' then
+  if auth.role() is distinct from 'service_role' then
     raise exception 'service role required';
   end if;
-  if p_surface not in ('home_room', 'room', 'room_question') then
+  if p_surface is null or p_surface not in ('home_room', 'room', 'room_question') then
     raise exception 'invalid Room exposure surface';
   end if;
 

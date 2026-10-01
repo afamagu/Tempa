@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import EditorialByline from '@/app/editorial-byline'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { helperTextClass } from '@/app/profile/ui'
@@ -12,7 +13,8 @@ export type HomeRoomAnswer = {
   body: string
 }
 
-export default function RoomAnswerCard({ answer }: { answer: HomeRoomAnswer }) {
+export default async function RoomAnswerCard({ answer }: { answer: HomeRoomAnswer }) {
+  const t = await getTranslations('RoomEngagement')
   return (
     <Link
       href={`/room/${answer.userId}?source=home_room`}
@@ -36,7 +38,7 @@ export default function RoomAnswerCard({ answer }: { answer: HomeRoomAnswer }) {
         {answer.body}
       </p>
       <p className="mt-4 text-[12px] font-medium text-foreground/55 transition-colors group-hover:text-foreground/75">
-        Read {answer.pseudonym} →
+        {t('readMember', { name: answer.pseudonym })}
       </p>
     </Link>
   )

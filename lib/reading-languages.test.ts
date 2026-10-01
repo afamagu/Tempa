@@ -89,8 +89,8 @@ describe('Country never determines language', () => {
       'reading-language-data.ts',
       '../app/reading-language-picker.tsx',
       '../app/reading-language-actions.ts',
-      '../app/you/reading-language/page.tsx',
-      '../app/you/reading-language/reading-language-editor.tsx',
+      '../app/you/language/page.tsx',
+      '../app/you/language/language-settings-editor.tsx',
     ]
     for (const file of files) {
       // Code only — the doc comments deliberately SAY country is never used.

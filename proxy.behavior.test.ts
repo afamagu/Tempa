@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { LOCALE_COOKIE } from '@/i18n/config'
 import { NextRequest } from 'next/server'
 import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION } from '@/lib/legal'
 
@@ -24,12 +25,16 @@ const fake = {
     eligibility: null as { status: string } | null,
     legal: [] as { document_type: string; document_version: string }[],
   },
+  language: { language_confirmed_at: '2026-09-30T00:00:00Z', interface_locale: null } as { language_confirmed_at: string | null; interface_locale: string | null } | null,
+  languageError: null as { message: string } | null,
+  refreshCookie: false,
   ops: [] as string[],
   rpcArgs: [] as unknown[],
 }
 
 function query(table: string) {
   const result = () => {
+    if (table === 'member_language_preferences') return { data: fake.language, error: fake.languageError }
     if (table === 'profiles') return { data: fake.legacy.profile }
     if (table === 'account_eligibility') return { data: fake.legacy.eligibility }
     return { data: fake.legacy.legal }
@@ -44,10 +49,11 @@ function query(table: string) {
 }
 
 vi.mock('@supabase/ssr', () => ({
-  createServerClient: () => ({
+  createServerClient: (_url: string, _key: string, options: { cookies: { setAll: (cookies: { name: string; value: string; options: { path: string; httpOnly: boolean } }[]) => void } }) => ({
     auth: {
       getUser: async () => {
         fake.ops.push('auth.getUser')
+        if (fake.refreshCookie) options.cookies.setAll([{ name: 'sb-session', value: 'refreshed', options: { path: '/', httpOnly: true } }])
         return { data: { user: fake.user } }
       },
     },
@@ -88,7 +94,10 @@ beforeEach(() => {
   fake.user = { id: 'viewer' }
   fake.entryRow = { ...complete }
   fake.entryError = null
+  fake.language = { language_confirmed_at: '2026-09-30T00:00:00Z', interface_locale: null }
+  fake.languageError = null
   fake.legacy = { status: 'active', profile: null, eligibility: null, legal: [] }
+  fake.refreshCookie = false
   fake.ops = []
   fake.rpcArgs = []
 })
@@ -157,7 +166,7 @@ describe('proxy — protected entry destinations', () => {
 describe('proxy — consolidated account-entry read', () => {
   it('normal authenticated entry = auth.getUser + ONE self-scoped RPC (was: getUser + status RPC + 3 table reads)', async () => {
     await visit('/home')
-    expect(fake.ops).toEqual(['auth.getUser', 'rpc:current_account_entry_state'])
+    expect(fake.ops).toEqual(['auth.getUser', 'rpc:current_account_entry_state', 'from:member_language_preferences'])
   })
 
   it('passes only the server-side legal version constants — never a user id', async () => {
@@ -184,5 +193,46 @@ describe('proxy — consolidated account-entry read', () => {
 
     fake.legacy.status = 'banned'
     expect((await visit('/home'))?.pathname).toBe('/account-unavailable')
+  })
+})
+
+
+describe('proxy — language confirmation and durable cookies', () => {
+  it('gates direct Room access before DOB/legal or profile setup', async () => {
+    fake.language = null
+    fake.entryRow = { ...complete, has_profile: false, eligibility_status: null }
+    expect((await visit('/room'))?.pathname).toBe('/language')
+    expect(await visit('/language')).toBeNull()
+  })
+
+  it('keeps account restrictions ahead of the language gate', async () => {
+    fake.language = null
+    fake.entryRow = { ...complete, account_status: 'banned' }
+    expect((await visit('/room'))?.pathname).toBe('/account-unavailable')
+  })
+
+  it('does not lock members out when the language migration is unavailable', async () => {
+    fake.language = null
+    fake.languageError = { message: 'column does not exist' }
+    expect(await visit('/room')).toBeNull()
+  })
+
+  it.each(['/room', '/begin'])('preserves the saved locale and refreshed session on %s', async (path) => {
+    fake.refreshCookie = true
+    fake.language = { language_confirmed_at: '2026-09-30T00:00:00Z', interface_locale: 'fr' }
+    fake.entryRow = { ...complete, eligibility_status: null }
+    const response = await proxy(new NextRequest(new URL(path, 'https://tempa.test')))
+    expect(response.cookies.get('sb-session')?.value).toBe('refreshed')
+    expect(response.cookies.get(LOCALE_COOKIE)?.value).toBe('fr')
+    expect(response.cookies.get(LOCALE_COOKIE)?.httpOnly).toBe(true)
+    if (path === '/room') expect(new URL(response.headers.get('location')!).pathname).toBe('/begin')
+    else expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('preserves refreshed session cookies on sign-in redirects', async () => {
+    fake.refreshCookie = true
+    fake.user = null
+    const response = await proxy(new NextRequest('https://tempa.test/room'))
+    expect(response.cookies.get('sb-session')?.value).toBe('refreshed')
   })
 })

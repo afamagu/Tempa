@@ -1,9 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import { Geist, Newsreader } from "next/font/google";
 import "./globals.css";
 import { writingStyleFontFaceVars, writingStyleFontVariables } from "./writing-style-fonts";
 import { BRAND_BACKGROUND, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
+import { localeDirection } from "@/i18n/config";
 
 // Interface machinery — navigation, buttons, labels, metadata.
 const geistSans = Geist({
@@ -53,13 +56,22 @@ export const viewport: Viewport = {
 // scripts (nonces cannot exist in prerendered HTML).
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   await connection();
+  // Tempa interface language (i18n/request.ts): explicit tempa_locale
+  // cookie, else a non-persistent Accept-Language match, else English.
+  // Direction comes from the interface-locale registry. Messages reach
+  // Client Components through NextIntlClientProvider (next-intl passes the
+  // request's messages automatically).
+  const locale = await getLocale();
   return (
     <html
-      lang="en"
+      lang={locale}
+      dir={localeDirection(locale)}
       className={`${geistSans.variable} ${newsreader.variable} ${writingStyleFontVariables} h-full antialiased`}
       style={writingStyleFontFaceVars}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+      </body>
     </html>
   );
 }

@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ProfileForm from './profile-form'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
 const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('@/lib/supabase/client', () => ({createClient: () => ({rpc})}))
 vi.mock('next/navigation', () => ({useRouter: () => ({push:vi.fn(),refresh:vi.fn()})}))
@@ -17,7 +19,7 @@ beforeEach(async () => {
   vi.useFakeTimers();rpc.mockReset()
   Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true})
   host=document.createElement('div');document.body.append(host);root=createRoot(host)
-  await act(async () => {root.render(<ProfileForm userId="member" />)})
+  await act(async () => {root.render(<NextIntlClientProvider locale="en" messages={en}><ProfileForm userId="member" /></NextIntlClientProvider>)})
 })
 afterEach(async () => {
   await act(async () => root.unmount());host.remove();vi.useRealTimers()

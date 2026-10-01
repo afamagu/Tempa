@@ -21,7 +21,12 @@ export const ACCOUNT_DELETED_UNAVAILABLE_MESSAGE = `This account was deleted and
 
 export const ACCOUNT_UNAVAILABLE_MESSAGE = `This account can’t be used to sign in to Tempa. If you believe this is a mistake, contact ${SUPPORT_EMAIL}.`
 
+/** Stable semantic key for the refusal — the sign-in page renders its
+ * words from the interface dictionary (messages/*.json → SignIn.refusals). */
+export type SignInRefusalKind = 'deleted' | 'banned' | 'deletedUnavailable' | 'unavailable'
+
 export type SignInRefusal = {
+  kind: SignInRefusalKind
   message: string
   /** Only a voluntary deletion is ever invited to create a new account. */
   offerNewAccount: boolean
@@ -32,13 +37,13 @@ export type SignInRefusal = {
 export function signInRefusal(errorParam: string | null): SignInRefusal | null {
   switch (errorParam) {
     case 'account_deleted':
-      return { message: ACCOUNT_DELETED_MESSAGE, offerNewAccount: true, hideJoinInvitations: false }
+      return { kind: 'deleted', message: ACCOUNT_DELETED_MESSAGE, offerNewAccount: true, hideJoinInvitations: false }
     case 'account_banned':
-      return { message: ACCOUNT_BANNED_MESSAGE, offerNewAccount: false, hideJoinInvitations: true }
+      return { kind: 'banned', message: ACCOUNT_BANNED_MESSAGE, offerNewAccount: false, hideJoinInvitations: true }
     case 'account_deleted_unavailable':
-      return { message: ACCOUNT_DELETED_UNAVAILABLE_MESSAGE, offerNewAccount: false, hideJoinInvitations: true }
+      return { kind: 'deletedUnavailable', message: ACCOUNT_DELETED_UNAVAILABLE_MESSAGE, offerNewAccount: false, hideJoinInvitations: true }
     case 'account_unavailable':
-      return { message: ACCOUNT_UNAVAILABLE_MESSAGE, offerNewAccount: false, hideJoinInvitations: true }
+      return { kind: 'unavailable', message: ACCOUNT_UNAVAILABLE_MESSAGE, offerNewAccount: false, hideJoinInvitations: true }
     default:
       return null
   }

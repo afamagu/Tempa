@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -48,6 +49,7 @@ const HOME_ROOM_ANSWER_COUNT = 3
 const HOME_BOARD_COUNT = 3
 
 export default async function HomePage() {
+  const t = await getTranslations('RoomEngagement')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
@@ -273,20 +275,20 @@ export default async function HomePage() {
               {currentRoomQuestion && (
                 <section aria-labelledby="home-room-heading" className="space-y-6">
                   <div className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
-                    <p className={sectionLabelClass}>This week in The Room</p>
+                    <p className={sectionLabelClass}>{t('thisWeek')}</p>
                     <h2 id="home-room-heading" className="mt-3 max-w-3xl font-serif text-2xl leading-snug text-foreground sm:text-3xl">
                       {currentRoomQuestion.prompt}
                     </h2>
                     <div className="mt-6">
                       <Link href={`/question/${currentRoomQuestion.id}?source=home_room`} className={primaryButtonClass}>
-                        {currentRoomAnswer ? 'Read or edit your answer' : 'Answer the Question'}
+                        {currentRoomAnswer ? t('readEdit') : t('answerQuestion')}
                       </Link>
                     </div>
                   </div>
 
                   {homeRoomAnswers.length > 0 && (
                     <div className="space-y-4">
-                      <p className={sectionLabelClass}>See what people said</p>
+                      <p className={sectionLabelClass}>{t('peopleSaid')}</p>
                       <div className="grid gap-4 md:grid-cols-3">
                         {homeRoomAnswers.map((answer) => (
                           <RoomAnswerCard key={answer.userId} answer={answer} />
@@ -297,10 +299,10 @@ export default async function HomePage() {
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <Link href={`/room?question=${currentRoomQuestion.id}`} className={secondaryButtonClass}>
-                      See more answers →
+                      {t('moreAnswers')}
                     </Link>
                     <Link href="/room#read-the-room" className={quietLinkClass}>
-                      Find someone worth writing to →
+                      {t('findWriter')} →
                     </Link>
                   </div>
                 </section>

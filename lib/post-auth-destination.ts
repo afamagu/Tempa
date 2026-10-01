@@ -4,31 +4,41 @@ import { isLegalCurrent } from '@/lib/legal'
 import { type OnboardingStage } from '@/lib/onboarding'
 
 /**
- * Cross-browser magic-link fix (2026-09-24) — the ONE place that turns
- * "a user id just got a fresh session" into "where should they land."
- * Extracted from app/auth/callback/route.ts's own inline sequence
- * (unchanged in substance — same three parallel queries, same
- * resolveAccountEntryDestination call, same /begin?next= special case)
- * so the Google/OAuth PKCE callback and the email magic-link
- * verification action share exactly one definition of account-entry
- * routing, never two subtly different ones. Returns a relative path
- * (e.g. '/home', '/begin?next=%2Fletters', '/profile/mark') — each
- * caller decides whether to prefix it with its own origin.
+ * The ONE post-auth destination resolver shared by OAuth, email magic-link
+ * verification and GIS. Language confirmation now precedes DOB/legal/profile
+ * onboarding. A missing language migration fails open so deploy ordering is
+ * safe; once SQL is applied, a brand-new account has no confirmed row and is
+ * sent to /language first.
  */
 export async function resolvePostAuthDestination(
   supabase: SupabaseClient,
   userId: string,
   requestedDestination: string
 ): Promise<string> {
-  const [{ data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: eligibility },
+    { data: legalRows },
+    languageResult,
+  ] = await Promise.all([
     supabase.from('profiles').select('id, onboarding_stage').eq('id', userId).maybeSingle(),
     supabase.from('account_eligibility').select('status').eq('user_id', userId).maybeSingle(),
     supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', userId),
+    supabase
+      .from('member_language_preferences')
+      .select('language_confirmed_at')
+      .eq('user_id', userId)
+      .maybeSingle(),
   ])
+
+  const languageConfirmed = languageResult.error
+    ? undefined
+    : Boolean((languageResult.data as { language_confirmed_at?: string | null } | null)?.language_confirmed_at)
 
   const destination = resolveAccountEntryDestination(
     {
       authenticated: true,
+      languageConfirmed,
       eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
       eligibleOn: null,
       legalCurrent: isLegalCurrent(
