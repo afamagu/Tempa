@@ -54,6 +54,7 @@ export default function QuestionAnswer({
   initialAnswer,
   isFlagship = false,
   isActive = true,
+  editable,
   nextQuestion = null,
   onboarding = false,
   writingStyleId = null,
@@ -64,16 +65,19 @@ export default function QuestionAnswer({
   initialAnswer: string | null
   isFlagship?: boolean
   isActive?: boolean
+  /** UI permission hint. The RPC remains the authority. False for a
+   * retired Question or a moderation-frozen existing response. */
+  editable?: boolean
   /** Retained temporarily for call-site compatibility while the old
-   * three-slot Question model is retired. The member-facing flow no
-   * longer chains one Question into another. */
+   * three-slot Question model is retired. */
   nextQuestion?: LibraryQuestion | null
   onboarding?: boolean
   writingStyleId?: string | null
 }) {
   void nextQuestion
   const router = useRouter()
-  const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !isActive ? 'view' : 'edit')
+  const canEditResponse = editable ?? isActive
+  const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !canEditResponse ? 'view' : 'edit')
   const [publishedBody, setPublishedBody] = useState(initialAnswer)
   const hadExistingAnswer = initialAnswer !== null
   const [body, setBody] = useState(() => readDraft(questionId, userId) ?? initialAnswer ?? '')
@@ -86,7 +90,7 @@ export default function QuestionAnswer({
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
   const aboveMax = charCount > MAX_CHARS
-  const canPublish = hasContent && !aboveMax && !saving
+  const canPublish = canEditResponse && hasContent && !aboveMax && !saving
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
   const hasPublishedView = mode === 'view' && Boolean(publishedBody)
   const promptClass = hasPublishedView ? contextQuestionClass : proseSubheadingClass
@@ -151,6 +155,7 @@ export default function QuestionAnswer({
   }
 
   async function saveAnswer(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    if (!canEditResponse) return
     setSaving(true)
     setError(null)
 
@@ -226,19 +231,21 @@ export default function QuestionAnswer({
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>
-                {isFlagship ? 'Enter the Room' : 'Back to my responses'}
+              <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                {isFlagship ? 'Enter the Room' : 'Back to Responses'}
               </Link>
-              <button
-                type="button"
-                onClick={() => { setConfirmation(null); setMode('edit') }}
-                className={secondaryButtonClass}
-              >
-                Edit response
-              </button>
+              {canEditResponse && (
+                <button
+                  type="button"
+                  onClick={() => { setConfirmation(null); setMode('edit') }}
+                  className={secondaryButtonClass}
+                >
+                  Edit response
+                </button>
+              )}
             </div>
           </div>
-        ) : mode === 'view' && !isActive ? (
+        ) : mode === 'view' && !canEditResponse ? (
           <div className="space-y-8">
             <p className={helperTextClass}>This Question is no longer open, and you haven&apos;t answered it.</p>
             <Link href="/room" className={secondaryButtonClass}>Back to The Room</Link>
@@ -272,8 +279,8 @@ export default function QuestionAnswer({
 
             <div className="flex flex-wrap gap-3">
               {!(onboarding && !hadExistingAnswer) && (
-                <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>
-                  {isFlagship ? 'Back to The Room' : 'Back to my responses'}
+                <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                  {isFlagship ? 'Back to The Room' : 'Back to Responses'}
                 </Link>
               )}
               <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>
