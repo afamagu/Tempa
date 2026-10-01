@@ -56,6 +56,30 @@ describe('shared correspondent picker', () => {
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
     expect(input.value).toContain('@Weak ')
   })
+  it('remains visible while scrolling and resizing with a phone keyboard open, until explicitly closed', async () => {
+    const viewport = new EventTarget() as EventTarget & { offsetTop: number; offsetLeft: number; height: number; width: number }
+    Object.assign(viewport, { offsetTop: 0, offsetLeft: 0, height: 300, width: 378 })
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport })
+    await act(async () => root.render(<Harness/>))
+    await openAtCaret()
+    const menu = document.querySelector<HTMLElement>('[data-correspondent-menu]')!
+    expect(Number.parseFloat(menu.style.top)).toBeGreaterThanOrEqual(8)
+    expect(Number.parseFloat(menu.style.top) + Number.parseFloat(menu.style.maxHeight)).toBeLessThanOrEqual(292)
+    await act(async () => { window.dispatchEvent(new Event('scroll')); viewport.dispatchEvent(new Event('resize')) })
+    expect(document.querySelector('[data-correspondent-menu]')).toBeTruthy()
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click())
+    expect(document.querySelector('[data-correspondent-menu]')).toBeNull()
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined })
+  })
+  it('shows six compact choices and replaces them with the expanded list', async () => {
+    vi.mocked(findCorrespondents).mockResolvedValue({ people: Array.from({ length: 9 }, (_,i)=>({userId:`u${i}`,pseudonym:`Person ${i}`,markUrl:null})), error:false })
+    await act(async () => root.render(<Harness/>))
+    await openAtCaret()
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(6)
+    await act(async () => [...document.querySelectorAll('button')].find(b=>b.textContent==='See all correspondents')!.click())
+    expect(document.querySelectorAll('[data-correspondent-menu]')).toHaveLength(1)
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(9)
+  })
   it('inserts through Tiptap so ordinary markup and undo remain valid', async () => {
     const editor = new Editor({ extensions: baseWritingExtensions(), content: '<p>Dear @We</p>' })
     await act(async () => root.render(<NextIntlClientProvider locale="en" messages={en}><CorrespondentPicker editor={editor}><EditorContent editor={editor}/></CorrespondentPicker></NextIntlClientProvider>))

@@ -126,33 +126,33 @@ export default async function HomePage() {
     const preferred = await getDiscoveryPage(supabase, {
       questionId: currentRoomQuestion.id,
       excludeUserIds: [...seenBoardAuthors],
-      limit: HOME_ROOM_ANSWER_COUNT,
+      limit: 24,
     })
     roomCandidates = preferred.candidates
 
     if (roomCandidates.length < HOME_ROOM_ANSWER_COUNT && preferred.fairRankingApplied) {
       const fallback = await getDiscoveryPage(supabase, {
         questionId: currentRoomQuestion.id,
-        limit: HOME_ROOM_ANSWER_COUNT,
+        limit: 24,
       })
       const seen = new Set(roomCandidates.map((candidate) => candidate.userId))
       for (const candidate of fallback.candidates) {
         if (seen.has(candidate.userId)) continue
         roomCandidates.push(candidate)
         seen.add(candidate.userId)
-        if (roomCandidates.length >= HOME_ROOM_ANSWER_COUNT) break
+        if (roomCandidates.length >= 24) break
       }
     }
 
     if (!preferred.fairRankingApplied) {
       const legacyPreferred = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
         excludeUserIds: [...seenBoardAuthors],
-        limit: HOME_ROOM_ANSWER_COUNT,
+        limit: 24,
       })
       const legacyAnswers = [...legacyPreferred]
       if (legacyAnswers.length < HOME_ROOM_ANSWER_COUNT) {
         const legacyFallback = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
-          limit: HOME_ROOM_ANSWER_COUNT,
+          limit: 24,
         })
         const seen = new Set(legacyAnswers.map((answer) => answer.userId))
         for (const answer of legacyFallback) {
@@ -178,10 +178,14 @@ export default async function HomePage() {
   }
 
   if (!currentRoomQuestion) {
-    const discovery = await getDiscoveryPage(supabase, { limit: HOME_ROOM_ANSWER_COUNT })
+    const discovery = await getDiscoveryPage(supabase, { limit: 24 })
     roomCandidates = discovery.candidates
   }
 
+  // Read history is separate from exposure and introductions. Never refill with read answers.
+  const { data: readRows, error: readError } = roomCandidates.length ? await supabase.from('member_answer_reads').select('answer_id').eq('viewer_id', user.id).in('answer_id', roomCandidates.map(candidate => candidate.answerId)) : { data: [], error: null }
+  const readIds = new Set((readRows ?? []).map(row => row.answer_id as string))
+  roomCandidates = readError ? [] : roomCandidates.filter(candidate => !readIds.has(candidate.answerId)).slice(0, HOME_ROOM_ANSWER_COUNT)
   await recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')
 
   const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
@@ -209,6 +213,7 @@ export default async function HomePage() {
   ])
 
   const homeRoomAnswers: HomeRoomAnswer[] = roomCandidates.map((answer) => ({
+    answerId: answer.answerId,
     userId: answer.userId,
     pseudonym: answer.pseudonym,
     country: answer.country || null,

@@ -1,6 +1,5 @@
 'use client'
 
-import CorrespondentPicker from '@/app/correspondent-picker'
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -997,7 +996,7 @@ export default function MomentsComposer({
 
       <div className="space-y-2">
         <WritingToolbar editor={editor} />
-        <CorrespondentPicker editor={editor}><EditorContent editor={editor} /></CorrespondentPicker>
+        <EditorContent editor={editor} />
       </div>
 
       {uploadingIndex !== null && <p className={helperTextClass}>Adding photo…</p>}

@@ -949,7 +949,7 @@ describe('Home Phase 1 (Editorial Reading Surface) — Home candidate pool', () 
     expect(items.length).toBeLessThanOrEqual(30)
   })
 
-  it('is unseen-first, same tiering as the Board itself — a seen Dispatch is not among the first candidates while unseen ones exist', async () => {
+  it('excludes viewed Dispatches from Home rather than backfilling with them', async () => {
     const fake = createFakeDispatches({
       viewerId: VIEWER,
       rows: [
@@ -962,7 +962,8 @@ describe('Home Phase 1 (Editorial Reading Surface) — Home candidate pool', () 
     })
     const { items } = await getHomeBoardCandidates(client(fake))
     const ids = items.map((d) => d.id)
-    expect(ids.indexOf('seen-1')).toBe(ids.length - 1)
+    expect(ids).not.toContain('seen-1')
+    expect(ids).toHaveLength(3)
   })
 
   it('returns the session (sessionStartedAt/seed) it minted, so callers can encode it into reading-trail links', async () => {

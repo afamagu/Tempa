@@ -87,7 +87,7 @@
   "Letters": {
     "heading": "Cartas",
     "penPals": "Amigos por correspondência",
-    "discover": "Descobrir"
+    "discover": "Descobrir pessoas"
   },
   "Discovery": {
     "intro": "Encontre alguém a quem valha a pena escrever.",
@@ -104,7 +104,7 @@
     "done": "Concluído",
     "findOption": "Buscar uma opção",
     "any": "Qualquer",
-    "more": "Continuar procurando",
+    "more": "Ver mais pessoas",
     "loading": "Procurando…",
     "end": "Por enquanto, você viu todas as pessoas disponíveis com estes filtros.",
     "failed": "Não foi possível carregar mais pessoas. Tente novamente.",
@@ -128,7 +128,11 @@
     "loading": "Procurando…",
     "empty": "Nenhum correspondente disponível.",
     "failed": "Não foi possível carregar os correspondentes. Tente novamente.",
-    "limit": "Uma resposta pode convidar no máximo dois correspondentes."
+    "limit": "Uma resposta pode convidar no máximo dois correspondentes.",
+    "close": "Fechar",
+    "seeAll": "Ver todos os correspondentes",
+    "search": "Pesquisar correspondentes",
+    "more": "Ver mais correspondentes"
   },
   "RoomInvitations": {
     "heading": "Convites para a Sala",

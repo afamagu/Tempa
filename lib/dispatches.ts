@@ -374,7 +374,7 @@ export async function getHomeBoardCandidates(
     cursor: null,
     limit: HOME_CANDIDATE_COUNT,
   })
-  return { items, sessionStartedAt, seed }
+  return { items: items.filter(item => item.cursor.seenBucket === 0), sessionStartedAt, seed }
 }
 
 export type HomeSections = {

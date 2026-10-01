@@ -87,7 +87,7 @@
   "Letters": {
     "heading": "Letters",
     "penPals": "Pen Pals",
-    "discover": "Discover"
+    "discover": "Discover People"
   },
   "Discovery": {
     "intro": "Find someone worth writing to.",
@@ -104,7 +104,7 @@
     "done": "Done",
     "findOption": "Find an option",
     "any": "Any",
-    "more": "Keep looking",
+    "more": "See more people",
     "loading": "Looking…",
     "end": "You’ve seen everyone available with these filters for now.",
     "failed": "Could not load more people. Please try again.",
@@ -128,7 +128,11 @@
     "loading": "Looking…",
     "empty": "No eligible correspondents match.",
     "failed": "Could not load correspondents. Try again.",
-    "limit": "A Room answer can invite at most two correspondents."
+    "limit": "A Room answer can invite at most two correspondents.",
+    "close": "Close",
+    "seeAll": "See all correspondents",
+    "search": "Search correspondents",
+    "more": "See more correspondents"
   },
   "RoomInvitations": {
     "heading": "Room invitations",
