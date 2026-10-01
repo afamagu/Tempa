@@ -19,15 +19,14 @@ function KebabIcon() {
 }
 
 /** The Dispatch author's restrained actions control. Every mutation is
- * still re-validated server-side; these booleans only keep the UI from
- * advertising actions the current read already knows cannot succeed. */
+ * still re-validated server-side; the reply lookup below is only a UI
+ * hint so a known-impossible Delete is not advertised. */
 export default function AuthorActionsMenu({
   dispatchId,
   initialShareToken,
   initialIsPinned,
   momentImagePaths,
   editable,
-  deletable = true,
   allowPin = true,
   editHref,
 }: {
@@ -36,10 +35,6 @@ export default function AuthorActionsMenu({
   initialIsPinned: boolean
   momentImagePaths: string[]
   editable: boolean
-  /** False once this read can already see a Reply. delete_dispatch is
-   * still the authority and permanently refuses deletion after ANY Reply
-   * has ever existed, including a later-hidden/tombstoned one. */
-  deletable?: boolean
   /** Official/Sponsored Dispatches are never pinned to the creating
    * admin's member profile. */
   allowPin?: boolean
@@ -51,6 +46,7 @@ export default function AuthorActionsMenu({
   const [shareToken, setShareToken] = useState(initialShareToken)
   const [isPinned, setIsPinned] = useState(initialIsPinned)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteLocked, setDeleteLocked] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -60,6 +56,23 @@ export default function AuthorActionsMenu({
     setConfirmingDelete(false)
     setError(null)
     setCopied(false)
+  }
+
+  async function openMenu() {
+    setOpen(true)
+    setConfirmingDelete(false)
+    setError(null)
+    setDeleteLocked(null)
+
+    // Same acknowledged UI-hint limitation as canEditDispatch: Reply
+    // RLS can hide a moderator-hidden Reply from this read. The server's
+    // delete_dispatch RPC still checks bare row existence unconditionally.
+    const { data } = await createClient()
+      .from('dispatch_replies')
+      .select('id')
+      .eq('dispatch_id', dispatchId)
+      .limit(1)
+    setDeleteLocked((data?.length ?? 0) > 0)
   }
 
   async function handleShare() {
@@ -124,18 +137,20 @@ export default function AuthorActionsMenu({
   }
 
   async function handleDelete() {
-    if (busy || !deletable) return
+    if (busy || deleteLocked !== false) return
     setBusy(true)
     setError(null)
     try {
       const supabase = createClient()
       const { error: deleteError } = await deleteDispatch(supabase, dispatchId)
       if (deleteError) {
-        setError(
-          deleteError.message === 'This Dispatch cannot be deleted while it still has Replies.'
-            ? deleteError.message
-            : 'Could not delete this Dispatch. Please try again.'
-        )
+        if (deleteError.message === 'This Dispatch cannot be deleted while it still has Replies.') {
+          setDeleteLocked(true)
+          setConfirmingDelete(false)
+          setError(deleteError.message)
+        } else {
+          setError('Could not delete this Dispatch. Please try again.')
+        }
         return
       }
       if (momentImagePaths.length > 0) {
@@ -150,7 +165,7 @@ export default function AuthorActionsMenu({
   return (
     <div className="relative">
       <Tooltip label="Dispatch options">
-        <button type="button" onClick={() => setOpen(true)} aria-label="Dispatch options" className={iconButtonClass}>
+        <button type="button" onClick={openMenu} aria-label="Dispatch options" className={iconButtonClass}>
           <KebabIcon />
         </button>
       </Tooltip>
@@ -191,7 +206,13 @@ export default function AuthorActionsMenu({
 
                 <div className="my-1 border-t border-foreground/10" />
 
-                {deletable ? (
+                {deleteLocked === null ? (
+                  <p className={`px-1 py-2 ${helperTextClass}`}>Checking deletion availability…</p>
+                ) : deleteLocked ? (
+                  <p className={`px-1 py-2 ${helperTextClass}`}>
+                    This Dispatch has responses and can no longer be deleted.
+                  </p>
+                ) : (
                   <button
                     type="button"
                     onClick={() => setConfirmingDelete(true)}
@@ -200,10 +221,6 @@ export default function AuthorActionsMenu({
                   >
                     Delete Dispatch
                   </button>
-                ) : (
-                  <p className={`px-1 py-2 ${helperTextClass}`}>
-                    This Dispatch has responses and can no longer be deleted.
-                  </p>
                 )}
 
                 <button type="button" onClick={closeMenu} className={`w-full py-2 text-center ${helperTextClass}`}>
