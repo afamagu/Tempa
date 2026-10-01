@@ -50,7 +50,7 @@ describe('PhotoMomentView — restore contract (source-level, see doc comment)',
     expect(source).toContain('aria-label="Retry loading this photo"')
     // The retry token must actually be part of the effect's own
     // dependency array, or clicking retry would never re-run it.
-    expect(source).toContain('}, [imagePath, previewUrl, retryToken])')
+    expect(source).toContain('}, [imagePath, previewUrl, retryToken, resolveFailed])')
   })
 
   it('cancellation is tracked so a stale async result from a torn-down attempt is never applied', () => {

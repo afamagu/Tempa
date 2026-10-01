@@ -71,7 +71,7 @@ export const PhotoMoment = Node.create({
   },
 })
 
-function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) {
+export function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) {
   const { imagePath, previewUrl } = node.attrs as { imagePath: string; previewUrl: string | null }
   const [resolveFailed, setResolveFailed] = useState(false)
   // Bumped only by the member's own "tap to retry" — a genuinely new
@@ -80,6 +80,7 @@ function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) 
   // effect below after every automatic attempt has already failed.
   const [retryToken, setRetryToken] = useState(0)
   const cancelledRef = useRef(false)
+  const imageLoadRetries = useRef(0)
 
   // Restoring a draft only has imagePath (the real, already-uploaded
   // Storage path) — the actual file was never lost, only the transient
@@ -91,7 +92,7 @@ function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) 
   // (lib/resolve-restored-photo.ts), which owns the bounded-backoff retry
   // loop itself so this component only has to react to its outcome.
   useEffect(() => {
-    if (previewUrl || !imagePath) return
+    if (previewUrl || !imagePath || resolveFailed) return
     cancelledRef.current = false
 
     async function run() {
@@ -119,7 +120,7 @@ function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) 
       cancelledRef.current = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imagePath, previewUrl, retryToken])
+  }, [imagePath, previewUrl, retryToken, resolveFailed])
 
   function handleRemove() {
     if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
@@ -133,14 +134,24 @@ function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) 
   // a plain click handler, never inside the effect itself — is what
   // re-arms the placeholder's visible state for the new attempt.
   function handleRetry() {
+    imageLoadRetries.current = 0
     setResolveFailed(false)
     setRetryToken((n) => n + 1)
+  }
+
+  function handleImageError() {
+    // Signing may succeed even when the browser cannot load the URL.
+    // Re-sign once from the durable path, then leave a manual recovery
+    // control rather than looping or discarding the attached Moment.
+    if (imageLoadRetries.current >= 1) setResolveFailed(true)
+    imageLoadRetries.current += 1
+    updateAttributes({ previewUrl: null })
   }
 
   return (
     <NodeViewWrapper as="span" contentEditable={false} className="relative mx-0.5 inline-flex align-middle">
       {previewUrl ? (
-        <img src={previewUrl} alt="" className="h-7 w-7 rounded object-cover" />
+        <img src={previewUrl} onError={handleImageError} onLoad={() => { imageLoadRetries.current = 0 }} alt="" className="h-7 w-7 rounded object-cover" />
       ) : resolveFailed ? (
         <button
           type="button"
