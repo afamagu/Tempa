@@ -1,5 +1,5 @@
 .page {
-  --paper: #f5eee2;
+  --paper: #f6efe4;
   --ink: #292620;
   --plum: #70516f;
   background: var(--paper);
@@ -679,3 +679,10 @@
     margin: 35px 0
   }
 }
+
+.momentTrigger { display:inline-block; border:0; padding:0; cursor:pointer; background:transparent; }
+.inlineMoment { width:25px; height:30px; object-fit:cover; border-radius:5px; vertical-align:middle; margin-left:5px; }
+.momentDialog { background:var(--paper); border:1px solid #d9cbb7; border-radius:16px; padding:18px; max-width:90vw; max-height:90vh; margin:auto; }
+.momentDialog::backdrop { background:#29262099; }
+.momentDialog img { width:auto; max-width:80vw; height:auto; max-height:75vh; margin:auto; border-radius:10px; }
+.momentDialog button { display:block; margin:0 0 12px auto; padding:5px 10px; cursor:pointer; }
