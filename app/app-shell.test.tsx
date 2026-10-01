@@ -67,7 +67,7 @@ describe('AppShell — canonical Room navigation', () => {
         <div>content</div>
       </AppShell>
     )
-    expect((html.match(/>Pen pals</g) ?? []).length).toBe(2)
+    expect((html.match(/>Letters</g) ?? []).length).toBe(2)
     expect((html.match(/>The Room</g) ?? []).length).toBe(2)
     expect((html.match(/>The Board</g) ?? []).length).toBe(2)
     expect(html).toContain('href="/room"')

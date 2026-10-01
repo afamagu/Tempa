@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Inicio",
-    "letters": "Amigos por carta",
+    "letters": "Cartas",
     "room": "La Sala",
     "board": "El Tablón",
     "you": "Tú"
@@ -83,6 +83,64 @@
     "noMatch": "Ningún idioma coincide con esa búsqueda.",
     "current": "Actual",
     "languages": "Idiomas"
+  },
+  "Letters": {
+    "heading": "Cartas",
+    "penPals": "Amigos por carta",
+    "discover": "Descubrir"
+  },
+  "Discovery": {
+    "intro": "Encuentra a alguien a quien valga la pena escribir.",
+    "search": "Buscar por seudónimo",
+    "searchButton": "Buscar",
+    "filters": "Filtros",
+    "country": "País",
+    "language": "Idioma",
+    "age": "Edad",
+    "gender": "Género",
+    "intent": "Buscando",
+    "all": "Todos los filtros",
+    "clear": "Borrar filtros",
+    "done": "Listo",
+    "findOption": "Buscar una opción",
+    "any": "Cualquiera",
+    "more": "Seguir buscando",
+    "loading": "Buscando…",
+    "end": "Por ahora has visto a todas las personas disponibles con estos filtros.",
+    "failed": "No se pudieron cargar más personas. Inténtalo de nuevo.",
+    "signIn": "Vuelve a iniciar sesión para seguir buscando.",
+    "changed": "La Pregunta ha cambiado. Actualiza la página.",
+    "unavailable": "Descubrir aún no está disponible. Inténtalo más tarde.",
+    "empty": "Nadie coincide con estos filtros. Prueba a ampliarlos.",
+    "windowEnd": "Inicia una nueva búsqueda para seguir explorando.",
+    "suggested": "Sugerencias para ti",
+    "previousPeople": "Personas anteriores",
+    "nextPeople": "Personas siguientes"
+  },
+  "Correspondents": {
+    "heading": "Tus corresponsales",
+    "loading": "Buscando…",
+    "empty": "No hay corresponsales disponibles.",
+    "failed": "No se pudieron cargar los corresponsales. Inténtalo de nuevo.",
+    "limit": "Una respuesta puede invitar a dos corresponsales como máximo."
+  },
+  "RoomInvitations": {
+    "heading": "Invitaciones a la Sala",
+    "invited": "{name} quiere saber qué piensas",
+    "answer": "Responder en la Sala",
+    "emailPreference": "Enviarme un correo cuando un corresponsal me invite a una Pregunta de la Sala",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "saved": "Guardado.",
+    "failed": "No se pudo guardar. Inténtalo de nuevo.",
+    "preferenceUnavailable": "No se pudieron cargar las preferencias de invitación. Inténtalo más tarde.",
+    "invitationFailed": "Tu respuesta está guardada. Las invitaciones aún no se pudieron enviar.",
+    "retry": "Reintentar las invitaciones"
+  },
+  "HomeEngagement": {
+    "matters": "Lo que importa ahora",
+    "talking": "De qué habla la gente",
+    "writing": "Lo que escribe la gente"
   },
   "LanguageOnboarding": {
     "heading": "Elige tu idioma de Tempa",

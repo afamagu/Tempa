@@ -21,6 +21,8 @@ export type DiscoveryCandidate = {
   answerId: string
   body: string
   prompt: string
+  languages?: string[]
+  intent?: string[]
 }
 
 export type DiscoveryPage = {
@@ -30,9 +32,14 @@ export type DiscoveryPage = {
   /** False only when V2 was requested but is unavailable and a legacy fallback was used. */
   fairRankingApplied: boolean
   browseStartedAt: string | null
+  unavailable?: boolean
 }
 
 export type DiscoveryRequest = {
+  language?: string
+  intent?: string
+  search?: string
+  profileLed?: boolean
   country?: string
   gender?: string
   ageRange?: string
@@ -54,6 +61,8 @@ type RpcEntry = {
   answer_id: string
   body: string
   prompt: string | null
+  languages?: string[]
+  intent?: string[]
 }
 
 type RpcResult = {
@@ -83,6 +92,8 @@ function mapRpcResult(data: unknown, limit: number, fairRankingApplied: boolean)
       answerId: entry.answer_id,
       body: entry.body,
       prompt: entry.prompt ?? '',
+      ...(entry.languages ? { languages: entry.languages } : {}),
+      ...(entry.intent ? { intent: entry.intent } : {}),
     })
     if (candidates.length === limit) break
   }
@@ -98,6 +109,18 @@ function mapRpcResult(data: unknown, limit: number, fairRankingApplied: boolean)
 export async function getDiscoveryPage(supabase: SupabaseClient, request: DiscoveryRequest = {}): Promise<DiscoveryPage> {
   const limit = Math.min(Math.max(1, Math.floor(Number.isFinite(request.limit) ? request.limit! : DISCOVERY_BATCH_SIZE)), MAX_DISCOVERY_LIMIT)
   const offset = Math.min(Math.max(0, Math.floor(Number.isFinite(request.offset) ? request.offset! : 0)), 2147483647)
+
+  // Profile-led search/filtering is performed inside Postgres under the
+  // caller's RLS context, never by downloading the profile population.
+  if (request.profileLed || request.language || request.intent || request.search) {
+    const { data, error } = await supabase.rpc('discover_profiles', {
+      p_country: request.country || null, p_gender: request.gender || null,
+      p_age_range: request.ageRange || null, p_language: request.language || null,
+      p_intent: request.intent || null, p_search: request.search || null,
+      p_exclude_user_ids: request.excludeUserIds ?? [], p_limit: limit,
+    })
+    return error || !data ? { ...EMPTY, unavailable: true } : mapRpcResult(data, limit, true)
+  }
 
   const { data: v2Data, error: v2Error } = await supabase.rpc('discover_people_v2', {
     p_country: request.country || null,

@@ -14,7 +14,8 @@ import { pageTitleClass, helperTextClass, primaryButtonClass, secondaryButtonCla
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from '@/app/minds/filter-disclosure'
-import DiscoveryResults, { type DiscoveryEntry } from './discovery-results'
+import type { DiscoveryEntry } from './discovery-results'
+import PeopleBrowser from './people-browser'
 import QuestionSuggestionForm from './question-suggestion-form'
 
 const BATCH_SIZE = DISCOVERY_BATCH_SIZE
@@ -104,14 +105,7 @@ export default async function RoomPage({
     started: discovery.browseStartedAt ?? undefined,
   })
   const currentRoomHref = currentQuery ? `/room?${currentQuery}` : '/room'
-  const moreHref = `/room?${buildQuery({
-    country,
-    gender,
-    age,
-    batch: String(batch + 1),
-    question: focusedQuestionId,
-    started: discovery.browseStartedAt ?? undefined,
-  })}`
+
 
   return (
     <AppShell active="room" waitingLetterCount={waitingCount}>
@@ -142,7 +136,7 @@ export default async function RoomPage({
                   {liveAnswer ? t('readEdit') : t('answerQuestion')}
                 </Link>
                 {focusedQuestionId ? (
-                  <Link href="/room#read-the-room" className={secondaryButtonClass}>{t('findWriter')}</Link>
+                  <Link href="/letters/discover" className={secondaryButtonClass}>{t('findWriter')}</Link>
                 ) : liveAnswer ? (
                   <a href="#read-the-room" className={secondaryButtonClass}>{t('readRoom')}</a>
                 ) : null}
@@ -184,17 +178,13 @@ export default async function RoomPage({
                 {!poolExhausted && eligibleCount > 0 && <p className={helperTextClass}>{t('widenFilters')}</p>}
                 {!poolExhausted && eligibleCount === 0 && !focusedQuestionId && <p className={helperTextClass}>{t('moreArrivals')}</p>}
                 {focusedQuestionId && (
-                  <Link href="/room#read-the-room" className={secondaryButtonClass}>{t('findWriter')}</Link>
+                  <Link href="/letters/discover" className={secondaryButtonClass}>{t('findWriter')}</Link>
                 )}
               </div>
             ) : (
               <>
-                <DiscoveryResults entries={entries} returnTo={currentRoomHref} />
-                {hasMore && (
-                  <div className="flex justify-center">
-                    <Link href={moreHref} className={secondaryButtonClass}>{t('keepLooking')}</Link>
-                  </div>
-                )}
+                <PeopleBrowser key={currentRoomHref} initialEntries={entries} initialHasMore={hasMore}
+                  request={{ country, gender, ageRange: age, questionId: focusedQuestionId, browseStartedAt: discovery.browseStartedAt ?? undefined }} returnTo={currentRoomHref} />
               </>
             )}
           </section>

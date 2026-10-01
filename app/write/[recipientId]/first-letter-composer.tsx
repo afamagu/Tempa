@@ -1,5 +1,7 @@
 'use client'
 
+import CorrespondentPicker from '@/app/correspondent-picker'
+
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useEditor, EditorContent } from '@tiptap/react'
@@ -213,7 +215,7 @@ export default function FirstLetterComposer({
         <div className="space-y-4">
           <div className="space-y-2">
             <WritingToolbar editor={editor} />
-            <EditorContent editor={editor} />
+            <CorrespondentPicker editor={editor}><EditorContent editor={editor} /></CorrespondentPicker>
           </div>
 
           {showCharCount && (

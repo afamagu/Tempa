@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { createServiceClient } from '@/lib/supabase/service'
 import { runArrivalEmailWorker } from '@/lib/email/arrival-worker'
+import { runRoomInvitationEmailWorker } from '@/lib/email/room-invitation-worker'
 import { sendEmail } from '@/lib/email/provider'
 
 /**
@@ -43,6 +44,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       siteOrigin,
       artOrigin: process.env.ARRIVAL_EMAIL_ART_ORIGIN || null,
     })
+    await runRoomInvitationEmailWorker({ supabase: createServiceClient(), sendEmail, siteOrigin })
     return NextResponse.json(summary)
   } catch (error) {
     console.error('arrival-emails cron run failed', error)

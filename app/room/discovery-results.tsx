@@ -19,6 +19,8 @@ export type DiscoveryEntry = {
   response: { id: string; body: string; prompt: string }
   writingStyleId?: string | null
   editorialTitle?: string | null
+  languages?: string[]
+  intent?: string[]
 }
 
 function identityLine(entry: DiscoveryEntry) {
@@ -40,7 +42,7 @@ function IdentityMark({ entry, size = 'sm' }: { entry: DiscoveryEntry; size?: 's
   )
 }
 
-export default function DiscoveryResults({ entries, returnTo = '/room' }: { entries: DiscoveryEntry[]; returnTo?: string }) {
+export default function DiscoveryResults({ entries, returnTo = '/room', profileLed = false, horizontal = false }: { entries: DiscoveryEntry[]; returnTo?: string; profileLed?: boolean; horizontal?: boolean }) {
   const router = useRouter()
   const [openId, setOpenId] = useState<string | null>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -87,9 +89,15 @@ export default function DiscoveryResults({ entries, returnTo = '/room' }: { entr
 
   return (
     <>
-      <div className="space-y-5">
+      <div className={horizontal ? 'flex gap-4' : profileLed ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-3'}>
         {entries.map((entry) => (
-          <article key={entry.userId} className="border-b border-foreground/10 pb-6 last:border-b-0">
+          <article key={entry.userId} className={profileLed ? `rounded-lg border border-foreground/10 bg-surface-shell p-4 ${horizontal ? 'w-64 shrink-0 snap-start' : ''}` : 'border-b border-foreground/10 pb-4 last:border-b-0'}>
+            {profileLed ? <Link href={profileHref(entry.userId, returnTo)} className="block space-y-3">
+              <div className="flex items-start gap-3"><IdentityMark entry={entry} /><div className="min-w-0"><p className="break-words text-sm font-semibold">{entry.pseudonym}</p><EditorialByline title={entry.editorialTitle} /><p className={helperTextClass}>{identityLine(entry)}</p></div></div>
+              {entry.languages?.length ? <p className={helperTextClass}>{entry.languages.join(' · ')}</p> : null}
+              {entry.intent?.length ? <p className="line-clamp-2 text-sm text-foreground/70">{entry.intent.join(' · ')}</p> : null}
+              <p className="text-xs font-medium text-foreground/60">Read {entry.pseudonym} →</p>
+            </Link> :
             <button type="button" onClick={() => setOpenId(entry.userId)} className="block w-full text-left" aria-label={`Read ${entry.pseudonym}'s response`}>
               <div className="flex items-start gap-3">
                 <IdentityMark entry={entry} />
@@ -103,12 +111,12 @@ export default function DiscoveryResults({ entries, returnTo = '/room' }: { entr
                     <QuestionInfoIcon prompt={entry.response.prompt} />
                   </div>
                   <AuthoredProse styleId={entry.writingStyleId ?? null}>
-                    <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-[17px] leading-7">{entry.response.body}</p>
+                    <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-base leading-6">{entry.response.body}</p>
                   </AuthoredProse>
                   <p className="mt-3 text-[12px] font-medium text-foreground/55">Read {entry.pseudonym} →</p>
                 </div>
               </div>
-            </button>
+            </button>}
           </article>
         ))}
       </div>

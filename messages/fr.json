@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Accueil",
-    "letters": "Correspondants",
+    "letters": "Lettres",
     "room": "La Salle",
     "board": "Le Tableau",
     "you": "Vous"
@@ -83,6 +83,64 @@
     "noMatch": "Aucune langue ne correspond à cette recherche.",
     "current": "Actuelle",
     "languages": "Langues"
+  },
+  "Letters": {
+    "heading": "Lettres",
+    "penPals": "Correspondants",
+    "discover": "Découvrir"
+  },
+  "Discovery": {
+    "intro": "Trouvez quelqu’un à qui vous aimeriez écrire.",
+    "search": "Rechercher un pseudonyme",
+    "searchButton": "Rechercher",
+    "filters": "Filtres",
+    "country": "Pays",
+    "language": "Langue",
+    "age": "Âge",
+    "gender": "Genre",
+    "intent": "Recherche",
+    "all": "Tous les filtres",
+    "clear": "Effacer les filtres",
+    "done": "Terminé",
+    "findOption": "Rechercher une option",
+    "any": "Tous",
+    "more": "Continuer à explorer",
+    "loading": "Recherche…",
+    "end": "Vous avez vu toutes les personnes disponibles avec ces filtres pour le moment.",
+    "failed": "Impossible de charger d’autres personnes. Réessayez.",
+    "signIn": "Reconnectez-vous pour continuer.",
+    "changed": "La Question a changé. Actualisez la page.",
+    "unavailable": "La découverte n’est pas encore disponible. Réessayez plus tard.",
+    "empty": "Aucun résultat. Essayez d’élargir les filtres.",
+    "windowEnd": "Lancez une nouvelle recherche pour continuer.",
+    "suggested": "Suggestions pour vous",
+    "previousPeople": "Personnes précédentes",
+    "nextPeople": "Personnes suivantes"
+  },
+  "Correspondents": {
+    "heading": "Vos correspondants",
+    "loading": "Recherche…",
+    "empty": "Aucun correspondant disponible.",
+    "failed": "Impossible de charger les correspondants. Réessayez.",
+    "limit": "Une réponse peut inviter deux correspondants au maximum."
+  },
+  "RoomInvitations": {
+    "heading": "Invitations à la Salle",
+    "invited": "{name} aimerait connaître votre avis",
+    "answer": "Répondre dans la Salle",
+    "emailPreference": "M’envoyer un email quand un correspondant m’invite à répondre dans la Salle",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré.",
+    "failed": "Impossible d’enregistrer. Réessayez.",
+    "preferenceUnavailable": "Impossible de charger les préférences d’invitation. Réessayez plus tard.",
+    "invitationFailed": "Votre réponse est enregistrée. Les invitations n’ont pas encore pu être envoyées.",
+    "retry": "Réessayer les invitations"
+  },
+  "HomeEngagement": {
+    "matters": "Ce qui compte maintenant",
+    "talking": "De quoi les gens parlent",
+    "writing": "Ce que les gens écrivent"
   },
   "LanguageOnboarding": {
     "heading": "Choisissez votre langue Tempa",

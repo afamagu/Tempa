@@ -79,7 +79,7 @@ function Badge({ count }: { count: number }) {
 
 /**
  * Tempa's persistent primary navigation. The member-facing destinations are
- * Home, Pen pals, The Room, The Board and You. `minds` remains an accepted
+ * Home, Letters, The Room, The Board and You. `minds` remains an accepted
  * active value temporarily so older, non-canonical call sites cannot break a
  * production build while their URLs are redirected to The Room.
  */

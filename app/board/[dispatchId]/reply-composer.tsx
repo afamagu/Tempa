@@ -1,5 +1,7 @@
 'use client'
 
+import CorrespondentPicker from '@/app/correspondent-picker'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -170,7 +172,7 @@ export default function ReplyComposer({
 
   return (
     <div className="space-y-2">
-      <textarea
+      <CorrespondentPicker onChange={setBody} maxLength={REPLY_MAX_CHARS}><textarea
         value={body}
         onChange={(e) => setBody(e.target.value.slice(0, REPLY_MAX_CHARS))}
         maxLength={REPLY_MAX_CHARS}
@@ -179,7 +181,7 @@ export default function ReplyComposer({
         placeholder="Write a Reply…"
         aria-label="Write a Reply"
         className={inputClass}
-      />
+      /></CorrespondentPicker>
 
       {body.length >= CHAR_WARNING_THRESHOLD && (
         <p className={helperTextClass}>{remaining} characters left</p>

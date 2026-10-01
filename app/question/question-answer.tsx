@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
+import CorrespondentPicker from '@/app/correspondent-picker'
+import type { CorrespondentChoice } from '@/lib/correspondent-trigger'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
@@ -73,6 +75,35 @@ export default function QuestionAnswer({
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
   const [financialBlocked, setFinancialBlocked] = useState(false)
 
+  const [chosenCorrespondents, setChosenCorrespondents] = useState<CorrespondentChoice[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(`${draftKey(questionId, userId)}:people`) ?? '[]')
+      return Array.isArray(stored) ? stored.filter((person) => typeof person?.userId === 'string' && typeof person?.pseudonym === 'string').slice(0, 2) : []
+    } catch { return [] }
+  })
+  const [invitationError, setInvitationError] = useState(false)
+
+  function chooseCorrespondent(person: CorrespondentChoice) {
+    if (isFlagship || onboarding) return true
+    const retained = chosenCorrespondents.filter((item) => body.includes(`@${item.pseudonym}`))
+    if (!retained.some((item) => item.userId === person.userId) && retained.length >= 2) return false
+    const next = retained.some((item) => item.userId === person.userId) ? retained : [...retained, person]
+    setChosenCorrespondents(next)
+    try { window.localStorage.setItem(`${draftKey(questionId, userId)}:people`, JSON.stringify(next)) } catch { /* draft storage optional */ }
+    return true
+  }
+
+  async function inviteCorrespondents() {
+    if (isFlagship || onboarding) return
+    const ids = chosenCorrespondents.filter((person) => body.includes(`@${person.pseudonym}`)).map((person) => person.userId)
+    if (!ids.length) return
+    try {
+      const { error: invitationFailure } = await createClient().rpc('create_room_invitations', { p_question_id: questionId, p_recipient_ids: ids })
+      setInvitationError(Boolean(invitationFailure))
+    } catch { setInvitationError(true) }
+  }
+
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
   const aboveMax = charCount > MAX_CHARS
@@ -137,6 +168,7 @@ export default function QuestionAnswer({
     setPublishedBody(trimmed)
     setBody(trimmed)
     setMode('view')
+    await inviteCorrespondents()
     if (!onboarding) router.refresh()
   }
 
@@ -191,7 +223,7 @@ export default function QuestionAnswer({
               <div className={`italic ${helperTextClass}`}><p>{t('onboardingIntro')}</p><p className="mt-2"><strong className="font-semibold text-foreground/75">{t('specificity')}</strong></p></div>
             </div>}
             <div className="flex items-center gap-1 border-b border-foreground/10 pb-2"><EmojiPicker onSelect={insertEmoji} /></div>
-            <textarea ref={textareaRef} value={body} onChange={(e) => updateBody(e.target.value)} rows={16} placeholder={t('beginWriting')} className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent" />
+            <CorrespondentPicker onChange={updateBody} maxLength={MAX_CHARS} onSelect={chooseCorrespondent}><textarea ref={textareaRef} value={body} onChange={(e) => updateBody(e.target.value)} rows={16} placeholder={t('beginWriting')} className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent" /></CorrespondentPicker>
             {showCharCount && <p className={helperTextClass}>{charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex flex-wrap gap-3">
@@ -207,8 +239,16 @@ export default function QuestionAnswer({
           </div>
         )}
       </div>
+      {invitationError && <InvitationFailure onRetry={inviteCorrespondents} />}
       <SafetyWarningDialog open={pendingWarning !== null} copyKey={pendingWarning?.copyKey} onCancel={() => setPendingWarning(null)} onAcknowledgeAndSend={() => pendingWarning && saveAnswer(pendingWarning.evaluationId, true)} sending={saving} actionLabel={t('saveAnyway')} sendingLabel={t('saving')} />
       <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </main>
   )
+}
+
+function InvitationFailure({ onRetry }: { onRetry: () => Promise<void> }) {
+  const t = useTranslations('RoomInvitations')
+  return <div role="alert" className="mx-auto mb-8 max-w-2xl rounded-md border border-foreground/15 p-4 text-sm">
+    <p>{t('invitationFailed')}</p><button type="button" onClick={onRetry} className="mt-2 underline underline-offset-4">{t('retry')}</button>
+  </div>
 }
