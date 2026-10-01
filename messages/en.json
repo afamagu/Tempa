@@ -1,7 +1,7 @@
 {
   "Nav": {
     "home": "Home",
-    "letters": "Pen pals",
+    "letters": "Letters",
     "room": "The Room",
     "board": "The Board",
     "you": "You"
@@ -83,6 +83,64 @@
     "noMatch": "No language matches that search.",
     "current": "Current",
     "languages": "Languages"
+  },
+  "Letters": {
+    "heading": "Letters",
+    "penPals": "Pen Pals",
+    "discover": "Discover"
+  },
+  "Discovery": {
+    "intro": "Find someone worth writing to.",
+    "search": "Search by pseudonym",
+    "searchButton": "Search",
+    "filters": "Filters",
+    "country": "Country",
+    "language": "Language",
+    "age": "Age",
+    "gender": "Gender",
+    "intent": "Looking for",
+    "all": "All filters",
+    "clear": "Clear filters",
+    "done": "Done",
+    "findOption": "Find an option",
+    "any": "Any",
+    "more": "Keep looking",
+    "loading": "Looking…",
+    "end": "You’ve seen everyone available with these filters for now.",
+    "failed": "Could not load more people. Please try again.",
+    "signIn": "Sign in again to keep looking.",
+    "changed": "The Question has changed. Refresh to see the new Question.",
+    "unavailable": "Discover is not available yet. Please try again later.",
+    "empty": "No one matches these filters right now. Try widening them.",
+    "windowEnd": "Start a new search to keep exploring.",
+    "suggested": "Suggested for you",
+    "previousPeople": "Previous people",
+    "nextPeople": "Next people"
+  },
+  "Correspondents": {
+    "heading": "Your correspondents",
+    "loading": "Looking…",
+    "empty": "No eligible correspondents match.",
+    "failed": "Could not load correspondents. Try again.",
+    "limit": "A Room answer can invite at most two correspondents."
+  },
+  "RoomInvitations": {
+    "heading": "Room invitations",
+    "invited": "{name} wants to hear what you think",
+    "answer": "Answer in The Room",
+    "emailPreference": "Email me when a correspondent invites me to a Room Question",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "failed": "Could not save right now. Please try again.",
+    "preferenceUnavailable": "Could not load Room invitation preferences. Try again later.",
+    "invitationFailed": "Your answer is saved. Your Room invitations could not be sent yet.",
+    "retry": "Retry invitations"
+  },
+  "HomeEngagement": {
+    "matters": "What matters now",
+    "talking": "What people are talking about",
+    "writing": "What people are writing"
   },
   "LanguageOnboarding": {
     "heading": "Choose your Tempa language",

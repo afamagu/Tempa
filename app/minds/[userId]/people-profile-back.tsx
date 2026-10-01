@@ -9,6 +9,8 @@ export default function PeopleProfileBack({ returnTo }: { returnTo?: string | nu
   const router = useRouter()
   const destination = sanitizeInternalPath(returnTo) ?? '/room'
 
+  const label = destination.startsWith('/letters/discover') ? 'Discover' : 'The Room'
+
   return (
     <Link
       href={destination}
@@ -21,10 +23,10 @@ export default function PeopleProfileBack({ returnTo }: { returnTo?: string | nu
         }
       }}
       className={`inline-flex items-center gap-2 ${quietLinkClass}`}
-      aria-label="Back to The Room"
+      aria-label={`Back to ${label}`}
     >
       <span aria-hidden="true">←</span>
-      <span>The Room</span>
+      <span>{label}</span>
     </Link>
   )
 }

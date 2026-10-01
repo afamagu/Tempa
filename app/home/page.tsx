@@ -39,6 +39,7 @@ import MemberNotices from '@/app/member-notices'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
 import ArrivalSenderLink from './arrival-sender-link'
+import RoomInvitations from './room-invitations'
 import BoardShelfCard from './board-shelf-card'
 import RoomAnswerCard, { type HomeRoomAnswer } from './room-answer-card'
 import AnnouncementTeaser from './announcement-teaser'
@@ -176,6 +177,11 @@ export default async function HomePage() {
     }
   }
 
+  if (!currentRoomQuestion) {
+    const discovery = await getDiscoveryPage(supabase, { limit: HOME_ROOM_ANSWER_COUNT })
+    roomCandidates = discovery.candidates
+  }
+
   await recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')
 
   const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
@@ -267,10 +273,11 @@ export default async function HomePage() {
               )}
 
               {mailOnTheWay && <MailOnTheWay />}
+              <RoomInvitations />
             </div>
           </div>
 
-          {(currentRoomQuestion || homeBoardItems.length > 0) && (
+          {(currentRoomQuestion || homeRoomAnswers.length > 0 || homeBoardItems.length > 0) && (
             <div className="mx-auto mt-14 w-full max-w-4xl space-y-14">
               {currentRoomQuestion && (
                 <section aria-labelledby="home-room-heading" className="space-y-6">
@@ -301,10 +308,20 @@ export default async function HomePage() {
                     <Link href={`/room?question=${currentRoomQuestion.id}`} className={secondaryButtonClass}>
                       {t('moreAnswers')}
                     </Link>
-                    <Link href="/room#read-the-room" className={quietLinkClass}>
+                    <Link href="/letters/discover" className={quietLinkClass}>
                       {t('findWriter')} →
                     </Link>
                   </div>
+                </section>
+              )}
+
+              {!currentRoomQuestion && (
+                <section aria-labelledby="home-people-heading" className="space-y-4">
+                  <h2 id="home-people-heading" className={sectionLabelClass}>{t('findWriter')}</h2>
+                  {homeRoomAnswers.length > 0 && <div className="grid gap-4 md:grid-cols-3">
+                    {homeRoomAnswers.map((answer) => <RoomAnswerCard key={answer.userId} answer={answer} />)}
+                  </div>}
+                  <Link href="/letters/discover" className={quietLinkClass}>{t('findWriter')} →</Link>
                 </section>
               )}
 

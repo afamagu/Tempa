@@ -5,6 +5,8 @@ import { getWaitingLetterCount } from '@/lib/letters'
 import { getArrivalEmailPreference } from '@/lib/email-preferences'
 import { proseSubheadingClass, helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
+import RoomInvitationPreference from './room-invitation-preference'
+import { getTranslations } from 'next-intl/server'
 import NotificationsEditor from './notifications-editor'
 
 export default async function NotificationsPage() {
@@ -21,6 +23,9 @@ export default async function NotificationsPage() {
     getWaitingLetterCount(supabase, user.id),
     getArrivalEmailPreference(supabase, user.id),
   ])
+
+  const { data: roomPreference, error: roomPreferenceError } = await supabase.from('room_invitation_preferences').select('emails_enabled').eq('user_id', user.id).maybeSingle()
+  const t = await getTranslations('RoomInvitations')
 
   return (
     <AppShell active="you" waitingLetterCount={waitingCount}>
@@ -53,6 +58,7 @@ export default async function NotificationsPage() {
               </a>
             </div>
           )}
+          {roomPreferenceError ? <p className={helperTextClass}>{t('preferenceUnavailable')}</p> : <RoomInvitationPreference initialEnabled={roomPreference?.emails_enabled ?? true} />}
         </div>
       </main>
     </AppShell>

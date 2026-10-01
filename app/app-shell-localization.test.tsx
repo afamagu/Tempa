@@ -21,10 +21,10 @@ function render(locale: keyof typeof DICTIONARIES, waitingLetterCount = 0) {
 }
 
 const EXPECTED = {
-  en: ['Home', 'Pen pals', 'The Room', 'The Board', 'You'],
-  fr: ['Accueil', 'Correspondants', 'La Salle', 'Le Tableau', 'Vous'],
-  es: ['Inicio', 'Amigos por carta', 'La Sala', 'El Tablón', 'Tú'],
-  pt: ['Início', 'Amigos por correspondência', 'A Sala', 'O Mural', 'Você'],
+  en: ['Home', 'Letters', 'The Room', 'The Board', 'You'],
+  fr: ['Accueil', 'Lettres', 'La Salle', 'Le Tableau', 'Vous'],
+  es: ['Inicio', 'Cartas', 'La Sala', 'El Tablón', 'Tú'],
+  pt: ['Início', 'Cartas', 'A Sala', 'O Mural', 'Você'],
 } as const
 
 describe('AppShell navigation is localized from the dictionaries', () => {

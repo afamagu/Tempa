@@ -7,7 +7,7 @@ const source = readFileSync(path.join(__dirname, 'people-profile-back.tsx'), 'ut
 describe('People profile return navigation', () => {
   it('sanitizes the return destination before using it as an href', () => {
     expect(source).toContain('sanitizeInternalPath(returnTo)')
-    expect(source).toContain("?? '/minds'")
+    expect(source).toContain("?? '/room'")
   })
 
   it('prefers browser back when opened from People so filters and scroll position can be restored naturally', () => {
@@ -16,7 +16,8 @@ describe('People profile return navigation', () => {
   })
 
   it('renders a clear back affordance', () => {
-    expect(source).toContain('aria-label="Back to People"')
+    expect(source).toContain('aria-label={`Back to ${label}`}')
+    expect(source).toContain("destination.startsWith('/letters/discover')")
     expect(source).toContain('<span aria-hidden="true">←</span>')
   })
 })

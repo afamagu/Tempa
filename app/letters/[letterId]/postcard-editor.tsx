@@ -1,5 +1,7 @@
 'use client'
 
+import CorrespondentPicker from '@/app/correspondent-picker'
+
 import { useEffect } from 'react'
 import PostcardObject from '@/app/letters/postcard-object'
 import {
@@ -145,7 +147,7 @@ export default function PostcardEditor({
               A few words for the reveal
             </label>
             <p className={helperTextClass}>Appears while the postcard comes alive.</p>
-            <input
+            <CorrespondentPicker onChange={(value) => onChange({ ...draft, revealLine: value })} maxLength={REVEAL_LINE_MAX_LENGTH}><input
               id="postcard-reveal-line"
               type="text"
               value={draft.revealLine}
@@ -153,7 +155,7 @@ export default function PostcardEditor({
               maxLength={REVEAL_LINE_MAX_LENGTH}
               placeholder="A few words, just for them…"
               className={inputClass}
-            />
+            /></CorrespondentPicker>
           </div>
         </div>
       </div>

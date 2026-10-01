@@ -10,6 +10,8 @@ import { pageTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MemberNotices from '@/app/member-notices'
 import LetterboxSearch from './letterbox-search'
+import LettersTabs from './letters-tabs'
+import { getTranslations } from 'next-intl/server'
 
 /**
  * Letterbox Level 1 — a people-first address book, not a message
@@ -26,6 +28,7 @@ import LetterboxSearch from './letterbox-search'
  * implementation, no other Letterbox redesign.
  */
 export default async function LettersPage() {
+  const t = await getTranslations('Letters')
   const supabase = await createClient()
   const {
     data: { user },
@@ -51,7 +54,8 @@ export default async function LettersPage() {
             content-width guidance — wider than a reading measure). */}
         <div className="w-full max-w-5xl">
           <MemberNotices />
-          <h1 className={`mb-6 ${pageTitleClass}`}>Pen pals</h1>
+          <h1 className={pageTitleClass}>{t('heading')}</h1>
+          <LettersTabs active="penPals" />
           <LetterboxSearch people={people} mailInTransitPersonIds={mailInTransitPersonIds} />
         </div>
       </main>
