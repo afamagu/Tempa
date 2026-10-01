@@ -121,9 +121,9 @@ export default async function LetterArchiveWithUserPage({
               {otherProfile ? (
                 /* Mindform + pseudonym form ONE link while the profile is
                    actually visible. A missing profile is deliberately not
-                   replaced by a dead /minds link. */
+                   replaced by a dead profile link. */
                 <Link
-                  href={`/minds/${otherProfile.id}`}
+                  href={`/room/${otherProfile.id}`}
                   className="flex min-w-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80"
                 >
                   <ProfileIdentityMark

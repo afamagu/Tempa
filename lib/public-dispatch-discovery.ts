@@ -1,13 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dispatchDescription, publicDispatchPath } from '@/lib/public-dispatches'
 import { SITE_URL } from '@/lib/site'
+import { editorialTitleFor, getEditorialBylines, type EditorialBylines } from '@/lib/editorial-byline'
 
 export const PUBLIC_DISPATCH_INDEX_PATH = '/dispatches'
 export const PUBLIC_DISPATCH_TOPIC_BASE_PATH = '/dispatches/topics'
 export const PUBLIC_TOPIC_MIN_INDEXABLE_COUNT = 3
 
 export type PublicDispatchPreviewIdentity =
-  | { kind: 'member'; name: string; country: string | null }
+  | { kind: 'member'; name: string; country: string | null; editorialTitle?: string | null }
   | { kind: 'tempa'; name: 'Tempa' }
   | { kind: 'sponsored'; name: string }
 
@@ -48,14 +49,17 @@ type PublicDispatchTopicRpcRow = {
   last_modified: string
 }
 
-function toPreview(row: PublicDispatchPreviewRpcRow): PublicDispatchPreview {
+function toPreview(row: PublicDispatchPreviewRpcRow, editorialBylines: EditorialBylines = new Map()): PublicDispatchPreview {
   const publishedAs = row.published_as === 'tempa' || row.published_as === 'sponsored' ? row.published_as : 'member'
   const identity: PublicDispatchPreviewIdentity =
     publishedAs === 'tempa'
       ? { kind: 'tempa', name: 'Tempa' }
       : publishedAs === 'sponsored'
         ? { kind: 'sponsored', name: row.sponsor_name?.trim() || row.author_pseudonym?.trim() || 'Sponsored' }
-        : { kind: 'member', name: row.author_pseudonym?.trim() || 'A TEMPA member', country: row.author_country ?? null }
+        : withEditorialTitle(
+            { kind: 'member', name: row.author_pseudonym?.trim() || 'A TEMPA member', country: row.author_country ?? null },
+            editorialTitleFor(editorialBylines, row.author_pseudonym)
+          )
 
   return {
     slug: row.web_slug,
@@ -68,16 +72,27 @@ function toPreview(row: PublicDispatchPreviewRpcRow): PublicDispatchPreview {
   }
 }
 
+// Only house accounts carry the key; an ordinary member's preview is unchanged.
+function withEditorialTitle(
+  identity: Extract<PublicDispatchPreviewIdentity, { kind: 'member' }>,
+  editorialTitle: string | null
+): PublicDispatchPreviewIdentity {
+  return editorialTitle ? { ...identity, editorialTitle } : identity
+}
+
 export async function listPublicDispatchPreviews(
   supabase: SupabaseClient,
   options: { limit?: number; topic?: string | null } = {}
 ): Promise<PublicDispatchPreview[]> {
-  const { data, error } = await supabase.rpc('list_public_dispatch_previews', {
-    p_limit: options.limit ?? 24,
-    p_topic: options.topic ?? null,
-  })
+  const [{ data, error }, editorialBylines] = await Promise.all([
+    supabase.rpc('list_public_dispatch_previews', {
+      p_limit: options.limit ?? 24,
+      p_topic: options.topic ?? null,
+    }),
+    getEditorialBylines(supabase),
+  ])
   if (error || !data) return []
-  return (data as PublicDispatchPreviewRpcRow[]).map(toPreview)
+  return (data as PublicDispatchPreviewRpcRow[]).map((row) => toPreview(row, editorialBylines))
 }
 
 export async function listRelatedPublicDispatches(
@@ -87,13 +102,18 @@ export async function listRelatedPublicDispatches(
   limit = 4
 ): Promise<PublicDispatchPreview[]> {
   if (topics.length === 0) return []
-  const { data, error } = await supabase.rpc('list_related_public_dispatches', {
-    p_slug: slug,
-    p_topics: topics,
-    p_limit: limit,
-  })
+  const [{ data, error }, editorialBylines] = await Promise.all([
+    supabase.rpc('list_related_public_dispatches', {
+      p_slug: slug,
+      p_topics: topics,
+      p_limit: limit,
+    }),
+    getEditorialBylines(supabase),
+  ])
   if (error || !data) return []
-  return (data as (PublicDispatchPreviewRpcRow & { shared_topic_count?: number | string })[]).map(toPreview)
+  return (data as (PublicDispatchPreviewRpcRow & { shared_topic_count?: number | string })[]).map((row) =>
+    toPreview(row, editorialBylines)
+  )
 }
 
 export async function listPublicDispatchTopics(supabase: SupabaseClient): Promise<PublicDispatchTopic[]> {

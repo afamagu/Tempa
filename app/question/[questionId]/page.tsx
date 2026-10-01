@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getQuestionById, getEligibleQuestions, nextEligibleQuestion } from '@/lib/questions'
+import { getQuestionById } from '@/lib/questions'
 import QuestionAnswer from '../question-answer'
 import { getMyWritingStyle } from '@/lib/writing-style-data'
 
@@ -22,25 +22,18 @@ export default async function QuestionWritePage({
   const question = await getQuestionById(supabase, questionId)
 
   if (!question) {
-    redirect('/you/responses?tab=new')
+    redirect('/room')
   }
 
-  const [{ data: answer }, eligibleQuestions, writingStyleId] = await Promise.all([
+  const [{ data: answer }, writingStyleId] = await Promise.all([
     supabase
       .from('question_answers')
-      .select('body, updated_at, is_current')
+      .select('body, updated_at, is_current, moderation_status')
       .eq('question_id', question.id)
       .eq('user_id', user.id)
       .maybeSingle(),
-    getEligibleQuestions(supabase, user.id),
     getMyWritingStyle(supabase, user.id),
   ])
-
-  // "Next" is simply the first other currently-eligible (positioned,
-  // unanswered) Question in #1/#2/#3 order, or null once nothing else
-  // is left — no fixed-order wraparound needed with only 3 possible
-  // slots.
-  const nextQuestion = nextEligibleQuestion(eligibleQuestions, question.id)
 
   return (
     <QuestionAnswer
@@ -50,7 +43,8 @@ export default async function QuestionWritePage({
       isActive={question.isActive}
       isFlagship={question.isFlagship}
       initialAnswer={answer?.body ?? null}
-      nextQuestion={nextQuestion}
+      editable={question.isActive && answer?.moderation_status !== 'hidden'}
+      nextQuestion={null}
       writingStyleId={writingStyleId}
     />
   )

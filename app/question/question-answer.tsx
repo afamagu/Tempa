@@ -54,6 +54,7 @@ export default function QuestionAnswer({
   initialAnswer,
   isFlagship = false,
   isActive = true,
+  editable,
   nextQuestion = null,
   onboarding = false,
   writingStyleId = null,
@@ -64,31 +65,32 @@ export default function QuestionAnswer({
   initialAnswer: string | null
   isFlagship?: boolean
   isActive?: boolean
+  /** UI permission hint. The RPC remains the authority. False for a
+   * retired Question or a moderation-frozen existing response. */
+  editable?: boolean
+  /** Retained temporarily for call-site compatibility while the old
+   * three-slot Question model is retired. */
   nextQuestion?: LibraryQuestion | null
   onboarding?: boolean
-  /** The member's own current Writing Style, for their published
-   * response (null during onboarding — it is chosen next). */
   writingStyleId?: string | null
 }) {
+  void nextQuestion
   const router = useRouter()
-  const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !isActive ? 'view' : 'edit')
+  const canEditResponse = editable ?? isActive
+  const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !canEditResponse ? 'view' : 'edit')
   const [publishedBody, setPublishedBody] = useState(initialAnswer)
   const hadExistingAnswer = initialAnswer !== null
   const [body, setBody] = useState(() => readDraft(questionId, userId) ?? initialAnswer ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<string | null>(null)
-  // Safety 2, Checkpoint 4 — mirrors first-letter-composer.tsx's own
-  // pendingWarning split exactly (see that file's own doc comment).
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
-  // Phase 1 — a confirmed financial solicitation is not sendable and has
-  // no override; this only ever opens the calm SafetyBlockedDialog.
   const [financialBlocked, setFinancialBlocked] = useState(false)
 
   const charCount = charLength(body)
   const hasContent = body.trim().length > 0
   const aboveMax = charCount > MAX_CHARS
-  const canPublish = hasContent && !aboveMax && !saving
+  const canPublish = canEditResponse && hasContent && !aboveMax && !saving
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
   const hasPublishedView = mode === 'view' && Boolean(publishedBody)
   const promptClass = hasPublishedView ? contextQuestionClass : proseSubheadingClass
@@ -115,13 +117,6 @@ export default function QuestionAnswer({
     })
   }
 
-  // Safety 2, Checkpoint 4 — the member's own click. Evaluates FIRST;
-  // only ever calls publish_question_answer itself once that evaluation
-  // resolves to allow (immediately) or the member explicitly
-  // acknowledges a warning (handleAcknowledgeWarning below). A failed
-  // evaluation never falls back to an unscreened save — see lib/safety/
-  // send-with-safety.ts's own doc comment on why evaluateSafety is
-  // fail-closed by construction.
   async function handlePublish() {
     if (!canPublish) return
     setSaving(true)
@@ -160,14 +155,10 @@ export default function QuestionAnswer({
   }
 
   async function saveAnswer(safetyEvaluationId: string, warningAcknowledged: boolean) {
+    if (!canEditResponse) return
     setSaving(true)
     setError(null)
 
-    // Re-read body fresh at call time is unnecessary here — body is
-    // already the single source of truth this whole component reads
-    // from; publish_question_answer's own fingerprint recheck
-    // (tempa_private.consume_safety_evaluation) still rejects it if it
-    // somehow changed since evaluation.
     const trimmed = body.trim()
     const supabase = createClient()
     const { error: publishError } = await supabase.rpc('publish_question_answer', {
@@ -207,16 +198,16 @@ export default function QuestionAnswer({
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-2xl space-y-8 py-10">
         <div className="space-y-3">
-          <p className={sectionLabelClass}>The Question</p>
+          <p className={sectionLabelClass}>{isFlagship ? 'The First Question' : 'The Question'}</p>
           <h1 className={promptClass}>{prompt}</h1>
         </div>
 
         {mode === 'view' && publishedBody && onboarding && confirmation ? (
           <div className="space-y-8">
             <div className="space-y-4">
-              <h2 className={proseSubheadingClass}>That&rsquo;s your first response.</h2>
+              <h2 className={proseSubheadingClass}>You&rsquo;re in the Room.</h2>
               <p className={helperTextClass}>
-                Your response is one of the first ways people can discover you on Tempa. You can answer the other two whenever you feel like it. For now, there are people to meet.
+                This is your First Question. It stays with your Tempa identity and gives people something real to encounter before they decide to write.
               </p>
               <div className="rounded-md bg-surface-shell p-4 sm:p-5">
                 <AuthoredProse styleId={null}>
@@ -225,14 +216,7 @@ export default function QuestionAnswer({
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              {/* Writing Style comes next in onboarding — shown the words
-                  just written, then on into People. */}
               <Link href={WRITING_STYLE_ONBOARDING_HREF} className={primaryButtonClass}>Continue</Link>
-              {nextQuestion ? (
-                <Link href={`/question/${nextQuestion.id}`} className={secondaryButtonClass}>Answer another Question</Link>
-              ) : (
-                <Link href="/you/responses?tab=new" className={secondaryButtonClass}>Answer another Question</Link>
-              )}
             </div>
           </div>
         ) : mode === 'view' && publishedBody ? (
@@ -247,31 +231,33 @@ export default function QuestionAnswer({
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/you/responses" className={secondaryButtonClass}>Back to my responses</Link>
-              <button
-                type="button"
-                onClick={() => { setConfirmation(null); setMode('edit') }}
-                className={secondaryButtonClass}
-              >
-                Edit response
-              </button>
-              {nextQuestion && <Link href={`/question/${nextQuestion.id}`} className={primaryButtonClass}>Next</Link>}
+              <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                {isFlagship ? 'Enter the Room' : 'Back to Responses'}
+              </Link>
+              {canEditResponse && (
+                <button
+                  type="button"
+                  onClick={() => { setConfirmation(null); setMode('edit') }}
+                  className={secondaryButtonClass}
+                >
+                  Edit response
+                </button>
+              )}
             </div>
           </div>
-        ) : mode === 'view' && !isActive ? (
+        ) : mode === 'view' && !canEditResponse ? (
           <div className="space-y-8">
             <p className={helperTextClass}>This Question is no longer open, and you haven&apos;t answered it.</p>
-            <Link href="/you/responses" className={secondaryButtonClass}>Back to my responses</Link>
+            <Link href="/room" className={secondaryButtonClass}>Back to The Room</Link>
           </div>
         ) : (
           <div className="space-y-4">
             {onboarding && !hadExistingAnswer && (
               <div className="space-y-2 border-l-2 border-clay/50 pl-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">One last thing before you meet everyone</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">One last thing before you enter The Room</p>
                 <div className={`italic ${helperTextClass}`}>
-                  <p>Tempa gives you three Questions designed to reveal a little more than a profile ever could.</p>
-                  <p className="mt-2">Your responses give people something real to discover. This first response is one of the first ways people can discover you on Tempa — and sometimes the beginning of a letter.</p>
-                  <p className="mt-2">Start with this one. The other two can wait.</p>
+                  <p>Everyone enters Tempa through the same First Question. Your answer becomes one of the first ways people can discover you here.</p>
+                  <p className="mt-2"><strong className="font-semibold text-foreground/75">Give them something to write to.</strong> A particular opinion, habit, contradiction, belief or curiosity is often more memorable than a list of things you like.</p>
                 </div>
               </div>
             )}
@@ -293,7 +279,9 @@ export default function QuestionAnswer({
 
             <div className="flex flex-wrap gap-3">
               {!(onboarding && !hadExistingAnswer) && (
-                <Link href="/you/responses" className={secondaryButtonClass}>Back to my responses</Link>
+                <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                  {isFlagship ? 'Back to The Room' : 'Back to Responses'}
+                </Link>
               )}
               <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>
                 {saving ? 'Saving…' : 'Save response'}

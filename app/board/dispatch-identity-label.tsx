@@ -1,6 +1,7 @@
 import TempaEmblem from '@/app/tempa-emblem'
 import { SPONSORED_LABEL, type DispatchIdentity } from '@/lib/dispatch-identity'
 import DispatchAuthorLink from './dispatch-author-link'
+import EditorialByline from '@/app/editorial-byline'
 
 const EMBLEM_SIZE = { sm: 28, md: 36 } as const
 
@@ -51,10 +52,22 @@ export default function DispatchIdentityLabel({
   }
 
   if (!linkable) {
-    return (
-      <span className="flex min-w-0 items-center gap-1.5" data-dispatch-identity="member">
+    const nameAndCountry = (
+      <>
         <span className="truncate text-[14px] text-foreground/70">{identity.name}</span>
         {identity.country && <span className="truncate text-[13px] text-muted">· {identity.country}</span>}
+      </>
+    )
+    return (
+      <span className={`flex min-w-0 ${identity.editorialTitle ? 'flex-col' : 'items-center gap-1.5'}`} data-dispatch-identity="member">
+        {identity.editorialTitle ? (
+          <>
+            <span className="flex min-w-0 items-center gap-1.5">{nameAndCountry}</span>
+            <EditorialByline title={identity.editorialTitle} />
+          </>
+        ) : (
+          nameAndCountry
+        )}
       </span>
     )
   }
@@ -65,6 +78,7 @@ export default function DispatchIdentityLabel({
       authorPseudonym={identity.name}
       authorCountry={identity.country}
       authorMarkUrl={identity.markUrl}
+      authorEditorialTitle={identity.editorialTitle}
       size={size}
     />
   )

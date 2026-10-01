@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useLocale } from 'next-intl'
 import { GOOGLE_GSI_SCRIPT_SRC, createGoogleNonce, type GoogleNonce } from '@/lib/google-identity'
 
 /**
  * The ONE place Google Identity Services is loaded and its button
  * rendered (imported only by app/sign-in/page.tsx). Google issues an ID
  * token only to its own rendered button (or One Tap), so the button's
- * look is Google's; Tempa chooses theme/shape/text/width.
+ * look is Google's; Tempa chooses theme/shape/text/width/language.
  *
  * `google.accounts.id.initialize()` runs ONCE per page load (Google's
  * guidance), with ONE nonce generated for that page. The page submits at
@@ -43,6 +44,7 @@ declare global {
               shape: 'rectangular' | 'pill'
               logo_alignment: 'left' | 'center'
               width: number
+              locale?: string
             }
           ) => void
           cancel: () => void
@@ -126,6 +128,7 @@ export default function GoogleIdentityButton({
   /** GIS could not load (blocked, offline). */
   onUnavailable: () => void
 }) {
+  const locale = useLocale()
   const containerRef = useRef<HTMLDivElement>(null)
   const onCredentialRef = useRef(onCredential)
   const onUnavailableRef = useRef(onUnavailable)
@@ -144,8 +147,10 @@ export default function GoogleIdentityButton({
       .then(() => {
         if (cancelled || !containerRef.current || !window.google?.accounts?.id) return
         containerRef.current.replaceChildren()
-        // Rendering a button again (e.g. after a re-mount) is fine; only
-        // initialize is once per page.
+        // Rendering a button again (including after a Tempa locale change)
+        // is fine; initializeOnce above keeps GIS initialization and its
+        // nonce page-lifetime, so changing button language does not alter
+        // the authentication flow.
         window.google.accounts.id.renderButton(containerRef.current, {
           type: 'standard',
           theme: 'outline',
@@ -154,6 +159,7 @@ export default function GoogleIdentityButton({
           shape: 'rectangular',
           logo_alignment: 'center',
           width: Math.min(400, Math.max(200, containerRef.current.offsetWidth || 320)),
+          locale,
         })
       })
       .catch(() => {
@@ -164,7 +170,7 @@ export default function GoogleIdentityButton({
       cancelled = true
       if (deliverCredential === handler) deliverCredential = null
     }
-  }, [clientId, joinIntent])
+  }, [clientId, joinIntent, locale])
 
   return <div ref={containerRef} className="flex min-h-[44px] w-full justify-center" data-testid="google-identity-button" />
 }

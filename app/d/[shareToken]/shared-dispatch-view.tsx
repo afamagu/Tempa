@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Mindform from '@/app/mindform'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import CountryFlag from '@/app/country-flag'
+import EditorialByline from '@/app/editorial-byline'
 import TopicChips from '@/app/board/topic-chips'
 import DispatchBody from '@/app/board/dispatch-body'
 import MomentHint from '@/app/board/moment-hint'
@@ -48,11 +49,12 @@ export default function SharedDispatchView({
               ) : (
                 <Mindform identifier={dispatch.id} size="md" />
               )}
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="text-[15px] font-medium text-foreground">{dispatch.authorPseudonym}</p>
                   <CountryFlag country={dispatch.authorCountry} />
                 </div>
+                <EditorialByline title={dispatch.identity.editorialTitle} className="mb-0.5" />
                 <p className={metadataTextClass}>{formatDatePlain(dispatch.publishedAt)}</p>
               </div>
             </div>

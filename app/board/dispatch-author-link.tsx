@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import EditorialByline from '@/app/editorial-byline'
 
 /**
  * Shared Dispatch-author identity link — pseudonym (and identity mark)
@@ -25,14 +26,28 @@ export default function DispatchAuthorLink({
   authorPseudonym,
   authorCountry,
   authorMarkUrl = null,
+  authorEditorialTitle = null,
   size = 'sm',
 }: {
   authorId: string
   authorPseudonym: string
   authorCountry: string | null
   authorMarkUrl?: string | null
+  /** House accounts only — rendered directly beneath the pseudonym. */
+  authorEditorialTitle?: string | null
   size?: 'sm' | 'md'
 }) {
+  const nameAndCountry = (
+    <>
+      <p className="truncate text-[14px] text-foreground/70">{authorPseudonym}</p>
+      {authorCountry && (
+        <span className="truncate text-[13px] text-muted" aria-label={`Country: ${authorCountry}`}>
+          · {authorCountry}
+        </span>
+      )}
+    </>
+  )
+
   return (
     <Link
       href={`/minds/${authorId}`}
@@ -44,11 +59,13 @@ export default function DispatchAuthorLink({
         label={authorMarkUrl ? `${authorPseudonym}'s Mark` : undefined}
         size={size}
       />
-      <p className="truncate text-[14px] text-foreground/70">{authorPseudonym}</p>
-      {authorCountry && (
-        <span className="truncate text-[13px] text-muted" aria-label={`Country: ${authorCountry}`}>
-          · {authorCountry}
+      {authorEditorialTitle ? (
+        <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">{nameAndCountry}</span>
+          <EditorialByline title={authorEditorialTitle} />
         </span>
+      ) : (
+        nameAndCountry
       )}
     </Link>
   )

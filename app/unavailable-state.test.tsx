@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import UnavailableState from './unavailable-state'
 import NotFound from './not-found'
 import ProfileNotFound from './minds/[userId]/not-found'
+import RoomProfileNotFound from './room/[userId]/not-found'
 import DispatchNotFound from './board/[dispatchId]/not-found'
 
 function normalize(html: string) {
@@ -21,10 +22,18 @@ describe('Tempa unavailable states', () => {
   it('keeps a missing profile deliberately neutral', () => {
     const html = normalize(renderToStaticMarkup(<ProfileNotFound />))
     expect(html).toContain('This profile is no longer available.')
-    expect(html).toContain('Back to People')
+    expect(html).toContain('Back to The Room')
+    expect(html).toContain('href="/room"')
     expect(html.toLowerCase()).not.toContain('deleted')
     expect(html.toLowerCase()).not.toContain('banned')
     expect(html.toLowerCase()).not.toContain('suspended')
+  })
+
+  it('uses the same neutral profile state on the canonical Room route', () => {
+    expect(RoomProfileNotFound).toBe(ProfileNotFound)
+    const html = normalize(renderToStaticMarkup(<RoomProfileNotFound />))
+    expect(html).toContain('This profile is no longer available.')
+    expect(html).toContain('href="/room"')
   })
 
   it('keeps an unavailable Dispatch neutral as well', () => {

@@ -26,6 +26,8 @@ import ReportButton from '@/app/report-button'
 import InterestsDisclosure from './interests-disclosure'
 import ProfileAnswer from './profile-answer'
 import { getMemberWritingStyles } from '@/lib/writing-style-data'
+import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
+import EditorialByline from '@/app/editorial-byline'
 import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
 import PeopleProfileBack from './people-profile-back'
@@ -42,18 +44,10 @@ export function canWriteToMind(state: {
   hasCurrentAnswer: boolean
   currentAnswerAlreadyContacted: boolean
 }): boolean {
-  return (
-    !state.isSelf &&
-    !state.alreadyCorresponding &&
-    state.hasCurrentAnswer &&
-    !state.currentAnswerAlreadyContacted
-  )
+  return !state.isSelf && !state.alreadyCorresponding && state.hasCurrentAnswer && !state.currentAnswerAlreadyContacted
 }
 
-/** The same continuity rule used by People discovery, expressed over the
- * resolved profile-answer shape: Flagship first, then the member's historical
- * current response, then their latest response. This keeps established users
- * readable after a Flagship rotation without weakening response-first People. */
+/** Stable introduction first, then a live/historical Room response, then latest. */
 export function chooseProfileAnswer(answers: MyQuestionAnswer[]): MyQuestionAnswer | null {
   return (
     answers.find((answer) => answer.isPrimary) ??
@@ -95,7 +89,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -103,9 +97,10 @@ export default async function PublicProfilePage({
     getPinnedDispatch(supabase, userId),
     isSelf ? Promise.resolve(null) : getBlockScope(supabase, userId),
     getMemberWritingStyles(supabase, [userId]),
+    getEditorialBylines(supabase),
   ])
-  // The writer's CURRENT style — profile prose represents who they are now.
   const writingStyleId = writingStyles.get(userId) ?? null
+  const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
   const primaryAnswer = chooseProfileAnswer(rawAnswers)
@@ -126,19 +121,16 @@ export default async function PublicProfilePage({
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
 
   return (
-    <AppShell active="minds" waitingLetterCount={waitingCount}>
+    <AppShell active={isSelf ? 'you' : 'room'} waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center p-6">
         <div className="w-full max-w-2xl space-y-8 py-10">
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}
 
           <div className="flex items-start gap-4">
-            <ProfileMarkViewer
-              identifier={profile.id}
-              markUrl={markUrl}
-              pseudonym={profile.pseudonym}
-            />
+            <ProfileMarkViewer identifier={profile.id} markUrl={markUrl} pseudonym={profile.pseudonym} />
             <div className="min-w-0">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
+              <EditorialByline title={editorialTitle} rule className="mb-2" />
               {demographics && <p className={metadataTextClass}>{demographics}</p>}
               {languages.length > 0 && <p className={`mt-1 ${metadataTextClass}`}>Speaks {languages.join(', ')}</p>}
               {intent.length > 0 && (
@@ -188,7 +180,7 @@ export default async function PublicProfilePage({
             <div className="space-y-3 border-t border-foreground/10 pt-6">
               <div className="flex items-center justify-between gap-3">
                 <p className={sectionLabelClass}>Dispatches</p>
-                <Link href={`/minds/${userId}/dispatches`} className={quietLinkClass}>See all Dispatches</Link>
+                <Link href={`/room/${userId}/dispatches`} className={quietLinkClass}>See all Dispatches</Link>
               </div>
               {recentDispatches.length > 0 && (
                 <div className="space-y-4">
@@ -201,7 +193,7 @@ export default async function PublicProfilePage({
           {!isSelf && (
             <div className="space-y-3">
               {showWriteToMind && primaryAnswer ? (
-                <Link href={`/write/${profile.id}?a=${primaryAnswer.id}`} className={primaryButtonClass}>
+                <Link href={`/write/${profile.id}?a=${primaryAnswer.id}&source=room_profile`} className={primaryButtonClass}>
                   Write to {profile.pseudonym}
                 </Link>
               ) : alreadyCorresponding ? (
@@ -216,7 +208,7 @@ export default async function PublicProfilePage({
                   blockedPseudonym={profile.pseudonym}
                   triggerClassName={quietLinkClass}
                   initialScope={blockScope}
-                  fullBlockRedirect="/minds"
+                  fullBlockRedirect="/room"
                 />
                 <ReportButton targetType="profile" targetId={profile.id} triggerClassName={quietLinkClass} />
               </div>
