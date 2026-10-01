@@ -24,6 +24,7 @@ export const PROTECTED_MATCHERS = [
   '/minds/:path*',
   '/profile/:path*',
   '/question/:path*',
+  '/room/:path*',
   '/write/:path*',
   '/you/:path*',
 ] as const
@@ -47,20 +48,24 @@ export async function proxy(request: NextRequest) {
     enforce: CSP_ENFORCE,
   })
 
+  let response: NextResponse | undefined
   const withCspRequest = () => {
     const headers = new Headers(request.headers)
     headers.set('x-nonce', nonce)
     headers.set(CSP_HEADER, csp)
-    return NextResponse.next({ request: { headers } })
+    const next = NextResponse.next({ request: { headers } })
+    response?.cookies.getAll().forEach((cookie) => next.cookies.set(cookie))
+    return next
   }
   const withCsp = <T extends NextResponse>(res: T): T => {
+    if (response && res !== response) response.cookies.getAll().forEach((cookie) => res.cookies.set(cookie))
     res.headers.set(CSP_HEADER, csp)
     return res
   }
 
   if (!isProtectedPath(request.nextUrl.pathname)) return withCsp(withCspRequest())
 
-  let response = withCspRequest()
+  response = withCspRequest()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
@@ -71,7 +76,7 @@ export async function proxy(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = withCspRequest()
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
+          cookiesToSet.forEach(({ name, value, options }) => response!.cookies.set(name, value, options))
         },
       },
     }
@@ -110,14 +115,14 @@ export async function proxy(request: NextRequest) {
     // synchronized before the DOB/legal UI renders. Let that route through
     // when it is already the required gate; otherwise preserve the original
     // requested page in `next` for the normal post-gate return.
-    if (request.nextUrl.pathname === '/begin') return withCsp(response)
+    if (request.nextUrl.pathname === '/begin') return withCsp(response!)
     const beginUrl = new URL('/begin', request.url)
     beginUrl.searchParams.set('next', requestedDestination)
     return withCsp(NextResponse.redirect(beginUrl))
   }
 
   if (destination !== requestedDestination) return withCsp(NextResponse.redirect(new URL(destination, request.url)))
-  return withCsp(response)
+  return withCsp(response!)
 }
 
 export const config = {

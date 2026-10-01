@@ -143,7 +143,6 @@ do $$
 declare
   v_a uuid;
   v_b uuid;
-  v_a_old_reading text;
   v_seen int;
   v_rejected boolean := false;
 begin
@@ -151,13 +150,8 @@ begin
   select id into v_b from public.profiles where id <> v_a order by id limit 1;
 
   if v_a is null or v_b is null then
-    raise notice 'fewer than two profiles; behavioural isolation check skipped';
-    return;
+    raise exception 'At least two existing profiles are required for the behavioural isolation check';
   end if;
-
-  select reading_language into v_a_old_reading
-  from public.member_language_preferences
-  where user_id = v_a;
 
   set local role authenticated;
 
@@ -207,17 +201,26 @@ begin
   -- There is intentionally no user-id parameter on either write RPC;
   -- with B's JWT active, a write can only affect B.
   perform public.set_my_tempa_language('es');
-  if exists (
+  reset role;
+
+  -- Inspect as the SQL-editor owner: RLS hides A while acting as B, so
+  -- an authenticated B-scoped SELECT alone cannot prove A was unchanged.
+  if not exists (
     select 1 from public.member_language_preferences
-    where user_id = v_a and interface_locale = 'es'
+    where user_id = v_a and interface_locale = 'fr' and reading_language = 'ja'
   ) then
     raise exception 'member B altered member A language preferences';
   end if;
-
-  reset role;
+  if not exists (
+    select 1 from public.member_language_preferences
+    where user_id = v_b and interface_locale = 'es' and reading_language = 'es'
+  ) then
+    raise exception 'member B language save did not affect its own row';
+  end if;
 end;
 $$;
 
 rollback;
 
--- Expected: no exception (possibly the two-profile skip notice), then ROLLBACK.
+-- Reaching this row means all checks passed and behavioural writes rolled back.
+select 'LANGUAGE_ONBOARDING_VERIFIED' as result;

@@ -8,7 +8,7 @@ import {
   contextQuestionClass,
 } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
-import { formatDatePlain } from '@/lib/format-date'
+import { formatDateTimeFull } from '@/lib/format-date'
 import type { LibraryQuestion, MyQuestionAnswer } from '@/lib/questions'
 
 function excerpt(text: string, maxChars = 240) {
@@ -38,7 +38,7 @@ function AnsweredQuestionRow({ answer, writingStyleId }: { answer: MyQuestionAns
     <div className="border-b border-foreground/10 py-6 first:pt-0 last:border-b-0">
       <Link href={`/question/${answer.questionId}`} className="block hover:opacity-90">
         <p className={contextQuestionClass}>{answer.prompt}</p>
-        <p className={`mt-1 ${helperTextClass}`}>{formatDatePlain(answer.updatedAt)}</p>
+        <p className={`mt-1 ${helperTextClass}`}>{formatDateTimeFull(answer.updatedAt)}</p>
         <div className="mt-3 rounded-md bg-surface-shell p-4">
           <AuthoredProse styleId={writingStyleId}>
             <p className="line-clamp-4 whitespace-pre-wrap">{excerpt(answer.body)}</p>
@@ -47,10 +47,6 @@ function AnsweredQuestionRow({ answer, writingStyleId }: { answer: MyQuestionAns
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {answer.isPrimary && <span className={helperTextClass}>Your primary response</span>}
-        {/* Admin Phase 2A-1 — only ever true for the answer's own
-            author (question_answers' RLS excludes a hidden row from
-            everyone else entirely); a calm, private notice, never a
-            public tombstone. */}
         {answer.moderationStatus === 'hidden' && (
           <span className={helperTextClass}>Hidden by TEMPA.</span>
         )}
@@ -70,25 +66,8 @@ function EligibleQuestionRow({ question }: { question: LibraryQuestion }) {
   )
 }
 
-/**
- * Minds' "My answers" and "Answer a Question" content.
- *
- * "Answer a Question" shows the current, explicitly Admin-positioned
- * three Questions (lib/questions.ts's getEligibleQuestions), in slot
- * order, minus anything this member has already answered — genuinely
- * new things to try, never something already answered. Revisiting/
- * editing an existing answer is "My answers"' job (each answer's own
- * prompt links to the same write page,
- * app/question/[questionId]/page.tsx, pre-filled with the existing
- * body).
- */
 export default function QuestionWorkspace({
   tab,
-  // An empty array is always a real, valid state (a brand-new account,
-  // nothing currently eligible, or nothing answered yet) — never an
-  // error state. Defaulting here means this component can never throw
-  // on a missing/not-yet-resolved prop; every `.length`/`.map` below
-  // always has a real array to work with.
   questions = [],
   answers = [],
   writingStyleId = null,
@@ -96,7 +75,6 @@ export default function QuestionWorkspace({
   tab: 'answers' | 'new'
   questions?: LibraryQuestion[]
   answers?: MyQuestionAnswer[]
-  /** The member's own current Writing Style. */
   writingStyleId?: string | null
 }) {
   if (tab === 'answers') {
@@ -104,7 +82,7 @@ export default function QuestionWorkspace({
       return (
         <div className="space-y-4">
           <p className={helperTextClass}>You haven&apos;t answered a Question yet.</p>
-          <Link href="/you/responses?tab=new" className={quietLinkClass}>
+          <Link href="/you/archive?tab=responses&mode=new" className={quietLinkClass}>
             Answer a new Question
           </Link>
         </div>
@@ -127,11 +105,6 @@ export default function QuestionWorkspace({
           Choose whichever gives you the best opportunity to say something real.
         </p>
       </div>
-      {/* Onboarding & First-Use checkpoint — People Information
-          Architecture: this component's own two tabs (host-controlled
-          via the `tab` prop) now live at /you/responses instead of as a
-          third co-equal Minds/People tab (see that route's own doc
-          comment). Nothing in this component's own internals changed. */}
       {questions.length === 0 ? (
         <p className={helperTextClass}>Nothing new to answer right now — check back later.</p>
       ) : (

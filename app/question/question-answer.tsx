@@ -39,6 +39,7 @@ export default function QuestionAnswer({
   initialAnswer,
   isFlagship = false,
   isActive = true,
+  editable,
   nextQuestion = null,
   onboarding = false,
   writingStyleId = null,
@@ -49,6 +50,11 @@ export default function QuestionAnswer({
   initialAnswer: string | null
   isFlagship?: boolean
   isActive?: boolean
+  /** UI permission hint. The RPC remains the authority. False for a
+   * retired Question or a moderation-frozen existing response. */
+  editable?: boolean
+  /** Retained temporarily for call-site compatibility while the old
+   * three-slot Question model is retired. */
   nextQuestion?: LibraryQuestion | null
   onboarding?: boolean
   writingStyleId?: string | null
@@ -56,7 +62,8 @@ export default function QuestionAnswer({
   void nextQuestion
   const t = useTranslations('Question')
   const router = useRouter()
-  const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !isActive ? 'view' : 'edit')
+  const canEditResponse = editable ?? isActive
+  const [mode, setMode] = useState<'view' | 'edit'>(initialAnswer || !canEditResponse ? 'view' : 'edit')
   const [publishedBody, setPublishedBody] = useState(initialAnswer)
   const hadExistingAnswer = initialAnswer !== null
   const [body, setBody] = useState(() => readDraft(questionId, userId) ?? initialAnswer ?? '')
@@ -67,7 +74,9 @@ export default function QuestionAnswer({
   const [financialBlocked, setFinancialBlocked] = useState(false)
 
   const charCount = charLength(body)
-  const canPublish = body.trim().length > 0 && charCount <= MAX_CHARS && !saving
+  const hasContent = body.trim().length > 0
+  const aboveMax = charCount > MAX_CHARS
+  const canPublish = canEditResponse && hasContent && !aboveMax && !saving
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
   const hasPublishedView = mode === 'view' && Boolean(publishedBody)
   const promptClass = hasPublishedView ? contextQuestionClass : proseSubheadingClass
@@ -105,7 +114,10 @@ export default function QuestionAnswer({
   }
 
   async function saveAnswer(safetyEvaluationId: string, warningAcknowledged: boolean) {
-    setSaving(true); setError(null)
+    if (!canEditResponse) return
+    setSaving(true)
+    setError(null)
+
     const trimmed = body.trim()
     const { error: publishError } = await createClient().rpc('publish_question_answer', {
       p_question_id: questionId,
@@ -153,12 +165,25 @@ export default function QuestionAnswer({
               <div className="rounded-md bg-surface-shell p-4 sm:p-5"><AuthoredProse styleId={writingStyleId}><p className="whitespace-pre-wrap">{publishedBody}</p></AuthoredProse></div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>{isFlagship ? t('enterRoom') : t('backResponses')}</Link>
-              <button type="button" onClick={() => { setConfirmation(null); setMode('edit') }} className={secondaryButtonClass}>{t('editResponse')}</button>
+              <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                {isFlagship ? t('enterRoom') : t('backResponses')}
+              </Link>
+              {canEditResponse && (
+                <button
+                  type="button"
+                  onClick={() => { setConfirmation(null); setMode('edit') }}
+                  className={secondaryButtonClass}
+                >
+                  {t('editResponse')}
+                </button>
+              )}
             </div>
           </div>
-        ) : mode === 'view' && !isActive ? (
-          <div className="space-y-8"><p className={helperTextClass}>{t('unansweredClosed')}</p><Link href="/room" className={secondaryButtonClass}>{t('backRoom')}</Link></div>
+        ) : mode === 'view' && !canEditResponse ? (
+          <div className="space-y-8">
+            <p className={helperTextClass}>{t('unansweredClosed')}</p>
+            <Link href="/room" className={secondaryButtonClass}>{t('backRoom')}</Link>
+          </div>
         ) : (
           <div className="space-y-4">
             {onboarding && !hadExistingAnswer && <div className="space-y-2 border-l-2 border-clay/50 pl-3">
@@ -170,8 +195,14 @@ export default function QuestionAnswer({
             {showCharCount && <p className={helperTextClass}>{charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex flex-wrap gap-3">
-              {!(onboarding && !hadExistingAnswer) && <Link href={isFlagship ? '/room' : '/you/responses'} className={secondaryButtonClass}>{isFlagship ? t('backRoom') : t('backResponses')}</Link>}
-              <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>{saving ? t('saving') : t('saveResponse')}</button>
+              {!(onboarding && !hadExistingAnswer) && (
+                <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                  {isFlagship ? t('backRoom') : t('backResponses')}
+                </Link>
+              )}
+              <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>
+                {saving ? t('saving') : t('saveResponse')}
+              </button>
             </div>
           </div>
         )}

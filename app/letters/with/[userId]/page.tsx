@@ -8,7 +8,7 @@ import {
   getIncomingMailInTransit,
   incomingMailInTransitPersonIds,
 } from '@/lib/letters'
-import { sectionTitleClass, iconButtonClass } from '@/app/profile/ui'
+import { sectionTitleClass, iconButtonClass, metadataTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
@@ -45,6 +45,16 @@ function BackChevronIcon() {
  * from a Level 1 person card; opens the existing, untouched
  * individual-letter reader (/letters/[letterId]) when a card is
  * clicked.
+ *
+ * Account deletion deliberately keeps the OTHER participant's letters,
+ * and a full block likewise leaves historical letters in Letterbox. In
+ * either case public_profiles can no longer resolve the other person.
+ * That missing profile must not destroy access to an otherwise-visible
+ * archive, and it must not be used to infer WHY the profile vanished.
+ * Historical mail therefore renders under a neutral identity while the
+ * live profile link and write action disappear. If neither a profile nor
+ * any visible correspondence exists, this is simply an invalid archive
+ * URL and the segment's not-found state handles it.
  */
 export default async function LetterArchiveWithUserPage({
   params,
@@ -77,19 +87,22 @@ export default async function LetterArchiveWithUserPage({
       getIncomingMailInTransit(supabase),
     ])
 
-  const otherProfile = (profiles ?? []).find((p) => p.id === otherUserId)
-  if (!otherProfile) {
+  const otherProfile = (profiles ?? []).find((p) => p.id === otherUserId) ?? null
+  const hasHistoricalAccess = letters.length > 0 || visibleCorrespondenceIds.length > 0
+  if (!otherProfile && !hasHistoricalAccess) {
     notFound()
   }
+
   const viewerPseudonym = (profiles ?? []).find((p) => p.id === user.id)?.pseudonym ?? 'You'
-  const otherMarkUrl = otherProfile.mark_id
+  const otherPseudonym = otherProfile?.pseudonym ?? 'A Tempa member'
+  const otherMarkUrl = otherProfile?.mark_id
     ? publicProfileMarkUrl(supabase, `${otherProfile.mark_id}.png`)
     : null
   // Same existence-only signal Letterbox Level 1 already shows for
   // this person (incomingMailInTransitPersonIds) — scoped to THIS
   // specific correspondent, never "some mail is on the way somewhere."
   // No new query shape, no inspection of the hidden letter itself.
-  const mailOnTheWayFromThisPerson = incomingMailInTransitPersonIds(incomingInTransit).has(otherProfile.id)
+  const mailOnTheWayFromThisPerson = incomingMailInTransitPersonIds(incomingInTransit).has(otherUserId)
 
   return (
     <AppShell active="letters" waitingLetterCount={waitingCount}>
@@ -105,29 +118,35 @@ export default async function LetterArchiveWithUserPage({
           </Link>
           <div className="mb-6 space-y-3">
             <div className="flex items-start justify-between gap-3">
-              {/* Mindform + pseudonym form ONE link to this person's public
-                  profile — the only path there from inside their archive,
-                  since the Level 1 card that led here deliberately opens
-                  the archive itself, not the profile. */}
-              <Link
-                href={`/minds/${otherProfile.id}`}
-                className="flex min-w-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80"
-              >
-                <ProfileIdentityMark
-                  identifier={otherProfile.id}
-                  markUrl={otherMarkUrl}
-                  label={otherMarkUrl ? `${otherProfile.pseudonym}'s Mark` : undefined}
-                  size="md"
-                />
-                <h1 className={sectionTitleClass}>{otherProfile.pseudonym}</h1>
-              </Link>
+              {otherProfile ? (
+                /* Mindform + pseudonym form ONE link while the profile is
+                   actually visible. A missing profile is deliberately not
+                   replaced by a dead profile link. */
+                <Link
+                  href={`/room/${otherProfile.id}`}
+                  className="flex min-w-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80"
+                >
+                  <ProfileIdentityMark
+                    identifier={otherProfile.id}
+                    markUrl={otherMarkUrl}
+                    label={otherMarkUrl ? `${otherProfile.pseudonym}'s Mark` : undefined}
+                    size="md"
+                  />
+                  <h1 className={sectionTitleClass}>{otherProfile.pseudonym}</h1>
+                </Link>
+              ) : (
+                <div className="min-w-0 space-y-1">
+                  <h1 className={sectionTitleClass}>{otherPseudonym}</h1>
+                  <p className={metadataTextClass}>This profile is no longer available. Your letters remain here.</p>
+                </div>
+              )}
 
               {visibleCorrespondenceIds.length > 0 && (
                 <RemoveFromLetterbox
                   correspondenceIds={visibleCorrespondenceIds}
                   triggerClassName={`shrink-0 ${iconButtonClass}`}
                   triggerIcon={<RemoveFromLetterboxIcon />}
-                  confirmDescription={`your correspondence with ${otherProfile.pseudonym}`}
+                  confirmDescription={`your correspondence with ${otherPseudonym}`}
                 />
               )}
             </div>
@@ -138,13 +157,13 @@ export default async function LetterArchiveWithUserPage({
           <ArchiveList
             letters={letters}
             viewerId={user.id}
-            otherUserId={otherProfile.id}
-            otherPseudonym={otherProfile.pseudonym}
+            otherUserId={otherUserId}
+            otherPseudonym={otherPseudonym}
             viewerPseudonym={viewerPseudonym}
           />
         </div>
       </main>
-      <WriteQuillButton otherUserId={otherProfile.id} otherPseudonym={otherProfile.pseudonym} />
+      {otherProfile && <WriteQuillButton otherUserId={otherProfile.id} otherPseudonym={otherProfile.pseudonym} />}
     </AppShell>
   )
 }

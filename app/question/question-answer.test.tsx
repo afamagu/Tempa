@@ -27,7 +27,7 @@ describe('QuestionAnswer — localized current behaviour', () => {
     const html = renderQuestion()
     expect(html).toContain('Save response')
     expect(html).toContain('Back to my responses')
-    expect(html).toContain('href="/you/responses"')
+    expect(html).toContain('href="/you/archive?tab=responses"')
     expect(html).not.toContain('Send letter')
     expect(html).not.toContain('Publish answer')
     expect(html).not.toMatch(/>Send<\/button>/)
@@ -51,6 +51,18 @@ describe('QuestionAnswer — localized current behaviour', () => {
     const html = renderQuestion({ initialAnswer: 'My historical answer.', isActive: false })
     expect(html).toContain('My historical answer.')
     expect(html).toContain('This Question is no longer open')
+  })
+
+  it('never offers editing for a frozen historical answer', () => {
+    const html = renderQuestion({ initialAnswer: 'Frozen response.', editable: false })
+    expect(html).toContain('Frozen response.')
+    expect(html).not.toContain('Edit response')
+    expect(html).not.toContain('<textarea')
+  })
+
+  it('honors explicit edit permission independently of active status', () => {
+    const html = renderQuestion({ initialAnswer: 'Existing response.', isActive: false, editable: true })
+    expect(html).toContain('Edit response')
   })
 
   it('keeps edit controls for an existing answer', () => {

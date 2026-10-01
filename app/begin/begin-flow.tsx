@@ -73,6 +73,11 @@ function DobStep() {
     setPhase('confirm')
   }
 
+  function handleEdit() {
+    setPhase('entry')
+    setError(null)
+  }
+
   async function handleConfirm() {
     if (submitting || !confirmedDob) return
     setSubmitting(true); setError(null)
@@ -87,7 +92,7 @@ function DobStep() {
       {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
       <div className="space-y-3">
         <button type="button" onClick={handleConfirm} disabled={submitting} className={`w-full ${primaryButtonClass}`}>{submitting ? common('saving') : t('confirmDob')}</button>
-        <button type="button" onClick={() => { setPhase('entry'); setError(null) }} disabled={submitting} className={quietLinkClass}>{t('goBackEdit')}</button>
+        <button type="button" onClick={handleEdit} disabled={submitting} className={quietLinkClass}>{t('goBackEdit')}</button>
       </div>
     </Shell>
   }
