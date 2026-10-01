@@ -95,7 +95,7 @@ export default async function WriteToPage({
 
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <Link href="/letters" className={secondaryButtonClass}>Your letters</Link>
-            <Link href={`/room/${recipientId}${backHref === '/home' ? '?returnTo=%2Fhome' : ''}`} className={quietLinkClass}>
+            <Link href={backHref.startsWith(`/room/${recipientId}`) ? backHref : `/room/${recipientId}${backHref === '/home' ? '?returnTo=%2Fhome' : backHref.startsWith('/letters/discover') ? `?returnTo=${encodeURIComponent(backHref)}` : ''}`} className={quietLinkClass}>
               Back to {recipient.pseudonym}&apos;s profile
             </Link>
           </div>

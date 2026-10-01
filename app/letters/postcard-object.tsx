@@ -1,6 +1,5 @@
 'use client'
 
-import CorrespondentPicker from '@/app/correspondent-picker'
 
 import { useEffect, useRef, useState } from 'react'
 import { helperTextClass, secondaryButtonClass } from '@/app/profile/ui'
@@ -214,7 +213,7 @@ export function PostcardBack({
             a small card), so a bigger jump risks clipping/overflow the
             physical-postcard layout was never built for. */}
         {editable ? (
-          <CorrespondentPicker onChange={editable.onChange} maxLength={editable.maxLength}><textarea
+          <textarea
             value={editable.value}
             onChange={(e) => editable.onChange(e.target.value)}
             maxLength={editable.maxLength}
@@ -222,7 +221,7 @@ export function PostcardBack({
             aria-label="Postcard message"
             rows={5}
             className="w-full min-w-0 resize-none border-0 bg-transparent font-serif text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted sm:text-[14px]"
-          /></CorrespondentPicker>
+          />
         ) : (
           <div className="space-y-2">
             {postcard.backMessage.split('\n\n').map((paragraph, i) => (

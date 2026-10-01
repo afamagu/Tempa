@@ -87,7 +87,7 @@
   "Letters": {
     "heading": "Lettres",
     "penPals": "Correspondants",
-    "discover": "Découvrir"
+    "discover": "Découvrir des personnes"
   },
   "Discovery": {
     "intro": "Trouvez quelqu’un à qui vous aimeriez écrire.",
@@ -104,7 +104,7 @@
     "done": "Terminé",
     "findOption": "Rechercher une option",
     "any": "Tous",
-    "more": "Continuer à explorer",
+    "more": "Voir plus de personnes",
     "loading": "Recherche…",
     "end": "Vous avez vu toutes les personnes disponibles avec ces filtres pour le moment.",
     "failed": "Impossible de charger d’autres personnes. Réessayez.",
@@ -128,7 +128,11 @@
     "loading": "Recherche…",
     "empty": "Aucun correspondant disponible.",
     "failed": "Impossible de charger les correspondants. Réessayez.",
-    "limit": "Une réponse peut inviter deux correspondants au maximum."
+    "limit": "Une réponse peut inviter deux correspondants au maximum.",
+    "close": "Fermer",
+    "seeAll": "Voir tous les correspondants",
+    "search": "Rechercher des correspondants",
+    "more": "Voir plus de correspondants"
   },
   "RoomInvitations": {
     "heading": "Invitations à la Salle",

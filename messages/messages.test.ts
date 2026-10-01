@@ -16,6 +16,7 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
 
 const englishKeys = leaves(en).map(([key]) => key).sort()
 const SAMPLE_VALUES = {
+  current: 1, total: 7, languages: 'English',
   email: 'support@jointempa.com',
   seconds: 42,
   name: '日本語',

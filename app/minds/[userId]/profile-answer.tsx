@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { recordAnswerRead } from './answer-reading'
 import { metadataTextClass, iconButtonClass } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
 import QuestionInfoIcon from '@/app/question-info-icon'
@@ -79,6 +80,22 @@ export default function ProfileAnswer({
 }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = isLongAnswer(body)
+  const prose = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    const read = () => void recordAnswerRead(id).catch(() => {})
+    if (expanded) { read(); return }
+    const element = prose.current
+    if (!element) return
+    let recorded = false
+    const check = () => {
+      if (!recorded && element.clientHeight > 0 && element.scrollHeight <= element.clientHeight) { recorded = true; read() }
+    }
+    check()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(check)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [id, expanded])
 
   return (
     <div className="rounded-md border border-foreground/10 p-4">
@@ -100,7 +117,7 @@ export default function ProfileAnswer({
 
       <div className="-mt-2 rounded-md bg-surface-shell p-4">
         <AuthoredProse styleId={writingStyleId}>
-          <p className={`whitespace-pre-wrap ${expanded ? '' : PREVIEW_CLAMP_CLASS}`}>{body}</p>
+          <p ref={prose} className={`whitespace-pre-wrap ${expanded ? '' : PREVIEW_CLAMP_CLASS}`}>{body}</p>
         </AuthoredProse>
         {isLong && (
           <button

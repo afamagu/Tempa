@@ -10,9 +10,9 @@ describe('People profile return navigation', () => {
     expect(source).toContain("?? '/room'")
   })
 
-  it('prefers browser back when opened from People so filters and scroll position can be restored naturally', () => {
-    expect(source).toContain('router.back()')
-    expect(source).toContain('window.history.length > 1')
+  it('uses the named destination even when browser history leads to a composer', () => {
+    expect(source).not.toContain('router.back()')
+    expect(source).toContain('href={destination}')
   })
 
   it('renders a clear back affordance', () => {

@@ -16,6 +16,7 @@ let root: ReturnType<typeof createRoot>
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
+  sessionStorage.clear()
   vi.stubGlobal('IntersectionObserver', class { constructor(cb: IntersectionObserverCallback) { intersect = cb } observe() {} disconnect() {} })
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
@@ -39,6 +40,30 @@ describe('Discover grid and independent suggestions', () => {
     expect(loadMorePeople).toHaveBeenCalledWith(expect.objectContaining({ peopleMode: 'browse', browseSeed: 'visit-1' }), ['u1','u2'], true)
     expect(host.querySelector('section[aria-label="Suggested for you"]')!.textContent).toContain('Person 9')
     expect(host.querySelectorAll('section[aria-label="Filters"]')).toHaveLength(1)
+  })
+  it('automatically loads only one batch, then requires the explicit button', async () => {
+    vi.mocked(loadMorePeople).mockResolvedValueOnce({ entries: [person(3)], hasMore: true, error: null }).mockResolvedValueOnce({ entries: [person(4)], hasMore: true, error: null })
+    await mount()
+    await act(async () => intersect([{ isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver))
+    await act(async () => intersect([{ isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver))
+    expect(loadMorePeople).toHaveBeenCalledTimes(1)
+    await clickLabel('See more people')
+    expect(loadMorePeople).toHaveBeenCalledTimes(2)
+    await act(async () => intersect([{ isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver))
+    expect(loadMorePeople).toHaveBeenCalledTimes(2)
+    expect(host.querySelector('section[aria-label="Suggested for you"]')!.textContent).toContain('Person 9')
+  })
+  it('restores a labelled Discover return after a composer detour without loading automatically again', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 1 })
+    sessionStorage.setItem('tempa.discover.return:viewer', JSON.stringify({ at:Date.now(), url:'/letters/discover', entries:[person(1),person(2),person(3)], hasMore:true, seed:'original-visit', automaticUsed:true, scrollY:450 }))
+    await act(async () => root.render(<NextIntlClientProvider locale="en" messages={en}><DiscoverBrowser initialValues={{}} initialEntries={[person(1)]} initialHasMore initialUnavailable={false} suggestions={[person(9)]} seed="new-visit" viewerId="viewer" restore /></NextIntlClientProvider>))
+    expect(host.querySelector('[aria-label="Discover people"]')!.textContent).toContain('Person 3')
+    expect(window.scrollTo).toHaveBeenCalledWith(0,450)
+    expect(loadMorePeople).not.toHaveBeenCalled()
+    vi.mocked(loadMorePeople).mockResolvedValueOnce({entries:[person(4)],hasMore:false,error:null})
+    await clickLabel('See more people')
+    expect(loadMorePeople).toHaveBeenCalledWith(expect.objectContaining({browseSeed:'original-visit',afterUserId:'u3'}),['u1','u2','u3'],true)
   })
   it('keeps one filter area through consecutive filter changes and ignores an old result', async () => {
     let resolveOld!: (value: Awaited<ReturnType<typeof loadMorePeople>>) => void

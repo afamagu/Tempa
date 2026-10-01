@@ -1,0 +1,17 @@
+# Discover, navigation, mentions and Home reading
+
+Discover People under Letters retains Pen pals, filters and independent suggestions. Six initial cards, exactly one automatic appended page, then explicit See more people per batch. Resetting filters resets the automatic allowance. Both grids and suggested rails show two-line answer excerpts instead of intent labels. Profiles without answers retain identity and a profile link.
+
+Labelled profile back links follow their sanitized destination, never arbitrary browser history. Discover returns carry restore=1; a viewer-scoped, thirty-minute session cache restores filters, loaded entries, seed, automatic allowance and vertical scroll. Normal new visits keep fresh random seeds. Optional storage failure falls back to real navigation. Profile context survives composer detours and logged-out links. Successful sends invalidate recipient profile caches; pending first contact offers the sent letter rather than another composer. Existing send/Safety SQL is unchanged.
+
+No CorrespondentPicker in private first letters, first-contact replies, established-letter bodies or editable postcard text/reveal fields. Public question answers, Dispatch bodies and Board replies retain it. It inserts plain text, with any Room invitation handled by its existing explicit question-answer flow. A phone visualViewport controls geometry; scrolling/resizing repositions instead of closes. Six initial choices, explicit Close; expanded searchable/paginated list replaces compact menu. Pointer scrolling on touch is allowed. Escape and selection still close; expanded backdrop can close. Correspondent ranking remains existing exchange frequency/recency, no new private fields exposed. Expanded results are fetched twenty at a time using a narrow member-invoker RPC.
+
+Home Board candidates exclude viewed rows using the existing Board seen bucket. Answer reading is separate own-RLS history. Preview/exposure alone does not count: profile text must fit unclipped, or be expanded. Hidden/unavailable answers cannot be recorded by the invoker RPC. Home uses a bounded candidate pool and filters read answer IDs, then caps at three; sparse shelves are not refilled with read content. Read-history lookup failure hides that shelf. A new answer from the same author may appear. Home links include the exact answer and Home return destination.
+
+## Validation and release
+
+Production build/TypeScript, focused interaction/navigation/Board/dictionaries tests and relevant lint. Isolated PostgreSQL checks migration repeatability, a 31-correspondent multi-page list without omissions, visible-only/idempotent reading, own-row RLS and anonymous denial. Owner applies public-correspondent-picker.sql and home-answer-reading.sql, then discovery-reading-verify.sql; expected DISCOVERY_READING_READY with all eight flags true before release. Authenticated device acceptance still required for Venus compose-return, six/twelve/manual paging, keyboard-open public picker, private-letter absence and Home reading suppression.
+
+## Remaining member-question stage
+
+The approved profile questions, owner controls, attribution, admin publishing and question-originated correspondence are not implemented in this PR. The existing Safety/send contract accepts an answer reference; first obtain exact live definitions using member-question-live-preflight.sql before extending it for member questions. Never substitute a question ID into an answer foreign key or bypass Safety. The check reads function/schema definitions only, not member rows.

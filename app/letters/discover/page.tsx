@@ -30,6 +30,6 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
   return <AppShell active="letters" waitingLetterCount={waitingCount}><main className="flex min-h-screen justify-center px-4 py-8 sm:px-8"><div className="w-full max-w-5xl space-y-6">
     <div><h1 className={pageTitleClass}>{letters('heading')}</h1><LettersTabs active="discover"/></div>
     <p className={helperTextClass}>{t('intro')}</p>
-    <DiscoverBrowser initialValues={values} initialEntries={entries} initialHasMore={page.filteredCount > entries.length} initialUnavailable={!!page.unavailable} suggestions={suggestions} seed={seed} />
+    <DiscoverBrowser viewerId={user.id} restore={value('restore') === '1'} initialValues={values} initialEntries={entries} initialHasMore={page.filteredCount > entries.length} initialUnavailable={!!page.unavailable} suggestions={suggestions} seed={seed} />
   </div></main></AppShell>
 }

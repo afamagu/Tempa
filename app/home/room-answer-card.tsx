@@ -5,6 +5,7 @@ import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { helperTextClass } from '@/app/profile/ui'
 
 export type HomeRoomAnswer = {
+  answerId?: string
   userId: string
   pseudonym: string
   country: string | null
@@ -17,7 +18,7 @@ export default async function RoomAnswerCard({ answer }: { answer: HomeRoomAnswe
   const t = await getTranslations('RoomEngagement')
   return (
     <Link
-      href={`/room/${answer.userId}?source=home_room`}
+      href={`/room/${answer.userId}?returnTo=%2Fhome${answer.answerId ? `&answer=${encodeURIComponent(answer.answerId)}` : ''}`}
       className="group block rounded-lg border border-foreground/10 p-5 transition-colors hover:border-foreground/20 hover:bg-foreground/[.015]"
     >
       <div className="flex items-center gap-3">

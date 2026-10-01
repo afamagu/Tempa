@@ -1,6 +1,5 @@
 'use client'
 
-import CorrespondentPicker from '@/app/correspondent-picker'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -334,7 +333,7 @@ export default function FirstContactResponse({
         </div>
         <div className="space-y-2">
           <WritingToolbar editor={editor} />
-          <CorrespondentPicker editor={editor}><EditorContent editor={editor} /></CorrespondentPicker>
+          <EditorContent editor={editor} />
         </div>
         {replyError && <p className="text-sm text-red-600">{replyError}</p>}
         <div className="flex flex-wrap gap-3">

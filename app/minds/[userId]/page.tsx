@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getMyAnswers } from '@/lib/questions'
 import {
   getWaitingLetterCount,
+  getFirstContact,
   getActiveCorrespondencePartnerIds,
   getContactedAnswerIds,
 } from '@/lib/letters'
@@ -63,10 +64,10 @@ export default async function PublicProfilePage({
   searchParams,
 }: {
   params: Promise<{ userId: string }>
-  searchParams: Promise<{ returnTo?: string }>
+  searchParams: Promise<{ returnTo?: string; answer?: string }>
 }) {
   const { userId } = await params
-  const { returnTo } = await searchParams
+  const { returnTo, answer: selectedAnswerId } = await searchParams
   const originReturn = introductionReturnPath(returnTo)
   const profileReturn = originReturn ? `/room/${userId}?returnTo=${encodeURIComponent(originReturn)}` : null
   const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
@@ -93,7 +94,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -102,12 +103,13 @@ export default async function PublicProfilePage({
     isSelf ? Promise.resolve(null) : getBlockScope(supabase, userId),
     getMemberWritingStyles(supabase, [userId]),
     getEditorialBylines(supabase),
+    isSelf ? Promise.resolve(null) : getFirstContact(supabase, viewer.id, userId),
   ])
   const writingStyleId = writingStyles.get(userId) ?? null
   const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
-  const primaryAnswer = chooseProfileAnswer(rawAnswers)
+  const primaryAnswer = rawAnswers.find(answer => answer.id === selectedAnswerId) ?? chooseProfileAnswer(rawAnswers)
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -117,7 +119,7 @@ export default async function PublicProfilePage({
     isSelf,
     alreadyCorresponding,
     hasCurrentAnswer: primaryAnswer !== null,
-    currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted,
+    currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted || firstContact !== null,
   })
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
     .filter(Boolean)
@@ -204,6 +206,8 @@ export default async function PublicProfilePage({
                 <Link href="/letters" className={secondaryButtonClass}>
                   Open your correspondence with {profile.pseudonym}
                 </Link>
+              ) : firstContact ? (
+                <Link href={`/letters/${firstContact.id}`} className={secondaryButtonClass}>View your letter to {profile.pseudonym}</Link>
               ) : null}
 
               <div className="flex flex-wrap items-center gap-4">

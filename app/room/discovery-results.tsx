@@ -95,7 +95,7 @@ export default function DiscoveryResults({ entries, returnTo = '/room', profileL
             {profileLed ? <Link href={profileHref(entry.userId, returnTo)} className="block space-y-3">
               <div className="flex items-start gap-3"><IdentityMark entry={entry} /><div className="min-w-0"><p className="break-words text-sm font-semibold">{entry.pseudonym}</p><EditorialByline title={entry.editorialTitle} /><p className={helperTextClass}>{identityLine(entry)}</p></div></div>
               {entry.languages?.length ? <p className={helperTextClass}>{entry.languages.join(' · ')}</p> : null}
-              {entry.intent?.length ? <p className="line-clamp-2 text-sm text-foreground/70">{entry.intent.join(' · ')}</p> : null}
+              {entry.response.body ? <AuthoredProse styleId={entry.writingStyleId ?? null}><p className="line-clamp-2 whitespace-pre-wrap text-base leading-6">{entry.response.body}</p></AuthoredProse> : null}
               <p className="text-xs font-medium text-foreground/60">Read {entry.pseudonym} →</p>
             </Link> :
             <button type="button" onClick={() => setOpenId(entry.userId)} className="block w-full text-left" aria-label={`Read ${entry.pseudonym}'s response`}>

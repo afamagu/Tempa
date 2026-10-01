@@ -40,7 +40,9 @@ describe('Home — Arrivals, Room conversation, Board, announcement', () => {
 
   it('bounds Home answers at three and records only the selected candidates', () => {
     expect(source).toContain('const HOME_ROOM_ANSWER_COUNT = 3')
-    expect(source).toContain('limit: HOME_ROOM_ANSWER_COUNT')
+    expect(source).toContain('limit: 24')
+    expect(source).toContain('!readIds.has(candidate.answerId)')
+    expect(source).toContain('slice(0, HOME_ROOM_ANSWER_COUNT)')
     expect(source).toContain("recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')")
   })
 

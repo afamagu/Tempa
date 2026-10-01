@@ -87,7 +87,7 @@
   "Letters": {
     "heading": "Cartas",
     "penPals": "Amigos por carta",
-    "discover": "Descubrir"
+    "discover": "Descubrir personas"
   },
   "Discovery": {
     "intro": "Encuentra a alguien a quien valga la pena escribir.",
@@ -104,7 +104,7 @@
     "done": "Listo",
     "findOption": "Buscar una opción",
     "any": "Cualquiera",
-    "more": "Seguir buscando",
+    "more": "Ver más personas",
     "loading": "Buscando…",
     "end": "Por ahora has visto a todas las personas disponibles con estos filtros.",
     "failed": "No se pudieron cargar más personas. Inténtalo de nuevo.",
@@ -128,7 +128,11 @@
     "loading": "Buscando…",
     "empty": "No hay corresponsales disponibles.",
     "failed": "No se pudieron cargar los corresponsales. Inténtalo de nuevo.",
-    "limit": "Una respuesta puede invitar a dos corresponsales como máximo."
+    "limit": "Una respuesta puede invitar a dos corresponsales como máximo.",
+    "close": "Cerrar",
+    "seeAll": "Ver todos los corresponsales",
+    "search": "Buscar corresponsales",
+    "more": "Ver más corresponsales"
   },
   "RoomInvitations": {
     "heading": "Invitaciones a la Sala",
