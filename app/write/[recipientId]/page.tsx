@@ -4,6 +4,7 @@ import { introductionReturnPath } from '@/lib/introduction-navigation'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
+  getActiveEstablishedCorrespondenceWithUser,
   closeReasonForSender,
   getFirstContact,
   isEffectivelyExpired,
@@ -25,12 +26,13 @@ export default async function WriteToPage({
   searchParams,
 }: {
   params: Promise<{ recipientId: string }>
-  searchParams: Promise<{ a?: string; source?: string; returnTo?: string }>
+  searchParams: Promise<{ a?: string; source?: string; returnTo?: string; mq?: string }>
 }) {
   const { recipientId } = await params
-  const { a: answerId, source, returnTo } = await searchParams
+  const { a: answerId, source, returnTo, mq } = await searchParams
   const backHref = introductionReturnPath(returnTo) ?? '/room'
   const nav = await getTranslations('Nav')
+  const letters = await getTranslations('Letters')
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -38,6 +40,7 @@ export default async function WriteToPage({
     const query = new URLSearchParams()
     if (answerId) query.set('a', answerId)
     if (source) query.set('source', source)
+    if (mq) query.set('mq', mq)
     if (backHref !== '/room') query.set('returnTo', backHref)
     redirect(`/sign-in?next=${encodeURIComponent(`/write/${recipientId}${query.size ? `?${query}` : ''}`)}`)
   }
@@ -52,6 +55,16 @@ export default async function WriteToPage({
 
   if (!recipient) redirect('/room')
 
+  const { data: memberQuestion } = mq ? await supabase.from('member_questions').select('id, body').eq('id', mq).eq('author_id', recipientId).eq('is_profile_visible', true).eq('moderation_status', 'visible').is('withdrawn_at', null).maybeSingle() : { data: null }
+  if (mq && !memberQuestion) redirect(backHref)
+  if (mq) {
+    const correspondence = await getActiveEstablishedCorrespondenceWithUser(supabase, user.id, recipientId)
+    if (correspondence && await isEstablishedForViewer(supabase, correspondence.id)) redirect(`/letters/with/${recipientId}/write?mq=${encodeURIComponent(mq)}&returnTo=${encodeURIComponent(backHref)}`)
+  }
+  if (mq) {
+    const incoming = await getFirstContact(supabase, recipientId, user.id)
+    if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) redirect(`/letters/${incoming.id}`)
+  }
   const existing = await getFirstContact(supabase, user.id, recipientId)
 
   if (existing) {
@@ -127,12 +140,14 @@ export default async function WriteToPage({
 
   return (
     <FirstLetterComposer
+      key={memberQuestion?.id ?? recipientId}
       recipientId={recipientId}
       recipientPseudonym={recipient.pseudonym}
       questionAnswerId={answer.id}
-      questionPrompt={question?.prompt ?? null}
+      questionPrompt={memberQuestion?.body ?? question?.prompt ?? null}
+      memberQuestionId={memberQuestion?.id}
       backHref={backHref}
-      backLabel={backHref === '/home' ? nav('home') : backHref.startsWith('/letters/discover') ? 'Discover' : backHref.startsWith('/room/') ? recipient.pseudonym : nav('room')}
+      backLabel={backHref === '/home' ? nav('home') : backHref.startsWith('/letters/discover') ? letters('discover') : backHref.startsWith('/room/') ? recipient.pseudonym : nav('room')}
     />
   )
 }

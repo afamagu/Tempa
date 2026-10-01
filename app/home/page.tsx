@@ -1,3 +1,4 @@
+import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
@@ -291,6 +292,7 @@ export default async function HomePage() {
                     <h2 id="home-room-heading" className="mt-3 max-w-3xl font-serif text-2xl leading-snug text-foreground sm:text-3xl">
                       {currentRoomQuestion.prompt}
                     </h2>
+                    <RoomQuestionCredit questionId={currentRoomQuestion.id} />
                     <div className="mt-6">
                       <Link href={`/question/${currentRoomQuestion.id}?source=home_room`} className={primaryButtonClass}>
                         {currentRoomAnswer ? t('readEdit') : t('answerQuestion')}

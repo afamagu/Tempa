@@ -247,7 +247,7 @@ describe('MomentsComposer — legacy postcardMoment migration on restore (audit 
 
   it('the migrated draft starts with a blank back message, which the blank-back Send guard above will correctly catch', () => {
     const migrateStart = source.indexOf('const migrated: LetterPostcardDraft = {')
-    const migrateEnd = source.indexOf('writeLetterPostcardDraft(correspondenceId, migrated)')
+    const migrateEnd = source.indexOf('writeLetterPostcardDraft(draftKey, migrated)')
     const migrateBody = source.slice(migrateStart, migrateEnd)
     expect(migrateBody).toContain("revealLine: ''")
     expect(migrateBody).toContain("backMessage: ''")
@@ -298,9 +298,9 @@ describe('MomentsComposer — Letter-Level Postcards (A/C/F)', () => {
   })
 
   it('the letter-level Postcard draft is restored and persisted through its own separate module, never the editor draft module', () => {
-    expect(source).toContain('readLetterPostcardDraft(correspondenceId)')
-    expect(source).toContain('writeLetterPostcardDraft(correspondenceId')
-    expect(source).toContain('clearLetterPostcardDraft(correspondenceId)')
+    expect(source).toContain('readLetterPostcardDraft(draftKey)')
+    expect(source).toContain('writeLetterPostcardDraft(draftKey')
+    expect(source).toContain('clearLetterPostcardDraft(draftKey)')
   })
 
   it('the send payload carries the Postcard SEPARATELY from p_moments, never folded into it', () => {
@@ -404,7 +404,7 @@ describe('MomentsComposer — Postcard FeatureIntroduction (cross-surface first 
 describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard bound in (Checkpoint 3)', () => {
   it('evaluates via evaluateSafety, surface: write_anytime, before ever calling write_letter — same for both the quill and a reply, since both use this one RPC', () => {
     const evaluateIndex = source.indexOf("surface: 'write_anytime'")
-    const rpcIndex = source.indexOf("supabase.rpc('write_letter_once'")
+    const rpcIndex = source.indexOf("supabase.rpc(memberQuestionId ? 'write_letter_from_member_question_once'")
     expect(evaluateIndex, 'expected a call to evaluateSafety with surface: write_anytime').toBeGreaterThan(-1)
     expect(rpcIndex, 'expected a call to write_letter').toBeGreaterThan(-1)
     expect(evaluateIndex).toBeLessThan(rpcIndex)
@@ -429,7 +429,7 @@ describe('MomentsComposer — Safety-gated send, always write_anytime, Postcard 
     // the plain write_letter is reachable ONLY as the deploy-order
     // fallback, when write_letter_once does not exist yet (PGRST202)
     expect(source.match(/supabase\.rpc\('write_letter',/g) ?? []).toHaveLength(1)
-    expect(source).toMatch(/if \(sendError\?\.code === 'PGRST202'\) \{\s+;\(\{ error: sendError \} = await supabase\.rpc\('write_letter', letterArgs\)\)/)
+    expect(source).toMatch(/if \(!memberQuestionId && sendError\?\.code === 'PGRST202'\) \{\s+;\(\{ error: sendError \} = await supabase\.rpc\('write_letter', letterArgs\)\)/)
     // never reset after being assigned: a retry must reuse it
     expect(source).not.toMatch(/submissionIdRef\.current = (null|crypto)/)
   })

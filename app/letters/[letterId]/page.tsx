@@ -174,6 +174,9 @@ export default async function LetterPage({
     context = question?.prompt ?? null
   }
 
+  const { data: memberQuestionContext } = await supabase.from('member_question_letter_contexts').select('prompt_snapshot').eq('letter_id', target.id).maybeSingle()
+  if (memberQuestionContext) context = memberQuestionContext.prompt_snapshot
+
   const { senderName, recipientName } = resolveLetterDirection(target, pseudonymById)
   const senderProfileHref = target.senderId === user.id ? null : `/minds/${target.senderId}`
 

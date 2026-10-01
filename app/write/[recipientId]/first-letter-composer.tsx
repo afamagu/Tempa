@@ -50,16 +50,19 @@ export default function FirstLetterComposer({
   recipientPseudonym,
   questionAnswerId,
   questionPrompt,
+  memberQuestionId,
   backHref = '/room',
   backLabel = 'The Room',
 }: {
   recipientId: string
   recipientPseudonym: string
   questionAnswerId: string
+  memberQuestionId?: string
   questionPrompt: string | null
   backHref?: string
   backLabel?: string
 }) {
+  const draftKey = memberQuestionId ? `${recipientId}:mq:${memberQuestionId}` : recipientId
   const [sending, setSending] = useState(false)
   const composerRootRef = useRef<HTMLElement | null>(null)
   useKeyboardDismiss(composerRootRef)
@@ -91,15 +94,15 @@ export default function FirstLetterComposer({
       },
     },
     onUpdate({ editor: current }) {
-      writeFirstContactDraft(recipientId, current.getJSON() as LetterDocJSON)
+      writeFirstContactDraft(draftKey, current.getJSON() as LetterDocJSON)
     },
   })
 
   useEffect(() => {
     if (!editor) return
-    const draft = readFirstContactDraft(recipientId)
+    const draft = readFirstContactDraft(draftKey)
     if (draft) editor.commands.setContent(draft)
-  }, [editor, recipientId])
+  }, [editor, draftKey])
 
   const docJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
   const charCount = charLength(docToPlainBody(docJSON))
@@ -152,7 +155,8 @@ export default function FirstLetterComposer({
 
     try {
       const supabase = createClient()
-      const { error: sendError } = await supabase.rpc('send_first_letter', {
+      const { error: sendError } = await supabase.rpc(memberQuestionId ? 'send_first_letter_from_member_question' : 'send_first_letter', {
+        ...(memberQuestionId ? { p_member_question_id: memberQuestionId } : {}),
         p_recipient_id: recipientId,
         p_question_answer_id: questionAnswerId,
         p_body: body,
@@ -173,7 +177,7 @@ export default function FirstLetterComposer({
         return
       }
 
-      clearFirstContactDraft(recipientId)
+      clearFirstContactDraft(draftKey)
       setPendingWarning(null)
       await refreshWrittenProfile(recipientId).catch(() => {})
       setSent(true)
@@ -212,7 +216,7 @@ export default function FirstLetterComposer({
           <h1 className={proseSubheadingClass}>{recipientPseudonym}</h1>
           {questionPrompt && (
             <div className="space-y-1">
-              <p className={helperTextClass}>In response to their answer to:</p>
+              <p className={helperTextClass}>{memberQuestionId ? `A question from ${recipientPseudonym}` : 'In response to their answer to:'}</p>
               <p className={contextQuestionClass}>{questionPrompt}</p>
             </div>
           )}
