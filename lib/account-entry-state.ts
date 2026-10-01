@@ -1,25 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isInterfaceLocale, type InterfaceLocale } from '@/i18n/config'
 import type { OnboardingStage } from '@/lib/onboarding'
 import type { AccountEntryState, EligibilityStatus } from '@/lib/account-entry'
 import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION, isLegalCurrent } from '@/lib/legal'
 
-// proxy.ts's account-entry read. One self-scoped RPC
-// (current_account_entry_state — see docs/sql/2026-10-13-prelaunch-
-// performance.sql) replaces the status RPC + three table reads the
-// proxy used to make on every protected navigation. The routing
-// decision itself stays in lib/account-entry.ts's pure resolver.
-//
-// The legacy four-read path is kept ONLY as a fallback for when the RPC
-// errors (e.g. the migration has not been applied yet), so a deploy
-// ordering mistake can never send every member to /begin.
+// proxy.ts's account-entry read. The existing current_account_entry_state RPC
+// remains untouched. Language state is read alongside it so saved interface
+// language can win over a stale/missing device cookie on authenticated pages.
+// A missing migration fails open (undefined) for safe deploy ordering.
 
 export type ProxyAccountEntry = {
-  /** 'active' | 'restricted' | 'suspended' | 'banned' — defaults to
-   * 'active' when unreadable, matching current_account_status()'s own
-   * fallback. Every write is still refused server-side for a banned
-   * account regardless. */
   accountStatus: string
   state: AccountEntryState
+  interfaceLocale?: InterfaceLocale
 }
 
 type EntryStateRow = {
@@ -29,38 +22,61 @@ type EntryStateRow = {
   onboarding_stage: string | null
   terms_current: boolean | null
   guidelines_current: boolean | null
-  /** Added by 2026-10-29-writing-style.sql; undefined before it. */
   has_writing_style?: boolean | null
 }
 
 export async function readProxyAccountEntry(supabase: SupabaseClient, userId: string): Promise<ProxyAccountEntry> {
-  const { data, error } = await supabase.rpc('current_account_entry_state', {
-    p_terms_version: CURRENT_TERMS_VERSION,
-    p_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
-  })
+  const [entryResult, languageResult] = await Promise.all([
+    supabase.rpc('current_account_entry_state', {
+      p_terms_version: CURRENT_TERMS_VERSION,
+      p_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
+    }),
+    supabase
+      .from('member_language_preferences')
+      .select('language_confirmed_at, interface_locale')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ])
+
+  const { data, error } = entryResult
   const row = (Array.isArray(data) ? data[0] : data) as EntryStateRow | null | undefined
+  const languageRow = languageResult.data as {
+    language_confirmed_at?: string | null
+    interface_locale?: unknown
+  } | null
+  const languageConfirmed = languageResult.error
+    ? undefined
+    : Boolean(languageRow?.language_confirmed_at)
+  const interfaceLocale = !languageResult.error && isInterfaceLocale(languageRow?.interface_locale)
+    ? languageRow.interface_locale
+    : undefined
 
   if (!error && row) {
     return {
       accountStatus: row.account_status ?? 'active',
+      interfaceLocale,
       state: {
         authenticated: true,
+        languageConfirmed,
         eligibilityStatus: (row.eligibility_status as EligibilityStatus | null) ?? null,
         eligibleOn: null,
         legalCurrent: Boolean(row.terms_current) && Boolean(row.guidelines_current),
         hasProfile: Boolean(row.has_profile),
         onboardingStage: (row.onboarding_stage as OnboardingStage | null) ?? null,
-        // Only an explicit `false` gates: an older RPC without the column
-        // (undefined) or an unreadable value never interrupts anyone.
         needsWritingStyle: row.has_writing_style === false,
       },
     }
   }
 
-  return readLegacyProxyAccountEntry(supabase, userId)
+  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale)
 }
 
-async function readLegacyProxyAccountEntry(supabase: SupabaseClient, userId: string): Promise<ProxyAccountEntry> {
+async function readLegacyProxyAccountEntry(
+  supabase: SupabaseClient,
+  userId: string,
+  languageConfirmed: boolean | undefined,
+  interfaceLocale: InterfaceLocale | undefined
+): Promise<ProxyAccountEntry> {
   const [{ data: accountStatus }, { data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
     supabase.rpc('current_account_status'),
     supabase.from('profiles').select('id, onboarding_stage').eq('id', userId).maybeSingle(),
@@ -70,8 +86,10 @@ async function readLegacyProxyAccountEntry(supabase: SupabaseClient, userId: str
 
   return {
     accountStatus: (accountStatus as string | null) ?? 'active',
+    interfaceLocale,
     state: {
       authenticated: true,
+      languageConfirmed,
       eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
       eligibleOn: null,
       legalCurrent: isLegalCurrent(

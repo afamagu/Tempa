@@ -3,6 +3,12 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BeginFlow from './begin-flow'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
+
+function renderLocalized(element: React.ReactNode) {
+  return renderToStaticMarkup(<NextIntlClientProvider locale="en" messages={en}>{element}</NextIntlClientProvider>)
+}
 
 // /begin has no test file's own established render harness yet — same
 // SSR-only limitation as every other interactive client component in
@@ -64,7 +70,7 @@ describe('BeginFlow — terminal states (real render: neither uses useRouter)', 
   const noopSignOutAction = async () => {}
 
   it('ineligible terminal state renders the exact approved copy, the persisted eligible_on, no retry affordance, and a real sign-out form (not a bare link)', () => {
-    const html = renderToStaticMarkup(
+    const html = renderLocalized(
       <BeginFlow
         eligibilityStatus="ineligible"
         stillBlocked={true}
@@ -100,7 +106,7 @@ describe('BeginFlow — terminal states (real render: neither uses useRouter)', 
   })
 
   it('ineligible terminal state renders gracefully with no eligible_on line when eligibleOn is null', () => {
-    const html = renderToStaticMarkup(
+    const html = renderLocalized(
       <BeginFlow
         eligibilityStatus="ineligible"
         stillBlocked={true}
@@ -114,7 +120,7 @@ describe('BeginFlow — terminal states (real render: neither uses useRouter)', 
   })
 
   it('review-required terminal state renders distinct copy from the ineligible state, also with a real sign-out form', () => {
-    const html = renderToStaticMarkup(
+    const html = renderLocalized(
       <BeginFlow
         eligibilityStatus="review_required"
         stillBlocked={false}
@@ -154,7 +160,8 @@ describe('BeginFlow — sign-out contract (source inspection)', () => {
   })
 
   it('the copy stays exactly "Return to sign in" — only the underlying action changed, not the approved terminal-state text', () => {
-    expect(body).toContain('Return to sign in')
+    expect(body).toContain("t('returnSignIn')")
+    expect(en.Begin.returnSignIn).toBe('Return to sign in')
   })
 })
 
@@ -181,14 +188,14 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   const handleConfirmBody = body.slice(confirmFnStart, confirmFnEnd)
 
   const confirmRenderStart = body.indexOf("if (phase === 'confirm'")
-  const confirmRenderEnd = body.indexOf('\n  return (\n    <Shell>\n      <div className="space-y-2">\n        <p className={wordmarkClass}>Tempa</p>\n        <h1 className={headingClass}>When were you born?')
+  const confirmRenderEnd = body.indexOf('\n  return <Shell>', confirmRenderStart)
   const confirmRenderBody = body.slice(confirmRenderStart, confirmRenderEnd)
 
   it('uses the approved heading/body copy, never asks "are you 18?" or reveals the cutoff', () => {
-    expect(body).toContain('When were you born?')
-    expect(body).toContain(
-      'Your date of birth helps us make sure Tempa is right for you and keeps age information'
-    )
+    expect(body).toContain("t('dobHeading')")
+    expect(en.Begin.dobHeading).toBe('When were you born?')
+    expect(body).toContain("t('dobIntro')")
+    expect(en.Begin.dobIntro).toContain('Your date of birth helps us make sure Tempa is right for you and keeps age information')
     const lower = body.toLowerCase()
     expect(lower).not.toContain('are you 18')
     expect(lower).not.toContain('18+')
@@ -196,12 +203,12 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   })
 
   it('month is selected by name, not an ambiguous numeric format', () => {
-    expect(body).toContain('MONTHS')
-    expect(body).toContain('<option key={name} value={i + 1}>')
+    expect(body).toContain("useTranslations('Begin.months')")
+    expect(body).toContain('<option key={n} value={n}>{monthT(String(n) as never)}</option>')
   })
 
   it('1. pressing Continue (handleContinue, the form onSubmit) never calls submit_dob_eligibility', () => {
-    expect(handleContinueBody).not.toContain("supabase.rpc('submit_dob_eligibility'")
+    expect(handleContinueBody).not.toContain(".rpc('submit_dob_eligibility'")
     expect(handleContinueBody).not.toContain('createClient()')
   })
 
@@ -238,7 +245,7 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   })
 
   it('5. only handleConfirm calls submit_dob_eligibility, using the CONFIRMED date fields, never a boolean eligibility claim from the client', () => {
-    expect(handleConfirmBody).toContain("supabase.rpc('submit_dob_eligibility'")
+    expect(handleConfirmBody).toContain(".rpc('submit_dob_eligibility'")
     expect(handleConfirmBody).toContain('p_year: confirmedDob.year')
     expect(handleConfirmBody).toContain('p_month: confirmedDob.month')
     expect(handleConfirmBody).toContain('p_day: confirmedDob.day')
@@ -247,7 +254,8 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   })
 
   it('a rejected/invalid DOB shows only "Enter a valid date." — never teaches which date would pass', () => {
-    expect(body).toContain("setError('Enter a valid date.')")
+    expect(body).toContain("setError(t('invalidDate'))")
+    expect(en.Begin.invalidDate).toBe('Enter a valid date.')
     expect(body).not.toMatch(/\b18\b/)
     expect(body).not.toMatch(/before \d{4}/i)
   })
@@ -258,30 +266,25 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   })
 
   it('3. the confirm phase displays the exact entered date via formatCalendarDate(confirmedDob), in the approved "You entered ..." copy', () => {
-    expect(confirmRenderBody).toContain('Check your date of birth')
-    expect(confirmRenderBody).toContain('You entered {formatCalendarDate(confirmedDob)}.')
-    expect(confirmRenderBody).toContain('Please check it carefully.')
-    expect(confirmRenderBody).toContain("you won&rsquo;t be able")
-    expect(confirmRenderBody).toContain('to change it through this age check.')
-    // formatCalendarDate itself renders day, full month name, year —
-    // "14 March 2010", not an ISO/locale-ambiguous form.
-    const formatterStart = source.indexOf('function formatCalendarDate')
-    const formatterEnd = source.indexOf('\nfunction parseIsoDate')
-    const formatterBody = source.slice(formatterStart, formatterEnd)
-    expect(formatterBody).toContain('${dob.day} ${MONTHS[dob.month - 1]} ${dob.year}')
+    expect(confirmRenderBody).toContain("t('checkDobHeading')")
+    expect(confirmRenderBody).toContain("t('youEntered', { date: formatDate(confirmedDob) })")
+    expect(confirmRenderBody).toContain("t('checkCarefully')")
+    expect(en.Begin.checkCarefully).toContain('to change it through this age check.')
+    expect(source).toContain("monthT(String(dob.month) as never)")
+    expect(en.Begin.dateFormat).toBe('{day} {month} {year}')
   })
 
   it('does not calculate or display whether the DOB is adult/minor on the confirm screen — no age/eligibility preview', () => {
-    expect(confirmRenderBody).not.toMatch(/\b1[3-9]\b/) // no bare "16", "17", "18" etc. age callouts
+    expect(en.Begin.checkCarefully).not.toMatch(/\b1[3-9]\b/) // no bare "16", "17", "18" etc. age callouts
     expect(confirmRenderBody).not.toMatch(/this makes you/i)
     expect(confirmRenderBody).not.toContain('isAdultOn')
     expect(confirmRenderBody).not.toContain('calculateAge')
   })
 
   it('the confirm phase has exactly the two specified actions — Confirm date of birth (primary) and Go back and edit (secondary)', () => {
-    expect(confirmRenderBody).toContain('Confirm date of birth')
+    expect(confirmRenderBody).toContain("t('confirmDob')")
     expect(confirmRenderBody).toContain('onClick={handleConfirm}')
-    expect(confirmRenderBody).toContain('Go back and edit')
+    expect(confirmRenderBody).toContain("t('goBackEdit')")
     expect(confirmRenderBody).toContain('onClick={handleEdit}')
     expect(confirmRenderBody).toContain('disabled={submitting}')
   })
@@ -289,7 +292,7 @@ describe('BeginFlow — DOB step (source inspection)', () => {
   it('the entry form\'s Continue button is a plain form submit — never itself disabled/labelled as a saving state (only the confirm phase talks to the server)', () => {
     const entryButtonStart = body.lastIndexOf('<button type="submit"')
     const entryButtonBody = body.slice(entryButtonStart, body.indexOf('</form>'))
-    expect(entryButtonBody).toContain('>\n          Continue\n        </button>')
+    expect(entryButtonBody).toContain("{common('continue')}")
     expect(entryButtonBody).not.toContain('disabled={submitting}')
   })
 })
@@ -308,14 +311,15 @@ describe('BeginFlow — legal acceptance step (source inspection)', () => {
     const labelStart = body.indexOf('<label')
     const labelEnd = body.indexOf('</label>', labelStart)
     const checkboxLabel = body.slice(labelStart, labelEnd)
-    expect(checkboxLabel).not.toContain('Privacy Notice')
-    expect(body).toContain('Privacy Notice')
+    expect(checkboxLabel).not.toContain("t.rich('privacyExplainer'")
+    expect(body).toContain("t.rich('privacyExplainer'")
   })
 
   it('the required checkbox copy is the exact approved text', () => {
-    expect(body).toContain('I agree to the')
-    expect(body).toContain('Terms of Service')
-    expect(body).toContain('Community Guidelines')
+    expect(body).toContain("t.rich('agreeLegal'")
+    expect(en.Begin.agreeLegal).toContain('I agree to the')
+    expect(en.Begin.agreeLegal).toContain('Terms of Service')
+    expect(en.Begin.agreeLegal).toContain('Community Guidelines')
   })
 
   it('links point to the correct public legal routes', () => {
@@ -325,9 +329,9 @@ describe('BeginFlow — legal acceptance step (source inspection)', () => {
   })
 
   it('includes the restrained liability/indemnity disclosure line, linked to Terms', () => {
-    expect(body).toContain('limitations of')
-    expect(body).toContain('liability')
-    expect(body).toContain('indemnity')
+    expect(en.Begin.termsExplainer).toContain('limitations of')
+    expect(en.Begin.termsExplainer).toContain('liability')
+    expect(en.Begin.termsExplainer).toContain('indemnity')
   })
 
   it('Continue to Tempa is disabled until the checkbox is checked', () => {
@@ -335,7 +339,7 @@ describe('BeginFlow — legal acceptance step (source inspection)', () => {
   })
 
   it('calls accept_current_legal_documents with NO version arguments — the accepted versions are server-side SQL constants (independent audit correction), never client-supplied', () => {
-    expect(body).toContain("supabase.rpc('accept_current_legal_documents')")
+    expect(body).toContain(".rpc('accept_current_legal_documents')")
     // The old client-supplied-version call shape must be fully gone —
     // an authenticated caller must not be able to choose which
     // document version gets recorded.

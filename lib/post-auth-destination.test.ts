@@ -15,9 +15,17 @@ import { CURRENT_TERMS_VERSION, CURRENT_COMMUNITY_GUIDELINES_VERSION } from './l
 function fakeSupabase(options: {
   profile?: { id: string; onboarding_stage: string } | null
   eligibility?: { status: string } | null
+  languageConfirmed?: boolean
+  languageError?: boolean
   legalRows?: { document_type: string; document_version: string }[]
 }) {
   const from = vi.fn((table: string) => {
+    if (table === 'member_language_preferences') {
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({
+        data: options.languageConfirmed === false ? null : { language_confirmed_at: '2026-09-30T00:00:00Z' },
+        error: options.languageError ? { message: 'migration missing' } : null,
+      }) }) }) }
+    }
     if (table === 'profiles') {
       return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: options.profile ?? null }) }) }) }
     }
@@ -108,5 +116,15 @@ describe('resolvePostAuthDestination', () => {
 
     const destination = await resolvePostAuthDestination(supabase, 'u1', '/letters')
     expect(destination).toBe(expected)
+  })
+})
+
+
+describe('language-first post-auth destinations', () => {
+  it('sends a new unconfirmed member to Language before eligibility', async () => {
+    expect(await resolvePostAuthDestination(fakeSupabase({ languageConfirmed: false }), 'new-user', '/room')).toBe('/language')
+  })
+  it('preserves existing entry behavior when the migration is missing', async () => {
+    expect(await resolvePostAuthDestination(fakeSupabase({ languageError: true }), 'new-user', '/room')).toBe('/begin?next=%2Froom')
   })
 })

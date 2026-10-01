@@ -36,8 +36,12 @@ describe('no locale routing', () => {
     expect(nextConfig).not.toMatch(/\bi18n\s*:|locales\s*:|defaultLocale/)
   })
 
-  it('proxy.ts is untouched by localization (no next-intl middleware, no locale rewrites)', () => {
-    expect(proxy).not.toMatch(/next-intl|tempa_locale|createMiddleware|locale/i)
+  it('proxy only synchronizes the authenticated saved locale; it never introduces locale routing', () => {
+    expect(proxy).not.toMatch(/from ['"]next-intl\/middleware['"]|createMiddleware\s*\(/)
+    expect(proxy).not.toMatch(/\[locale\]|\/fr\/|\/es\/|\/pt\//)
+    expect(proxy).toContain('LOCALE_COOKIE')
+    expect(proxy).toContain('interfaceLocale')
+    expect(proxy).toContain("response.cookies.set(LOCALE_COOKIE, interfaceLocale")
   })
 
   it('no [locale] route segment and no /fr/ /es/ /pt/ paths exist', () => {

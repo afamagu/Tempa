@@ -6,9 +6,7 @@
     "board": "Le Tableau",
     "you": "Vous"
   },
-  "LanguageSwitcher": {
-    "label": "Langue"
-  },
+  "LanguageSwitcher": { "label": "Langue" },
   "SignIn": {
     "tagline": "Une façon plus humaine de créer du lien",
     "signIn": "Se connecter",
@@ -53,9 +51,7 @@
       "unavailable": "Ce compte ne peut pas être utilisé pour se connecter à Tempa. Si vous pensez qu’il s’agit d’une erreur, écrivez à {email}."
     }
   },
-  "You": {
-    "language": "Langue"
-  },
+  "You": { "language": "Langue" },
   "LanguageSettings": {
     "back": "Vous",
     "heading": "Langue",
@@ -83,5 +79,177 @@
     "noMatch": "Aucune langue ne correspond à cette recherche.",
     "current": "Actuelle",
     "languages": "Langues"
+  },
+  "LanguageOnboarding": {
+    "heading": "Choisissez votre langue Tempa",
+    "intro": "Ce sera la langue des menus et commandes de Tempa, ainsi que votre langue par défaut lorsque vous traduirez les écrits de quelqu’un d’autre.",
+    "continue": "Continuer",
+    "saving": "Enregistrement…",
+    "error": "Impossible d’enregistrer votre langue. Veuillez réessayer.",
+    "changeLater": "Vous pourrez la modifier plus tard dans Vous → Langue."
+  },
+  "Common": {
+    "noMatches": "Aucun résultat",
+    "addValue": "Ajouter « {value} »",
+    "removeValue": "Retirer {value}",
+    "optional": "facultatif",
+    "saving": "Enregistrement…",
+    "continue": "Continuer",
+    "tryAgain": "Réessayer"
+  },
+  "Begin": {
+    "dateFormat": "{day} {month} {year}",
+    "months": {
+      "1": "janvier", "2": "février", "3": "mars", "4": "avril", "5": "mai", "6": "juin",
+      "7": "juillet", "8": "août", "9": "septembre", "10": "octobre", "11": "novembre", "12": "décembre"
+    },
+    "invalidDate": "Saisissez une date valide.",
+    "checkDobHeading": "Vérifiez votre date de naissance",
+    "youEntered": "Vous avez saisi le {date}.",
+    "checkCarefully": "Vérifiez-la attentivement. Une fois votre date de naissance confirmée, vous ne pourrez plus la modifier dans le cadre de cette vérification d’âge.",
+    "confirmDob": "Confirmer la date de naissance",
+    "goBackEdit": "Revenir et modifier",
+    "dobHeading": "Quand êtes-vous né(e) ?",
+    "dobIntro": "Votre date de naissance nous aide à vérifier que Tempa vous convient et à garder des informations d’âge exactes.",
+    "day": "Jour",
+    "month": "Mois",
+    "year": "Année",
+    "beforeBegin": "Avant de commencer",
+    "legalIntro": "Quelques règles simples permettent à Tempa de rester réfléchi, privé lorsque nécessaire et sûr pour les personnes qui l’utilisent.",
+    "agreeLegal": "J’accepte les <terms>Conditions d’utilisation</terms> et les <guidelines>Règles de la communauté</guidelines>.",
+    "privacyExplainer": "Notre <privacy>Avis de confidentialité</privacy> explique comment Tempa traite vos informations.",
+    "termsExplainer": "Les <terms>Conditions</terms> contiennent des dispositions importantes concernant la responsabilité liée à l’utilisation de Tempa, les limitations de responsabilité et l’indemnisation.",
+    "saveFailed": "Impossible d’enregistrer pour le moment. Veuillez réessayer.",
+    "continueToTempa": "Continuer vers Tempa",
+    "returnSignIn": "Retourner à la connexion",
+    "adultsHeading": "Tempa est réservé aux adultes",
+    "adultsOnly": "Tempa est uniquement accessible aux personnes âgées de 18 ans ou plus.",
+    "returnOn": "Vous pourrez revenir sur Tempa le {date}.",
+    "cannotAccessUntil": "D’ici là, ce compte ne peut pas accéder à Tempa.",
+    "reviewHeading": "Votre compte est en cours d’examen",
+    "reviewBody": "Nous vous informerons dès que la situation sera résolue. Merci de votre patience."
+  },
+  "ProfileSetup": {
+    "heading": "Choisissez votre nom sur Tempa",
+    "intro": "C’est le nom sous lequel les autres membres vous connaîtront.",
+    "aboutYou": "À propos de vous",
+    "nameLabel": "Nom sur Tempa",
+    "namePlaceholder": "ex. Port Tranquille",
+    "nameHelp": "Le nom sous lequel vous souhaitez être connu ici. Votre prénom, un surnom, des initiales ou un nom de plume conviennent — 3 à 24 caractères, lettres, chiffres, espaces ou traits d’union.",
+    "pseudonymLength": "Utilisez entre 3 et 24 caractères.",
+    "pseudonymChars": "Utilisez uniquement des lettres, chiffres, espaces ou traits d’union.",
+    "checking": "Vérification de la disponibilité…",
+    "available": "Disponible",
+    "taken": "Ce nom est déjà pris.",
+    "country": "Pays",
+    "searchCountries": "Rechercher un pays",
+    "region": "Région",
+    "selectCountryFirst": "Sélectionnez d’abord un pays",
+    "searchRegions": "Rechercher une région",
+    "languages": "Langues",
+    "searchLanguages": "Rechercher des langues",
+    "gender": "Genre",
+    "selfDescribe": "Décrivez-le avec vos propres mots",
+    "whatBrings": "Qu’est-ce qui vous amène ici ?",
+    "chooseMany": "Choisissez tout ce qui vous correspond.",
+    "tellMore": "Dites-nous-en plus",
+    "readingInterests": "Sur quoi aimez-vous lire ?",
+    "interestsHelp": "Choisissez-en au moins {min}. Vous pourrez les modifier à tout moment.",
+    "correspondence": "Votre correspondance",
+    "writingQuestion": "Comment écrivez-vous habituellement vos lettres ?",
+    "receivingQuestion": "Que souhaitez-vous recevoir ?",
+    "checkNameError": "Impossible de vérifier ce nom pour le moment. Veuillez réessayer.",
+    "saveError": "Impossible d’enregistrer votre profil. Veuillez réessayer.",
+    "fieldErrors": {
+      "country": "Choisissez votre pays.",
+      "languages": "Ajoutez au moins une langue.",
+      "intent": "Choisissez ce qui vous amène sur Tempa.",
+      "interests": "Choisissez au moins {min} sujets que vous aimez lire (jusqu’à {max}).",
+      "writingStyle": "Indiquez comment vous écrivez habituellement vos lettres.",
+      "receiving": "Indiquez ce que vous souhaitez recevoir."
+    },
+    "genderOptions": {
+      "Woman": "Femme", "Man": "Homme", "Non-binary": "Non binaire", "Self-describe": "Me décrire moi-même", "Prefer not to say": "Je préfère ne pas répondre"
+    },
+    "intentOptions": {
+      "Meaningful friendship": "Une amitié sincère", "Long-term correspondence": "Une correspondance durable", "Thoughtful conversation": "Des conversations réfléchies", "Cultural exchange": "Un échange culturel", "Sharing everyday life": "Partager le quotidien", "Practising a language": "Pratiquer une langue", "Meeting people different from me": "Rencontrer des personnes différentes de moi", "Meeting people who think like me": "Rencontrer des personnes qui pensent comme moi", "Writing and self-expression": "Écriture et expression personnelle", "A little serendipity": "Un peu de hasard heureux", "Something else": "Autre chose"
+    },
+    "writingOptions": {
+      "self_written": "J’écris mes lettres moi-même", "ai_review_only": "J’utilise l’IA uniquement pour relire", "ai_edit": "J’utilise parfois l’IA pour réviser mes textes", "ai_draft": "J’utilise l’IA pour m’aider à rédiger"
+    },
+    "writingDescriptions": {
+      "self_written": "Je n’utilise pas d’IA générative pour écrire ou réécrire mes lettres.", "ai_review_only": "Je peux l’utiliser pour l’orthographe, la grammaire, la traduction ou la correction après avoir écrit.", "ai_edit": "Je peux l’utiliser pour reformuler, organiser ou améliorer un texte que j’ai déjà écrit.", "ai_draft": "L’IA peut générer une partie ou la majeure partie du texte que j’envoie."
+    },
+    "receivingOptions": {
+      "any": "Tous les styles d’écriture", "self_written_or_ai_reviewed": "Écrit par la personne ou relu par l’IA", "self_written_only": "Uniquement écrit par la personne"
+    },
+    "interestOptions": {
+      "life-reflections": "Vie et réflexions", "family-parenting": "Famille et parentalité", "friendship": "Amitié", "love-relationships": "Amour et relations", "spirituality-faith": "Spiritualité et foi", "philosophy": "Philosophie", "psychology": "Psychologie et nature humaine", "books-literature": "Livres et littérature", "writing-poetry": "Écriture et poésie", "art-creativity": "Art et créativité", "music": "Musique", "film-tv": "Cinéma et télévision", "travel-places": "Voyages et lieux", "culture-society": "Culture et société", "history": "Histoire", "science-nature": "Sciences et nature", "technology": "Technologie", "work-ambition": "Travail et ambition", "food-cooking": "Cuisine et gastronomie", "health-wellbeing": "Santé et bien-être", "sport-fitness": "Sport et forme", "everyday-life": "Vie quotidienne"
+    }
+  },
+  "MarkOnboarding": {
+    "label": "Votre Mark",
+    "heading": "Choisissez une photographie qui compte pour vous.",
+    "intro": "Cela peut être vous, un lieu, un objet — n’importe quoi.",
+    "privacy": "Votre photographie ne quitte jamais cet appareil.",
+    "preparing": "Préparation de votre Mark…",
+    "finding": "Création de votre Mark…",
+    "saving": "Enregistrement de votre Mark…",
+    "preparingAnother": "Préparation d’une autre photographie…",
+    "chooseImage": "Choisissez un fichier image.",
+    "tooLarge": "Cette photographie est trop volumineuse. Choisissez un fichier plus petit.",
+    "prepareFailed": "Votre Mark n’a pas pu être préparé. Veuillez réessayer.",
+    "findFailed": "Tempa n’a pas pu trouver un Mark dans cette photographie.",
+    "saveFailed": "Votre Mark n’a pas pu être enregistré. Veuillez réessayer.",
+    "replaceFailed": "Ce Mark n’a pas pu être remplacé. Veuillez réessayer.",
+    "choosePhoto": "Choisir une photographie",
+    "tryAgain": "Réessayer",
+    "imageAlt": "Votre Mark généré",
+    "revealHeading": "Voici votre Mark.",
+    "revealBody": "Il a commencé avec votre photographie. Les autres ne verront que ce qui en reste.",
+    "revealClosing": "Chaque Mark que vous rencontrerez a commencé de la même façon.",
+    "continue": "Continuer",
+    "chooseAnother": "Choisir une autre photographie"
+  },
+  "Question": {
+    "firstQuestion": "La Première Question",
+    "question": "La Question",
+    "oneLastThing": "Une dernière chose avant d’entrer dans La Salle",
+    "onboardingIntro": "Tout le monde entre sur Tempa par la même Première Question. Votre réponse devient l’une des premières façons dont les autres peuvent vous découvrir ici.",
+    "specificity": "Donnez-leur quelque chose à quoi répondre. Une opinion précise, une habitude, une contradiction, une conviction ou une curiosité marque souvent davantage qu’une liste de choses que vous aimez.",
+    "beginWriting": "Commencez à écrire…",
+    "saveResponse": "Enregistrer la réponse",
+    "saving": "Enregistrement…",
+    "saveFailed": "Impossible d’enregistrer votre réponse. Veuillez réessayer.",
+    "roomHeading": "Vous êtes dans La Salle.",
+    "roomIntro": "C’est votre Première Question. Elle reste liée à votre identité Tempa et donne aux autres quelque chose de réel à découvrir avant de décider de vous écrire.",
+    "continue": "Continuer",
+    "published": "Publié",
+    "closed": "Cette Question n’est plus ouverte",
+    "enterRoom": "Entrer dans La Salle",
+    "backResponses": "Retour à mes réponses",
+    "editResponse": "Modifier la réponse",
+    "unansweredClosed": "Cette Question n’est plus ouverte et vous n’y avez pas répondu.",
+    "backRoom": "Retour à La Salle",
+    "saveAnyway": "Enregistrer quand même",
+    "recoveryHeading": "Un instant",
+    "recoveryBody": "Nous n’avons pas pu terminer cette étape. Actualisez la page pour réessayer."
+  },
+  "WritingStyle": {
+    "heading": "Choisissez l’allure de votre écriture sur la page",
+    "intro": "Vos mots restent les vôtres. Tempa leur donne simplement une voix visuelle.",
+    "legend": "Apparence de votre écriture",
+    "fallbackSample": "Quelques lignes pour commencer — vos propres mots prendront cette forme.",
+    "preview": "Aperçu · {name}",
+    "choosePreview": "Choisissez-en un pour le voir en taille réelle.",
+    "saveError": "Impossible d’enregistrer pour le moment. Veuillez réessayer.",
+    "saved": "Enregistré. Votre écriture apparaîtra désormais ainsi.",
+    "continue": "Continuer",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "back": "Retour à Vous",
+    "styles": {
+      "ink": "Encre", "notebook": "Carnet", "freehand": "Main libre", "literary": "Littéraire", "correspondence": "Correspondance", "typewriter": "Machine à écrire"
+    }
   }
 }

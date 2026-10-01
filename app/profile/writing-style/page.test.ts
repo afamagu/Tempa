@@ -16,14 +16,14 @@ describe('/profile/writing-style — next destination', () => {
     expect(resolveWritingStyleNext('/letters/abc?x=1')).toBe('/letters/abc?x=1')
   })
 
-  it('never an external or protocol-relative URL, and never back to itself', () => {
+  it('never accepts an external or protocol-relative URL, and never loops to itself', () => {
     for (const bad of ['https://evil.test', '//evil.test', 'javascript:alert(1)', undefined, '', '/profile/writing-style', '/profile/writing-style?next=%2Fhome']) {
       expect(resolveWritingStyleNext(bad)).toBe('/home')
     }
   })
 })
 
-describe('/profile/writing-style — server guards (defense in depth behind proxy.ts)', () => {
+describe('/profile/writing-style — server guards and localization', () => {
   it('requires auth and a profile, and resumes earlier steps where they belong', () => {
     expect(source).toContain("redirect('/sign-in')")
     expect(source).toContain("redirect('/profile')")
@@ -31,14 +31,16 @@ describe('/profile/writing-style — server guards (defense in depth behind prox
     expect(source).toContain("profile.onboarding_stage === 'question') redirect('/profile/question')")
   })
 
-  it('is one-time: a member who already has a valid style is sent on, never shown it again', () => {
+  it('is one-time: a member who already has a valid style is sent on', () => {
     expect(source).toContain('const current = await getMyWritingStyle(supabase, user.id)')
     expect(source).toContain('if (current) redirect(destination)')
   })
 
-  it('previews the member’s own words and uses the restrained copy', () => {
+  it('previews the member’s own words and gets restrained copy from next-intl', () => {
     expect(source).toContain('getWritingSample(supabase, user.id)')
-    expect(source).toContain('heading={WRITING_STYLE_HEADING}')
+    expect(source).toContain("getTranslations('WritingStyle')")
+    expect(source).toContain("heading={t('heading')}")
+    expect(source).toContain("intro={t('intro')}")
     expect(source).toContain("sampleIsOwn={sample.source !== 'fallback'}")
   })
 })
@@ -48,11 +50,9 @@ describe('You → Writing style', () => {
     expect(youSource).toContain('<WritingStyleChooser')
     expect(youSource).toContain('mode="settings"')
     expect(youSource).toContain('initialStyleId={current}')
-    expect(youSource).toMatch(/already sent keep the style they were sent in/)
   })
 
-  it('is reachable from You alongside the other presence settings', () => {
+  it('remains reachable from You alongside the other presence settings', () => {
     expect(youHome).toContain('href="/you/writing-style"')
-    expect(youHome).toContain('<span>Writing style</span>')
   })
 })

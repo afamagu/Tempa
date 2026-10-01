@@ -24,12 +24,16 @@ const mockExchangeCodeForSession = vi.fn()
 const mockProfileMaybeSingle = vi.fn()
 const mockEligibilityMaybeSingle = vi.fn()
 const mockLegalAcceptances = vi.fn()
+const mockLanguagePreference = vi.fn()
 const mockCookiesGetAll = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { exchangeCodeForSession: mockExchangeCodeForSession },
     from: (table: string) => {
+      if (table === 'member_language_preferences') {
+        return { select: () => ({ eq: () => ({ maybeSingle: mockLanguagePreference }) }) }
+      }
       if (table === 'profiles') {
         return { select: () => ({ eq: () => ({ maybeSingle: mockProfileMaybeSingle }) }) }
       }
@@ -52,6 +56,8 @@ beforeEach(() => {
   mockExchangeCodeForSession.mockReset()
   mockProfileMaybeSingle.mockReset()
   mockEligibilityMaybeSingle.mockReset()
+  mockLanguagePreference.mockReset()
+  mockLanguagePreference.mockResolvedValue({ data: { language_confirmed_at: '2026-09-30T00:00:00Z' }, error: null })
   mockLegalAcceptances.mockReset()
   mockCookiesGetAll.mockReset()
   mockCookiesGetAll.mockReturnValue([])
@@ -316,5 +322,17 @@ describe('GET /auth/callback — a refused (Auth-banned) identity is never "auth
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const res = await GET(new Request('https://jointempa.com/auth/callback?error=access_denied&error_code=other'))
     expect(locationOf(res)).toBe('https://jointempa.com/sign-in?error=auth_failed')
+  })
+})
+
+
+describe('OAuth callback — language-first entry', () => {
+  it('sends an unconfirmed account to Language before DOB/legal', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({ data: null })
+    mockLanguagePreference.mockResolvedValue({ data: null, error: null })
+    mockEligibilityMaybeSingle.mockResolvedValue({ data: null })
+    const res = await GET(new Request('https://jointempa.com/auth/callback?code=abc'))
+    expect(locationOf(res)).toBe('https://jointempa.com/language')
   })
 })
