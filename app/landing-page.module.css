@@ -100,8 +100,7 @@
 }
 .heroCollage {
   width: 100%;
-  height: auto;
-  mix-blend-mode: multiply
+  height: auto
 }
 .mobilePeek {
   display: none
@@ -177,8 +176,7 @@
   width: 30px;
   height: 30px;
   object-fit: cover;
-  border-radius: 8px;
-  mix-blend-mode: multiply
+  border-radius: 8px
 }
 .dispatchBody {
   font-size: 22px!important
@@ -208,8 +206,7 @@
 }
 .markScene {
   height: auto;
-  width: min(100%,330px);
-  mix-blend-mode: multiply
+  width: min(100%,330px)
 }
 .markStage p {
   font-family: Arial,sans-serif;
@@ -502,8 +499,7 @@
     height: 220px;
     overflow: hidden;
     background: url('/landing/hero-collage.webp') no-repeat center 45%;
-    background-size: 105%;
-    mix-blend-mode: multiply
+    background-size: 105%
   }
   .thread {
     height: 150px;
@@ -645,17 +641,14 @@
 .postcardScene {
   width: min(100%,530px);
   height: auto;
-  margin: 45px auto;
-  mix-blend-mode: multiply
+  margin: 45px auto
 }
 .envelopeArt {
   width: 44%;
-  height: auto;
-  mix-blend-mode: multiply
+  height: auto
 }
 .personMark {
-  object-fit: cover;
-  mix-blend-mode: multiply
+  object-fit: cover
 }
 @media(max-width:699px) {
   .mobilePeek {
