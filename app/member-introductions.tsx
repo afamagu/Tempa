@@ -2,90 +2,128 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   consumeIntroduction,
   isForwardSwipe,
-  isVisitHandled,
   loadMemberIntroductions,
   markIntroductionPresented,
-  markVisitHandled,
   sessionIdFromAccessToken,
   type IntroductionCard,
   type IntroductionConsumeReason,
 } from '@/lib/member-introductions'
+import { ensureIntroductionPresence, claimIntroductionVisit, noteIntroductionActivity, noteIntroductionAway } from '@/lib/introduction-visit'
+import { introductionDestinations } from '@/lib/introduction-navigation'
 import { contextQuestionClass, helperTextClass, primaryButtonClass, quietLinkClass } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 
 type Supabase = ReturnType<typeof createClient>
 
-function sessionStore(): Storage | null {
+function visitStore(): Storage | null {
   try {
-    return window.sessionStorage
+    return window.localStorage
   } catch {
     return null
   }
 }
 
 /**
- * "People to meet" — a floating, forward-only introduction stack shown at
- * most once per visit on ordinary member surfaces (mounted by AppShell,
+ * "People to meet" — a floating, forward-only introduction stack shown on Home
+ * once per sign-in and on a long return with unseen newcomers (mounted by AppShell,
  * which onboarding, sign-in, admin and compose screens never use).
  *
  * Loaded lazily AFTER the page itself has rendered and failing open: any
  * error simply means nothing appears. Presented = the card became the
  * active card; consumed = advanced past, or Write / View profile.
  */
-export default function MemberIntroductions() {
+export default function MemberIntroductions({ enabled = true }: { enabled?: boolean }) {
+  const pathname = usePathname()
+  const presentOnHome = enabled && pathname === '/home'
   const [cards, setCards] = useState<IntroductionCard[]>([])
   const [index, setIndex] = useState(0)
   const [open, setOpen] = useState(false)
   const supabaseRef = useRef<Supabase | null>(null)
+  const openRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    const run = async () => {
+    let busy = false
+    let sessionId: string | null = null
+    let focused = document.hasFocus()
+    let lastActivity = 0
+    const storage = visitStore()
+    const supabase = createClient()
+    supabaseRef.current = supabase
+    const visible = () => !document.hidden && focused
+    const inspect = async () => {
+      if (cancelled || busy || !visible()) return
+      busy = true
       try {
-        const supabase = createClient()
-        supabaseRef.current = supabase
         const { data } = await supabase.auth.getSession()
-        const sessionId = sessionIdFromAccessToken(data.session?.access_token)
-        if (!sessionId || cancelled) return
-        const storage = sessionStore()
-        if (isVisitHandled(storage, sessionId)) return
-        const loaded = await loadMemberIntroductions(supabase)
-        if (cancelled) return
-        // Handled for this visit from the moment a result arrives —
-        // refresh / navigation never re-shows it, even mid-stack.
-        markVisitHandled(storage, sessionId)
+        if (cancelled || !visible()) return
+        sessionId = sessionIdFromAccessToken(data.session?.access_token)
+        if (!sessionId) return
+        ensureIntroductionPresence(storage, sessionId)
+        const now = Date.now()
+        if (!presentOnHome || openRef.current) { noteIntroductionActivity(storage, sessionId, now); return }
+        const mode = claimIntroductionVisit(storage, sessionId, now)
+        noteIntroductionActivity(storage, sessionId, now)
+        if (!mode) return
+        const loaded = await loadMemberIntroductions(supabase, mode === 'return')
+        if (cancelled || !visible()) return
         if (loaded.length > 0) {
-          setCards(loaded)
-          setIndex(0)
-          setOpen(true)
+          openRef.current = true
+          setCards(loaded); setIndex(0); setOpen(true)
         }
-      } catch {
-        // Fail open.
-      }
+      } catch { /* Reading and navigation remain available if introductions fail. */ }
+      finally { busy = false }
     }
-    // Never compete with the page's own first render.
+    const away = () => {
+      focused = false
+      if (sessionId) noteIntroductionAway(storage, sessionId, Date.now())
+    }
+    const returned = () => {
+      focused = document.hasFocus()
+      if (!document.hidden) void inspect()
+    }
+    const visibility = () => { if (document.hidden) away(); else returned() }
+    const activity = () => {
+      if (!visible() || Date.now() - lastActivity < 30000) return
+      lastActivity = Date.now()
+      void inspect()
+    }
+    window.addEventListener('blur', away)
+    window.addEventListener('focus', returned)
+    window.addEventListener('pagehide', away)
+    window.addEventListener('pageshow', returned)
+    document.addEventListener('visibilitychange', visibility)
+    document.addEventListener('pointerdown', activity)
+    document.addEventListener('keydown', activity)
     const idle = typeof window.requestIdleCallback === 'function'
-    const handle = idle ? window.requestIdleCallback(() => void run(), { timeout: 2000 }) : window.setTimeout(() => void run(), 300)
+    const handle = idle ? window.requestIdleCallback(() => void inspect(), { timeout: 2000 }) : window.setTimeout(() => void inspect(), 300)
     return () => {
       cancelled = true
-      if (idle) window.cancelIdleCallback(handle)
-      else window.clearTimeout(handle)
+      if (idle) window.cancelIdleCallback(handle); else window.clearTimeout(handle)
+      window.removeEventListener('blur', away)
+      window.removeEventListener('focus', returned)
+      window.removeEventListener('pagehide', away)
+      window.removeEventListener('pageshow', returned)
+      document.removeEventListener('visibilitychange', visibility)
+      document.removeEventListener('pointerdown', activity)
+      document.removeEventListener('keydown', activity)
     }
-  }, [])
+  }, [presentOnHome])
 
-  if (!open || cards.length === 0) return null
+  if (!presentOnHome || !open || cards.length === 0) return null
   return (
     <IntroductionDialog
       cards={cards}
       index={index}
       onIndexChange={setIndex}
-      onClose={() => setOpen(false)}
+      onClose={() => { openRef.current = false; setOpen(false) }}
       supabase={() => supabaseRef.current ?? createClient()}
     />
   )
@@ -105,6 +143,7 @@ export function IntroductionDialog({
   supabase: () => Supabase
 }) {
   const router = useRouter()
+  const t = useTranslations('MemberIntroductions')
   const panelRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -117,12 +156,6 @@ export function IntroductionDialog({
     if (card) void markIntroductionPresented(supabase(), card.candidateId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card?.candidateId])
-
-  // Each new card starts at its top; focus moves to the new card.
-  useEffect(() => {
-    scrollRef.current?.scrollTo?.({ top: 0 })
-    panelRef.current?.focus()
-  }, [index])
 
   // Modal behaviour: background inert + scroll-locked; focus restored on close.
   useEffect(() => {
@@ -138,9 +171,17 @@ export function IntroductionDialog({
       previousFocus?.focus?.()
     }
   }, [])
+  // Each new card starts at its top; focus moves to the new card.
+  useEffect(() => {
+    busyRef.current = false
+    scrollRef.current?.scrollTo?.({ top: 0 })
+    panelRef.current?.focus()
+  }, [index])
+
 
   const advance = useCallback(() => {
     if (!card || busyRef.current) return
+    busyRef.current = true
     void consumeIntroduction(supabase(), card.candidateId, 'advanced')
     if (isLast) onClose()
     else onIndexChange(index + 1)
@@ -166,6 +207,12 @@ export function IntroductionDialog({
         e.preventDefault()
         advance()
       }
+      if (e.key === 'Tab') {
+        const buttons = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]') ?? [])
+        const first = buttons[0], last = buttons[buttons.length - 1]
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { e.preventDefault(); last?.focus() }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
       // ArrowLeft intentionally does nothing — there is no previous card.
     }
     document.addEventListener('keydown', onKeyDown)
@@ -187,11 +234,7 @@ export function IntroductionDialog({
   }
 
   const titleId = `intro-name-${card.candidateId}`
-  // No returnTo: the profile's existing "← People" control then uses its
-  // /minds default instead of history-back (which would land on the page
-  // the introduction happened to open over, e.g. Home).
-  const profileHref = `/minds/${card.candidateId}`
-  const writeHref = `/write/${card.candidateId}?a=${card.answerId}`
+  const { profileHref, writeHref } = introductionDestinations(card.candidateId, card.answerId)
   const hasCommon = card.sharedLanguages.length > 0 || card.sharedIntents.length > 0
 
   const dialog = (
@@ -210,12 +253,12 @@ export function IntroductionDialog({
       >
         <header className="flex items-center justify-between gap-3 border-b border-foreground/10 py-2 pl-5 pr-2">
           <p className={helperTextClass} aria-live="polite">
-            People to meet · {index + 1} of {cards.length}
+            {t('progress', { current: index + 1, total: cards.length })}
           </p>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close introductions"
+            aria-label={t('close')}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-foreground transition-colors hover:bg-foreground/[.06]"
           >
             ×
@@ -231,31 +274,33 @@ export function IntroductionDialog({
           className="flex-1 overflow-y-auto overscroll-contain px-5 py-5 motion-safe:animate-[tempa-intro-in_200ms_ease-out]"
         >
           <div className="flex items-center gap-4">
+            <button type="button" onClick={() => void leaveTo('profile', profileHref)} aria-label={t('viewProfile', { name: card.pseudonym })} className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">
             <ProfileIdentityMark
               identifier={card.candidateId}
               markUrl={card.markUrl}
               label={card.markUrl ? `${card.pseudonym}'s Mark` : undefined}
               size="lg"
             />
+            </button>
             <div className="min-w-0">
               <h2 id={titleId} className="truncate font-serif text-xl text-foreground">
-                {card.pseudonym}
+                <button type="button" onClick={() => void leaveTo('profile', profileHref)} className="text-left underline-offset-4 hover:underline">{card.pseudonym}</button>
               </h2>
               {card.identityLine && <p className={helperTextClass}>{card.identityLine}</p>}
-              {card.languages.length > 0 && <p className={helperTextClass}>Speaks {card.languages.join(', ')}</p>}
+              {card.languages.length > 0 && <p className={helperTextClass}>{t('speaks', { languages: card.languages.join(', ') })}</p>}
             </div>
           </div>
 
           {hasCommon && (
             <p className={`mt-4 ${helperTextClass}`} data-testid="introduction-in-common">
-              <span className="text-foreground/80">In common:</span>{' '}
+              <span className="text-foreground/80">{t('inCommon')}</span>{' '}
               {[...card.sharedLanguages, ...card.sharedIntents].join(' · ')}
             </p>
           )}
 
           {card.intents.length > 0 && (
             <p className={`mt-2 ${helperTextClass}`}>
-              <span className="text-foreground/80">Here for:</span> {card.intents.join(' · ')}
+              <span className="text-foreground/80">{t('hereFor')}</span> {card.intents.join(' · ')}
             </p>
           )}
 
@@ -271,19 +316,19 @@ export function IntroductionDialog({
 
         <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-foreground/10 px-5 py-3">
           <button type="button" onClick={() => void leaveTo('profile', profileHref)} className={quietLinkClass}>
-            View {card.pseudonym}&rsquo;s profile
+            {t('viewProfile', { name: card.pseudonym })}
           </button>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={advance}
-              aria-label={isLast ? 'Finish introductions' : 'Next person'}
+              aria-label={isLast ? t('finish') : t('nextPerson')}
               className="rounded-full px-4 py-2 text-[14px] text-foreground/80 transition-colors hover:bg-foreground/[.06]"
             >
-              {isLast ? 'Done' : 'Next →'}
+              {isLast ? t('done') : t('next')}
             </button>
             <button type="button" onClick={() => void leaveTo('write', writeHref)} className={primaryButtonClass}>
-              Write to {card.pseudonym}
+              {t('writeTo', { name: card.pseudonym })}
             </button>
           </div>
         </footer>

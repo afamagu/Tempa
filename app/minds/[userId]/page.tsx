@@ -30,6 +30,7 @@ import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
 import EditorialByline from '@/app/editorial-byline'
 import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
+import { introductionReturnPath } from '@/lib/introduction-navigation'
 import PeopleProfileBack from './people-profile-back'
 
 function genderDisplay(gender: string | null, genderCustom: string | null) {
@@ -66,9 +67,12 @@ export default async function PublicProfilePage({
 }) {
   const { userId } = await params
   const { returnTo } = await searchParams
+  const originReturn = introductionReturnPath(returnTo)
+  const profileReturn = originReturn ? `/room/${userId}?returnTo=${encodeURIComponent(originReturn)}` : null
+  const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
   const supabase = await createClient()
   const { data: { user: viewer } } = await supabase.auth.getUser()
-  if (!viewer) redirect('/sign-in')
+  if (!viewer) redirect(`/sign-in?next=${encodeURIComponent(`/room/${userId}${originReturn ? `?returnTo=${encodeURIComponent(originReturn)}` : ''}`)}`)
 
   const [{ data: profile }, waitingCount] = await Promise.all([
     supabase
@@ -121,7 +125,7 @@ export default async function PublicProfilePage({
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
 
   return (
-    <AppShell active={isSelf ? 'you' : returnTo?.startsWith('/letters/discover') ? 'letters' : 'room'} waitingLetterCount={waitingCount}>
+    <AppShell active={isSelf ? 'you' : returnTo === '/home' ? 'home' : returnTo?.startsWith('/letters/discover') ? 'letters' : 'room'} waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center p-6">
         <div className="w-full max-w-2xl space-y-8 py-10">
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}
@@ -193,7 +197,7 @@ export default async function PublicProfilePage({
           {!isSelf && (
             <div className="space-y-3">
               {showWriteToMind && primaryAnswer ? (
-                <Link href={`/write/${profile.id}?a=${primaryAnswer.id}&source=room_profile`} className={primaryButtonClass}>
+                <Link href={`/write/${profile.id}?a=${primaryAnswer.id}&source=room_profile${writeReturnQuery}`} className={primaryButtonClass}>
                   Write to {profile.pseudonym}
                 </Link>
               ) : alreadyCorresponding ? (

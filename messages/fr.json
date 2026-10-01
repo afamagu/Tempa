@@ -420,5 +420,18 @@
     "reviewNote": "Les suggestions sont examinées avant de devenir une question de la Room.",
     "invalidSuggestion": "Écrivez la question à laquelle vous aimeriez entendre les gens répondre.",
     "suggestFailed": "Impossible d’envoyer votre suggestion. Veuillez réessayer."
+  },
+  "MemberIntroductions": {
+    "progress": "Des personnes à rencontrer · {current} sur {total}",
+    "close": "Fermer les présentations",
+    "viewProfile": "Voir le profil de {name}",
+    "speaks": "Parle {languages}",
+    "inCommon": "En commun :",
+    "hereFor": "Ici pour :",
+    "finish": "Terminer les présentations",
+    "nextPerson": "Personne suivante",
+    "done": "Terminé",
+    "next": "Suivant →",
+    "writeTo": "Écrire à {name}"
   }
 }

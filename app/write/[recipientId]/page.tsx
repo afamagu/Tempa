@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
+import { introductionReturnPath } from '@/lib/introduction-navigation'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -23,14 +25,22 @@ export default async function WriteToPage({
   searchParams,
 }: {
   params: Promise<{ recipientId: string }>
-  searchParams: Promise<{ a?: string; source?: string }>
+  searchParams: Promise<{ a?: string; source?: string; returnTo?: string }>
 }) {
   const { recipientId } = await params
-  const { a: answerId } = await searchParams
+  const { a: answerId, source, returnTo } = await searchParams
+  const backHref = introductionReturnPath(returnTo) ?? '/room'
+  const nav = await getTranslations('Nav')
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/sign-in')
+  if (!user) {
+    const query = new URLSearchParams()
+    if (answerId) query.set('a', answerId)
+    if (source) query.set('source', source)
+    if (backHref !== '/room') query.set('returnTo', backHref)
+    redirect(`/sign-in?next=${encodeURIComponent(`/write/${recipientId}${query.size ? `?${query}` : ''}`)}`)
+  }
 
   if (recipientId === user.id) redirect('/room')
 
@@ -85,7 +95,7 @@ export default async function WriteToPage({
 
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <Link href="/letters" className={secondaryButtonClass}>Your letters</Link>
-            <Link href={`/room/${recipientId}`} className={quietLinkClass}>
+            <Link href={`/room/${recipientId}${backHref === '/home' ? '?returnTo=%2Fhome' : ''}`} className={quietLinkClass}>
               Back to {recipient.pseudonym}&apos;s profile
             </Link>
           </div>
@@ -121,6 +131,8 @@ export default async function WriteToPage({
       recipientPseudonym={recipient.pseudonym}
       questionAnswerId={answer.id}
       questionPrompt={question?.prompt ?? null}
+      backHref={backHref}
+      backLabel={backHref === '/home' ? nav('home') : backHref.startsWith('/letters/discover') ? 'Discover' : backHref.startsWith('/room/') ? recipient.pseudonym : nav('room')}
     />
   )
 }

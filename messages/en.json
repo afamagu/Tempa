@@ -420,5 +420,18 @@
     "reviewNote": "Suggestions are reviewed before they can become a Room Question.",
     "invalidSuggestion": "Write the question you would like to hear people answer.",
     "suggestFailed": "Could not send your suggestion. Please try again."
+  },
+  "MemberIntroductions": {
+    "progress": "People to meet · {current} of {total}",
+    "close": "Close introductions",
+    "viewProfile": "View {name}’s profile",
+    "speaks": "Speaks {languages}",
+    "inCommon": "In common:",
+    "hereFor": "Here for:",
+    "finish": "Finish introductions",
+    "nextPerson": "Next person",
+    "done": "Done",
+    "next": "Next →",
+    "writeTo": "Write to {name}"
   }
 }

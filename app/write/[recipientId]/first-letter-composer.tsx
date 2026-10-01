@@ -49,11 +49,15 @@ export default function FirstLetterComposer({
   recipientPseudonym,
   questionAnswerId,
   questionPrompt,
+  backHref = '/room',
+  backLabel = 'The Room',
 }: {
   recipientId: string
   recipientPseudonym: string
   questionAnswerId: string
   questionPrompt: string | null
+  backHref?: string
+  backLabel?: string
 }) {
   const [sending, setSending] = useState(false)
   const composerRootRef = useRef<HTMLElement | null>(null)
@@ -190,8 +194,8 @@ export default function FirstLetterComposer({
           <p className="text-lg leading-relaxed">
             Your letter to {recipientPseudonym} has been sent.
           </p>
-          <Link href="/room" className={secondaryButtonClass}>
-            Back to The Room
+          <Link href={backHref} className={secondaryButtonClass}>
+            Back to {backLabel}
           </Link>
         </div>
       </main>
@@ -226,8 +230,8 @@ export default function FirstLetterComposer({
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex flex-wrap gap-3">
-            <Link href="/room" className={secondaryButtonClass}>
-              Back to The Room
+            <Link href={backHref} className={secondaryButtonClass}>
+              Back to {backLabel}
             </Link>
             <button
               type="button"
