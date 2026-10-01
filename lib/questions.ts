@@ -5,16 +5,6 @@ export type ActiveQuestion = {
   prompt: string
 }
 
-/**
- * The 3 originally-seeded Questions' stable slugs
- * (docs/sql/2026-09-03-canonical-questions.sql). Neither slug
- * membership NOR this constant plays any role in member-reachability
- * or Question order — Question Slots checkpoint: `questions.
- * current_position` (1/2/3, explicit Admin assignment only) is the
- * sole source of truth for what's currently offered and in what order.
- * Kept only because slug remains a legitimate, stable identifier for
- * these 3 specific rows.
- */
 export const CANONICAL_QUESTION_SLUGS = [
   'private_ritual',
   'place_outsiders_miss',
@@ -22,19 +12,7 @@ export const CANONICAL_QUESTION_SLUGS = [
 ] as const
 
 export type CanonicalSlug = (typeof CANONICAL_QUESTION_SLUGS)[number]
-
-/**
- * TEMPA's canonical "stranger/discovery writing" length cap
- * (2026-09-05 length-policy audit). This is the actual, currently-live
- * Question-answer maximum — matches the live
- * question_answers_body_max_length check constraint (<= 2000) exactly.
- * Question is the canonical source: the first-contact letter composer
- * (app/write/[recipientId]/first-letter-composer.tsx) imports this
- * SAME constant rather than hard-coding a second independent number,
- * so the two values can never silently drift apart.
- */
 export const QUESTION_ANSWER_MAX_CHARS = 2000
-
 export type QuestionPosition = 1 | 2 | 3
 
 export type LibraryQuestion = {
@@ -43,25 +21,6 @@ export type LibraryQuestion = {
   position: QuestionPosition
 }
 
-/**
- * Question Slots checkpoint. Replaces the previous "up to three,
- * family-diverse, picked from the whole active library" selection
- * entirely: there is no longer a pool to pick FROM — the current three
- * Questions are #1/#2/#3, an explicit Admin assignment
- * (questions.current_position), never computed or ranked. This
- * function does exactly one thing: fetch whichever of #1/#2/#3
- * currently exist, in slot order, and drop any this member has already
- * answered. `family` no longer drives anything at the member-facing
- * layer (see docs/sql/2026-09-19-question-slots-and-premium-
- * announcements.sql's own header comment) — it remains pure admin
- * curation metadata.
- *
- * `current_position is not null` already implies `is_active = true`
- * (questions_current_position_requires_active, enforced at the
- * database level and re-enforced by admin_set_question_active clearing
- * a Question's position the instant it's deactivated) — so this query
- * needs no separate is_active filter of its own.
- */
 export async function getEligibleQuestions(
   supabase: SupabaseClient,
   userId: string
@@ -81,15 +40,6 @@ export async function getEligibleQuestions(
     .map((q) => ({ id: q.id, prompt: q.prompt, position: q.current_position as QuestionPosition }))
 }
 
-/**
- * The current Flagship Question, or null if none is currently
- * assigned. Flagship Simplification correction — Flagship is a
- * separate, admin-chosen bit of state (questions.is_flagship), never
- * tied to any particular slot number; it is NOT permanently position
- * #1 (that was the prior, over-engineered model). This is the single
- * source of truth for "which Question defines a member's primary
- * Minds identity" — see getPrimaryAnswer below.
- */
 export async function getFlagshipQuestion(
   supabase: SupabaseClient
 ): Promise<{ id: string; prompt: string } | null> {
@@ -101,6 +51,93 @@ export async function getFlagshipQuestion(
   return data ? { id: data.id, prompt: data.prompt } : null
 }
 
+/** The one editorially-selected, active non-Flagship Question for The Room. */
+export async function getCurrentRoomQuestion(
+  supabase: SupabaseClient
+): Promise<{ id: string; prompt: string } | null> {
+  const { data } = await supabase
+    .from('questions')
+    .select('id, prompt')
+    .eq('is_active', true)
+    .eq('is_flagship', false)
+    .not('current_position', 'is', null)
+    .order('current_position', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  return data ? { id: data.id, prompt: data.prompt } : null
+}
+
+export type QuestionAnswerEncounter = {
+  answerId: string
+  userId: string
+  pseudonym: string
+  country: string | null
+  markId: string | null
+  body: string
+}
+
+/**
+ * A bounded, writing-first set of people who actually answered one Question.
+ * Visibility is still constrained by question_answers/public_profiles RLS.
+ * `excludeUserIds` is a presentation dedupe hint, never a security boundary.
+ */
+export async function getQuestionAnswerEncounters(
+  supabase: SupabaseClient,
+  questionId: string,
+  viewerId: string,
+  options: { excludeUserIds?: string[]; limit?: number } = {}
+): Promise<QuestionAnswerEncounter[]> {
+  const limit = Math.min(Math.max(1, options.limit ?? 3), 12)
+  const fetchLimit = Math.min(Math.max(limit * 4, 12), 48)
+  const excluded = new Set([viewerId, ...(options.excludeUserIds ?? [])])
+
+  const { data: answerRows } = await supabase
+    .from('question_answers')
+    .select('id, user_id, body, updated_at')
+    .eq('question_id', questionId)
+    .eq('moderation_status', 'visible')
+    .neq('user_id', viewerId)
+    .order('updated_at', { ascending: false })
+    .limit(fetchLimit)
+
+  if (!answerRows || answerRows.length === 0) return []
+
+  const distinctRows: typeof answerRows = []
+  const seenUsers = new Set<string>()
+  for (const row of answerRows) {
+    if (excluded.has(row.user_id) || seenUsers.has(row.user_id)) continue
+    seenUsers.add(row.user_id)
+    distinctRows.push(row)
+  }
+  if (distinctRows.length === 0) return []
+
+  const { data: profiles } = await supabase
+    .from('public_profiles')
+    .select('id, pseudonym, country, mark_id')
+    .in('id', distinctRows.map((row) => row.user_id))
+
+  const profileById = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile as { id: string; pseudonym: string; country: string | null; mark_id: string | null }])
+  )
+
+  const encounters: QuestionAnswerEncounter[] = []
+  for (const row of distinctRows) {
+    const profile = profileById.get(row.user_id)
+    if (!profile) continue
+    encounters.push({
+      answerId: row.id,
+      userId: row.user_id,
+      pseudonym: profile.pseudonym,
+      country: profile.country,
+      markId: profile.mark_id,
+      body: row.body,
+    })
+    if (encounters.length >= limit) break
+  }
+  return encounters
+}
+
 export type PrimaryAnswer = {
   id: string
   questionId: string
@@ -109,19 +146,6 @@ export type PrimaryAnswer = {
   updatedAt: string
 }
 
-/**
- * The member's PRIMARY identity answer, for Minds cards/previews and
- * the Profile default. Deliberately NEVER falls back to another
- * current Question, and deliberately does NOT read `is_current` at
- * all: is_current is member-choosable and could point at any answer,
- * but "primary" is no longer a member choice — it is always and only
- * the answer to whichever Question is currently Flagship (dynamic,
- * admin-chosen, never permanently tied to a slot — see
- * getFlagshipQuestion above). A member who hasn't answered the current
- * Flagship yet (or whose Flagship answer is currently hidden by
- * moderation) has no primary answer at all — never a silent substitute
- * from another current Question.
- */
 export async function getPrimaryAnswer(
   supabase: SupabaseClient,
   userId: string
@@ -142,41 +166,16 @@ export async function getPrimaryAnswer(
 }
 
 export type MyQuestionAnswer = {
-  /** The question_answers row's own id — what set_current_answer and
-   * the write flow key off, distinct from questionId. */
   id: string
   questionId: string
   prompt: string
   body: string
   updatedAt: string
   isCurrent: boolean
-  /** True exactly when this answer's Question is the current Flagship
-   * (questions.is_flagship — a separate, admin-chosen bit of state,
-   * never tied to a particular slot number). This is the one true
-   * "primary identity answer" flag now; `isCurrent` is retained
-   * unchanged (member-choosable, still governs nothing about primary
-   * identity — see this file's own header discussion) purely for
-   * backward compatibility with historical data and the still-live
-   * set_current_answer RPC. */
   isPrimary: boolean
-  /** Admin Phase 2A-1 — 'hidden' only ever reaches the CALLER when the
-   * caller is this answer's own author (question_answers' self-select
-   * RLS policy; every other viewer's row is excluded entirely before
-   * this ever runs). The owner's own profile view renders "Hidden by
-   * TEMPA" for it instead of the normal answer card. */
   moderationStatus: 'visible' | 'hidden'
 }
 
-/**
- * Pure: pairs a member's raw question_answers rows with the prompt of
- * the Question each belongs to (and whether that Question is currently
- * Flagship). A member's answer to ANY Question in the library is real,
- * historical content of theirs and is always included here, regardless
- * of whether that Question is still active, still positioned, or was
- * ever "canonical." The only row ever dropped is one whose parent
- * Question can't be resolved at all — which in practice never happens,
- * since a Question is never hard-deleted while it still has answers.
- */
 export function buildMyAnswers(
   answerRows: {
     id: string
@@ -205,12 +204,6 @@ export function buildMyAnswers(
     })
 }
 
-/**
- * Every Question-answer this member has ever written, to ANY Question
- * in the library — "My answers"/"other answers" own history, complete,
- * regardless of whether the underlying Question is still active or
- * positioned.
- */
 export async function getMyAnswers(
   supabase: SupabaseClient,
   userId: string
@@ -234,12 +227,6 @@ export async function getMyAnswers(
   return buildMyAnswers(answerRows, questionsById)
 }
 
-/**
- * Pure: whichever eligible Question comes first, excluding the one the
- * member just answered/is currently viewing — `eligible` is already in
- * #1/#2/#3 slot order (getEligibleQuestions), so this is simply "the
- * first one that isn't the current page's own Question."
- */
 export function nextEligibleQuestion(
   eligible: LibraryQuestion[],
   currentQuestionId: string
@@ -247,17 +234,6 @@ export function nextEligibleQuestion(
   return eligible.find((q) => q.id !== currentQuestionId) ?? null
 }
 
-/**
- * Pure: whether a member still needs to answer a Question — one
- * completed answer is enough, never a specific count, and this is
- * never true at all when there's nothing currently eligible to offer
- * (eligibleQuestionCount === 0). Despite the name, this no longer gates
- * any navigation — it now drives only the non-blocking "Answer a
- * Question" indicator on /minds (the dot on its tab, and
- * QuestionIncompleteNotice). Browsing Minds, opening a profile, reading
- * a published answer, and starting a first letter are never blocked by
- * this being true.
- */
 export function needsParticipationGate(
   eligibleQuestionCount: number,
   completedAnswerCount: number
@@ -266,20 +242,6 @@ export function needsParticipationGate(
   return completedAnswerCount === 0
 }
 
-/**
- * Pure: the save-confirmation copy for a Question answer. Does not
- * read `is_current`/`wasCurrent` at all: the ONLY save that is ever
- * announced as "now your primary Minds answer" is a member's very
- * FIRST save of an answer to whichever Question is currently Flagship
- * (isFlagship — a separate, admin-chosen bit of state, never
- * permanently tied to a slot). Every other save — including a first
- * answer to a non-Flagship current Question, and every edit of an
- * already-answered Flagship Question — gets the plain copy. This keeps
- * the message truthful under the model: is_current can still silently
- * flip server-side (publish_question_answer's own unchanged promotion
- * rule), but that is no longer what makes an answer "featured," so it
- * is no longer what this copy announces.
- */
 export function questionSaveConfirmationCopy(isFlagship: boolean, hadExistingAnswer: boolean): string {
   if (isFlagship && !hadExistingAnswer) return 'Saved. This is now your primary response.'
   return 'Response saved.'

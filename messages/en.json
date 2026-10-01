@@ -6,7 +6,9 @@
     "board": "The Board",
     "you": "You"
   },
-  "LanguageSwitcher": { "label": "Language" },
+  "LanguageSwitcher": {
+    "label": "Language"
+  },
   "SignIn": {
     "tagline": "A more human way to connect",
     "signIn": "Sign in",
@@ -51,7 +53,9 @@
       "unavailable": "This account can’t be used to sign in to Tempa. If you believe this is a mistake, contact {email}."
     }
   },
-  "You": { "language": "Language" },
+  "You": {
+    "language": "Language"
+  },
   "LanguageSettings": {
     "back": "You",
     "heading": "Language",
@@ -100,8 +104,18 @@
   "Begin": {
     "dateFormat": "{day} {month} {year}",
     "months": {
-      "1": "January", "2": "February", "3": "March", "4": "April", "5": "May", "6": "June",
-      "7": "July", "8": "August", "9": "September", "10": "October", "11": "November", "12": "December"
+      "1": "January",
+      "2": "February",
+      "3": "March",
+      "4": "April",
+      "5": "May",
+      "6": "June",
+      "7": "July",
+      "8": "August",
+      "9": "September",
+      "10": "October",
+      "11": "November",
+      "12": "December"
     },
     "invalidDate": "Enter a valid date.",
     "checkDobHeading": "Check your date of birth",
@@ -169,23 +183,67 @@
       "receiving": "Choose what you’re comfortable receiving."
     },
     "genderOptions": {
-      "Woman": "Woman", "Man": "Man", "Non-binary": "Non-binary", "Self-describe": "Self-describe", "Prefer not to say": "Prefer not to say"
+      "Woman": "Woman",
+      "Man": "Man",
+      "Non-binary": "Non-binary",
+      "Self-describe": "Self-describe",
+      "Prefer not to say": "Prefer not to say"
     },
     "intentOptions": {
-      "Meaningful friendship": "Meaningful friendship", "Long-term correspondence": "Long-term correspondence", "Thoughtful conversation": "Thoughtful conversation", "Cultural exchange": "Cultural exchange", "Sharing everyday life": "Sharing everyday life", "Practising a language": "Practising a language", "Meeting people different from me": "Meeting people different from me", "Meeting people who think like me": "Meeting people who think like me", "Writing and self-expression": "Writing and self-expression", "A little serendipity": "A little serendipity", "Something else": "Something else"
+      "Meaningful friendship": "Meaningful friendship",
+      "Long-term correspondence": "Long-term correspondence",
+      "Thoughtful conversation": "Thoughtful conversation",
+      "Cultural exchange": "Cultural exchange",
+      "Sharing everyday life": "Sharing everyday life",
+      "Practising a language": "Practising a language",
+      "Meeting people different from me": "Meeting people different from me",
+      "Meeting people who think like me": "Meeting people who think like me",
+      "Writing and self-expression": "Writing and self-expression",
+      "A little serendipity": "A little serendipity",
+      "Something else": "Something else"
     },
     "writingOptions": {
-      "self_written": "I write my letters myself", "ai_review_only": "I use AI only for review", "ai_edit": "I sometimes use AI to edit my writing", "ai_draft": "I use AI to help draft letters"
+      "self_written": "I write my letters myself",
+      "ai_review_only": "I use AI only for review",
+      "ai_edit": "I sometimes use AI to edit my writing",
+      "ai_draft": "I use AI to help draft letters"
     },
     "writingDescriptions": {
-      "self_written": "I don’t use generative AI to write or rewrite them.", "ai_review_only": "I may use it for spelling, grammar, translation, or proofreading after I’ve written.", "ai_edit": "I may use it to rephrase, organise, or improve something I’ve already written.", "ai_draft": "AI may generate some or most of the wording I send."
+      "self_written": "I don’t use generative AI to write or rewrite them.",
+      "ai_review_only": "I may use it for spelling, grammar, translation, or proofreading after I’ve written.",
+      "ai_edit": "I may use it to rephrase, organise, or improve something I’ve already written.",
+      "ai_draft": "AI may generate some or most of the wording I send."
     },
     "receivingOptions": {
-      "any": "Any writing style", "self_written_or_ai_reviewed": "Self-written or AI-reviewed", "self_written_only": "Self-written only"
+      "any": "Any writing style",
+      "self_written_or_ai_reviewed": "Self-written or AI-reviewed",
+      "self_written_only": "Self-written only"
     },
     "interestOptions": {
-      "life-reflections": "Life & Reflections", "family-parenting": "Family & Parenting", "friendship": "Friendship", "love-relationships": "Love & Relationships", "spirituality-faith": "Spirituality & Faith", "philosophy": "Philosophy", "psychology": "Psychology & Human Nature", "books-literature": "Books & Literature", "writing-poetry": "Writing & Poetry", "art-creativity": "Art & Creativity", "music": "Music", "film-tv": "Film & Television", "travel-places": "Travel & Places", "culture-society": "Culture & Society", "history": "History", "science-nature": "Science & Nature", "technology": "Technology", "work-ambition": "Work & Ambition", "food-cooking": "Food & Cooking", "health-wellbeing": "Health & Wellbeing", "sport-fitness": "Sport & Fitness", "everyday-life": "Everyday Life"
-    }
+      "life-reflections": "Life & Reflections",
+      "family-parenting": "Family & Parenting",
+      "friendship": "Friendship",
+      "love-relationships": "Love & Relationships",
+      "spirituality-faith": "Spirituality & Faith",
+      "philosophy": "Philosophy",
+      "psychology": "Psychology & Human Nature",
+      "books-literature": "Books & Literature",
+      "writing-poetry": "Writing & Poetry",
+      "art-creativity": "Art & Creativity",
+      "music": "Music",
+      "film-tv": "Film & Television",
+      "travel-places": "Travel & Places",
+      "culture-society": "Culture & Society",
+      "history": "History",
+      "science-nature": "Science & Nature",
+      "technology": "Technology",
+      "work-ambition": "Work & Ambition",
+      "food-cooking": "Food & Cooking",
+      "health-wellbeing": "Health & Wellbeing",
+      "sport-fitness": "Sport & Fitness",
+      "everyday-life": "Everyday Life"
+    },
+    "reserved": "That name is reserved."
   },
   "MarkOnboarding": {
     "label": "Your Mark",
@@ -249,7 +307,53 @@
     "saving": "Saving…",
     "back": "Back to You",
     "styles": {
-      "ink": "Ink", "notebook": "Notebook", "freehand": "Freehand", "literary": "Literary", "correspondence": "Correspondence", "typewriter": "Typewriter"
+      "ink": "Ink",
+      "notebook": "Notebook",
+      "freehand": "Freehand",
+      "literary": "Literary",
+      "correspondence": "Correspondence",
+      "typewriter": "Typewriter"
     }
+  },
+  "RoomEngagement": {
+    "thisWeek": "This week in The Room",
+    "readEdit": "Read or edit your answer",
+    "answerQuestion": "Answer the Question",
+    "peopleSaid": "See what people said",
+    "moreAnswers": "See more answers →",
+    "findWriter": "Find someone worth writing to",
+    "readMember": "Read {name} →",
+    "title": "The Room",
+    "intro": "A question, answered in many different ways.",
+    "readRoom": "Read the Room",
+    "enterRoom": "Enter the Room",
+    "guideIntro": "Read first. If a person’s words stay with you, that is a good reason to write. There are no followers to collect here.",
+    "fewLines": "A few lines is enough.",
+    "week": "This week",
+    "explore": "Explore",
+    "sameQuestion": "Different people, answering the same question.",
+    "lookAround": "Take a look around through what people have actually written.",
+    "answersExhausted": "You’ve seen the available answers to this Question for now.",
+    "roomExhausted": "You’ve read everyone in this part of the Room for now.",
+    "noAnswers": "No other answers are available yet.",
+    "noPeople": "There’s no one new to read right now.",
+    "noMatches": "No one matches those filters right now.",
+    "widenFilters": "Try widening your filters.",
+    "moreArrivals": "The Room will change as more people arrive.",
+    "keepLooking": "Keep looking",
+    "firstQuestion": "The First Question",
+    "firstIntro": "Everyone enters Tempa through the same question. Your answer remains part of how people first encounter you in the Room.",
+    "suggestHeading": "Have a question for The Room?",
+    "suggestOne": "Suggest one →",
+    "suggestPlaceholder": "What would you genuinely want to hear different people answer?",
+    "creditMe": "Credit me if Tempa uses this question.",
+    "suggestNote": "Tempa may edit the wording before using a suggestion. Suggestions are not published automatically.",
+    "cancel": "Cancel",
+    "sending": "Sending…",
+    "sendSuggestion": "Send suggestion",
+    "thanks": "Thank you. Tempa will read it.",
+    "reviewNote": "Suggestions are reviewed before they can become a Room Question.",
+    "invalidSuggestion": "Write the question you would like to hear people answer.",
+    "suggestFailed": "Could not send your suggestion. Please try again."
   }
 }

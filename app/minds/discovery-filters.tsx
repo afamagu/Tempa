@@ -35,6 +35,7 @@ export default function DiscoveryFilters({
     // A filter change starts a new eligible pool, so the batch position
     // resets to the first page of it.
     params.delete('batch')
+    params.delete('started')
     const query = params.toString()
     router.push(query ? `${pathname}?${query}` : pathname)
     onApply?.()

@@ -6,7 +6,9 @@
     "board": "O Mural",
     "you": "Você"
   },
-  "LanguageSwitcher": { "label": "Idioma" },
+  "LanguageSwitcher": {
+    "label": "Idioma"
+  },
   "SignIn": {
     "tagline": "Um jeito mais humano de se conectar",
     "signIn": "Entrar",
@@ -51,7 +53,9 @@
       "unavailable": "Esta conta não pode ser usada para entrar no Tempa. Se você acredita que isso é um engano, escreva para {email}."
     }
   },
-  "You": { "language": "Idioma" },
+  "You": {
+    "language": "Idioma"
+  },
   "LanguageSettings": {
     "back": "Você",
     "heading": "Idioma",
@@ -100,8 +104,18 @@
   "Begin": {
     "dateFormat": "{day} de {month} de {year}",
     "months": {
-      "1": "janeiro", "2": "fevereiro", "3": "março", "4": "abril", "5": "maio", "6": "junho",
-      "7": "julho", "8": "agosto", "9": "setembro", "10": "outubro", "11": "novembro", "12": "dezembro"
+      "1": "janeiro",
+      "2": "fevereiro",
+      "3": "março",
+      "4": "abril",
+      "5": "maio",
+      "6": "junho",
+      "7": "julho",
+      "8": "agosto",
+      "9": "setembro",
+      "10": "outubro",
+      "11": "novembro",
+      "12": "dezembro"
     },
     "invalidDate": "Digite uma data válida.",
     "checkDobHeading": "Confira sua data de nascimento",
@@ -169,23 +183,67 @@
       "receiving": "Escolha o que você se sente à vontade para receber."
     },
     "genderOptions": {
-      "Woman": "Mulher", "Man": "Homem", "Non-binary": "Não binário", "Self-describe": "Prefiro me descrever", "Prefer not to say": "Prefiro não dizer"
+      "Woman": "Mulher",
+      "Man": "Homem",
+      "Non-binary": "Não binário",
+      "Self-describe": "Prefiro me descrever",
+      "Prefer not to say": "Prefiro não dizer"
     },
     "intentOptions": {
-      "Meaningful friendship": "Uma amizade significativa", "Long-term correspondence": "Correspondência de longo prazo", "Thoughtful conversation": "Conversas profundas", "Cultural exchange": "Intercâmbio cultural", "Sharing everyday life": "Compartilhar a vida cotidiana", "Practising a language": "Praticar um idioma", "Meeting people different from me": "Conhecer pessoas diferentes de mim", "Meeting people who think like me": "Conhecer pessoas que pensam como eu", "Writing and self-expression": "Escrita e expressão pessoal", "A little serendipity": "Um pouco de acaso feliz", "Something else": "Outra coisa"
+      "Meaningful friendship": "Uma amizade significativa",
+      "Long-term correspondence": "Correspondência de longo prazo",
+      "Thoughtful conversation": "Conversas profundas",
+      "Cultural exchange": "Intercâmbio cultural",
+      "Sharing everyday life": "Compartilhar a vida cotidiana",
+      "Practising a language": "Praticar um idioma",
+      "Meeting people different from me": "Conhecer pessoas diferentes de mim",
+      "Meeting people who think like me": "Conhecer pessoas que pensam como eu",
+      "Writing and self-expression": "Escrita e expressão pessoal",
+      "A little serendipity": "Um pouco de acaso feliz",
+      "Something else": "Outra coisa"
     },
     "writingOptions": {
-      "self_written": "Eu mesmo escrevo minhas cartas", "ai_review_only": "Uso IA apenas para revisar", "ai_edit": "Às vezes uso IA para editar o que escrevo", "ai_draft": "Uso IA para me ajudar a redigir"
+      "self_written": "Eu mesmo escrevo minhas cartas",
+      "ai_review_only": "Uso IA apenas para revisar",
+      "ai_edit": "Às vezes uso IA para editar o que escrevo",
+      "ai_draft": "Uso IA para me ajudar a redigir"
     },
     "writingDescriptions": {
-      "self_written": "Não uso IA generativa para escrever ou reescrever minhas cartas.", "ai_review_only": "Posso usar para ortografia, gramática, tradução ou revisão depois de escrever.", "ai_edit": "Posso usar para reformular, organizar ou melhorar algo que eu já escrevi.", "ai_draft": "A IA pode gerar parte ou a maior parte do texto que envio."
+      "self_written": "Não uso IA generativa para escrever ou reescrever minhas cartas.",
+      "ai_review_only": "Posso usar para ortografia, gramática, tradução ou revisão depois de escrever.",
+      "ai_edit": "Posso usar para reformular, organizar ou melhorar algo que eu já escrevi.",
+      "ai_draft": "A IA pode gerar parte ou a maior parte do texto que envio."
     },
     "receivingOptions": {
-      "any": "Qualquer estilo de escrita", "self_written_or_ai_reviewed": "Escrito pela pessoa ou revisado com IA", "self_written_only": "Somente escrito pela pessoa"
+      "any": "Qualquer estilo de escrita",
+      "self_written_or_ai_reviewed": "Escrito pela pessoa ou revisado com IA",
+      "self_written_only": "Somente escrito pela pessoa"
     },
     "interestOptions": {
-      "life-reflections": "Vida e reflexões", "family-parenting": "Família e criação dos filhos", "friendship": "Amizade", "love-relationships": "Amor e relacionamentos", "spirituality-faith": "Espiritualidade e fé", "philosophy": "Filosofia", "psychology": "Psicologia e natureza humana", "books-literature": "Livros e literatura", "writing-poetry": "Escrita e poesia", "art-creativity": "Arte e criatividade", "music": "Música", "film-tv": "Cinema e televisão", "travel-places": "Viagens e lugares", "culture-society": "Cultura e sociedade", "history": "História", "science-nature": "Ciência e natureza", "technology": "Tecnologia", "work-ambition": "Trabalho e ambição", "food-cooking": "Comida e culinária", "health-wellbeing": "Saúde e bem-estar", "sport-fitness": "Esporte e atividade física", "everyday-life": "Vida cotidiana"
-    }
+      "life-reflections": "Vida e reflexões",
+      "family-parenting": "Família e criação dos filhos",
+      "friendship": "Amizade",
+      "love-relationships": "Amor e relacionamentos",
+      "spirituality-faith": "Espiritualidade e fé",
+      "philosophy": "Filosofia",
+      "psychology": "Psicologia e natureza humana",
+      "books-literature": "Livros e literatura",
+      "writing-poetry": "Escrita e poesia",
+      "art-creativity": "Arte e criatividade",
+      "music": "Música",
+      "film-tv": "Cinema e televisão",
+      "travel-places": "Viagens e lugares",
+      "culture-society": "Cultura e sociedade",
+      "history": "História",
+      "science-nature": "Ciência e natureza",
+      "technology": "Tecnologia",
+      "work-ambition": "Trabalho e ambição",
+      "food-cooking": "Comida e culinária",
+      "health-wellbeing": "Saúde e bem-estar",
+      "sport-fitness": "Esporte e atividade física",
+      "everyday-life": "Vida cotidiana"
+    },
+    "reserved": "Esse nome está reservado."
   },
   "MarkOnboarding": {
     "label": "Seu Mark",
@@ -249,7 +307,53 @@
     "saving": "Salvando…",
     "back": "Voltar para Você",
     "styles": {
-      "ink": "Tinta", "notebook": "Caderno", "freehand": "Mão livre", "literary": "Literário", "correspondence": "Correspondência", "typewriter": "Máquina de escrever"
+      "ink": "Tinta",
+      "notebook": "Caderno",
+      "freehand": "Mão livre",
+      "literary": "Literário",
+      "correspondence": "Correspondência",
+      "typewriter": "Máquina de escrever"
     }
+  },
+  "RoomEngagement": {
+    "thisWeek": "Esta semana na Room",
+    "readEdit": "Ler ou editar a sua resposta",
+    "answerQuestion": "Responder à pergunta",
+    "peopleSaid": "Ver o que as pessoas disseram",
+    "moreAnswers": "Ver mais respostas →",
+    "findWriter": "Encontrar alguém a quem escrever",
+    "readMember": "Ler {name} →",
+    "title": "A Room",
+    "intro": "Uma pergunta, muitas formas de responder.",
+    "readRoom": "Ler a Room",
+    "enterRoom": "Entrar na Room",
+    "guideIntro": "Leia primeiro. Se as palavras de alguém ficam consigo, é uma boa razão para escrever. Aqui não há seguidores para colecionar.",
+    "fewLines": "Algumas linhas bastam.",
+    "week": "Esta semana",
+    "explore": "Explorar",
+    "sameQuestion": "Pessoas diferentes respondem à mesma pergunta.",
+    "lookAround": "Explore o que as pessoas realmente escreveram.",
+    "answersExhausted": "Já viu as respostas disponíveis a esta pergunta por agora.",
+    "roomExhausted": "Já leu todas as pessoas nesta parte da Room por agora.",
+    "noAnswers": "Ainda não há outras respostas disponíveis.",
+    "noPeople": "Não há ninguém novo para ler neste momento.",
+    "noMatches": "Ninguém corresponde a esses filtros neste momento.",
+    "widenFilters": "Experimente alargar os filtros.",
+    "moreArrivals": "A Room mudará à medida que mais pessoas chegarem.",
+    "keepLooking": "Continuar a explorar",
+    "firstQuestion": "A primeira pergunta",
+    "firstIntro": "Todos entram no Tempa através da mesma pergunta. A sua resposta continua a fazer parte de como as pessoas o descobrem na Room.",
+    "suggestHeading": "Tem uma pergunta para a Room?",
+    "suggestOne": "Sugerir uma →",
+    "suggestPlaceholder": "A que pergunta gostaria de ouvir pessoas diferentes responder?",
+    "creditMe": "Mencione o meu nome se o Tempa usar esta pergunta.",
+    "suggestNote": "O Tempa pode editar o texto antes de usar uma sugestão. As sugestões não são publicadas automaticamente.",
+    "cancel": "Cancelar",
+    "sending": "A enviar…",
+    "sendSuggestion": "Enviar sugestão",
+    "thanks": "Obrigado. O Tempa vai lê-la.",
+    "reviewNote": "As sugestões são revistas antes de se tornarem uma pergunta da Room.",
+    "invalidSuggestion": "Escreva a pergunta a que gostaria de ouvir as pessoas responder.",
+    "suggestFailed": "Não foi possível enviar a sua sugestão. Tente novamente."
   }
 }

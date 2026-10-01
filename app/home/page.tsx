@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -19,6 +20,9 @@ import {
   partitionHomeSections,
   readingTrailSearchParams,
 } from '@/lib/dispatches'
+import { getCurrentRoomQuestion, getMyAnswers, getQuestionAnswerEncounters } from '@/lib/questions'
+import { getDiscoveryPage, type DiscoveryCandidate } from '@/lib/discovery'
+import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
 import { getActiveAnnouncement } from '@/lib/announcements'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
 import {
@@ -27,23 +31,25 @@ import {
   helperTextClass,
   quietLinkClass,
   sectionTitleClass,
+  primaryButtonClass,
+  secondaryButtonClass,
 } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MemberNotices from '@/app/member-notices'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
-import RecommendedMindCard, { type RecommendedMind } from './recommended-mind-card'
 import ArrivalSenderLink from './arrival-sender-link'
 import BoardShelfCard from './board-shelf-card'
+import RoomAnswerCard, { type HomeRoomAnswer } from './room-answer-card'
 import AnnouncementTeaser from './announcement-teaser'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
-import { getDiscoveryPage } from '@/lib/discovery'
 
-const WORTH_KNOWING_COUNT = 3
+const HOME_ROOM_ANSWER_COUNT = 3
 const HOME_BOARD_COUNT = 3
 
 export default async function HomePage() {
+  const t = await getTranslations('RoomEngagement')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
@@ -56,7 +62,8 @@ export default async function HomePage() {
     hiddenCorrespondenceIds,
     boardCandidates,
     activeAnnouncement,
-    recommendedPage,
+    currentRoomQuestion,
+    myAnswers,
   ] = await Promise.all([
     supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
@@ -65,7 +72,8 @@ export default async function HomePage() {
     getHiddenCorrespondenceIds(supabase, user.id),
     getHomeBoardCandidates(supabase),
     getActiveAnnouncement(supabase),
-    getDiscoveryPage(supabase, { offset: 0, limit: WORTH_KNOWING_COUNT }),
+    getCurrentRoomQuestion(supabase),
+    getMyAnswers(supabase, user.id),
   ])
 
   if (!profile) redirect('/profile')
@@ -73,17 +81,26 @@ export default async function HomePage() {
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
 
-  // Familiarity and serendipity stay useful as selection ingredients, but they
-  // no longer become separate Home departments. Fill any remaining slot from
-  // the ranked Board pool while preventing duplicates.
   const homeBoardItems: typeof boardItems = []
   const seenBoardIds = new Set<string>()
+  const seenBoardAuthors = new Set<string>()
   const preferredBoardItems = [featured[0], fromMindsYouKeep[0], serendipity[0], ...boardItems]
+
   for (const item of preferredBoardItems) {
-    if (!item || seenBoardIds.has(item.id)) continue
+    if (!item || seenBoardIds.has(item.id) || seenBoardAuthors.has(item.authorId)) continue
     homeBoardItems.push(item)
     seenBoardIds.add(item.id)
+    seenBoardAuthors.add(item.authorId)
     if (homeBoardItems.length >= HOME_BOARD_COUNT) break
+  }
+  if (homeBoardItems.length < HOME_BOARD_COUNT) {
+    for (const item of preferredBoardItems) {
+      if (!item || seenBoardIds.has(item.id)) continue
+      homeBoardItems.push(item)
+      seenBoardIds.add(item.id)
+      seenBoardAuthors.add(item.authorId)
+      if (homeBoardItems.length >= HOME_BOARD_COUNT) break
+    }
   }
 
   function trailQueryFor(item: (typeof boardItems)[number]): string {
@@ -99,6 +116,67 @@ export default async function HomePage() {
   const awaitingReply = deriveArrivals(allLetters, user.id)
   const hasActiveCorrespondence = hasVisibleReply(allLetters)
   const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null
+
+  // Prefer V2 so Home participates in the same unseen/underexposure fairness
+  // ledger as The Room. Before production SQL is applied, fall back to the
+  // existing exact-Question helper rather than hiding the conversation.
+  let roomCandidates: DiscoveryCandidate[] = []
+  if (currentRoomQuestion) {
+    const preferred = await getDiscoveryPage(supabase, {
+      questionId: currentRoomQuestion.id,
+      excludeUserIds: [...seenBoardAuthors],
+      limit: HOME_ROOM_ANSWER_COUNT,
+    })
+    roomCandidates = preferred.candidates
+
+    if (roomCandidates.length < HOME_ROOM_ANSWER_COUNT && preferred.fairRankingApplied) {
+      const fallback = await getDiscoveryPage(supabase, {
+        questionId: currentRoomQuestion.id,
+        limit: HOME_ROOM_ANSWER_COUNT,
+      })
+      const seen = new Set(roomCandidates.map((candidate) => candidate.userId))
+      for (const candidate of fallback.candidates) {
+        if (seen.has(candidate.userId)) continue
+        roomCandidates.push(candidate)
+        seen.add(candidate.userId)
+        if (roomCandidates.length >= HOME_ROOM_ANSWER_COUNT) break
+      }
+    }
+
+    if (!preferred.fairRankingApplied) {
+      const legacyPreferred = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
+        excludeUserIds: [...seenBoardAuthors],
+        limit: HOME_ROOM_ANSWER_COUNT,
+      })
+      const legacyAnswers = [...legacyPreferred]
+      if (legacyAnswers.length < HOME_ROOM_ANSWER_COUNT) {
+        const legacyFallback = await getQuestionAnswerEncounters(supabase, currentRoomQuestion.id, user.id, {
+          limit: HOME_ROOM_ANSWER_COUNT,
+        })
+        const seen = new Set(legacyAnswers.map((answer) => answer.userId))
+        for (const answer of legacyFallback) {
+          if (seen.has(answer.userId)) continue
+          legacyAnswers.push(answer)
+          seen.add(answer.userId)
+          if (legacyAnswers.length >= HOME_ROOM_ANSWER_COUNT) break
+        }
+      }
+      roomCandidates = legacyAnswers.map((answer) => ({
+        userId: answer.userId,
+        pseudonym: answer.pseudonym,
+        country: answer.country ?? '',
+        gender: null,
+        genderCustom: null,
+        ageRange: '',
+        markId: answer.markId,
+        answerId: answer.answerId,
+        body: answer.body,
+        prompt: currentRoomQuestion.prompt,
+      }))
+    }
+  }
+
+  await recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')
 
   const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
     activeAnnouncement?.heroImagePath
@@ -124,21 +202,18 @@ export default async function HomePage() {
     getEditorialBylines(supabase),
   ])
 
-  const recommended: RecommendedMind[] = recommendedPage.candidates
-    .slice(0, WORTH_KNOWING_COUNT)
-    .map((candidate) => ({
-      userId: candidate.userId,
-      pseudonym: candidate.pseudonym,
-      country: candidate.country,
-      markUrl: candidate.markId
-        ? publicProfileMarkUrl(supabase, `${candidate.markId}.png`)
-        : null,
-      responseBody: candidate.body,
-      editorialTitle: editorialTitleFor(editorialBylines, candidate.pseudonym),
-    }))
+  const homeRoomAnswers: HomeRoomAnswer[] = roomCandidates.map((answer) => ({
+    userId: answer.userId,
+    pseudonym: answer.pseudonym,
+    country: answer.country || null,
+    markUrl: answer.markId ? publicProfileMarkUrl(supabase, `${answer.markId}.png`) : null,
+    editorialTitle: editorialTitleFor(editorialBylines, answer.pseudonym),
+    body: answer.body,
+  }))
 
-  // A waiting letter is Tempa's strongest return signal. Discovery yields to it.
-  const showWorthKnowing = awaitingReply.length === 0 && recommended.length > 0
+  const currentRoomAnswer = currentRoomQuestion
+    ? myAnswers.find((answer) => answer.questionId === currentRoomQuestion.id) ?? null
+    : null
 
   return (
     <AppShell active="home" waitingLetterCount={waitingCount}>
@@ -195,8 +270,44 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {(homeBoardItems.length > 0 || showWorthKnowing) && (
+          {(currentRoomQuestion || homeBoardItems.length > 0) && (
             <div className="mx-auto mt-14 w-full max-w-4xl space-y-14">
+              {currentRoomQuestion && (
+                <section aria-labelledby="home-room-heading" className="space-y-6">
+                  <div className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
+                    <p className={sectionLabelClass}>{t('thisWeek')}</p>
+                    <h2 id="home-room-heading" className="mt-3 max-w-3xl font-serif text-2xl leading-snug text-foreground sm:text-3xl">
+                      {currentRoomQuestion.prompt}
+                    </h2>
+                    <div className="mt-6">
+                      <Link href={`/question/${currentRoomQuestion.id}?source=home_room`} className={primaryButtonClass}>
+                        {currentRoomAnswer ? t('readEdit') : t('answerQuestion')}
+                      </Link>
+                    </div>
+                  </div>
+
+                  {homeRoomAnswers.length > 0 && (
+                    <div className="space-y-4">
+                      <p className={sectionLabelClass}>{t('peopleSaid')}</p>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        {homeRoomAnswers.map((answer) => (
+                          <RoomAnswerCard key={answer.userId} answer={answer} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    <Link href={`/room?question=${currentRoomQuestion.id}`} className={secondaryButtonClass}>
+                      {t('moreAnswers')}
+                    </Link>
+                    <Link href="/room#read-the-room" className={quietLinkClass}>
+                      {t('findWriter')} →
+                    </Link>
+                  </div>
+                </section>
+              )}
+
               {homeBoardItems.length > 0 && (
                 <section aria-labelledby="home-board-heading">
                   <div className="flex items-center justify-between gap-3">
@@ -205,29 +316,7 @@ export default async function HomePage() {
                   </div>
                   <div className="mt-3 grid gap-4 md:grid-cols-3">
                     {homeBoardItems.map((dispatch) => (
-                      <BoardShelfCard
-                        key={dispatch.id}
-                        dispatch={dispatch}
-                        trailQuery={trailQueryFor(dispatch)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {showWorthKnowing && (
-                <section aria-labelledby="worth-knowing-heading">
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className={sectionLabelClass}>Worth Knowing</p>
-                      <h2 id="worth-knowing-heading" className="sr-only">People worth knowing</h2>
-                      <p className={`mt-1 ${helperTextClass}`}>A few people, encountered through their words.</p>
-                    </div>
-                    <Link href="/room" className={quietLinkClass}>Read the Room</Link>
-                  </div>
-                  <div className="mt-3 grid gap-4 md:grid-cols-3">
-                    {recommended.map((mind) => (
-                      <RecommendedMindCard key={mind.userId} mind={mind} />
+                      <BoardShelfCard key={dispatch.id} dispatch={dispatch} trailQuery={trailQueryFor(dispatch)} />
                     ))}
                   </div>
                 </section>
@@ -237,10 +326,7 @@ export default async function HomePage() {
 
           {activeAnnouncement && (
             <div className="mx-auto mt-14 w-full max-w-md">
-              <AnnouncementTeaser
-                announcement={activeAnnouncement}
-                imageUrl={announcementImageUrl}
-              />
+              <AnnouncementTeaser announcement={activeAnnouncement} imageUrl={announcementImageUrl} />
             </div>
           )}
         </div>

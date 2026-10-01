@@ -32,17 +32,17 @@ function fakeClient(result: { data: unknown; error: unknown }) {
 }
 
 describe('getDiscoveryPage — one bounded RPC', () => {
-  it('makes exactly one discover_people call and never touches a table', async () => {
+  it('makes exactly one discover_people_v2 call and never touches a table', async () => {
     const { client, calls } = fakeClient({ data: { eligible_count: 3, filtered_count: 3, entries: [entry(1)] }, error: null })
     await getDiscoveryPage(client)
     expect(calls).toHaveLength(1)
-    expect(calls[0].fn).toBe('discover_people')
+    expect(calls[0].fn).toBe('discover_people_v2')
   })
 
   it('defaults to the six-per-batch window and passes filters/offset through', async () => {
     const { client, calls } = fakeClient({ data: { entries: [] }, error: null })
     await getDiscoveryPage(client, { country: 'KE', gender: 'Man', ageRange: '35-44', offset: 12 })
-    expect(calls[0].args).toEqual({ p_country: 'KE', p_gender: 'Man', p_age_range: '35-44', p_offset: 12, p_limit: DISCOVERY_BATCH_SIZE })
+    expect(calls[0].args).toEqual({ p_country: 'KE', p_gender: 'Man', p_age_range: '35-44', p_offset: 12, p_limit: DISCOVERY_BATCH_SIZE, p_question_id: null, p_exclude_user_ids: [], p_browse_started_at: null })
   })
 
   it('treats empty filter strings as "no filter"', async () => {
@@ -84,7 +84,7 @@ describe('getDiscoveryPage — one bounded RPC', () => {
 
   it('degrades to an empty page (calm empty state) on RPC error', async () => {
     const { client } = fakeClient({ data: null, error: { message: 'boom' } })
-    expect(await getDiscoveryPage(client)).toEqual({ candidates: [], eligibleCount: 0, filteredCount: 0 })
+    expect(await getDiscoveryPage(client)).toEqual({ candidates: [], eligibleCount: 0, filteredCount: 0, fairRankingApplied: false, browseStartedAt: null })
   })
 })
 
@@ -95,5 +95,42 @@ describe('genderDisplay', () => {
     expect(genderDisplay('Self-describe', 'Agender')).toBe('Agender')
     expect(genderDisplay('Self-describe', '')).toBeNull()
     expect(genderDisplay('Woman', null)).toBe('Woman')
+  })
+})
+
+
+describe('discovery rollout and browse continuity', () => {
+  it('uses legacy paging for ordinary discovery if V2 is unavailable', async () => {
+    const calls: string[] = []
+    const client = { rpc: async (fn: string) => {
+      calls.push(fn)
+      return fn === 'discover_people_v2' ? { data: null, error: { code: '42883' } } : { data: { entries: [entry(1)] }, error: null }
+    } } as unknown as SupabaseClient
+    const page = await getDiscoveryPage(client)
+    expect(calls).toEqual(['discover_people_v2', 'discover_people'])
+    expect(page.candidates).toHaveLength(1)
+    expect(page.fairRankingApplied).toBe(false)
+  })
+
+  it('never labels generic discovery as answers to a specific Question', async () => {
+    const { client, calls } = fakeClient({ data: null, error: { code: '42883' } })
+    const page = await getDiscoveryPage(client, { questionId: 'live-question' })
+    expect(page.candidates).toEqual([])
+    expect(calls).toHaveLength(1)
+  })
+
+  it('carries the database browse timestamp into the next request', async () => {
+    const started = '2026-10-01T11:00:00+00:00'
+    const { client, calls } = fakeClient({ data: { entries: [], browse_started_at: started }, error: null })
+    const first = await getDiscoveryPage(client)
+    await getDiscoveryPage(client, { browseStartedAt: first.browseStartedAt!, offset: 6 })
+    expect(first.browseStartedAt).toBe(started)
+    expect(calls[1].args.p_browse_started_at).toBe(started)
+  })
+
+  it('normalizes invalid numeric limits and offsets', async () => {
+    const { client, calls } = fakeClient({ data: { entries: [] }, error: null })
+    await getDiscoveryPage(client, { limit: NaN, offset: Infinity })
+    expect(calls[0].args).toMatchObject({ p_limit: 6, p_offset: 0 })
   })
 })
