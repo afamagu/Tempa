@@ -55,7 +55,7 @@ export default async function YourArchivePage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
 
-  const [waitingCount, dispatchResult, topicResult, replyResult, pinnedResult, eligibleQuestions, myAnswers, writingStyleId] = await Promise.all([
+  const [waitingCount, dispatchResult, pinnedResult, eligibleQuestions, myAnswers, writingStyleId] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     supabase
       .from('dispatches')
@@ -64,12 +64,6 @@ export default async function YourArchivePage({
       .eq('published_as', 'member')
       .eq('status', 'published')
       .order('published_at', { ascending: false }),
-    supabase
-      .from('dispatch_topics')
-      .select('dispatch_id, topic'),
-    supabase
-      .from('dispatch_replies')
-      .select('dispatch_id'),
     supabase
       .from('profiles')
       .select('pinned_dispatch_id')
@@ -81,18 +75,24 @@ export default async function YourArchivePage({
   ])
 
   const dispatches = (dispatchResult.data ?? []) as ArchiveDispatchRow[]
-  const dispatchIds = new Set(dispatches.map((row) => row.id))
+  const dispatchIdList = dispatches.map((row) => row.id)
+  const [topicResult, replyResult] = dispatchIdList.length > 0
+    ? await Promise.all([
+        supabase.from('dispatch_topics').select('dispatch_id, topic').in('dispatch_id', dispatchIdList),
+        // UI hint only. The mutation RPCs remain authoritative because
+        // Reply RLS can hide a moderated Reply from this read.
+        supabase.from('dispatch_replies').select('dispatch_id').in('dispatch_id', dispatchIdList),
+      ])
+    : [{ data: [] }, { data: [] }]
+
   const topicsByDispatch = new Map<string, string[]>()
   for (const row of (topicResult.data ?? []) as { dispatch_id: string; topic: string }[]) {
-    if (!dispatchIds.has(row.dispatch_id)) continue
     const topics = topicsByDispatch.get(row.dispatch_id) ?? []
     topics.push(row.topic)
     topicsByDispatch.set(row.dispatch_id, topics)
   }
   const replyDispatchIds = new Set(
-    ((replyResult.data ?? []) as { dispatch_id: string }[])
-      .map((row) => row.dispatch_id)
-      .filter((id) => dispatchIds.has(id))
+    ((replyResult.data ?? []) as { dispatch_id: string }[]).map((row) => row.dispatch_id)
   )
   const pinnedDispatchId = pinnedResult.data?.pinned_dispatch_id ?? null
   const dispatchGroups = groupDispatches(dispatches)
