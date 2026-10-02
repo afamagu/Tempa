@@ -171,30 +171,11 @@ describe('MomentsComposer — Preview wiring (I/J/P/Q)', () => {
   })
 })
 
-// Pre-migration audit correction (2026-09-14), Part 4 — a blank sender-
-// written back must block the actual Send action, but never block
-// opening Preview itself (which is still draft-time reading).
-describe('MomentsComposer — blank-back Send guard (audit correction, Part 4)', () => {
-  it('computes postcardNeedsMessage from the draft\'s own trimmed backMessage', () => {
-    expect(source).toContain(
-      'const postcardNeedsMessage = Boolean(postcardDraft && postcardDraft.backMessage.trim().length === 0)'
-    )
-  })
-
-  it('handleSend refuses to proceed while postcardNeedsMessage is true', () => {
-    expect(source).toContain('if (!editor || !canSend || postcardNeedsMessage) return')
-  })
-
-  it('postcardNeedsMessage is NOT folded into canSend — Preview letter itself stays unaffected by a blank back', () => {
-    const canSendStart = source.indexOf('const canSend =')
-    const canSendEnd = source.indexOf('const postcardNeedsMessage')
-    const canSendBody = source.slice(canSendStart, canSendEnd)
-    expect(canSendBody).not.toContain('postcardNeedsMessage')
-  })
-
-  it('passes a restrained instruction, not a raw boolean, through to LetterPreview\'s own sendBlockedReason prop', () => {
-    expect(source).toContain('sendBlockedReason={')
-    expect(source).toContain('Write something on the back of your postcard before sending.')
+describe('MomentsComposer — postcard notes are optional', () => {
+  it('does not block sending because the postcard has no written note', () => {
+    expect(source).not.toContain('postcardNeedsMessage')
+    expect(source).toContain('if (!editor || !canSend) return')
+    expect(source).not.toContain('Write something on the back of your postcard before sending.')
   })
 })
 
@@ -245,7 +226,7 @@ describe('MomentsComposer — legacy postcardMoment migration on restore (audit 
     expect(source).toContain('if (current) return current')
   })
 
-  it('the migrated draft starts with a blank back message, which the blank-back Send guard above will correctly catch', () => {
+  it('the migrated draft starts with an optional blank back message', () => {
     const migrateStart = source.indexOf('const migrated: LetterPostcardDraft = {')
     const migrateEnd = source.indexOf('writeLetterPostcardDraft(draftKey, migrated)')
     const migrateBody = source.slice(migrateStart, migrateEnd)

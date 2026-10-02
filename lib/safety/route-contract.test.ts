@@ -190,14 +190,14 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
       expect(result.ok).toBe(false)
     })
 
-    it('rejects a postcard with a missing/blank backMessage', () => {
+    it('accepts a postcard with a blank backMessage', () => {
       const result = parseEvaluateRequest({
         surface: 'reply',
         letterId: LETTER_ID,
         body: 'Thanks!',
         postcard: { postcardKey: 'seaside', backMessage: '   ' },
       })
-      expect(result.ok).toBe(false)
+      expect(result.ok).toBe(true)
     })
 
     it('rejects a non-object postcard', () => {

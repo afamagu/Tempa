@@ -247,9 +247,6 @@ export function simulatePostcardValidation(
   }
 
   const trimmedBackMessage = (postcard.backMessage ?? '').trim()
-  if (trimmedBackMessage.length === 0) {
-    throw new PostcardValidationError('A Postcard needs its own written message before it can be sent.')
-  }
   // Smoke-test contract completion checkpoint: 200 -> 300.
   if (trimmedBackMessage.length > 300) {
     throw new PostcardValidationError("A Postcard's back message is too long.")

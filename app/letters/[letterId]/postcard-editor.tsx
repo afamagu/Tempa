@@ -135,7 +135,7 @@ export default function PostcardEditor({
                 }}
                 initialShowingBack={startOnBack}
               />
-              <p className={helperTextClass}>Turn over to write on the back.</p>
+              <p className={helperTextClass}>Turn over to add a note, if you like.</p>
             </>
           ) : (
             <p className={helperTextClass}>This postcard is no longer available.</p>

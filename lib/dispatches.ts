@@ -1097,7 +1097,7 @@ export async function publishDispatch(
       ? {
           postcard_key: input.postcard.postcardKey,
           reveal_line: input.postcard.revealLine.trim().length > 0 ? input.postcard.revealLine : null,
-          back_message: input.postcard.backMessage.trim().length > 0 ? input.postcard.backMessage : null,
+          back_message: input.postcard.backMessage,
         }
       : null,
     p_warning_acknowledged: input.warningAcknowledged ?? false,
@@ -1253,7 +1253,7 @@ export async function publishOfficialDispatch(
       ? {
           postcard_key: input.postcard.postcardKey,
           reveal_line: input.postcard.revealLine.trim().length > 0 ? input.postcard.revealLine : null,
-          back_message: input.postcard.backMessage.trim().length > 0 ? input.postcard.backMessage : null,
+          back_message: input.postcard.backMessage,
         }
       : null,
     ...sponsorRpcArgs(input.publishedAs, input.sponsor),

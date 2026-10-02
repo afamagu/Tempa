@@ -824,12 +824,6 @@ export function createFakeDispatches(options: {
           return { data: null, error: { message: "A Postcard's Reveal Line is too long.", code: 'P0001' } }
         }
         const backMessage = (postcardInput.back_message ?? '').trim()
-        if (backMessage.length === 0) {
-          return {
-            data: null,
-            error: { message: 'A Postcard needs its own written message before it can be published.', code: 'P0001' },
-          }
-        }
         // Smoke-test contract completion checkpoint: 200 -> 300.
         if (backMessage.length > 300) {
           return { data: null, error: { message: "A Postcard's back message is too long.", code: 'P0001' } }

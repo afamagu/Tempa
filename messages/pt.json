@@ -437,5 +437,15 @@
     "done": "Concluído",
     "next": "Seguinte →",
     "writeTo": "Escrever a {name}"
+  },
+  "Introduction": {
+    "title": "Deixe que conheçam a sua voz.",
+    "body": "A sua apresentação dá às pessoas um motivo para lhe escrever. Bastam algumas linhas sinceras.",
+    "answer": "Escrever a minha apresentação",
+    "notNow": "Agora não",
+    "later": "Explorar o Tempa — responder mais tarde",
+    "laterBody": "Pode explorar primeiro. A sua resposta ajudará as pessoas a descobri-lo quando estiver pronto.",
+    "working": "A continuar…",
+    "continueError": "Não foi possível continuar. Tente novamente."
   }
 }
