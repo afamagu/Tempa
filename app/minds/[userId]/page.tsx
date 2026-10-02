@@ -70,7 +70,10 @@ export default async function PublicProfilePage({
   const { userId } = await params
   const { returnTo, answer: selectedAnswerId } = await searchParams
   const originReturn = introductionReturnPath(returnTo)
-  const profileReturn = originReturn ? `/room/${userId}?returnTo=${encodeURIComponent(originReturn)}` : null
+  const profileContext = new URLSearchParams()
+  if (originReturn) profileContext.set('returnTo', originReturn)
+  if (typeof selectedAnswerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedAnswerId)) profileContext.set('answer', selectedAnswerId)
+  const profileReturn = profileContext.size ? `/room/${userId}?${profileContext}` : null
   const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
   const supabase = await createClient()
   const { data: { user: viewer } } = await supabase.auth.getUser()
@@ -109,7 +112,7 @@ export default async function PublicProfilePage({
   const [{ data: memberQuestions }, { data: legacyQuestions }, { data: eligibleAnswers }, incomingFirstContact] = await Promise.all([
     supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
     isSelf ? supabase.rpc('my_unpublished_question_suggestions') : Promise.resolve({ data: [] }),
-    supabase.from('question_answers').select('id, questions!inner(is_active)').eq('user_id', userId).eq('is_current', true).eq('moderation_status', 'visible').eq('questions.is_active', true).limit(1),
+    supabase.from('question_answers').select('id, questions!inner(is_active)').eq('user_id', userId).eq('is_current', true).eq('moderation_status', 'visible').eq('questions.is_active', true).limit(12),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, userId, viewer.id),
   ])
   const writingStyleId = writingStyles.get(userId) ?? null
@@ -120,12 +123,13 @@ export default async function PublicProfilePage({
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const primaryWriteAnchor = eligibleAnswers?.find(a => a.id === primaryAnswer?.id) ?? eligibleAnswers?.[0] ?? null
   const alreadyCorresponding = activePartnerIds.has(userId)
-  const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryAnswer.id) : false
+  const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryWriteAnchor?.id ?? primaryAnswer.id) : false
   const showWriteToMind = canWriteToMind({
     isSelf,
     alreadyCorresponding,
-    hasCurrentAnswer: primaryAnswer !== null,
+    hasCurrentAnswer: primaryWriteAnchor !== null,
     currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted || firstContact !== null,
   })
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
@@ -210,8 +214,8 @@ export default async function PublicProfilePage({
 
           {!isSelf && (
             <div className="space-y-3">
-              {showWriteToMind && primaryAnswer ? (
-                <Link href={`/write/${profile.id}?a=${primaryAnswer.id}&source=room_profile${writeReturnQuery}`} className={primaryButtonClass}>
+              {showWriteToMind && primaryWriteAnchor ? (
+                <Link href={`/write/${profile.id}?a=${primaryWriteAnchor.id}&source=room_profile${writeReturnQuery}`} className={primaryButtonClass}>
                   Write to {profile.pseudonym}
                 </Link>
               ) : alreadyCorresponding ? (

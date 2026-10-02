@@ -14,6 +14,7 @@ export default function QuestionSuggestionForm() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const [pendingReview, setPendingReview] = useState(false)
   const [warning, setWarning] = useState<{ copyKey?: string } | null>(null)
 
   async function submit(acknowledged = false) {
@@ -30,6 +31,7 @@ export default function QuestionSuggestionForm() {
       if (result.error) { setError(result.error); return }
       if (result.warning) { setWarning({ copyKey: result.copyKey }); return }
       setWarning(null)
+      setPendingReview(result.pending === true)
       setSent(true)
       setQuestion('')
     } catch {
@@ -43,7 +45,9 @@ export default function QuestionSuggestionForm() {
     return (
       <div className="border-t border-foreground/10 pt-6">
         <p className="font-serif text-lg text-foreground">{t('thanks')}</p>
-        <p className={`mt-1 ${helperTextClass}`}>Your question is saved. Manage it on your profile. Questions awaiting review appear there only to you.</p>
+        <p className={`mt-1 ${helperTextClass}`}>{pendingReview
+          ? 'Your question is saved and awaiting review. Only you can see it until it is approved. Manage it on your profile.'
+          : 'Your question is on your profile. Other members can write to you about it, and Tempa may select it for the Room. Manage it on your profile.'}</p>
       </div>
     )
   }
@@ -70,7 +74,7 @@ export default function QuestionSuggestionForm() {
             <input type="checkbox" checked={credit} onChange={(event) => setCredit(event.target.checked)} className="mt-1" />
             <span>Show my name and Mark if this becomes the Room question.</span>
           </label>
-          <p className={helperTextClass}>Your question will also appear on your profile, inviting people to write to you. You can hide or remove it there.</p>
+          <p className={helperTextClass}>Your question will also appear on your profile, inviting people to write to you. Up to three questions are shown; older questions stay saved. You can hide or remove a question on your profile.</p>
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => { setOpen(false); setError(null) }} disabled={busy} className={secondaryButtonClass}>

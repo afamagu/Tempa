@@ -8,7 +8,7 @@ import { publishMemberQuestion } from './actions'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import { helperTextClass, quietLinkClass, secondaryButtonClass, sectionLabelClass } from '@/app/profile/ui'
 
-export type ProfileQuestion = { id: string; body: string; is_profile_visible: boolean; moderation_status: string; withdrawn_at: string | null; credit_if_used: boolean; selected: boolean }
+export type ProfileQuestion = { id: string; body: string; is_profile_visible: boolean; moderation_status: string; withdrawn_at: string | null; credit_if_used: boolean; selected: boolean; created_at?: string }
 type LegacyQuestion = { id: string; body: string; credit_if_used: boolean }
 
 export default function ProfileQuestions({ ownerId, name, own, initial, legacy, writeHref, returnTo, pendingLetterHref }: {
@@ -52,13 +52,14 @@ export default function ProfileQuestions({ ownerId, name, own, initial, legacy, 
       setRows(previous => [...previous, ...next.filter(q => !previous.some(p => p.id === q.id))])
       setHasMore(next.length === 12)
       setVisibleCount(count => count + 3)
-    } finally { setBusy(false) }
+    } catch { setError('Could not load more questions. Please try again.') } finally { setBusy(false) }
   }
   if (!rows.length && !(own && legacy.length)) return null
   return <section className="space-y-5 border-t border-foreground/10 pt-6">
     <h2 className={sectionLabelClass}>{own ? 'Your questions' : (rows.length === 1 ? `A question from ${name}` : `Questions from ${name}`)}</h2>
     {rows.slice(0, visibleCount).map(q => <article key={q.id} className="space-y-3 rounded-md border border-foreground/10 p-4">
       <p className="whitespace-pre-wrap font-serif text-lg leading-relaxed">{q.body}</p>
+      {q.created_at && <time dateTime={q.created_at} className={helperTextClass}>{new Date(q.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}</time>}
       {q.selected && <p className={helperTextClass}>Selected for the Room</p>}
       {own ? <>
         <p className={helperTextClass}>{q.withdrawn_at ? 'Removed from your profile and future consideration.' : q.moderation_status === 'pending' ? 'Awaiting review. Only you can see this question.' : q.moderation_status === 'hidden' ? 'Hidden by TEMPA.' : q.is_profile_visible ? 'Visible on your profile.' : 'Hidden from your profile.'}</p>
@@ -69,7 +70,7 @@ export default function ProfileQuestions({ ownerId, name, own, initial, legacy, 
         </div>}
       </> : writeHref ? <Link className={secondaryButtonClass} href={`${writeHref}${writeHref.includes('?') ? '&' : '?'}mq=${encodeURIComponent(q.id)}&returnTo=${encodeURIComponent(returnTo)}`}>Write to {name} about this</Link> : pendingLetterHref ? <Link href={pendingLetterHref} className={secondaryButtonClass}>Continue through your existing letter</Link> : <p className={helperTextClass}>Writing will be available when a current response is published.</p>}
     </article>)}
-    {(hasMore || visibleCount < rows.length) && <button disabled={busy} onClick={() => void more()} className={secondaryButtonClass}>More questions</button>}
+    {own && (hasMore || visibleCount < rows.length) && <button disabled={busy} onClick={() => void more()} className={secondaryButtonClass}>Your question history</button>}
     {own && legacy.length > 0 && <details className="space-y-3"><summary className="cursor-pointer text-sm text-foreground/65">Your earlier private suggestions ({legacy.length})</summary>
       <p className={helperTextClass}>Your earlier suggestions remain private. Choose which ones to show on your profile.</p>
       {legacy.map(q => <div key={q.id} className="space-y-2 border-t border-foreground/10 pt-3"><p className="whitespace-pre-wrap font-serif">{q.body}</p><button disabled={busy} className={quietLinkClass} onClick={() => void showLegacy(q)}>Show on my profile</button></div>)}

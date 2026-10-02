@@ -24,4 +24,12 @@ describe('profile questions', () => {
     expect(html).toContain('href="/letters/existing"')
     expect(html).not.toContain('/write/')
   })
+  it('shows dates and at most three questions to visitors, with history controls only for the owner', () => {
+    const initial=Array.from({length:4},(_,n)=>({...question,id:`q${n}`,body:`Question ${n}`,created_at:'2026-10-01T00:00:00Z'}))
+    const visitor=renderToStaticMarkup(<ProfileQuestions {...common} initial={initial} own={false} writeHref="/write/member-id?a=real-answer" />)
+    expect(visitor).toContain('1 October 2026');expect(visitor).not.toContain('Question 3')
+    expect(visitor).not.toContain('Your question history')
+    const owner=renderToStaticMarkup(<ProfileQuestions {...common} initial={initial} own writeHref={null} />)
+    expect(owner).toContain('Your question history')
+  })
 })

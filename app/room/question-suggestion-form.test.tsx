@@ -41,6 +41,13 @@ describe('public member questions with editorial submission', () => {
     await act(async () => button(en.RoomEngagement.sendSuggestion).click())
     expect(rpc).toHaveBeenCalledWith('What has stayed with you this year?', true, false)
     expect(host.textContent).toContain('Manage it on your profile')
+    expect(host.textContent).toContain('Other members can write to you about it')
+  })
+  it('describes pending moderation as private until approved', async () => {
+    rpc.mockResolvedValue({ saved: true, pending: true })
+    await writeQuestion('What has stayed with you this year?')
+    await act(async () => button(en.RoomEngagement.sendSuggestion).click())
+    expect(host.textContent).toContain('Only you can see it until it is approved')
   })
   it('requires an explicit acknowledgement before publishing warned text', async () => {
     rpc.mockResolvedValueOnce({ warning: true }).mockResolvedValueOnce({ saved: true })
