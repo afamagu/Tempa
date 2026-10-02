@@ -97,7 +97,7 @@ export default function AppShell({
   const activeNav: NavKey = active === 'minds' ? 'room' : active
 
   return (
-    <div className="sm:flex sm:min-h-screen">
+    <div className="tempa-shell w-full min-w-0 max-w-full sm:flex sm:min-h-screen">
       <nav className="hidden sm:flex sm:w-56 sm:shrink-0 sm:flex-col sm:border-r sm:border-foreground/10 sm:px-4 sm:py-8">
         <div className="flex items-center gap-2 px-2 pb-8">
           <TempaEmblem size={28} />
@@ -125,7 +125,7 @@ export default function AppShell({
         </div>
       </nav>
 
-      <div className="flex-1 pb-16 sm:pb-0">{children}</div>
+      <div className="min-w-0 max-w-full flex-1 pb-16 sm:pb-0">{children}</div>
 
       <MemberIntroductions enabled={activeNav === 'home'} />
 
