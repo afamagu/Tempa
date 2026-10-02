@@ -1,4 +1,5 @@
 import type { Moment, MomentDraft } from './moments'
+import { groupDispatchMoments } from './dispatch-moments'
 
 // The plain-JSON shape of the composer's Tiptap/ProseMirror document —
 // deliberately a hand-written type, not an import of ProseMirror's own
@@ -409,7 +410,7 @@ export function docToMomentDrafts(doc: LetterDocJSON): MomentDraft[] {
  * where the writer placed it instead of jumping below the next passage.
  * A Moment can never be silently dropped for landing "out of range".
  */
-export function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] {
+function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] {
   const survivingRawIndices: number[] = []
   paragraphs.forEach((paragraph, rawIndex) => {
     if (paragraphPlainText(paragraph).trim().length > 0) survivingRawIndices.push(rawIndex)
@@ -697,18 +698,18 @@ export function dispatchBodyToDoc(
   const doc = markupBodyToLetterDoc(body)
   if (moments.length === 0) return doc
 
-  const momentByPosition = new Map(moments.map((m) => [m.position, m]))
+  const momentsByPosition = groupDispatchMoments(moments)
 
   return {
     ...doc,
     content: (doc.content ?? []).map((paragraph, index) => {
-      const moment = momentByPosition.get(index)
-      if (!moment) return paragraph
+      const passageMoments = momentsByPosition.get(index)
+      if (!passageMoments) return paragraph
       return {
         ...paragraph,
         content: [
           ...(paragraph.content ?? []),
-          { type: 'photoMoment', attrs: { imagePath: moment.imagePath, previewUrl: moment.previewUrl } },
+          ...passageMoments.map(moment => ({ type: 'photoMoment' as const, attrs: { imagePath: moment.imagePath, previewUrl: moment.previewUrl } })),
         ],
       }
     }),

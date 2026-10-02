@@ -796,6 +796,7 @@ export async function getDispatchMoments(
     .select('id, position, image_path')
     .eq('dispatch_id', dispatchId)
     .order('position', { ascending: true })
+    .order('attachment_order', { ascending: true })
 
   const rows = (data ?? []) as { id: string; position: number; image_path: string }[]
   if (rows.length === 0) return []
@@ -834,6 +835,7 @@ export async function getFirstMomentThumbnails(
     .select('dispatch_id, position, image_path')
     .in('dispatch_id', dispatchIds)
     .order('position', { ascending: true })
+    .order('attachment_order', { ascending: true })
 
   const rows = (data ?? []) as { dispatch_id: string; position: number; image_path: string }[]
   const firstPathByDispatchId = new Map<string, string>()
@@ -877,6 +879,7 @@ export async function getDispatchMomentsForEditing(
     .select('position, image_path')
     .eq('dispatch_id', dispatchId)
     .order('position', { ascending: true })
+    .order('attachment_order', { ascending: true })
 
   const rows = (data ?? []) as { position: number; image_path: string }[]
   if (rows.length === 0) return []

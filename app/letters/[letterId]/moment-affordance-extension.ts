@@ -24,6 +24,10 @@ export function canReuseMomentDecorations(
 }
 
 export type MomentAffordanceOptions = {
+  /** Dispatches allow more than one photo in a passage; letters keep their current rule. */
+  allowMultiplePhotos: boolean
+  /** Dispatches offer attachment controls at every paragraph, including the active one. */
+  allParagraphs: boolean
   /** False while photo attachment isn't currently allowed at all (see
    * canSendPhoto in moments-composer.tsx) — the affordance simply never
    * renders rather than opening onto a dead end. */
@@ -64,6 +68,8 @@ export const MomentAffordance = Extension.create<MomentAffordanceOptions>({
   addOptions() {
     return {
       enabled: false,
+      allowMultiplePhotos: false,
+      allParagraphs: false,
       onRequestPhoto: () => {},
     }
   },
@@ -135,13 +141,13 @@ export const MomentAffordance = Extension.create<MomentAffordanceOptions>({
               const thisIndex = index
               index += 1
 
-              if (thisIndex >= activeIndex) return // not finished yet
+              if (!extensionOptions.allParagraphs && thisIndex >= activeIndex) return // not finished yet
 
               let hasPhoto = false
               node.forEach((child) => {
                 if (child.type.name === 'photoMoment') hasPhoto = true
               })
-              if (hasPhoto) return
+              if (hasPhoto && !extensionOptions.allowMultiplePhotos) return
 
               const pos = offset + node.nodeSize - 1
               const distance = activeIndex - thisIndex
