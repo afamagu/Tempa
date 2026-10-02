@@ -51,4 +51,15 @@ describe('DispatchBody', () => {
     const html = renderToStaticMarkup(<DispatchBody body={'A Dispatch.'} moments={[]} />)
     expect(html.toLowerCase()).not.toContain('postcard')
   })
+
+  it('renders every photo attached to the same passage, in input order', () => {
+    const html = renderToStaticMarkup(<DispatchBody body={'Before.\n\nAfter.'} moments={[
+      { id: 'a', position: 0, imageUrl: 'https://example.com/first.jpg' },
+      { id: 'b', position: 0, imageUrl: 'https://example.com/second.jpg' },
+      { id: 'c', position: 1, imageUrl: 'https://example.com/third.jpg' },
+    ]} />)
+    expect(html.lastIndexOf('first.jpg')).toBeLessThan(html.lastIndexOf('second.jpg'))
+    expect(html.lastIndexOf('second.jpg')).toBeLessThan(html.indexOf('After.'))
+    expect(html.lastIndexOf('third.jpg')).toBeGreaterThan(html.indexOf('After.'))
+  })
 })

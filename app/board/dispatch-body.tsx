@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { splitParagraphs } from '@/lib/moments'
+import { groupDispatchMoments } from '@/lib/dispatch-moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 import FormattedText from '@/app/letters/formatted-text'
 import PhotoMomentToken from '@/app/letters/[letterId]/photo-moment-token'
@@ -50,7 +51,7 @@ export default function DispatchBody({
 
   const { isRich, body: cleanBody } = stripRichBodyMarker(body)
   const paragraphs = splitParagraphs(cleanBody)
-  const momentByPosition = new Map(moments.map((m) => [m.position, m]))
+  const momentsByPosition = groupDispatchMoments(moments)
   // Writing Style — presentation-only roles (see lib/writing-style.ts).
   const { roles } = composeProse(paragraphs, isRich)
   const readerViewOffered = offersReaderView(writingStyleId, cleanBody)
@@ -84,7 +85,7 @@ export default function DispatchBody({
       )}
       <AuthoredProse styleId={writingStyleId} mode={mode} opening measure>
         {paragraphs.map((paragraph, index) => {
-          const moment = momentByPosition.get(index)
+          const passageMoments = momentsByPosition.get(index) ?? []
           return (
             <p
               key={index}
@@ -93,10 +94,10 @@ export default function DispatchBody({
               {...(paragraphAttrs?.(index) ?? {})}
             >
               <FormattedText text={paragraph} isRich={isRich} />
-              {moment?.imageUrl && (
-                <span className="wp-interface">
+              {passageMoments.filter(moment => moment.imageUrl).map(moment => (
+                <span key={moment.id} className="wp-interface">
                   <PhotoMomentToken
-                    src={moment.imageUrl}
+                    src={moment.imageUrl as string}
                     onOpen={() =>
                       setOpenPhoto({
                         src: moment.imageUrl as string,
@@ -106,7 +107,7 @@ export default function DispatchBody({
                     }
                   />
                 </span>
-              )}
+              ))}
             </p>
           )
         })}
