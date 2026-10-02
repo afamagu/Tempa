@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { makeCurrentRoomQuestion, type AdminQuestion } from '@/lib/admin-questions'
+import { startRoomQuestion, type AdminQuestion } from '@/lib/admin-questions'
 import { primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import { adminBadgeClass, adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
 
@@ -19,11 +19,11 @@ export default function RoomQuestionControl({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function makeCurrent() {
-    if (!selectedId || selectedId === current?.id) return
+  async function makeCurrent(restart = false) {
+    if (!selectedId || (!restart && selectedId === current?.id)) return
     setBusy(true)
     setError(null)
-    const { error: actionError } = await makeCurrentRoomQuestion(createClient(), selectedId)
+    const { error: actionError } = await startRoomQuestion(createClient(), restart && current ? current.id : selectedId, restart)
     setBusy(false)
     if (actionError) {
       setError(actionError.message || 'Could not change the current Room Question.')
@@ -52,6 +52,11 @@ export default function RoomQuestionControl({
         <p className={adminMetadataClass}>Members will not see a weekly Room Question until one is selected.</p>
       )}
 
+      {current && <div className="space-y-2">
+        <p className={adminMetadataClass}>Starting a fresh week keeps the wording and archives existing answers. Members answer again on a blank page.</p>
+        <button type="button" disabled={busy} className={secondaryButtonClass} onClick={() => makeCurrent(true)}>Start a fresh week with this question</button>
+      </div>}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {candidates.length > 0 && (
         <div className="space-y-2">
           <label className="block text-xs font-medium uppercase tracking-wider text-foreground/55" htmlFor="room-question-select">
@@ -68,13 +73,12 @@ export default function RoomQuestionControl({
               <option key={question.id} value={question.id}>{question.prompt}</option>
             ))}
           </select>
-          {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className={primaryButtonClass}
               disabled={busy || !selectedId || selectedId === current?.id}
-              onClick={makeCurrent}
+              onClick={() => makeCurrent()}
             >
               {busy ? 'Changing…' : 'Make this the current Room Question'}
             </button>

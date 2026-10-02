@@ -17,21 +17,22 @@ function client(pages: ReturnType<typeof answer>[][], readIds: string[] = [], fa
   return { supabase: { from, rpc: vi.fn(async (_name, args) => ({data: args.p_author !== 'u-deactivated',error:null})) } as unknown as SupabaseClient, calls }
 }
 describe('Home question answers', () => {
-  it('shows at most three unread answers to this question in returned chronological order', async () => {
-    const c = client([[answer('read'),answer('old','old-question'),answer('hidden'),answer('deactivated'),answer('a'),answer('b'),answer('c'),answer('d')]],['read'])
+  it('keeps the newest three visible answers even after reading', async () => {
+    const c = client([[answer('old','old-question'),answer('hidden'),answer('deactivated'),answer('a'),answer('b'),answer('c'),answer('d')]],['read'])
     const result = await getHomeQuestionAnswers(c.supabase,'viewer',{id:'current',prompt:'This week'})
     expect(result.map(a => a.answerId)).toEqual(['a','b','c'])
     expect(result.every(a => a.prompt === 'This week')).toBe(true)
     expect(c.calls).toContainEqual(['question_answers','eq','question_id','current'])
-    expect(c.calls).toContainEqual(['member_answer_reads','eq','viewer_id','viewer'])
+    expect(c.calls.some(c => c[0] === 'member_answer_reads')).toBe(false)
+    expect(c.calls).toContainEqual(['question_answers','order','created_at',{ascending:false}])
+    expect(c.calls.some(c => c[1] === 'neq')).toBe(false)
     expect(c.calls.some(c => c[0] === 'correspondences')).toBe(false)
   })
-  it('continues beyond a full page of read answers', async () => {
-    const first = Array.from({length:48},(_,i)=>answer(`read${i}`))
-    const c = client([first,[answer('unread')]],first.map(a=>a.id))
-    expect((await getHomeQuestionAnswers(c.supabase,'viewer',{id:'current',prompt:'Q'})).map(a=>a.answerId)).toEqual(['unread'])
+  it('does not remove answers after they have been read', async () => {
+    const c = client([[answer('a'),answer('b'),answer('c')]],['a','b','c'])
+    expect((await getHomeQuestionAnswers(c.supabase,'viewer',{id:'current',prompt:'Q'})).map(a=>a.answerId)).toEqual(['a','b','c'])
   })
-  it.each(['question_answers','member_answer_reads','public_profiles'])('fails closed if %s cannot be read',async fail=>{
+  it.each(['question_answers','public_profiles'])('fails closed if %s cannot be read',async fail=>{
     const c=client([[answer('a')]],[],fail)
     expect(await getHomeQuestionAnswers(c.supabase,'viewer',{id:'current',prompt:'Q'})).toEqual([])
   })

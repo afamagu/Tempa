@@ -18,7 +18,7 @@ export default async function RoomAnswerCard({ answer }: { answer: HomeRoomAnswe
   const t = await getTranslations('RoomEngagement')
   return (
     <Link
-      href={`/room/${answer.userId}?returnTo=%2Fhome${answer.answerId ? `&answer=${encodeURIComponent(answer.answerId)}` : ''}`}
+      href={`/room/${answer.userId}?returnTo=%2Fhome${answer.answerId ? `&reading=1&answer=${encodeURIComponent(answer.answerId)}` : ''}`}
       className="group block rounded-lg border border-foreground/10 p-5 transition-colors hover:border-foreground/20 hover:bg-foreground/[.015]"
     >
       <div className="flex items-center gap-3">

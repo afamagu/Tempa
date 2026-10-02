@@ -9,8 +9,8 @@ import path from 'node:path'
 const source = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8')
 
 describe('Question write page — response-management redirect target', () => {
-  it('redirects to /you/responses (never the retired /minds?view=answer) when the requested Question no longer exists', () => {
-    expect(source).toContain("redirect('/you/responses?tab=new')")
+  it('redirects to /room (never the retired /minds?view=answer) when the requested Question no longer exists', () => {
+    expect(source).toContain("redirect('/room')")
     expect(source).not.toContain('/minds?view=answer')
   })
 })
