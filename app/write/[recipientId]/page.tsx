@@ -57,11 +57,11 @@ export default async function WriteToPage({
 
   const { data: memberQuestion } = mq ? await supabase.from('member_questions').select('id, body').eq('id', mq).eq('author_id', recipientId).eq('is_profile_visible', true).eq('moderation_status', 'visible').is('withdrawn_at', null).maybeSingle() : { data: null }
   if (mq && !memberQuestion) redirect(backHref)
-  if (mq) {
+  if (mq || answerId) {
     const correspondence = await getActiveEstablishedCorrespondenceWithUser(supabase, user.id, recipientId)
-    if (correspondence && await isEstablishedForViewer(supabase, correspondence.id)) redirect(`/letters/with/${recipientId}/write?mq=${encodeURIComponent(mq)}&returnTo=${encodeURIComponent(backHref)}`)
+    if (correspondence && await isEstablishedForViewer(supabase, correspondence.id)) redirect(`/letters/with/${recipientId}/write?${mq ? `mq=${encodeURIComponent(mq)}&` : ''}returnTo=${encodeURIComponent(backHref)}`)
   }
-  if (mq) {
+  if (mq || answerId) {
     const incoming = await getFirstContact(supabase, recipientId, user.id)
     if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) redirect(`/letters/${incoming.id}`)
   }

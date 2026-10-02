@@ -1,3 +1,4 @@
+import AuthoredProse from '@/app/authored-prose'
 import ProfileQuestions from '@/app/member-questions/profile-questions'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
@@ -65,14 +66,15 @@ export default async function PublicProfilePage({
   searchParams,
 }: {
   params: Promise<{ userId: string }>
-  searchParams: Promise<{ returnTo?: string; answer?: string }>
+  searchParams: Promise<{ returnTo?: string; answer?: string; reading?: string }>
 }) {
   const { userId } = await params
-  const { returnTo, answer: selectedAnswerId } = await searchParams
+  const { returnTo, answer: selectedAnswerId, reading } = await searchParams
   const originReturn = introductionReturnPath(returnTo)
   const profileContext = new URLSearchParams()
   if (originReturn) profileContext.set('returnTo', originReturn)
   if (typeof selectedAnswerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedAnswerId)) profileContext.set('answer', selectedAnswerId)
+  if (reading === '1') profileContext.set('reading', '1')
   const profileReturn = profileContext.size ? `/room/${userId}?${profileContext}` : null
   const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
   const supabase = await createClient()
@@ -120,6 +122,8 @@ export default async function PublicProfilePage({
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
   const primaryAnswer = rawAnswers.find(answer => answer.id === selectedAnswerId) ?? chooseProfileAnswer(rawAnswers)
+  // An answer link must never silently fall back to an unrelated profile answer.
+  if (selectedAnswerId && (!primaryAnswer || primaryAnswer.id !== selectedAnswerId || primaryAnswer.moderationStatus !== 'visible')) notFound()
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -136,6 +140,27 @@ export default async function PublicProfilePage({
     .filter(Boolean)
     .join(' · ')
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
+
+  if (reading === '1' && selectedAnswerId && primaryAnswer) {
+    const pendingContact = firstContact ?? (incomingFirstContact?.status === 'sent' ? incomingFirstContact : null)
+    const replyHref = alreadyCorresponding ? `/letters/with/${userId}/write`
+      : pendingContact ? `/letters/${pendingContact.id}`
+      : `/write/${userId}?a=${primaryAnswer.id}&source=room_answer${writeReturnQuery}`
+    return <AppShell active={returnTo === '/home' ? 'home' : 'room'} waitingLetterCount={waitingCount}>
+      <main className="mx-auto w-full max-w-2xl space-y-6 px-6 py-10">
+        <PeopleProfileBack returnTo={returnTo} />
+        <h1 className="font-serif text-2xl leading-relaxed">{primaryAnswer.prompt}</h1>
+        <p className={metadataTextClass}>{profile.pseudonym}</p>
+        <AuthoredProse styleId={writingStyleId}><p className="whitespace-pre-wrap">{primaryAnswer.body}</p></AuthoredProse>
+        <div className="flex flex-wrap gap-4">
+          {!isSelf && <Link href={replyHref} className={primaryButtonClass}>{pendingContact && !alreadyCorresponding ? 'Open your letter' : 'Reply privately'}</Link>}
+          {isSelf && <Link href={`/question/${primaryAnswer.questionId}?source=room`} className={secondaryButtonClass}>Read or edit your answer</Link>}
+          <Link href={`/room/${userId}${originReturn ? `?returnTo=${encodeURIComponent(originReturn)}` : ''}`} className={quietLinkClass}>Visit {profile.pseudonym}&apos;s profile</Link>
+        </div>
+        {!isSelf && <ReportButton targetType="question_answer" targetId={primaryAnswer.id} triggerClassName={quietLinkClass} />}
+      </main>
+    </AppShell>
+  }
 
   return (
     <AppShell active={isSelf ? 'you' : returnTo === '/home' ? 'home' : returnTo?.startsWith('/letters/discover') ? 'letters' : 'room'} waitingLetterCount={waitingCount}>

@@ -60,7 +60,7 @@ export default async function RoomPage({ searchParams }: {
         </div>
         <div id="question-answers" className="space-y-5 scroll-mt-6">
           <div className="space-y-3"><h3 className="font-serif text-xl">See how people answered</h3><FilterDisclosure country={params.country ?? ''} gender={params.gender ?? ''} ageRange={params.age ?? ''} /></div>
-          {answers && <QuestionAnswerBrowser key={returnTo} questionId={question.id} initial={answers} filters={filters} returnTo={returnTo} />}
+          {answers && <QuestionAnswerBrowser viewerId={user.id} key={returnTo} questionId={question.id} initial={answers} filters={filters} returnTo={returnTo} />}
         </div>
       </section>}
       <QuestionSuggestionForm />

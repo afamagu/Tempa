@@ -161,3 +161,9 @@ export async function setQuestionPosition(
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }
 }
+
+/** Start a weekly round atomically, preserving all older answers. */
+export async function startRoomQuestion(supabase: SupabaseClient, questionId: string, restart = false): Promise<{ error: AdminError }> {
+  const { error } = await supabase.rpc('admin_start_room_question', { p_question_id: questionId, p_restart: restart })
+  return { error: error ? { message: error.message, code: error.code } : null }
+}
