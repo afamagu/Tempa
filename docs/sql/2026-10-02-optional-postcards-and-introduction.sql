@@ -20,7 +20,7 @@ begin
     select p.oid, n.nspname, p.proname
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where (n.nspname = 'public' and p.proname in (
-      'write_letter', 'reply_to_letter', 'publish_dispatch', 'update_dispatch', 'publish_official_dispatch'
+      'write_letter', 'reply_to_letter', 'publish_dispatch', 'publish_official_dispatch'
     )) or (n.nspname = 'tempa_private' and p.proname = 'postcard_shape_is_valid')
   loop
     definition := pg_get_functiondef(f.oid);
@@ -37,8 +37,8 @@ begin
     end if;
     execute definition;
   end loop;
-  if matched <> 6 then
-    raise exception 'Expected six installed postcard validators, found %; nothing applied.', matched;
+  if matched <> 5 then
+    raise exception 'Expected five installed postcard validators, found %; nothing applied.', matched;
   end if;
 end;
 $migration$;

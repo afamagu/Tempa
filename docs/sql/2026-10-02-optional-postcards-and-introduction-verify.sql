@@ -4,12 +4,12 @@ with checks as (
      from pg_constraint where conname in ('letter_postcards_back_message_length', 'dispatch_postcards_back_message_length')
      and conrelid in ('public.letter_postcards'::regclass, 'public.dispatch_postcards'::regclass)
      and convalidated) as blank_notes_allowed,
-    (select count(*) = 6 and bool_and(
+    (select count(*) = 5 and bool_and(
        pg_get_functiondef(p.oid) like '%coalesce(p_postcard->>''back_message'', '''')%'
        and pg_get_functiondef(p.oid) not like '%A Postcard needs its own written message%'
        and pg_get_functiondef(p.oid) not like '%if v_back_message is null or char_length(trim(both from v_back_message)) = 0%'
      ) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-     where (n.nspname = 'public' and p.proname in ('write_letter','reply_to_letter','publish_dispatch','update_dispatch','publish_official_dispatch'))
+     where (n.nspname = 'public' and p.proname in ('write_letter','reply_to_letter','publish_dispatch','publish_official_dispatch'))
        or (n.nspname = 'tempa_private' and p.proname = 'postcard_shape_is_valid')) as postcard_validators_updated,
     to_regprocedure('public.defer_flagship_onboarding()') is not null as deferral_installed,
     not has_function_privilege('anon', 'public.defer_flagship_onboarding()', 'execute') as anonymous_denied,

@@ -26,7 +26,7 @@ await db.exec(safety.slice(start,end))
 await db.exec('revoke all on function tempa_private.postcard_shape_is_valid(jsonb) from public,anon,authenticated')
 // The installed public functions have different signatures and larger bodies;
 // exercise their exact legacy guard and preserve a stand-in authorization check.
-for(const name of ['write_letter','reply_to_letter','publish_dispatch','update_dispatch','publish_official_dispatch']) {
+for(const name of ['write_letter','reply_to_letter','publish_dispatch','publish_official_dispatch']) {
  const failure=name.includes('dispatch')?'published':'sent'
  await db.exec(`create function public.${name}(p_postcard jsonb) returns text language plpgsql security definer set search_path='pg_catalog' as $function$
  declare v_back_message text;
@@ -41,8 +41,13 @@ for(const name of ['write_letter','reply_to_letter','publish_dispatch','update_d
  end;$function$;
  revoke all on function public.${name}(jsonb) from public,anon;grant execute on function public.${name}(jsonb) to authenticated;`)
 }
+// Production update_dispatch has no postcard argument: it must remain untouched.
+await db.exec(`create function public.update_dispatch(p_dispatch_id uuid, p_body text)
+returns text language sql as $$select p_body$$;`)
+const updateBefore=(await db.query("select pg_get_functiondef('public.update_dispatch(uuid,text)'::regprocedure) as definition")).rows[0].definition
 const sql=await readFile(new URL('../docs/sql/2026-10-02-optional-postcards-and-introduction.sql',import.meta.url),'utf8')
 await db.exec(sql);await db.exec(sql)
+assert.equal((await db.query("select pg_get_functiondef('public.update_dispatch(uuid,text)'::regprocedure) as definition")).rows[0].definition,updateBefore)
 for(const table of ['letter_postcards','dispatch_postcards']) {
  await db.query(`insert into public.${table} values($1)`,[''])
  await assert.rejects(db.query(`insert into public.${table} values($1)`,['x'.repeat(301)]))
@@ -50,7 +55,7 @@ for(const table of ['letter_postcards','dispatch_postcards']) {
 for(const note of [null,'','   ','A real note']) {
  const shape={postcard_key:'seaside',back_message:note}
  assert.equal((await db.query('select tempa_private.postcard_shape_is_valid($1) as ok',[shape])).rows[0].ok,true)
- for(const name of ['write_letter','reply_to_letter','publish_dispatch','update_dispatch','publish_official_dispatch']) {
+ for(const name of ['write_letter','reply_to_letter','publish_dispatch','publish_official_dispatch']) {
   assert.equal((await db.query(`select public.${name}($1) as note`,[shape])).rows[0].note,(note??'').trim())
   await assert.rejects(db.query(`select public.${name}($1)`,[{...shape,forbidden:'yes'}]))
  }
