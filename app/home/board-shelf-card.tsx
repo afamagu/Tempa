@@ -85,8 +85,8 @@ export default function BoardShelfCard({
 }) {
   const href = trailQuery ? `/board/${dispatch.id}?${trailQuery}` : `/board/${dispatch.id}`
   return (
-    <div className="rounded-md border border-foreground/10 p-4">
-      <div className="flex items-center gap-1.5">
+    <div className="min-w-0 max-w-full rounded-md border border-foreground/10 p-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <DispatchIdentityLabel identity={dispatch.identity} />
         <p className={`shrink-0 ${metadataTextClass}`}>· {formatDatePlain(dispatch.publishedAt)}</p>
       </div>

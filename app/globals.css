@@ -147,7 +147,9 @@ body {
   color: var(--foreground);
   font-kerning: normal;
   font-optical-sizing: auto;
-  overflow-wrap: break-word;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 @media (min-width: 640px) {
@@ -278,4 +280,16 @@ body {
   height: 0;
   pointer-events: none;
   color: var(--muted);
+}
+
+/* Keep member pages within the device width, including long URLs and
+   user-written words. Unlike clipping the body, this keeps all text readable
+   and leaves intentional horizontal suggestion rails free to scroll. */
+.tempa-shell {
+  overflow-wrap: anywhere;
+}
+
+.tempa-shell pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
