@@ -9,16 +9,18 @@ vi.mock('next/navigation', () => ({ usePathname: () => pathname }))
 const { default: SystemTabs, SYSTEM_TABS, activeSystemTab } = await import('./system-tabs')
 
 describe('Admin System tabs', () => {
-  it('Email / Translation, in that order', () => {
+  it('includes Email, Translation and Account access', () => {
     expect(SYSTEM_TABS).toEqual([
       { href: '/admin/system/email', label: 'Email' },
       { href: '/admin/system/translation', label: 'Translation' },
+      { href: '/admin/system/account-access', label: 'Account access' },
     ])
   })
 
   it('highlights the active child; Email is the default', () => {
     expect(activeSystemTab('/admin/system/translation')).toBe('/admin/system/translation')
     expect(activeSystemTab('/admin/system/email')).toBe('/admin/system/email')
+    expect(activeSystemTab('/admin/system/account-access')).toBe('/admin/system/account-access')
     expect(activeSystemTab('/admin/system')).toBe('/admin/system/email')
     const html = renderToStaticMarkup(<SystemTabs />)
     expect(html).toMatch(/aria-current="page"[^>]*>Translation</)

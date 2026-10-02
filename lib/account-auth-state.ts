@@ -8,6 +8,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // through docs/sql/2026-10-25-account-auth-state.sql, whose functions
 // are executable by service_role only.
 
+// deleted_suspended is accepted only for compatibility with databases before
+// 2026-10-02-deleted-member-return.sql; the current policy returns deleted
+// for every closed account without a permanent admin ban.
 export type AccountAuthState = 'permanently_banned' | 'deleted_suspended' | 'deleted' | 'suspended' | 'none'
 
 const STATES: readonly AccountAuthState[] = ['permanently_banned', 'deleted_suspended', 'deleted', 'suspended', 'none']

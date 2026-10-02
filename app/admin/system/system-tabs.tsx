@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 export const SYSTEM_TABS = [
   { href: '/admin/system/email', label: 'Email' },
   { href: '/admin/system/translation', label: 'Translation' },
+  { href: '/admin/system/account-access', label: 'Account access' },
 ] as const
 
 /** Email is the System default (app/admin/system/page.tsx). */

@@ -18,9 +18,11 @@ import { PERMANENT_AUTH_BAN_DURATION, readAccountAuthState } from '@/lib/account
 //          sessions, tokens and factors are removed. The old account can
 //          never be signed into again, and the same email / Google
 //          account can create a brand-new account later;
-//        - deleted while suspended or permanently banned: Auth-banned
-//          with the identity kept, so deleting cannot be used to escape
-//          the sanction by re-registering.
+//        - permanently banned: Auth-banned with the identity kept.
+//      The 2026-10-02-deleted-member-return migration makes a permanent
+//      admin ban the only sanction preventing a fresh account. An older
+//      database may still return deleted_suspended; that legacy value
+//      remains fail-closed until the migration is installed.
 //      Reports, Safety cases and restriction are NOT sanctions here.
 // Both steps are idempotent. A failure never reopens anything: the
 // account is already closed in the database before either runs, and
