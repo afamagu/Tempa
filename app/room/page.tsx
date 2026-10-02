@@ -1,208 +1,75 @@
-import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
 import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
-import { getDiscoveryPage, genderDisplay, DISCOVERY_BATCH_SIZE } from '@/lib/discovery'
-import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
+import { readRoomAnswers, readRoomLibrary } from '@/lib/room-reading'
 import { hasCompletedGuide } from '@/lib/guide'
-import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
-import { publicProfileMarkUrl } from '@/lib/profile-marks'
-import { getMemberWritingStyles } from '@/lib/writing-style-data'
-import { pageTitleClass, helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from '@/app/minds/filter-disclosure'
-import type { DiscoveryEntry } from './discovery-results'
-import PeopleBrowser from './people-browser'
+import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
+import { pageTitleClass, helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
+import QuestionAnswerBrowser from './question-answer-browser'
 import QuestionSuggestionForm from './question-suggestion-form'
+import QuestionLibraryCards from './question-library-cards'
 
-const BATCH_SIZE = DISCOVERY_BATCH_SIZE
-
-function buildQuery(params: { country?: string; gender?: string; age?: string; batch?: string; question?: string; started?: string }) {
-  const query = new URLSearchParams()
-  if (params.country) query.set('country', params.country)
-  if (params.gender) query.set('gender', params.gender)
-  if (params.age) query.set('age', params.age)
-  if (params.batch) query.set('batch', params.batch)
-  if (params.question) query.set('question', params.question)
-  if (params.started) query.set('started', params.started)
-  return query.toString()
-}
-
-export default async function RoomPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ country?: string; gender?: string; age?: string; batch?: string; question?: string; started?: string }>
+export default async function RoomPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { country, gender, age, batch: batchParam, question: requestedQuestionId, started } = await searchParams
-  const batch = Math.max(0, Number(batchParam) || 0)
-  const t = await getTranslations('RoomEngagement')
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const raw = await searchParams
+  const textParam = (key: string) => typeof raw[key] === 'string' ? raw[key].slice(0, 100) : undefined
+  const params = { country: textParam('country'), gender: textParam('gender'), age: textParam('age'), question: textParam('question') }
+  const client = await createClient()
+  const { data: { user } } = await client.auth.getUser()
   if (!user) redirect('/sign-in')
-
-  const [waitingCount, myAnswers, introSeen, liveQuestion] = await Promise.all([
-    getWaitingLetterCount(supabase, user.id),
-    getMyAnswers(supabase, user.id),
-    hasCompletedGuide(supabase, user.id, 'people'),
-    getCurrentRoomQuestion(supabase),
+  const t = await getTranslations('RoomEngagement')
+  const [live, mine, waiting, introSeen, library] = await Promise.all([
+    getCurrentRoomQuestion(client), getMyAnswers(client, user.id), getWaitingLetterCount(client, user.id),
+    hasCompletedGuide(client, user.id, 'people'), readRoomLibrary(client),
   ])
-
-  const focusedQuestionId = liveQuestion && requestedQuestionId === liveQuestion.id
-    ? liveQuestion.id
-    : undefined
-
-  const discovery = await getDiscoveryPage(supabase, {
-    country,
-    gender,
-    ageRange: age,
-    questionId: focusedQuestionId,
-    browseStartedAt: started && Number.isFinite(Date.parse(started)) ? started : undefined,
-    offset: batch * BATCH_SIZE,
-    limit: BATCH_SIZE,
-  })
-
-  const liveAnswer = liveQuestion
-    ? myAnswers.find((answer) => answer.questionId === liveQuestion.id) ?? null
-    : null
-  const firstAnswer = myAnswers.find((answer) => answer.isPrimary) ?? null
-
-  const { candidates: page, eligibleCount, filteredCount } = discovery
-  await recordRoomExposureOpportunities(user.id, page, focusedQuestionId ? 'room_question' : 'room')
-
-  const windowStart = batch * BATCH_SIZE
-  const hasMore = (discovery.fairRankingApplied ? page.length : windowStart + page.length) < filteredCount
-  const poolExhausted = page.length === 0 && (
-    filteredCount > 0 || (discovery.fairRankingApplied && Boolean(started) && eligibleCount > 0)
-  )
-  const writingStyles = await getMemberWritingStyles(supabase, page.map((candidate) => candidate.userId))
-
-  const editorialBylines = await getEditorialBylines(supabase)
-  const entries: DiscoveryEntry[] = page.map((candidate) => ({
-    userId: candidate.userId,
-    pseudonym: candidate.pseudonym,
-    editorialTitle: editorialTitleFor(editorialBylines, candidate.pseudonym),
-    country: candidate.country,
-    genderDisplay: genderDisplay(candidate.gender, candidate.genderCustom),
-    ageRange: candidate.ageRange,
-    markUrl: candidate.markId ? publicProfileMarkUrl(supabase, `${candidate.markId}.png`) : null,
-    response: {
-      id: candidate.answerId,
-      body: candidate.body,
-      prompt: candidate.prompt,
-    },
-    writingStyleId: writingStyles.get(candidate.userId) ?? null,
-  }))
-
-  const currentQuery = buildQuery({
-    country,
-    gender,
-    age,
-    batch: batch > 0 ? String(batch) : undefined,
-    question: focusedQuestionId,
-    started: discovery.browseStartedAt ?? undefined,
-  })
-  const currentRoomHref = currentQuery ? `/room?${currentQuery}` : '/room'
-
-
-  return (
-    <AppShell active="room" waitingLetterCount={waitingCount}>
-      <main className="min-h-screen flex justify-center p-6">
-        <div className="w-full max-w-2xl space-y-10 py-10">
-          <header className="space-y-2">
-            <h1 className={pageTitleClass}>{t('title')}</h1>
-            <p className="max-w-xl font-serif text-xl leading-relaxed text-foreground/80">
-              {t('intro')}
-            </p>
-          </header>
-
-          {!introSeen && (
-            <FeatureIntroduction guideKey="people" title={t('readRoom')} ctaLabel={t('enterRoom')}>
-              <p>{t('guideIntro')}</p>
-            </FeatureIntroduction>
-          )}
-
-          {liveQuestion && (
-            <section aria-labelledby="room-question-heading" className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">{t('thisWeek')}</p>
-              <h2 id="room-question-heading" className="mt-3 font-serif text-2xl leading-snug text-foreground sm:text-3xl">
-                {liveQuestion.prompt}
-              </h2>
-              <RoomQuestionCredit questionId={liveQuestion.id} />
-              <p className={`mt-3 ${helperTextClass}`}>{t('fewLines')}</p>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <Link href={`/question/${liveQuestion.id}?source=room`} className={primaryButtonClass}>
-                  {liveAnswer ? t('readEdit') : t('answerQuestion')}
-                </Link>
-                {focusedQuestionId ? (
-                  <Link href="/letters/discover" className={secondaryButtonClass}>{t('findWriter')}</Link>
-                ) : liveAnswer ? (
-                  <a href="#read-the-room" className={secondaryButtonClass}>{t('readRoom')}</a>
-                ) : null}
-              </div>
-            </section>
-          )}
-
-          <section id="read-the-room" aria-labelledby="read-room-heading" className="space-y-5 scroll-mt-6">
-            <div className="flex items-end justify-between gap-4 border-b border-foreground/10 pb-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">
-                  {focusedQuestionId ? t('week') : t('explore')}
-                </p>
-                <h2 id="read-room-heading" className="mt-1 font-serif text-2xl text-foreground">
-                  {focusedQuestionId ? t('peopleSaid') : t('readRoom')}
-                </h2>
-                <p className={`mt-1 ${helperTextClass}`}>
-                  {focusedQuestionId
-                    ? t('sameQuestion')
-                    : t('lookAround')}
-                </p>
-              </div>
-              <FilterDisclosure country={country ?? ''} gender={gender ?? ''} ageRange={age ?? ''} />
-            </div>
-
-            {entries.length === 0 ? (
-              <div className="space-y-2 py-2">
-                <p className={helperTextClass}>
-                  {poolExhausted
-                    ? focusedQuestionId
-                      ? t('answersExhausted')
-                      : t('roomExhausted')
-                    : eligibleCount === 0
-                      ? focusedQuestionId
-                        ? t('noAnswers')
-                        : t('noPeople')
-                      : t('noMatches')}
-                </p>
-                {!poolExhausted && eligibleCount > 0 && <p className={helperTextClass}>{t('widenFilters')}</p>}
-                {!poolExhausted && eligibleCount === 0 && !focusedQuestionId && <p className={helperTextClass}>{t('moreArrivals')}</p>}
-                {focusedQuestionId && (
-                  <Link href="/letters/discover" className={secondaryButtonClass}>{t('findWriter')}</Link>
-                )}
-              </div>
-            ) : (
-              <>
-                <PeopleBrowser key={currentRoomHref} initialEntries={entries} initialHasMore={hasMore}
-                  request={{ country, gender, ageRange: age, questionId: focusedQuestionId, browseStartedAt: discovery.browseStartedAt ?? undefined }} returnTo={currentRoomHref} />
-              </>
-            )}
-          </section>
-
-          {firstAnswer && (
-            <section className="border-t border-foreground/10 pt-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/50">{t('firstQuestion')}</p>
-              <p className={`mt-2 max-w-xl ${helperTextClass}`}>
-                {t('firstIntro')}
-              </p>
-            </section>
-          )}
-
-          <QuestionSuggestionForm />
+  let question = live
+  if (params.question && params.question !== live?.id) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.question)) notFound()
+    const { data: allowed, error } = await client.rpc('room_question_published', { p_question_id: params.question })
+    if (error || allowed !== true) notFound()
+    const { data } = await client.from('questions').select('id,prompt').eq('id', params.question).maybeSingle()
+    if (!data) notFound()
+    question = data
+  }
+  const filters = { country: params.country, gender: params.gender, age: params.age }
+  const query = new URLSearchParams()
+  if (question) query.set('question', question.id)
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value)
+  const returnTo = query.size ? `/room?${query}` : '/room'
+  const answers = question ? await readRoomAnswers(client, question.id, filters) : null
+  const current = question?.id === live?.id
+  const answered = mine.some(a => a.questionId === question?.id)
+  const earlier = library.questions.filter(q => !q.is_current)
+  return <AppShell active="room" waitingLetterCount={waiting}>
+    <main className="mx-auto w-full max-w-3xl space-y-10 px-6 py-10">
+      <header className="space-y-2"><h1 className={pageTitleClass}>{t('title')}</h1><p className="font-serif text-xl text-foreground/80">Read what people have written. Let a conversation begin there.</p></header>
+      {!introSeen && <FeatureIntroduction guideKey="people" title={t('readRoom')} ctaLabel={t('enterRoom')}><p>{t('guideIntro')}</p></FeatureIntroduction>}
+      {question && <section className="space-y-6" aria-labelledby="room-question-heading">
+        <div className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
+          <p className="text-xs uppercase tracking-widest text-foreground/55">{current ? 'This week in the Room' : 'From the question library'}</p>
+          <h2 id="room-question-heading" className="my-4 font-serif text-2xl leading-relaxed sm:text-3xl">{question.prompt}</h2>
+          <RoomQuestionCredit questionId={question.id} />
+          <div className="mt-6">{current ? <Link href={`/question/${question.id}?source=room`} className={primaryButtonClass}>{answered ? t('readEdit') : t('answerQuestion')}</Link> : <Link href="/room" className={secondaryButtonClass}>Back to this week&apos;s question</Link>}</div>
         </div>
-      </main>
-    </AppShell>
-  )
+        <div id="question-answers" className="space-y-5 scroll-mt-6">
+          <div className="space-y-3"><h3 className="font-serif text-xl">See how people answered</h3><FilterDisclosure country={params.country ?? ''} gender={params.gender ?? ''} ageRange={params.age ?? ''} /></div>
+          {answers && <QuestionAnswerBrowser key={returnTo} questionId={question.id} initial={answers} filters={filters} returnTo={returnTo} />}
+        </div>
+      </section>}
+      <QuestionSuggestionForm />
+      <section id="read-the-room" className="space-y-5 border-t border-foreground/10 pt-8">
+        <div><p className="text-xs uppercase tracking-widest text-foreground/55">Explore</p><h2 className="mt-2 font-serif text-2xl">Read the Room</h2><p className={`mt-2 ${helperTextClass}`}>Explore how people answered earlier questions.</p></div>
+        {library.error ? <p role="alert" className="text-sm text-red-600">{library.error}</p> : <QuestionLibraryCards questions={earlier} />}
+        <Link href="/room/questions" className={secondaryButtonClass}>Explore the question library</Link>
+      </section>
+      <section className="border-t border-foreground/10 pt-6"><Link href="/letters/discover" className={secondaryButtonClass}>Discover People</Link></section>
+    </main>
+  </AppShell>
 }

@@ -8,6 +8,7 @@ import AuthoredProse from '@/app/authored-prose'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import EditorialByline from '@/app/editorial-byline'
 import QuestionInfoIcon from '@/app/question-info-icon'
+import { recordAnswerRead } from '@/app/minds/[userId]/answer-reading'
 
 export type DiscoveryEntry = {
   userId: string
@@ -27,8 +28,11 @@ function identityLine(entry: DiscoveryEntry) {
   return [entry.country, entry.genderDisplay, entry.ageRange].filter(Boolean).join(' · ')
 }
 
-function profileHref(userId: string, returnTo: string) {
-  return returnTo ? `/room/${userId}?returnTo=${encodeURIComponent(returnTo)}` : `/room/${userId}`
+function profileHref(userId: string, returnTo: string, answerId?: string) {
+  const params = new URLSearchParams()
+  if (returnTo) params.set('returnTo', returnTo)
+  if (answerId) params.set('answer', answerId)
+  return `/room/${userId}${params.size ? `?${params}` : ''}`
 }
 
 function IdentityMark({ entry, size = 'sm' }: { entry: DiscoveryEntry; size?: 'sm' | 'md' }) {
@@ -42,7 +46,7 @@ function IdentityMark({ entry, size = 'sm' }: { entry: DiscoveryEntry; size?: 's
   )
 }
 
-export default function DiscoveryResults({ entries, returnTo = '/room', profileLed = false, horizontal = false }: { entries: DiscoveryEntry[]; returnTo?: string; profileLed?: boolean; horizontal?: boolean }) {
+export default function DiscoveryResults({ entries, returnTo = '/room', profileLed = false, horizontal = false, questionReading = false }: { entries: DiscoveryEntry[]; returnTo?: string; profileLed?: boolean; horizontal?: boolean; questionReading?: boolean }) {
   const router = useRouter()
   const [openId, setOpenId] = useState<string | null>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -50,6 +54,7 @@ export default function DiscoveryResults({ entries, returnTo = '/room', profileL
   const openEntry = openIndex >= 0 ? entries[openIndex] : null
   const hasPrevious = openIndex > 0
   const hasNext = openIndex >= 0 && openIndex < entries.length - 1
+  useEffect(() => { if (openEntry?.response.id) void recordAnswerRead(openEntry.response.id).catch(() => {}) }, [openEntry?.response.id])
 
   function showPrevious() { if (hasPrevious) setOpenId(entries[openIndex - 1].userId) }
   function showNext() { if (hasNext) setOpenId(entries[openIndex + 1].userId) }
@@ -92,7 +97,7 @@ export default function DiscoveryResults({ entries, returnTo = '/room', profileL
       <div className={horizontal ? 'flex gap-4' : profileLed ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-3'}>
         {entries.map((entry) => (
           <article key={entry.userId} className={profileLed ? `rounded-lg border border-foreground/10 bg-surface-shell p-4 ${horizontal ? 'w-64 shrink-0 snap-start' : ''}` : 'border-b border-foreground/10 pb-4 last:border-b-0'}>
-            {profileLed ? <Link href={profileHref(entry.userId, returnTo)} className="block space-y-3">
+            {profileLed ? <Link href={profileHref(entry.userId, returnTo, entry.response.id)} className="block space-y-3">
               <div className="flex items-start gap-3"><IdentityMark entry={entry} /><div className="min-w-0"><p className="break-words text-sm font-semibold">{entry.pseudonym}</p><EditorialByline title={entry.editorialTitle} /><p className={helperTextClass}>{identityLine(entry)}</p></div></div>
               {entry.languages?.length ? <p className={helperTextClass}>{entry.languages.join(' · ')}</p> : null}
               {entry.response.body ? <AuthoredProse styleId={entry.writingStyleId ?? null}><p className="line-clamp-2 whitespace-pre-wrap text-base leading-6">{entry.response.body}</p></AuthoredProse> : null}
@@ -148,9 +153,9 @@ export default function DiscoveryResults({ entries, returnTo = '/room', profileL
                   <button type="button" onClick={showPrevious} disabled={!hasPrevious} aria-label="Previous response" className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25">←</button>
                   <button type="button" onClick={showNext} disabled={!hasNext} aria-label="Next response" className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25">→</button>
                 </div>
-                <button type="button" onClick={() => router.push(`/write/${openEntry.userId}?a=${openEntry.response.id}&source=room`)} className={primaryButtonClass}>Write to {openEntry.pseudonym}</button>
+                {questionReading ? <Link href={profileHref(openEntry.userId, returnTo, openEntry.response.id)} className={primaryButtonClass}>Visit {openEntry.pseudonym}&apos;s profile to write</Link> : <button type="button" onClick={() => router.push(`/write/${openEntry.userId}?a=${openEntry.response.id}&source=room&returnTo=${encodeURIComponent(profileHref(openEntry.userId, returnTo, openEntry.response.id))}`)} className={primaryButtonClass}>Write to {openEntry.pseudonym}</button>}
               </div>
-              <Link href={profileHref(openEntry.userId, returnTo)} className={quietLinkClass}>Read more from {openEntry.pseudonym}</Link>
+              <Link href={profileHref(openEntry.userId, returnTo, openEntry.response.id)} className={quietLinkClass}>Read more from {openEntry.pseudonym}</Link>
             </div>
           </div>
         </div>
