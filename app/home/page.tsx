@@ -1,3 +1,4 @@
+import PublicMentions from './public-mentions'
 import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
 import Link from 'next/link'
 import { cookies } from 'next/headers'
@@ -175,6 +176,7 @@ export default async function HomePage() {
           <div className="mx-auto w-full max-w-md">
             {introductionQuestion && !reminderSnoozed && <IntroductionReminder userId={user.id} questionId={introductionQuestion.id} />}
             <MemberNotices />
+            <PublicMentions />
             <div className="space-y-6">
               <h1 className={pageTitleClass}>Arrivals</h1>
 

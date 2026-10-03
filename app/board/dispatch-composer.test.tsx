@@ -1,7 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { renderToStaticMarkup as renderMarkup } from 'react-dom/server'
+import { NextIntlClientProvider } from 'next-intl'
+import type { ReactNode } from 'react'
+import en from '@/messages/en.json'
 import DispatchComposer from './dispatch-composer'
+
+function renderToStaticMarkup(node: ReactNode) {
+  return renderMarkup(<NextIntlClientProvider locale="en" messages={en}>{node}</NextIntlClientProvider>)
+}
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {} }) }))
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))

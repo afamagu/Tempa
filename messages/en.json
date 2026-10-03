@@ -124,15 +124,15 @@
     "matchingHelp": "Your interests also help you discover people. Your saved list is not shown on your profile."
   },
   "Correspondents": {
-    "heading": "Your correspondents",
+    "heading": "Mention someone",
     "loading": "Looking…",
-    "empty": "No eligible correspondents match.",
-    "failed": "Could not load correspondents. Try again.",
+    "empty": "No members match. Try another name.",
+    "failed": "Could not load members. Try again.",
     "limit": "A Room answer can invite at most two correspondents.",
     "close": "Close",
-    "seeAll": "See all correspondents",
-    "search": "Search correspondents",
-    "more": "See more correspondents"
+    "seeAll": "See more people",
+    "search": "Search members by name",
+    "more": "See more people"
   },
   "RoomInvitations": {
     "heading": "Room invitations",
@@ -412,7 +412,7 @@
     "keepLooking": "Keep looking",
     "firstQuestion": "The First Question",
     "firstIntro": "Everyone enters Tempa through the same question. Your answer remains part of how people first encounter you in the Room.",
-    "suggestHeading": "Have a question for The Room?",
+    "suggestHeading": "Give the Room its next question.",
     "suggestOne": "Suggest one →",
     "suggestPlaceholder": "What would you genuinely want to hear different people answer?",
     "creditMe": "Credit me if Tempa uses this question.",
@@ -423,7 +423,8 @@
     "thanks": "Thank you. Tempa will read it.",
     "reviewNote": "Suggestions are reviewed before they can become a Room Question.",
     "invalidSuggestion": "Write the question you would like to hear people answer.",
-    "suggestFailed": "Could not send your suggestion. Please try again."
+    "suggestFailed": "Could not send your suggestion. Please try again.",
+    "suggestDescription": "Your question appears on your profile, where people can respond by letter. Tempa may also select it for the Room."
   },
   "MemberIntroductions": {
     "progress": "People to meet · {current} of {total}",
@@ -447,5 +448,17 @@
     "laterBody": "You can take a look around first. Your answer will help people discover you when you’re ready.",
     "working": "Continuing…",
     "continueError": "Could not continue yet. Please try again."
+  },
+  "Mentions": {
+    "heading": "Mentions",
+    "dispatch": "{name} mentioned you in a Dispatch.",
+    "reply": "{name} mentioned you in a reply.",
+    "answer": "{name} mentioned you in an answer.",
+    "all": "See all mentions",
+    "empty": "Your mentions will appear here.",
+    "unavailable": "This mention is no longer available. The writing may have been removed or its visibility changed.",
+    "home": "Back to Home",
+    "previous": "Previous",
+    "more": "See more"
   }
 }

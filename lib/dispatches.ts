@@ -1,3 +1,4 @@
+import { mentionPublicationRpc, type MentionSelection } from './public-mentions'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { letterPreviewText, isRichBody } from './letters'
 import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
@@ -1083,9 +1084,10 @@ export async function publishDispatch(
     warningAcknowledged?: boolean
     /** Requested "Public on the web" state, applied atomically (see saveRpc). */
     webPublic?: boolean
+    mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...saveRpc('publish_dispatch', {
+  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('publish_dispatch', {
     p_title: input.title,
     p_body: input.body,
     p_safety_evaluation_id: input.safetyEvaluationId,
@@ -1101,7 +1103,7 @@ export async function publishDispatch(
         }
       : null,
     p_warning_acknowledged: input.warningAcknowledged ?? false,
-  }, input.webPublic))
+  }, input.webPublic), input.mentions))
 
   if (error) {
     // Diagnostic checkpoint (2026-09-08): details/hint were previously
@@ -1186,9 +1188,10 @@ export async function updateDispatch(
     warningAcknowledged?: boolean
     /** Requested "Public on the web" state, applied atomically (see saveRpc). */
     webPublic?: boolean
+    mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...saveRpc('update_dispatch', {
+  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('update_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,
@@ -1196,7 +1199,7 @@ export async function updateDispatch(
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
     p_warning_acknowledged: input.warningAcknowledged ?? false,
-  }, input.webPublic))
+  }, input.webPublic), input.mentions))
 
   if (error) {
     return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
@@ -1241,9 +1244,10 @@ export async function publishOfficialDispatch(
     sponsor?: SponsorFields | null
     /** Requested "Public on the web" state, applied atomically (see saveRpc). */
     webPublic?: boolean
+    mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...saveRpc('publish_official_dispatch', {
+  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('publish_official_dispatch', {
     p_published_as: input.publishedAs,
     p_title: input.title,
     p_body: input.body,
@@ -1257,7 +1261,7 @@ export async function publishOfficialDispatch(
         }
       : null,
     ...sponsorRpcArgs(input.publishedAs, input.sponsor),
-  }, input.webPublic))
+  }, input.webPublic), input.mentions))
   if (error) {
     return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
   }
@@ -1276,16 +1280,17 @@ export async function updateOfficialDispatch(
     sponsor?: SponsorFields | null
     /** Requested "Public on the web" state, applied atomically (see saveRpc). */
     webPublic?: boolean
+    mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...saveRpc('update_official_dispatch', {
+  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('update_official_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,
     p_topics: normalizeTopics(input.topics),
     p_moments: (input.moments ?? []).map((m) => ({ position: m.position, type: 'photo', image_path: m.imagePath })),
     ...sponsorRpcArgs(input.publishedAs, input.sponsor),
-  }, input.webPublic))
+  }, input.webPublic), input.mentions))
   if (error) {
     return { data: null, error: { message: error.message, code: error.code, details: error.details, hint: error.hint } }
   }

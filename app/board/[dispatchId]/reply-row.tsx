@@ -104,7 +104,7 @@ export default function ReplyRow({
   }
 
   return (
-    <div className={isNested ? 'ml-6 border-l border-foreground/10 pl-4' : ''}>
+    <div id={`reply-${reply.id}`} style={{ scrollMarginTop: 24 }} className={isNested ? 'ml-6 border-l border-foreground/10 pl-4' : ''}>
       <div className="flex min-w-0 items-center gap-1.5">
         <DispatchAuthorLink authorId={reply.authorId} authorPseudonym={reply.authorPseudonym} authorCountry={reply.authorCountry} authorMarkUrl={reply.authorMarkUrl ?? null} authorEditorialTitle={reply.authorEditorialTitle ?? null} size="sm" />
         <p className={`shrink-0 ${helperTextClass}`}>· {formatDatePlain(reply.createdAt)}</p>

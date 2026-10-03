@@ -124,15 +124,15 @@
     "matchingHelp": "Os seus interesses também ajudam a descobrir pessoas. A sua lista guardada não é mostrada no seu perfil."
   },
   "Correspondents": {
-    "heading": "Seus correspondentes",
+    "heading": "Mencionar alguém",
     "loading": "Procurando…",
-    "empty": "Nenhum correspondente disponível.",
-    "failed": "Não foi possível carregar os correspondentes. Tente novamente.",
+    "empty": "Nenhum membro encontrado. Experimente outro nome.",
+    "failed": "Não foi possível carregar os membros. Tente novamente.",
     "limit": "Uma resposta pode convidar no máximo dois correspondentes.",
     "close": "Fechar",
-    "seeAll": "Ver todos os correspondentes",
-    "search": "Pesquisar correspondentes",
-    "more": "Ver mais correspondentes"
+    "seeAll": "Ver mais pessoas",
+    "search": "Pesquisar membros pelo nome",
+    "more": "Ver mais pessoas"
   },
   "RoomInvitations": {
     "heading": "Convites para a Sala",
@@ -412,7 +412,7 @@
     "keepLooking": "Continuar a explorar",
     "firstQuestion": "A primeira pergunta",
     "firstIntro": "Todos entram no Tempa através da mesma pergunta. A sua resposta continua a fazer parte de como as pessoas o descobrem na Room.",
-    "suggestHeading": "Tem uma pergunta para a Room?",
+    "suggestHeading": "Proponha a próxima pergunta da Sala.",
     "suggestOne": "Sugerir uma →",
     "suggestPlaceholder": "A que pergunta gostaria de ouvir pessoas diferentes responder?",
     "creditMe": "Mencione o meu nome se o Tempa usar esta pergunta.",
@@ -423,7 +423,8 @@
     "thanks": "Obrigado. O Tempa vai lê-la.",
     "reviewNote": "As sugestões são revistas antes de se tornarem uma pergunta da Room.",
     "invalidSuggestion": "Escreva a pergunta a que gostaria de ouvir as pessoas responder.",
-    "suggestFailed": "Não foi possível enviar a sua sugestão. Tente novamente."
+    "suggestFailed": "Não foi possível enviar a sua sugestão. Tente novamente.",
+    "suggestDescription": "A sua pergunta aparece no seu perfil, onde outras pessoas podem responder por carta. A Tempa também pode escolhê-la para a Sala."
   },
   "MemberIntroductions": {
     "progress": "Pessoas para conhecer · {current} de {total}",
@@ -447,5 +448,17 @@
     "laterBody": "Pode explorar primeiro. A sua resposta ajudará as pessoas a descobri-lo quando estiver pronto.",
     "working": "A continuar…",
     "continueError": "Não foi possível continuar. Tente novamente."
+  },
+  "Mentions": {
+    "heading": "Menções",
+    "dispatch": "{name} mencionou você em um Dispatch.",
+    "reply": "{name} mencionou você em uma resposta.",
+    "answer": "{name} mencionou você ao responder uma pergunta.",
+    "all": "Ver todas as menções",
+    "empty": "Suas menções aparecerão aqui.",
+    "unavailable": "Esta menção não está mais disponível. O texto pode ter sido removido ou sua visibilidade alterada.",
+    "home": "Voltar ao início",
+    "previous": "Anterior",
+    "more": "Ver mais"
   }
 }

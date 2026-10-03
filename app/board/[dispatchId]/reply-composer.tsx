@@ -1,5 +1,6 @@
 'use client'
 
+import { usePublicMentions } from '@/app/use-public-mentions'
 import CorrespondentPicker from '@/app/correspondent-picker'
 
 import { useState } from 'react'
@@ -56,6 +57,7 @@ export default function ReplyComposer({
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(autoFocus)
+  const mentions = usePublicMentions(null)
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +69,7 @@ export default function ReplyComposer({
   const [financialBlocked, setFinancialBlocked] = useState(false)
 
   function reset() {
+    mentions.clear()
     setOpen(false)
     setBody('')
     setError(null)
@@ -75,6 +78,7 @@ export default function ReplyComposer({
   }
 
   function cancel() {
+    mentions.clear()
     reset()
     onDone?.()
   }
@@ -139,6 +143,7 @@ export default function ReplyComposer({
     const { error: createError } = await createReply(createClient(), {
       dispatchId,
       body,
+      mentions: mentions.retained(body),
       parentReplyId,
       safetyEvaluationId,
       warningAcknowledged,
@@ -155,6 +160,7 @@ export default function ReplyComposer({
       return
     }
 
+    mentions.clear()
     reset()
     onDone?.()
     router.refresh()
@@ -172,7 +178,7 @@ export default function ReplyComposer({
 
   return (
     <div className="space-y-2">
-      <CorrespondentPicker onChange={setBody} maxLength={REPLY_MAX_CHARS}><textarea
+      <CorrespondentPicker onSelect={mentions.select} onChange={setBody} maxLength={REPLY_MAX_CHARS}><textarea
         value={body}
         onChange={(e) => setBody(e.target.value.slice(0, REPLY_MAX_CHARS))}
         maxLength={REPLY_MAX_CHARS}

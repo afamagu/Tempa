@@ -9,7 +9,7 @@ export async function findCorrespondents(query: string, offset = 0): Promise<{ p
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { people: [], error: true }
-  const { data, error } = await supabase.rpc('correspondent_picker_page', { p_search: query, p_limit: 21, p_offset: offset })
+  const { data, error } = await supabase.rpc('mention_picker_page', { p_search: query, p_limit: 21, p_offset: offset })
   if (error) return { people: [], error: true }
   return { hasMore: (data ?? []).length > 20, people: (data ?? []).slice(0,20).map((row: { user_id: string; pseudonym: string; mark_id: string | null }) => ({
     userId: row.user_id, pseudonym: row.pseudonym,

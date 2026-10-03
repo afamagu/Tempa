@@ -124,15 +124,15 @@
     "matchingHelp": "Vos centres d’intérêt vous aident aussi à découvrir des personnes. Votre liste enregistrée ne figure pas sur votre profil."
   },
   "Correspondents": {
-    "heading": "Vos correspondants",
+    "heading": "Mentionner quelqu’un",
     "loading": "Recherche…",
-    "empty": "Aucun correspondant disponible.",
-    "failed": "Impossible de charger les correspondants. Réessayez.",
+    "empty": "Aucun membre trouvé. Essayez un autre nom.",
+    "failed": "Impossible de charger les membres. Réessayez.",
     "limit": "Une réponse peut inviter deux correspondants au maximum.",
     "close": "Fermer",
-    "seeAll": "Voir tous les correspondants",
-    "search": "Rechercher des correspondants",
-    "more": "Voir plus de correspondants"
+    "seeAll": "Voir plus de personnes",
+    "search": "Rechercher un membre par son nom",
+    "more": "Voir plus de personnes"
   },
   "RoomInvitations": {
     "heading": "Invitations à la Salle",
@@ -412,7 +412,7 @@
     "keepLooking": "Continuer à explorer",
     "firstQuestion": "La première question",
     "firstIntro": "Tout le monde entre dans Tempa par la même question. Votre réponse fait partie de la façon dont les gens vous découvrent dans la Room.",
-    "suggestHeading": "Une question pour la Room ?",
+    "suggestHeading": "Proposez la prochaine question du Salon.",
     "suggestOne": "En proposer une →",
     "suggestPlaceholder": "À quelle question aimeriez-vous entendre différentes personnes répondre ?",
     "creditMe": "Mentionnez mon nom si Tempa utilise cette question.",
@@ -423,7 +423,8 @@
     "thanks": "Merci. Tempa la lira.",
     "reviewNote": "Les suggestions sont examinées avant de devenir une question de la Room.",
     "invalidSuggestion": "Écrivez la question à laquelle vous aimeriez entendre les gens répondre.",
-    "suggestFailed": "Impossible d’envoyer votre suggestion. Veuillez réessayer."
+    "suggestFailed": "Impossible d’envoyer votre suggestion. Veuillez réessayer.",
+    "suggestDescription": "Votre question apparaît sur votre profil, où les membres peuvent y répondre par lettre. Tempa peut aussi la choisir pour le Salon."
   },
   "MemberIntroductions": {
     "progress": "Des personnes à rencontrer · {current} sur {total}",
@@ -447,5 +448,17 @@
     "laterBody": "Vous pouvez commencer par explorer. Votre réponse aidera les autres à vous découvrir quand vous serez prêt.",
     "working": "Un instant…",
     "continueError": "Impossible de continuer pour le moment. Veuillez réessayer."
+  },
+  "Mentions": {
+    "heading": "Mentions",
+    "dispatch": "{name} vous a mentionné dans un Dispatch.",
+    "reply": "{name} vous a mentionné dans une réponse.",
+    "answer": "{name} vous a mentionné dans une réponse à une question.",
+    "all": "Voir toutes les mentions",
+    "empty": "Vos mentions apparaîtront ici.",
+    "unavailable": "Cette mention n’est plus disponible. Le texte a peut-être été retiré ou sa visibilité a changé.",
+    "home": "Retour à l’accueil",
+    "previous": "Précédent",
+    "more": "Voir plus"
   }
 }

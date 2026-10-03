@@ -18,6 +18,7 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
   onSelect?: (person: CorrespondentChoice) => boolean | void; maxLength?: number
 }) {
   const id = useId()
+  const t = useTranslations("Correspondents")
   const wrapper = useRef<HTMLDivElement>(null)
   const field = useRef<TextField | null>(null)
   const completed = useRef<{ from: number; to: number } | null>(null)
@@ -38,6 +39,7 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
   function detect(target?: EventTarget | null) {
     let next: CorrespondentTrigger | null = null
     if (editor) {
+      if (!editor.isFocused && menuRef.current) return
       const { $from, empty } = editor.state.selection
       if (empty) {
         const text = $from.parent.textBetween(0, $from.parentOffset, '\n', '\ufffc')
@@ -61,9 +63,9 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
     const width = viewport?.width ?? window.innerWidth
     const rect = (field.current ?? wrapper.current)?.getBoundingClientRect()
     const menuWidth = Math.min(expanded ? 480 : 320, width - 16)
-    const available = Math.max(80, height - 16)
+    const available = Math.max(0, height - 16)
     const desired = Math.min(expanded ? 440 : 280, available)
-    const anchor = expanded ? top + 8 : (rect?.bottom ?? top) + 4
+    const anchor = expanded ? top + height - desired - 8 : (rect?.bottom ?? top) + 4
     setMenuHeight(desired)
     setPosition({ top: Math.max(top + 8, Math.min(anchor, top + height - desired - 8)), left: Math.max(left + 8, Math.min(rect?.left ?? left + 8, left + width - menuWidth - 8)), width: menuWidth })
   }
@@ -110,7 +112,17 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!trigger, expanded])
 
-  function closeMenu() { requestVersion.current++; setTrigger(null); setExpanded(false) }
+  function closeMenu(restoreFocus = true) {
+    const cursor = trigger?.to
+    requestVersion.current++; setTrigger(null); setExpanded(false)
+    if (restoreFocus) requestAnimationFrame(() => {
+      if (editor) editor.commands.focus()
+      else if (field.current) { field.current.focus({ preventScroll: true }); if (cursor !== undefined) field.current.setSelectionRange(cursor, cursor) }
+    })
+  }
+  useEffect(() => {
+    menuRef.current?.querySelectorAll<HTMLElement>('[role="option"]')[highlighted]?.scrollIntoView?.({ block: 'nearest' })
+  }, [highlighted])
   async function morePeople() {
     if (!trigger || loading || loadedQuery !== trigger.query) return
     const version = requestVersion.current
@@ -127,8 +139,9 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
 
   function choose(person: CorrespondentChoice) {
     if (!trigger || loading || loadedQuery !== trigger.query) return
-    if (onSelect?.(person) === false) { setLimitReached(true); return }
     const inserted = `@${person.pseudonym} `
+    if (field.current && !editor && maxLength && field.current.value.length - (trigger.to - trigger.from) + inserted.length > maxLength) return
+    if (onSelect?.(person) === false) { setLimitReached(true); return }
     if (editor) {
       editor.chain().focus().command(({ tr }) => { closeHistory(tr); return true }).insertContentAt({ from: trigger.from, to: trigger.to }, [{ type: 'text', text: inserted }]).run()
     } else if (field.current && onChange) {
@@ -140,11 +153,17 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
       requestAnimationFrame(() => { element.focus(); element.setSelectionRange(cursor, cursor) })
     }
     completed.current = { from: trigger.from, to: trigger.from + inserted.length }
-    closeMenu()
+    closeMenu(false)
   }
 
   function keyDown(event: React.KeyboardEvent) {
     if (!trigger || event.nativeEvent.isComposing) return
+    if (expanded && event.key === 'Tab') {
+      const focusable = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input') ?? [])
+      const first = focusable[0], last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu() }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault(); event.stopPropagation()
@@ -156,9 +175,9 @@ export default function CorrespondentPicker({ children, editor, onChange, onSele
   return <div ref={wrapper} className="relative" onInputCapture={(event) => { if (wrapper.current?.contains(event.target as Node) && !event.nativeEvent.isComposing) detect(event.target) }} onClickCapture={(event) => { if (!trigger) detect(event.target) }} onKeyUpCapture={(event) => { if (wrapper.current?.contains(event.target as Node) && !['Escape', 'Enter', 'ArrowDown', 'ArrowUp'].includes(event.key)) detect(event.target) }} onKeyDownCapture={keyDown}>
     {children}
     {trigger && typeof document !== 'undefined' && createPortal(<>
-      {expanded && <div className="fixed inset-0 z-[99] bg-foreground/35" onClick={closeMenu} aria-hidden="true" />}
-      <div ref={menuRef} data-correspondent-menu className="fixed z-[100] flex flex-col overflow-hidden rounded-lg border border-accent/30 bg-background shadow-xl" style={{ ...position, maxHeight: menuHeight }}>
-        <CorrespondentMenu people={loadedQuery === trigger.query ? (expanded ? people : people.slice(0, 6)) : []} highlighted={highlighted} choose={choose} loading={loading || loadedQuery !== trigger.query} failed={failed} limitReached={limitReached} id={id} close={closeMenu} expand={() => setExpanded(true)} expanded={expanded} hasMore={people.length > 6 || hasMore} canLoadMore={hasMore} loadMore={morePeople} query={trigger.query} search={(value) => setTrigger({ ...trigger, query: value })} />
+      {expanded && <div className="fixed inset-0 z-[99] bg-foreground/35" onClick={() => closeMenu()} aria-hidden="true" />}
+      <div ref={menuRef} role={expanded ? "dialog" : undefined} aria-modal={expanded ? true : undefined} aria-label={expanded ? t("heading") : undefined} data-correspondent-menu className="fixed z-[100] flex flex-col overflow-hidden rounded-lg border border-accent/30 bg-background shadow-xl" style={{ ...position, maxHeight: menuHeight }}>
+        <CorrespondentMenu people={loadedQuery === trigger.query ? (expanded ? people : people.slice(0, 6)) : []} highlighted={highlighted} choose={choose} loading={loading || loadedQuery !== trigger.query} failed={failed} limitReached={limitReached} id={id} close={() => closeMenu()} expand={() => setExpanded(true)} expanded={expanded} hasMore={people.length > 6 || hasMore} canLoadMore={hasMore} loadMore={morePeople} query={trigger.query} search={(value) => setTrigger({ ...trigger, query: value })} />
       </div>
     </>, document.body)}
   </div>
