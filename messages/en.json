@@ -460,5 +460,18 @@
     "home": "Back to Home",
     "previous": "Previous",
     "more": "See more"
+  },
+  "MentionEmails": {
+    "heading": "Mention emails",
+    "help": "Get an email about unread mentions in Dispatches, replies and answers. Turning these off does not hide mentions in Tempa.",
+    "label": "Email me about mentions from",
+    "everyone": "Everyone",
+    "correspondents": "My correspondents only",
+    "off": "Nobody — in-app only",
+    "save": "Save preference",
+    "saving": "Saving…",
+    "saved": "Preference saved.",
+    "failed": "Could not save. Please try again.",
+    "unavailable": "Mention email preferences are unavailable. Please reload and try again."
   }
 }

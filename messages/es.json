@@ -460,5 +460,18 @@
     "home": "Volver al inicio",
     "previous": "Anterior",
     "more": "Ver más"
+  },
+  "MentionEmails": {
+    "heading": "Correos de menciones",
+    "help": "Recibe correos sobre menciones no leídas en Dispatches y respuestas. Desactivarlos no oculta las menciones en Tempa.",
+    "label": "Recibir correos de menciones de",
+    "everyone": "Todos",
+    "correspondents": "Solo mis corresponsales",
+    "off": "Nadie — solo en Tempa",
+    "save": "Guardar preferencia",
+    "saving": "Guardando…",
+    "saved": "Preferencia guardada.",
+    "failed": "No se pudo guardar. Inténtalo de nuevo.",
+    "unavailable": "Las preferencias no están disponibles. Recarga la página."
   }
 }

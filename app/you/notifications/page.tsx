@@ -8,6 +8,7 @@ import AppShell from '@/app/app-shell'
 import RoomInvitationPreference from './room-invitation-preference'
 import { getTranslations } from 'next-intl/server'
 import NotificationsEditor from './notifications-editor'
+import MentionEmailPreference from './mention-email-preference'
 
 export default async function NotificationsPage() {
   const supabase = await createClient()
@@ -16,7 +17,7 @@ export default async function NotificationsPage() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/sign-in')
+    redirect('/sign-in?next=%2Fyou%2Fnotifications')
   }
 
   const [waitingCount, preferenceResult] = await Promise.all([
@@ -27,6 +28,8 @@ export default async function NotificationsPage() {
   const { data: roomPreference, error: roomPreferenceError } = await supabase.from('room_invitation_preferences').select('emails_enabled').eq('user_id', user.id).maybeSingle()
   const t = await getTranslations('RoomInvitations')
   const mentions = await getTranslations('Mentions')
+  const mentionEmails = await getTranslations('MentionEmails')
+  const { data: mentionPreference, error: mentionPreferenceError } = await supabase.from('mention_email_preferences').select('audience').eq('user_id', user.id).maybeSingle()
 
   return (
     <AppShell active="you" waitingLetterCount={waitingCount}>
@@ -61,6 +64,7 @@ export default async function NotificationsPage() {
           )}
           {roomPreferenceError ? <p className={helperTextClass}>{t('preferenceUnavailable')}</p> : <RoomInvitationPreference initialEnabled={roomPreference?.emails_enabled ?? true} />}
           <Link href="/you/mentions" className={secondaryButtonClass}>{mentions('all')}</Link>
+          {mentionPreferenceError ? <p id="mention-emails" role="status">{mentionEmails('unavailable')}</p> : <MentionEmailPreference initialAudience={mentionPreference?.audience ?? 'everyone'} />}
         </div>
       </main>
     </AppShell>
