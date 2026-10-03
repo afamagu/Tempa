@@ -1,3 +1,4 @@
+import { mentionPublicationRpc, type MentionSelection } from './public-mentions'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publicProfileMarkUrl } from './profile-marks'
 import { editorialTitleFor, getEditorialBylines } from './editorial-byline'
@@ -238,16 +239,17 @@ export async function createReply(
      * surfaces.sql). Never optional — reply-composer.tsx always
      * evaluates before calling this. */
     safetyEvaluationId: string
+    mentions?: MentionSelection[]
     warningAcknowledged?: boolean
   }
 ): Promise<{ error: CreateReplyError }> {
-  const { error } = await supabase.rpc('create_reply', {
+  const { error } = await supabase.rpc(...mentionPublicationRpc('create_reply', {
     p_dispatch_id: input.dispatchId,
     p_body: input.body,
     p_safety_evaluation_id: input.safetyEvaluationId,
     p_parent_reply_id: input.parentReplyId ?? null,
     p_warning_acknowledged: input.warningAcknowledged ?? false,
-  })
+  }, input.mentions))
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }
 }

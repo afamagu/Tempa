@@ -43,9 +43,9 @@ export default function QuestionSuggestionForm() {
 
   if (sent) {
     return (
-      <div className="border-t border-foreground/10 pt-6">
-        <p className="font-serif text-lg text-foreground">{t('thanks')}</p>
-        <p className={`mt-1 ${helperTextClass}`}>{pendingReview
+      <div className="rounded-2xl bg-accent p-6 text-background sm:p-8" role="status">
+        <p className="font-serif text-2xl">{t('thanks')}</p>
+        <p className="mt-3 max-w-prose text-sm leading-relaxed text-background">{pendingReview
           ? 'Your question is saved and awaiting review. Only you can see it until it is approved. Manage it on your profile.'
           : 'Your question is on your profile. Other members can write to you about it, and Tempa may select it for the Room. Manage it on your profile.'}</p>
       </div>
@@ -53,14 +53,15 @@ export default function QuestionSuggestionForm() {
   }
 
   return (
-    <section className="border-t border-foreground/10 pt-6">
-      <p className="font-serif text-lg text-foreground">{t('suggestHeading')}</p>
+    <section className="rounded-2xl bg-accent p-6 text-background sm:p-8" aria-labelledby="suggest-question-heading">
+      <h2 id="suggest-question-heading" className="max-w-lg font-serif text-2xl leading-tight sm:text-3xl">{t('suggestHeading')}</h2>
+      <p className="mt-3 max-w-prose text-sm leading-relaxed">{t('suggestDescription')}</p>
       {!open ? (
-        <button type="button" onClick={() => setOpen(true)} className={`${secondaryButtonClass} mt-3`}>
+        <button type="button" onClick={() => setOpen(true)} className="mt-5 min-h-11 rounded-md bg-background px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-background">
           {t('suggestOne')}
         </button>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-5 space-y-4 rounded-xl bg-background p-4 text-foreground sm:p-5">
           <textarea
             value={question}
             onChange={(event) => { setQuestion(event.target.value); setWarning(null) }}

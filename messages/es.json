@@ -124,15 +124,15 @@
     "matchingHelp": "Tus intereses también te ayudan a descubrir personas. Tu lista guardada no se muestra en tu perfil."
   },
   "Correspondents": {
-    "heading": "Tus corresponsales",
+    "heading": "Mencionar a alguien",
     "loading": "Buscando…",
-    "empty": "No hay corresponsales disponibles.",
-    "failed": "No se pudieron cargar los corresponsales. Inténtalo de nuevo.",
+    "empty": "No hay miembros que coincidan. Prueba otro nombre.",
+    "failed": "No se pudieron cargar los miembros. Inténtalo de nuevo.",
     "limit": "Una respuesta puede invitar a dos corresponsales como máximo.",
     "close": "Cerrar",
-    "seeAll": "Ver todos los corresponsales",
-    "search": "Buscar corresponsales",
-    "more": "Ver más corresponsales"
+    "seeAll": "Ver más personas",
+    "search": "Buscar miembros por nombre",
+    "more": "Ver más personas"
   },
   "RoomInvitations": {
     "heading": "Invitaciones a la Sala",
@@ -412,7 +412,7 @@
     "keepLooking": "Seguir explorando",
     "firstQuestion": "La primera pregunta",
     "firstIntro": "Todos entran en Tempa a través de la misma pregunta. Tu respuesta sigue siendo parte de cómo te descubren en la Room.",
-    "suggestHeading": "¿Tienes una pregunta para la Room?",
+    "suggestHeading": "Propón la próxima pregunta de la Sala.",
     "suggestOne": "Sugerir una →",
     "suggestPlaceholder": "¿Qué pregunta te gustaría que respondieran distintas personas?",
     "creditMe": "Menciona mi nombre si Tempa usa esta pregunta.",
@@ -423,7 +423,8 @@
     "thanks": "Gracias. Tempa la leerá.",
     "reviewNote": "Las sugerencias se revisan antes de convertirse en una pregunta de la Room.",
     "invalidSuggestion": "Escribe la pregunta que te gustaría que la gente respondiera.",
-    "suggestFailed": "No se pudo enviar tu sugerencia. Inténtalo de nuevo."
+    "suggestFailed": "No se pudo enviar tu sugerencia. Inténtalo de nuevo.",
+    "suggestDescription": "Tu pregunta aparece en tu perfil, donde otras personas pueden responder por carta. Tempa también puede elegirla para la Sala."
   },
   "MemberIntroductions": {
     "progress": "Personas por conocer · {current} de {total}",
@@ -447,5 +448,17 @@
     "laterBody": "Puedes explorar primero. Tu respuesta ayudará a otros a descubrirte cuando estés listo.",
     "working": "Continuando…",
     "continueError": "No se pudo continuar. Inténtalo de nuevo."
+  },
+  "Mentions": {
+    "heading": "Menciones",
+    "dispatch": "{name} te mencionó en un Dispatch.",
+    "reply": "{name} te mencionó en una respuesta.",
+    "answer": "{name} te mencionó al responder una pregunta.",
+    "all": "Ver todas las menciones",
+    "empty": "Tus menciones aparecerán aquí.",
+    "unavailable": "Esta mención ya no está disponible. Es posible que el texto se haya eliminado o que su visibilidad haya cambiado.",
+    "home": "Volver al inicio",
+    "previous": "Anterior",
+    "more": "Ver más"
   }
 }

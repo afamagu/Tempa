@@ -26,6 +26,7 @@ export default async function NotificationsPage() {
 
   const { data: roomPreference, error: roomPreferenceError } = await supabase.from('room_invitation_preferences').select('emails_enabled').eq('user_id', user.id).maybeSingle()
   const t = await getTranslations('RoomInvitations')
+  const mentions = await getTranslations('Mentions')
 
   return (
     <AppShell active="you" waitingLetterCount={waitingCount}>
@@ -59,6 +60,7 @@ export default async function NotificationsPage() {
             </div>
           )}
           {roomPreferenceError ? <p className={helperTextClass}>{t('preferenceUnavailable')}</p> : <RoomInvitationPreference initialEnabled={roomPreference?.emails_enabled ?? true} />}
+          <Link href="/you/mentions" className={secondaryButtonClass}>{mentions('all')}</Link>
         </div>
       </main>
     </AppShell>

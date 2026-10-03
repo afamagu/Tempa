@@ -1,5 +1,6 @@
 'use client'
 
+import { usePublicMentions } from '@/app/use-public-mentions'
 import CorrespondentPicker from '@/app/correspondent-picker'
 
 import { useEffect, useRef, useState } from 'react'
@@ -135,6 +136,7 @@ export default function DispatchComposer({
   const official = publication ?? null
   const isSponsored = official?.publishedAs === 'sponsored'
   const draftKey = official ? `${authorId}:${official.publishedAs}` : authorId
+  const mentions = usePublicMentions(`dispatch:${draftKey}:${existingDispatch?.id ?? "new"}`)
   const [sponsor, setSponsor] = useState<SponsorFields>(
     official?.initialSponsor ?? { sponsorName: '', ctaLabel: '', ctaUrl: '' }
   )
@@ -482,6 +484,7 @@ export default function DispatchComposer({
               title,
               body,
               topics,
+              mentions: mentions.retained(body),
               moments,
               sponsor,
               webPublic: requestedWeb,
@@ -491,6 +494,7 @@ export default function DispatchComposer({
               title,
               body,
               topics,
+              mentions: mentions.retained(body),
               moments,
               postcard: postcardDraft,
               sponsor,
@@ -503,6 +507,7 @@ export default function DispatchComposer({
               title,
               body,
               topics,
+              mentions: mentions.retained(body),
               moments,
               safetyEvaluationId,
               warningAcknowledged,
@@ -512,6 +517,7 @@ export default function DispatchComposer({
               title,
               body,
               topics,
+              mentions: mentions.retained(body),
               moments,
               postcard: postcardDraft,
               safetyEvaluationId,
@@ -548,6 +554,7 @@ export default function DispatchComposer({
         clearDispatchDraft(draftKey)
         clearDispatchPostcardDraft(draftKey)
       }
+      mentions.clear()
       setPendingWarning(null)
       router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
@@ -674,7 +681,7 @@ export default function DispatchComposer({
 
         <div className="space-y-2">
           <WritingToolbar editor={editor} />
-          <CorrespondentPicker editor={editor}><EditorContent editor={editor} /></CorrespondentPicker>
+          <CorrespondentPicker editor={editor} onSelect={mentions.select}><EditorContent editor={editor} /></CorrespondentPicker>
         </div>
 
         {uploadingIndex !== null && <p className={helperTextClass}>Adding photo…</p>}

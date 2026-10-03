@@ -77,7 +77,7 @@ export default async function PublicProfilePage({
   const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
   const supabase = await createClient()
   const { data: { user: viewer } } = await supabase.auth.getUser()
-  if (!viewer) redirect(`/sign-in?next=${encodeURIComponent(`/room/${userId}${originReturn ? `?returnTo=${encodeURIComponent(originReturn)}` : ''}`)}`)
+  if (!viewer) redirect(`/sign-in?next=${encodeURIComponent(profileReturn ?? `/room/${userId}`)}`)
 
   const [{ data: profile }, waitingCount] = await Promise.all([
     supabase
@@ -119,7 +119,10 @@ export default async function PublicProfilePage({
   const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
-  const primaryAnswer = rawAnswers.find(answer => answer.id === selectedAnswerId) ?? chooseProfileAnswer(rawAnswers)
+  // An explicit answer link must never silently open a different answer.
+  const selectedAnswer = selectedAnswerId ? rawAnswers.find(answer => answer.id === selectedAnswerId) : null
+  if (selectedAnswerId && !selectedAnswer) notFound()
+  const primaryAnswer = selectedAnswer ?? chooseProfileAnswer(rawAnswers)
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

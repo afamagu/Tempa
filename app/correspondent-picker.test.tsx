@@ -76,7 +76,7 @@ describe('shared correspondent picker', () => {
     await act(async () => root.render(<Harness/>))
     await openAtCaret()
     expect(document.querySelectorAll('[role="option"]')).toHaveLength(6)
-    await act(async () => [...document.querySelectorAll('button')].find(b=>b.textContent==='See all correspondents')!.click())
+    await act(async () => [...document.querySelectorAll('button')].find(b=>b.textContent==='See more people')!.click())
     expect(document.querySelectorAll('[data-correspondent-menu]')).toHaveLength(1)
     expect(document.querySelectorAll('[role="option"]')).toHaveLength(9)
   })
