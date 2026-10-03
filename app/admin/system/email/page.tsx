@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getArrivalEmailStatus } from '@/lib/admin'
 import EmailStatusView from './email-status-view'
+import MentionEmailStatusView, { type MentionEmailStatus } from './mention-email-status'
 
 /**
  * Admin visibility into the arrival-email queue (docs/sql/2026-10-01-
@@ -14,6 +15,7 @@ import EmailStatusView from './email-status-view'
 export default async function AdminEmailStatusPage() {
   const supabase = await createClient()
   const { data, error } = await getArrivalEmailStatus(supabase)
+  const { data: mentions, error: mentionError } = await supabase.rpc('admin_get_mention_email_status')
 
-  return <EmailStatusView initialStatus={data} initialError={error?.message ?? null} />
+  return <><EmailStatusView initialStatus={data} initialError={error?.message ?? null} /><MentionEmailStatusView status={mentionError ? null : mentions as MentionEmailStatus} /></>
 }

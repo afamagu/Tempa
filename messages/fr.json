@@ -460,5 +460,18 @@
     "home": "Retour à l’accueil",
     "previous": "Précédent",
     "more": "Voir plus"
+  },
+  "MentionEmails": {
+    "heading": "E-mails de mention",
+    "help": "Recevez un e-mail pour les mentions non lues dans les Dispatches, les réponses et les échanges publics. Les mentions restent visibles dans Tempa.",
+    "label": "Recevoir les mentions par e-mail de",
+    "everyone": "Tout le monde",
+    "correspondents": "Mes correspondants uniquement",
+    "off": "Personne — dans Tempa uniquement",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Préférence enregistrée.",
+    "failed": "Impossible d’enregistrer. Réessayez.",
+    "unavailable": "Préférences indisponibles. Rechargez la page et réessayez."
   }
 }
