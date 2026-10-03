@@ -514,17 +514,6 @@ export default function MomentsComposer({
     !uploadingIndex &&
     !pendingFirstPhoto
 
-  // Pre-migration audit correction (2026-09-14), Part 4 — "The front is
-  // the atmosphere. The back is written for this particular sending."
-  // Draft state may absolutely have a blank back while composing (the
-  // Postcard editor never forces one), but SEND requires a real,
-  // sender-written message — mirrored server-side in write_letter/
-  // reply_to_letter's own non-blank check. Deliberately NOT folded into
-  // `canSend`/the "Preview letter" button: Preview is still draft-time
-  // reading, not the send action itself, so a blank back never blocks
-  // opening it — only the actual Send button inside LetterPreview.
-  const postcardNeedsMessage = Boolean(postcardDraft && postcardDraft.backMessage.trim().length === 0)
-
   // Admin Phase 2A-2 — resolved once here, passed down to the
   // composer-slot/editor/Preview so none of them repeat this lookup
   // against the live catalogue independently. Null when nothing is
@@ -680,12 +669,12 @@ export default function MomentsComposer({
   // captured once — the same "always read live state" discipline the
   // body itself already gets, in case the member edits the Postcard
   // between evaluating and actually sending.
-  function buildPostcardPayload(): { postcard_key: string; reveal_line: string | null; back_message: string | null } | null {
+  function buildPostcardPayload(): { postcard_key: string; reveal_line: string | null; back_message: string } | null {
     if (!postcardDraft) return null
     return {
       postcard_key: postcardDraft.postcardKey,
       reveal_line: postcardDraft.revealLine.trim().length > 0 ? postcardDraft.revealLine : null,
-      back_message: postcardDraft.backMessage.trim().length > 0 ? postcardDraft.backMessage : null,
+      back_message: postcardDraft.backMessage,
     }
   }
 
@@ -706,7 +695,7 @@ export default function MomentsComposer({
   }
 
   async function handleSend() {
-    if (!editor || !canSend || postcardNeedsMessage) return
+    if (!editor || !canSend) return
     if (submittingRef.current || sentRef.current) return
     submittingRef.current = true
     timingRef.current = startLetterSendTiming()
@@ -723,9 +712,7 @@ export default function MomentsComposer({
         ? {
             postcardKey: postcardPayload.postcard_key,
             revealLine: postcardPayload.reveal_line,
-            // postcardNeedsMessage already guards Send against a blank
-            // back message, so this is guaranteed non-null here.
-            backMessage: postcardPayload.back_message as string,
+            backMessage: postcardPayload.back_message,
           }
         : null,
     }, (timing) => {
@@ -1132,9 +1119,6 @@ export default function MomentsComposer({
           onClose={() => setPreviewMoments(null)}
           onSend={handleSend}
           sending={sending}
-          sendBlockedReason={
-            postcardNeedsMessage ? 'Write something on the back of your postcard before sending.' : null
-          }
           onEditPostcard={() => {
             setPostcardEditorStartOnBack(true)
             setPostcardEditorOpen(true)

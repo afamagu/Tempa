@@ -437,5 +437,15 @@
     "done": "Done",
     "next": "Next →",
     "writeTo": "Write to {name}"
+  },
+  "Introduction": {
+    "title": "Let people hear from you.",
+    "body": "Your introduction gives people a reason to write. A few honest lines are enough.",
+    "answer": "Write my introduction",
+    "notNow": "Not now",
+    "later": "Explore Tempa — answer later",
+    "laterBody": "You can take a look around first. Your answer will help people discover you when you’re ready.",
+    "working": "Continuing…",
+    "continueError": "Could not continue yet. Please try again."
   }
 }

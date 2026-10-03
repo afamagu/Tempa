@@ -1,5 +1,8 @@
 import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
 import Link from 'next/link'
+import { cookies } from 'next/headers'
+import IntroductionReminder from './introduction-reminder'
+import { introductionReminderCookie, introductionReminderSnoozed, needsIntroduction } from '@/lib/introduction-reminder'
 import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -21,7 +24,7 @@ import {
   partitionHomeSections,
   readingTrailSearchParams,
 } from '@/lib/dispatches'
-import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
+import { getFlagshipQuestion, getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getHomeQuestionAnswers } from '@/lib/home-question-answers'
 import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
 import { getActiveAnnouncement } from '@/lib/announcements'
@@ -65,6 +68,7 @@ export default async function HomePage() {
     activeAnnouncement,
     currentRoomQuestion,
     myAnswers,
+    introductionQuestion,
   ] = await Promise.all([
     supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
@@ -75,9 +79,12 @@ export default async function HomePage() {
     getActiveAnnouncement(supabase),
     getCurrentRoomQuestion(supabase),
     getMyAnswers(supabase, user.id),
+    getFlagshipQuestion(supabase),
   ])
 
   if (!profile) redirect('/profile')
+  const introductionNeeded = introductionQuestion && needsIntroduction(introductionQuestion.id, myAnswers)
+  const reminderSnoozed = introductionReminderSnoozed((await cookies()).get(introductionReminderCookie(user.id))?.value)
 
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
@@ -166,6 +173,7 @@ export default async function HomePage() {
       <main className="min-h-screen p-6">
         <div className="py-10">
           <div className="mx-auto w-full max-w-md">
+            {introductionNeeded && !reminderSnoozed && <IntroductionReminder userId={user.id} questionId={introductionQuestion.id} />}
             <MemberNotices />
             <div className="space-y-6">
               <h1 className={pageTitleClass}>Arrivals</h1>

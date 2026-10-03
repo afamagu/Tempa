@@ -242,14 +242,15 @@ function readPostcard(value: unknown): { ok: true; postcard: ParsedPostcard | nu
     revealLine = fields.revealLine
   }
 
-  if (typeof fields.backMessage !== 'string' || fields.backMessage.trim().length === 0) {
-    return { ok: false, error: 'postcard.backMessage must be a non-empty string.' }
+  const backMessage = fields.backMessage ?? ''
+  if (typeof backMessage !== 'string') {
+    return { ok: false, error: 'postcard.backMessage must be a string or null.' }
   }
-  if (fields.backMessage.length > MAX_BODY_CHARS) {
+  if (backMessage.length > MAX_BODY_CHARS) {
     return { ok: false, error: 'postcard.backMessage is too long.' }
   }
 
-  return { ok: true, postcard: { postcardKey: fields.postcardKey, revealLine, backMessage: fields.backMessage } }
+  return { ok: true, postcard: { postcardKey: fields.postcardKey, revealLine, backMessage } }
 }
 
 /** dispatch_publish/dispatch_update only — mirrors dispatchTitleError

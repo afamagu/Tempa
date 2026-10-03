@@ -323,7 +323,7 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
     expect(fake._dispatchPostcards).toHaveLength(0)
   })
 
-  it('invalid Postcard content (blank back message) is rejected before publication', async () => {
+  it('a blank postcard note does not prevent publication', async () => {
     const fake = createFakeDispatches({
       viewerId: AUTHOR_A,
       rows: [],
@@ -337,9 +337,9 @@ describe('publishDispatch — Postcard (Checkpoint 2)', () => {
       topics: [],
       postcard: { postcardKey: 'essaouira', revealLine: '', backMessage: '   ' },
     })
-    expect(data).toBeNull()
-    expect(error?.message).toContain('written message')
-    expect(fake._dispatchPostcards).toHaveLength(0)
+    expect(data).not.toBeNull()
+    expect(error).toBeNull()
+    expect(fake._dispatchPostcards).toHaveLength(1)
   })
 
   it('a Reveal Line over 32 characters is rejected', async () => {

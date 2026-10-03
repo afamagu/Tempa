@@ -437,5 +437,15 @@
     "done": "Listo",
     "next": "Siguiente →",
     "writeTo": "Escribir a {name}"
+  },
+  "Introduction": {
+    "title": "Deja que te conozcan por tus palabras.",
+    "body": "Tu presentación da a otros un motivo para escribirte. Bastan unas líneas sinceras.",
+    "answer": "Escribir mi presentación",
+    "notNow": "Ahora no",
+    "later": "Explorar Tempa — responder más tarde",
+    "laterBody": "Puedes explorar primero. Tu respuesta ayudará a otros a descubrirte cuando estés listo.",
+    "working": "Continuando…",
+    "continueError": "No se pudo continuar. Inténtalo de nuevo."
   }
 }

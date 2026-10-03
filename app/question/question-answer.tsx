@@ -16,6 +16,7 @@ import {
   contextQuestionClass,
 } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
+import ContinueLater from '@/app/profile/question/continue-later'
 import { WRITING_STYLE_ONBOARDING_HREF } from '@/lib/onboarding'
 import { questionSaveConfirmationCopy, QUESTION_ANSWER_MAX_CHARS, type LibraryQuestion } from '@/lib/questions'
 import { insertAtCursor } from '@/lib/textarea-insert'
@@ -179,6 +180,8 @@ export default function QuestionAnswer({
           <p className={sectionLabelClass}>{isFlagship ? t('firstQuestion') : t('question')}</p>
           <h1 className={promptClass}>{prompt}</h1>
         </div>
+
+        {onboarding && mode === 'edit' && !publishedBody && <ContinueLater disabled={saving} />}
 
         {mode === 'view' && publishedBody && onboarding && confirmation ? (
           <div className="space-y-8">

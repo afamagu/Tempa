@@ -225,7 +225,6 @@ export default function DispatchComposer({
   const postcardCatalogEntry = postcardDraft
     ? (activePostcards.find((p) => p.key === postcardDraft.postcardKey) ?? null)
     : null
-  const postcardNeedsMessage = Boolean(postcardDraft && postcardDraft.backMessage.trim().length === 0)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -317,12 +316,7 @@ export default function DispatchComposer({
               ? 'Link label is too long.'
               : null
 
-  const publishBlockedReason: string | null =
-    !isEdit && postcardNeedsMessage
-      ? 'Write something on the back of your postcard before publishing.'
-      : !isEdit && sponsorError
-        ? sponsorError
-        : null
+  const publishBlockedReason: string | null = !isEdit ? sponsorError : null
 
   const publicIdentity = resolveDispatchIdentity({
     publishedAs: official?.publishedAs ?? 'member',

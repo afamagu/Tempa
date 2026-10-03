@@ -84,16 +84,16 @@ describe('p_postcard validation — write_letter/reply_to_letter (docs/sql/2026-
     expect(result?.revealLine).toHaveLength(32)
   })
 
-  it('rejects a null back message — "the back is written for this particular sending"', () => {
-    expect(() =>
-      simulatePostcardValidation(CATALOG, VERSIONS, { postcardKey: 'essaouira', revealLine: null, backMessage: null })
-    ).toThrow('A Postcard needs its own written message before it can be sent.')
+  it('accepts a null back message as an empty note', () => {
+    expect(() => simulatePostcardValidation(CATALOG, VERSIONS, {
+      postcardKey: 'essaouira', revealLine: null, backMessage: null,
+    })).not.toThrow()
   })
 
-  it('rejects a whitespace-only back message — trimmed length must be non-zero', () => {
-    expect(() =>
-      simulatePostcardValidation(CATALOG, VERSIONS, { postcardKey: 'essaouira', revealLine: null, backMessage: '   ' })
-    ).toThrow('A Postcard needs its own written message before it can be sent.')
+  it('accepts a whitespace-only back message', () => {
+    expect(() => simulatePostcardValidation(CATALOG, VERSIONS, {
+      postcardKey: 'essaouira', revealLine: null, backMessage: '   ',
+    })).not.toThrow()
   })
 
   // Smoke-test contract completion checkpoint: 200 -> 300.

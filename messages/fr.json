@@ -437,5 +437,15 @@
     "done": "Terminé",
     "next": "Suivant →",
     "writeTo": "Écrire à {name}"
+  },
+  "Introduction": {
+    "title": "Faites entendre votre voix.",
+    "body": "Votre présentation donne aux autres une raison de vous écrire. Quelques lignes sincères suffisent.",
+    "answer": "Écrire ma présentation",
+    "notNow": "Pas maintenant",
+    "later": "Explorer Tempa — répondre plus tard",
+    "laterBody": "Vous pouvez commencer par explorer. Votre réponse aidera les autres à vous découvrir quand vous serez prêt.",
+    "working": "Un instant…",
+    "continueError": "Impossible de continuer pour le moment. Veuillez réessayer."
   }
 }
