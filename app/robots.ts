@@ -13,11 +13,18 @@ import { PUBLIC_DISPATCH_PATH } from '@/lib/public-dispatches'
 // pages. Share links (/d/…) stay disallowed/noindex.
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: {
+    rules: [{
       userAgent: '*',
       allow: [...PUBLIC_INDEXABLE_PATHS, `${PUBLIC_DISPATCH_PATH}/`, '/_next/'],
       disallow: '/',
-    },
+    }, {
+      // Social previews may read deliberately shared token URLs and their
+      // generated images. This grants no access: the share RPC still checks
+      // publication and revocation, and the reader remains noindex.
+      userAgent: ['Twitterbot', 'facebookexternalhit', 'Facebot'],
+      allow: [...PUBLIC_INDEXABLE_PATHS, `${PUBLIC_DISPATCH_PATH}/`, '/d/', '/_next/'],
+      disallow: '/',
+    }],
     sitemap: `${SITE_URL}/sitemap.xml`,
   }
 }

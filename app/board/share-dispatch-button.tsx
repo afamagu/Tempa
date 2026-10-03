@@ -65,6 +65,7 @@ export default function ShareDispatchButton({
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
 
   async function handleShare() {
     if (busy) return
@@ -79,14 +80,21 @@ export default function ShareDispatchButton({
         return
       }
       const url = `${window.location.origin}/d/${data.id}`
+      setShareUrl(url)
 
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
         try {
           await navigator.share({ title, text: shareText ?? `${title} — by ${authorPseudonym} on Tempa`, url })
-        } catch {
+        } catch (cause) {
           // Cancelling the native share sheet (or the platform
           // rejecting it) is a normal outcome, not a failure — nothing
           // to surface.
+          if (typeof cause === 'object' && cause !== null && 'name' in cause && cause.name === 'AbortError') return
+          // A failed native share can still fall back to copying the link.
+          if (navigator.clipboard) {
+            await navigator.clipboard.writeText(url)
+            setCopied(true)
+          }
         }
         return
       }
@@ -96,6 +104,8 @@ export default function ShareDispatchButton({
         setCopied(true)
         window.setTimeout(() => setCopied(false), 2500)
       }
+    } catch {
+      setError('Could not complete sharing. Use the public link below if available, or try again.')
     } finally {
       setBusy(false)
     }
@@ -115,6 +125,11 @@ export default function ShareDispatchButton({
       </button>
 
       {copied && <span className={helperTextClass}>Link copied</span>}
+      {shareUrl && (
+        <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent underline underline-offset-4">
+          Open public sharing link
+        </a>
+      )}
       {error && <span className="text-[11px] text-red-600">{error}</span>}
     </div>
   )
