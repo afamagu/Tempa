@@ -47,11 +47,11 @@ describe('LetterboxSearch', () => {
     const withTransit = renderToStaticMarkup(
       <LetterboxSearch people={PEOPLE} mailInTransitPersonIds={new Set(['user-1'])} />
     )
-    expect(withTransit).toContain('Mail on the way')
+    expect(withTransit).toContain('A letter is on the way')
 
     const withoutTransit = renderToStaticMarkup(
       <LetterboxSearch people={PEOPLE} mailInTransitPersonIds={new Set()} />
     )
-    expect(withoutTransit).not.toContain('Mail on the way')
+    expect(withoutTransit).not.toContain('A letter is on the way')
   })
 })
