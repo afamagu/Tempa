@@ -11,7 +11,8 @@ import {
 import DiscoveryResults, { type DiscoveryEntry } from '@/app/room/discovery-results'
 import { appendDistinctPeople } from '@/app/room/people-browser'
 import { loadMorePeople } from '@/app/room/discovery-actions'
-import { loadPassiveIntroductions, markPassiveIntroductionPresented } from './actions'
+import { markIntroductionPresented } from '@/app/introduction-actions'
+import { loadPassiveIntroductions } from './actions'
 import DiscoverFilters from './discover-filters'
 
 export default function DiscoverBrowser({
@@ -214,7 +215,7 @@ export default function DiscoverBrowser({
         if (!candidateId || presentedThisVisit.current.has(candidateId)) continue
         presentedThisVisit.current.add(candidateId)
         observer.unobserve(record.target)
-        void markPassiveIntroductionPresented(candidateId)
+        void markIntroductionPresented(candidateId)
       }
     }, { threshold: 0.6 })
     cards.forEach((card) => observer.observe(card))
