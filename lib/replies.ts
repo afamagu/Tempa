@@ -1,4 +1,4 @@
-import { mentionPublicationRpc, type MentionSelection } from './public-mentions'
+import { executeMentionPublication, mentionPublicationRpc, type MentionSelection } from './public-mentions'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { publicProfileMarkUrl } from './profile-marks'
 import { editorialTitleFor, getEditorialBylines } from './editorial-byline'
@@ -243,7 +243,7 @@ export async function createReply(
     warningAcknowledged?: boolean
   }
 ): Promise<{ error: CreateReplyError }> {
-  const { error } = await supabase.rpc(...mentionPublicationRpc('create_reply', {
+  const { error } = await executeMentionPublication(supabase, mentionPublicationRpc('create_reply', {
     p_dispatch_id: input.dispatchId,
     p_body: input.body,
     p_safety_evaluation_id: input.safetyEvaluationId,

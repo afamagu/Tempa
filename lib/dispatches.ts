@@ -1,4 +1,4 @@
-import { mentionPublicationRpc, type MentionSelection } from './public-mentions'
+import { executeMentionPublication, mentionPublicationRpc, type MentionSelection } from './public-mentions'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { letterPreviewText, isRichBody } from './letters'
 import type { LetterPostcardDraft, PostcardBaseContent, PostcardRevealLineAlignment } from './moments'
@@ -1087,7 +1087,7 @@ export async function publishDispatch(
     mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('publish_dispatch', {
+  const { data, error } = await executeMentionPublication(supabase, mentionPublicationRpc(...saveRpc('publish_dispatch', {
     p_title: input.title,
     p_body: input.body,
     p_safety_evaluation_id: input.safetyEvaluationId,
@@ -1191,7 +1191,7 @@ export async function updateDispatch(
     mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('update_dispatch', {
+  const { data, error } = await executeMentionPublication(supabase, mentionPublicationRpc(...saveRpc('update_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,
@@ -1247,7 +1247,7 @@ export async function publishOfficialDispatch(
     mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('publish_official_dispatch', {
+  const { data, error } = await executeMentionPublication(supabase, mentionPublicationRpc(...saveRpc('publish_official_dispatch', {
     p_published_as: input.publishedAs,
     p_title: input.title,
     p_body: input.body,
@@ -1283,7 +1283,7 @@ export async function updateOfficialDispatch(
     mentions?: MentionSelection[]
   }
 ): Promise<{ data: Dispatch | null; error: PublishDispatchError }> {
-  const { data, error } = await supabase.rpc(...mentionPublicationRpc(...saveRpc('update_official_dispatch', {
+  const { data, error } = await executeMentionPublication(supabase, mentionPublicationRpc(...saveRpc('update_official_dispatch', {
     p_dispatch_id: dispatchId,
     p_title: input.title,
     p_body: input.body,

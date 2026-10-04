@@ -11,6 +11,18 @@ export default async function PublicMentions({ history = false, offset = 0 }: { 
   const rows = (data ?? []) as Mention[]
   const visible = history ? rows.slice(0, 20) : rows.slice(0, 20).filter(row => !row.read_at).slice(0, 3)
   if (!rows.length && !history) return null
+  if (!history) return <section className="mb-8 space-y-2" aria-label={t('heading')}>
+    {visible.map(row => <Link prefetch={false} key={row.id} href={`/mentions/${row.id}`}
+      className="flex min-h-20 items-center gap-3 rounded-lg border border-clay/15 bg-clay/[.08] px-4 py-3 transition-colors hover:bg-clay/[.12] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-clay">
+      <span aria-hidden="true" className="shrink-0 font-serif text-3xl text-clay">@</span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-serif text-lg leading-snug text-clay">{t('noticeTitle')}</span>
+        <span className="mt-1 block break-words text-sm leading-relaxed text-foreground/70">{t(row.kind, { name: row.pseudonym })}</span>
+      </span>
+      <span aria-hidden="true" className="shrink-0 text-clay">→</span>
+    </Link>)}
+    <Link href="/you/mentions" className="inline-flex min-h-11 items-center text-sm text-clay underline underline-offset-4">{t('all')}</Link>
+  </section>
   return <section className="space-y-3 rounded-lg border border-accent/20 p-4" aria-label={t('heading')}>
     <h2 className="font-serif text-xl">{t('heading')}</h2>
     {visible.map(row => <Link prefetch={false} key={row.id} href={`/mentions/${row.id}`} className="block rounded-md py-2 text-sm underline underline-offset-4">

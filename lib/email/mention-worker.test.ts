@@ -50,3 +50,9 @@ describe('mention email delivery',()=>{
     expect(JSON.stringify(rpc.mock.calls)).not.toContain('private provider details')
   })
 })
+it('uses sender-scoped claims for immediate attempts, never the global queue', async () => {
+ vi.stubEnv('ARRIVAL_EMAIL_FROM',snapshot.from)
+ const rpc=vi.fn().mockResolvedValue({data:[],error:null})
+ await runMentionEmailWorker({supabase:{rpc} as unknown as SupabaseClient,sendEmail:vi.fn(),siteOrigin:snapshot.siteOrigin,senderId:'sender'})
+ expect(rpc).toHaveBeenCalledExactlyOnceWith('claim_immediate_mention_emails',{p_sender_id:'sender'})
+})
