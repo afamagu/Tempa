@@ -35,6 +35,17 @@ type RelationshipCapacityRow = {
   grandfathered: boolean
 }
 
+export type RelationshipCapacityErrorLike = {
+  message?: string | null
+  details?: string | null
+  hint?: string | null
+}
+
+export type RelationshipCapacityFailure =
+  | 'RELATIONSHIP_CAPACITY_REACHED'
+  | 'OUTGOING_FIRST_CONTACT_LIMIT_REACHED'
+  | 'RECIPIENT_FIRST_CONTACT_LIMIT_REACHED'
+
 function toRelationshipCapacity(row: RelationshipCapacityRow): RelationshipCapacity {
   return {
     activeLimit: row.active_limit,
@@ -49,6 +60,53 @@ function toRelationshipCapacity(row: RelationshipCapacityRow): RelationshipCapac
     canReceiveFirstContact: row.can_receive_first_contact,
     grandfathered: row.grandfathered,
   }
+}
+
+/**
+ * PostgREST exposes PostgreSQL RAISE ... DETAIL through `details`, but keep
+ * message/hint in the search too so the UI remains stable if the transport
+ * representation changes. Only these fixed server codes are interpreted;
+ * arbitrary database text is never shown directly to members.
+ */
+export function relationshipCapacityFailure(
+  error: RelationshipCapacityErrorLike
+): RelationshipCapacityFailure | null {
+  const haystack = [error.details, error.message, error.hint].filter(Boolean).join(' ')
+
+  for (const code of [
+    'RELATIONSHIP_CAPACITY_REACHED',
+    'OUTGOING_FIRST_CONTACT_LIMIT_REACHED',
+    'RECIPIENT_FIRST_CONTACT_LIMIT_REACHED',
+  ] as const) {
+    if (haystack.includes(code)) return code
+  }
+
+  return null
+}
+
+/** Member-facing copy for a failed attempt to START a correspondence. */
+export function firstContactCapacityMessage(
+  error: RelationshipCapacityErrorLike,
+  recipientPseudonym: string
+): string | null {
+  switch (relationshipCapacityFailure(error)) {
+    case 'RELATIONSHIP_CAPACITY_REACHED':
+      return 'Your correspondence circle is full right now. When a place opens, you can begin a new correspondence.'
+    case 'OUTGOING_FIRST_CONTACT_LIMIT_REACHED':
+      return 'You already have two first letters waiting for replies. When one is answered or closes, you can write to someone new.'
+    case 'RECIPIENT_FIRST_CONTACT_LIMIT_REACHED':
+      return `${recipientPseudonym} already has two new letters waiting for a response. Try again when they have room for another.`
+    default:
+      return null
+  }
+}
+
+/** Member-facing copy when a first reply would establish a new relationship. */
+export function establishmentCapacityMessage(
+  error: RelationshipCapacityErrorLike
+): string | null {
+  if (relationshipCapacityFailure(error) !== 'RELATIONSHIP_CAPACITY_REACHED') return null
+  return 'Your correspondence circle is full right now. You can keep this letter and reply when a place opens.'
 }
 
 /**
