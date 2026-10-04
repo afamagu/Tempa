@@ -2,132 +2,155 @@ import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
-import { helperTextClass, metadataTextClass } from '@/app/profile/ui'
-import { formatDateShort } from '@/lib/format-date'
-import {
-  letterPreviewText,
-  isRichBody,
-  deriveLetterboxCardStatus,
-  type LetterboxPerson,
-} from '@/lib/letters'
+import { helperTextClass, metadataTextClass, sectionLabelClass } from '@/app/profile/ui'
+import { letterPreviewText, isRichBody } from '@/lib/letters'
+import type { RelationshipSurfacePerson } from '@/lib/relationship-surface'
 
-/**
- * A small, restrained unread-count badge — same visual language as
- * the nav shell's own Badge (app-shell.tsx): quiet accent color, never
- * red/alarming, capped display at "99+". Only rendered when this
- * person has at least one unread incoming letter across their visible
- * correspondence(s) (see getLetterboxPeople's unreadCount aggregation).
- * Deliberately the stronger of the two badges on a card — unread means
- * something has actually arrived and hasn't been opened yet, distinct
- * from MailInTransitBadge below, which only means something is still
- * travelling.
- */
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
     <span
       aria-label={`${count} unread letter${count === 1 ? '' : 's'}`}
-      className="absolute right-2 top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-medium text-accent-foreground"
+      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-medium text-accent-foreground"
     >
       {count > 99 ? '99+' : count}
     </span>
   )
 }
 
-/** Release Polish Pass — the one quiet status line deriveLetterboxCardStatus
- * produces (New letter / Waiting for a reply / Last exchanged {date}).
- * "Mail on the way" is rendered separately, unconditionally, alongside
- * this — see deriveLetterboxCardStatus's own doc comment for why the
- * two are independent rather than one mutually-exclusive state. */
-function CardStatusLine({ person }: { person: LetterboxPerson }) {
-  const status = deriveLetterboxCardStatus(person)
-  if (status.kind === 'new') {
-    return <p className="text-[13px] font-medium text-accent">New letter</p>
-  }
-  if (status.kind === 'waiting_for_reply') {
-    return <p className={metadataTextClass}>Waiting for a reply</p>
-  }
-  return <p className={metadataTextClass}>Last exchanged {formatDateShort(new Date(status.activityAt).toISOString())}</p>
+function RelationshipRow({
+  person,
+  mailOnTheWay,
+}: {
+  person: RelationshipSurfacePerson
+  mailOnTheWay: boolean
+}) {
+  return (
+    <Link
+      href={`/letters/with/${person.userId}`}
+      className="group grid gap-3 px-1 py-5 transition-colors hover:bg-foreground/[.02] sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-6 sm:px-3"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <ProfileIdentityMark
+          identifier={person.userId}
+          markUrl={person.markUrl ?? null}
+          label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined}
+          size="lg"
+        />
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-[17px] font-semibold text-foreground group-hover:text-foreground/85">
+              {person.pseudonym}
+            </p>
+            <UnreadBadge count={person.unreadCount} />
+          </div>
+          <p className={`truncate ${metadataTextClass}`}>
+            {[person.country, person.ageRange].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      </div>
+
+      <div className="min-w-0 sm:px-2">
+        {person.latestExcerpt ? (
+          <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[14px] italic leading-snug text-foreground/60">
+            <FormattedText
+              text={letterPreviewText(person.latestExcerpt)}
+              isRich={isRichBody(person.latestExcerpt)}
+            />
+          </p>
+        ) : (
+          <p className={helperTextClass}>Your correspondence is here.</p>
+        )}
+      </div>
+
+      <div className="flex min-w-[10rem] items-end justify-between gap-3 sm:flex-col sm:items-end sm:justify-center sm:text-right">
+        <p
+          className={
+            person.unreadCount > 0
+              ? 'text-[13px] font-medium text-accent'
+              : metadataTextClass
+          }
+        >
+          {person.statusText}
+        </p>
+        {mailOnTheWay && <MailOnTheWay />}
+      </div>
+    </Link>
+  )
+}
+
+function RelationshipSection({
+  label,
+  people,
+  mailInTransitPersonIds,
+}: {
+  label: string
+  people: RelationshipSurfacePerson[]
+  mailInTransitPersonIds: Set<string>
+}) {
+  if (people.length === 0) return null
+
+  return (
+    <section className="space-y-2" aria-label={label}>
+      <p className={sectionLabelClass}>{label}</p>
+      <div className="divide-y divide-foreground/10 border-y border-foreground/10">
+        {people.map((person) => (
+          <RelationshipRow
+            key={person.userId}
+            person={person}
+            mailOnTheWay={mailInTransitPersonIds.has(person.userId)}
+          />
+        ))}
+      </div>
+    </section>
+  )
 }
 
 /**
- * Letterbox Level 1's entire visible surface: a responsive
- * correspondence-CARD grid, address-book style — the PERSON is the
- * primary object, never an individual message row. 3 cards per row on
- * a large desktop, 2 on tablet, 1 on phone (Release Polish Pass —
- * restores this grid after a prior pass had collapsed it into a
- * single-column stack of horizontal rows, which read too much like a
- * generic email inbox).
- *
- * Each card leads with the pseudonym at real visual weight, quiet
- * country/age-range metadata beneath it, ONE subordinate serif excerpt
- * line from the most recent VISIBLE letter (letterPreviewText,
- * lib/letters.ts — first paragraph only, CSS-clamped to two lines on
- * top of that so long and short letters produce approximately the same
- * card height), and a single quiet status line
- * (deriveLetterboxCardStatus) — deliberately plain text, not another
- * filled bg-surface-shell strip, so the excerpt reads as a quiet
- * aside rather than a Gmail-style preview strip. The corner unread
- * badge is unchanged from before; the independent "Mail on the way"
- * block (Brand asset pass, app/mail-on-the-way.tsx) now uses the
- * approved travelling-envelope asset and pale postal-notice treatment
- * instead of the old plain stroke icon + inline SystemMessage line.
- * Ordering is whatever order `people` already arrives in
- * (getLetterboxPeople sorts newest-activity first) — grid flow alone
- * puts the newest person first.
+ * Phase 4 — Letterbox is a small relationship surface, not an address-book
+ * gallery and not an email inbox. Living established correspondence is first;
+ * first-contact attempts remain visibly distinct; history is deliberately
+ * secondary. Pause/resume is not represented until its later product phase.
  */
 export default function PeopleGrid({
   people,
   mailInTransitPersonIds,
 }: {
-  people: LetterboxPerson[]
-  /** Correspondent ids currently sending mail this viewer's way but
-   * hasn't received yet — sourced from incoming_mail_in_transit
-   * (lib/letters.ts), never from anything letters_for_participant
-   * already hides. */
+  people: RelationshipSurfacePerson[]
   mailInTransitPersonIds: Set<string>
 }) {
   if (people.length === 0) {
-    return <p className={helperTextClass}>You don&apos;t have any letters yet.</p>
+    return (
+      <div className="rounded-md border border-foreground/10 px-5 py-6">
+        <p className="font-serif text-[17px] text-foreground">No correspondence yet.</p>
+        <p className={`mt-1 ${helperTextClass}`}>
+          When a first letter begins an exchange, that person will live here.
+        </p>
+      </div>
+    )
   }
 
+  const established = people.filter((person) => person.relationshipState === 'established')
+  const pending = people.filter((person) => person.relationshipState === 'pending')
+  const past = people.filter((person) => person.relationshipState === 'past')
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {people.map((person) => (
-        <Link
-          key={person.userId}
-          href={`/letters/with/${person.userId}`}
-          className="relative flex flex-col gap-2.5 rounded-md border border-foreground/10 p-4 transition-colors hover:border-foreground/25 hover:bg-foreground/[.02]"
-        >
-          <UnreadBadge count={person.unreadCount} />
-
-          <div className="flex items-center gap-3">
-            <ProfileIdentityMark
-              identifier={person.userId}
-              markUrl={person.markUrl ?? null}
-              label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined}
-              size="lg"
-            />
-            <div className="min-w-0">
-              <p className="truncate text-[17px] font-semibold text-foreground">{person.pseudonym}</p>
-              <p className={`truncate ${metadataTextClass}`}>
-                {[person.country, person.ageRange].filter(Boolean).join(' · ')}
-              </p>
-            </div>
-          </div>
-
-          {person.latestExcerpt && (
-            <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[14px] italic leading-snug text-foreground/60">
-              <FormattedText text={letterPreviewText(person.latestExcerpt)} isRich={isRichBody(person.latestExcerpt)} />
-            </p>
-          )}
-
-          <div className="mt-auto space-y-1 pt-1">
-            <CardStatusLine person={person} />
-            {mailInTransitPersonIds.has(person.userId) && <MailOnTheWay />}
-          </div>
-        </Link>
-      ))}
+    <div className="space-y-9">
+      <RelationshipSection
+        label="Correspondence"
+        people={established}
+        mailInTransitPersonIds={mailInTransitPersonIds}
+      />
+      <RelationshipSection
+        label="First letters"
+        people={pending}
+        mailInTransitPersonIds={mailInTransitPersonIds}
+      />
+      <RelationshipSection
+        label="Past correspondence"
+        people={past}
+        mailInTransitPersonIds={mailInTransitPersonIds}
+      />
     </div>
   )
 }

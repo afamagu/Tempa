@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import MemberIntroductions from '@/app/member-introductions'
 import TempaEmblem from '@/app/tempa-emblem'
 
 type NavKey = 'home' | 'letters' | 'room' | 'board' | 'you'
@@ -69,20 +68,25 @@ function NavIcon({ item, className }: { item: NavKey; className?: string }) {
   }
 }
 
-function Badge({ count }: { count: number }) {
-  if (count <= 0) return null
-  return (
-    <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-medium text-accent-foreground">
-      {count > 99 ? '99+' : count}
-    </span>
-  )
+/**
+ * One quiet actionable-mail signal. Tempa deliberately does not place a
+ * numeric inbox counter in persistent navigation: correspondence state lives
+ * on Home and in Letterbox, while navigation only needs to say “something
+ * arrived.”
+ */
+function LetterboxDot() {
+  return <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-accent" />
 }
 
 /**
  * Tempa's persistent primary navigation. The member-facing destinations are
- * Home, Letters, The Room, The Board and You. `minds` remains an accepted
- * active value temporarily so older, non-canonical call sites cannot break a
- * production build while their URLs are redirected to The Room.
+ * Home, Letterbox, The Room, The Board and You. `minds` remains an accepted
+ * internal active value temporarily so legacy route call sites cannot break a
+ * production build while user-facing terminology stays retired.
+ *
+ * The old sign-in Member Introductions popup is intentionally absent. Phase 4
+ * makes Home itself the stable relationship surface; Phase 5 will introduce
+ * Familiar Faces inline rather than reviving a modal stranger carousel.
  */
 export default function AppShell({
   active,
@@ -118,7 +122,11 @@ export default function AppShell({
               >
                 <NavIcon item={item.key} className="h-5 w-5 shrink-0" />
                 <span>{t(item.label)}</span>
-                {item.key === 'letters' && <Badge count={waitingLetterCount} />}
+                {item.key === 'letters' && waitingLetterCount > 0 && (
+                  <span className="ml-auto">
+                    <LetterboxDot />
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -126,8 +134,6 @@ export default function AppShell({
       </nav>
 
       <div className="min-w-0 max-w-full flex-1 pb-16 sm:pb-0">{children}</div>
-
-      <MemberIntroductions enabled={activeNav === 'home'} />
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden">
         {NAV_ITEMS.map((item) => {
@@ -152,10 +158,9 @@ export default function AppShell({
                     }`}
                   />
                   {item.key === 'letters' && waitingLetterCount > 0 && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent"
-                    />
+                    <span className="absolute -right-1 -top-1">
+                      <LetterboxDot />
+                    </span>
                   )}
                 </span>
               </span>
