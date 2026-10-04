@@ -65,10 +65,16 @@ export default async function WriteToPage({
     const correspondence = await getActiveEstablishedCorrespondenceWithUser(supabase, user.id, recipientId)
     if (correspondence && await isEstablishedForViewer(supabase, correspondence.id)) redirect(`/letters/with/${recipientId}/write?mq=${encodeURIComponent(mq)}&returnTo=${encodeURIComponent(backHref)}`)
   }
-  if (mq) {
-    const incoming = await getFirstContact(supabase, recipientId, user.id)
-    if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) redirect(`/letters/${incoming.id}`)
+
+  // A private relationship has only one first-contact episode at a time.
+  // If this person has already written to the viewer, every generic /write
+  // entry point should continue through that incoming letter rather than
+  // manufacture a crossed pair of first letters.
+  const incoming = await getFirstContact(supabase, recipientId, user.id)
+  if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) {
+    redirect(`/letters/${incoming.id}`)
   }
+
   const existing = await getFirstContact(supabase, user.id, recipientId)
 
   if (existing) {
