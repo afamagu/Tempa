@@ -26,6 +26,7 @@ import {
   ACCOUNT_RESTRICTED_MESSAGE,
   type AccountStatus,
 } from '@/lib/account-status'
+import { establishmentCapacityMessage } from '@/lib/relationship-capacity'
 import {
   evaluateSafety,
   SAFETY_CANNOT_SEND_MESSAGE,
@@ -251,14 +252,15 @@ export default function FirstContactResponse({
 
       if (error) {
         console.error('[letters] first-contact reply failed', { message: error.message, code: error.code })
-        // suspended/banned fully block this reply, sharing one
-        // deliberately vague RPC message with "not found"/blocked-pair
-        // (see reply_to_letter's own comment) — accountBlockedMessage
-        // only fires from the caller's OWN already-known status, never
-        // by decoding that shared message, so an unrelated failure
-        // still shows the existing generic copy.
+        // Capacity is enforced at the pending -> active database edge,
+        // after the reply insert but in the SAME transaction. A rejected
+        // establishment therefore rolls the reply back and leaves this
+        // draft intact. Translate only the fixed server detail code; all
+        // unrelated failures keep the established account/generic copy.
+        const capacityMessage = establishmentCapacityMessage(error)
         setReplyError(
-          accountBlockedMessage(myStatus) ??
+          capacityMessage ??
+            accountBlockedMessage(myStatus) ??
             (error.code === ACCOUNT_ACTION_UNAVAILABLE_CODE ? ACCOUNT_RESTRICTED_MESSAGE : 'Could not send your reply. Please try again.')
         )
         return
