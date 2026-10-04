@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { debounce } from '@/lib/debounce'
 import { toSearchResults, type SearchPersonResult, type SearchLetterResult } from '@/lib/search'
 import { inputClass } from '@/app/profile/ui'
-import type { LetterboxPerson } from '@/lib/letters'
+import type { RelationshipSurfacePerson } from '@/lib/relationship-surface'
 import PeopleGrid from './people-grid'
 import SearchResultsPanel, { type SearchStatus } from './search-results-panel'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
@@ -34,23 +34,15 @@ async function enrichPersonMarks(
 }
 
 /**
- * Letterbox's search entry point — a single field near the heading.
- * An empty query always restores the normal people grid unchanged
- * (people is the same server-fetched list Level 1 already renders);
- * a non-empty query replaces it with SearchResultsPanel. Typing
- * debounces at 300ms via lib/debounce.ts; pressing Enter flushes
- * immediately, bypassing the debounce and cancelling whatever was
- * pending so it can't also fire a second time afterward.
+ * Letterbox search spans people and letters the member already has here.
+ * Empty search returns to the relationship-first Correspondence / First
+ * letters / Past correspondence view unchanged.
  */
 export default function LetterboxSearch({
   people,
   mailInTransitPersonIds,
 }: {
-  people: LetterboxPerson[]
-  /** Correspondent ids with mail currently travelling toward the
-   * viewer — only ever applied to this default grid, never to search
-   * results (search must never surface a hidden incoming letter at
-   * all, transit or otherwise). */
+  people: RelationshipSurfacePerson[]
   mailInTransitPersonIds: Set<string>
 }) {
   const [query, setQuery] = useState('')
@@ -60,11 +52,6 @@ export default function LetterboxSearch({
   const [lettersOffset, setLettersOffset] = useState(0)
   const [hasMoreLetters, setHasMoreLetters] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-
-  // Guards against a slow, now-superseded response overwriting the
-  // results of a query the member has since moved on from — the
-  // response for "walk" that resolves after "walked" has already
-  // started must never clobber "walked"'s results.
   const activeQueryRef = useRef('')
 
   async function runSearch(q: string) {
@@ -88,7 +75,7 @@ export default function LetterboxSearch({
       p_letters_offset: 0,
     })
 
-    if (activeQueryRef.current !== q) return // a newer query has since started
+    if (activeQueryRef.current !== q) return
 
     if (error) {
       console.error('[letters] search failed', { message: error.message, code: error.code })
@@ -98,8 +85,8 @@ export default function LetterboxSearch({
 
     const results = toSearchResults(data ?? [])
     const letters = results.filter((r): r is SearchLetterResult => r.kind === 'letter')
-    const people = results.filter((r): r is SearchPersonResult => r.kind === 'person')
-    const peopleWithMarks = await enrichPersonMarks(supabase, people)
+    const foundPeople = results.filter((r): r is SearchPersonResult => r.kind === 'person')
+    const peopleWithMarks = await enrichPersonMarks(supabase, foundPeople)
     if (activeQueryRef.current !== q) return
     setPersonResults(peopleWithMarks)
     setLetterResults(letters)
@@ -108,11 +95,6 @@ export default function LetterboxSearch({
     setStatus('idle')
   }
 
-  // Constructed inside an effect, not during render — a ref must only
-  // ever be read/written outside of render (React's own rule). null
-  // only for the brief instant before the effect below has run, which
-  // no user interaction can reach in practice; the optional chaining
-  // at each call site is just honest typing, not a real race.
   const debouncerRef = useRef<ReturnType<typeof debounce<[string]>> | null>(null)
 
   useEffect(() => {
@@ -123,8 +105,6 @@ export default function LetterboxSearch({
   function handleChange(next: string) {
     setQuery(next)
     if (next.trim() === '') {
-      // Clearing the query restores the grid immediately — no reason
-      // to wait out a debounce window for "nothing to search."
       debouncerRef.current?.cancel()
       runSearch(next)
       return
@@ -172,8 +152,8 @@ export default function LetterboxSearch({
         value={query}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Search your pen pals…"
-        aria-label="Search your pen pals"
+        placeholder="Search your correspondence…"
+        aria-label="Search your correspondence"
         className={inputClass}
       />
 
