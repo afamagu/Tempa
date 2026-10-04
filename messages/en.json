@@ -459,7 +459,8 @@
     "unavailable": "This mention is no longer available. The writing may have been removed or its visibility changed.",
     "home": "Back to Home",
     "previous": "Previous",
-    "more": "See more"
+    "more": "See more",
+    "noticeTitle": "You were mentioned"
   },
   "MentionEmails": {
     "heading": "Mention emails",

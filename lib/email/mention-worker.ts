@@ -25,8 +25,8 @@ export function renderMentionEmail(snapshot: MentionEmailSnapshot) {
   return { subject, text, html }
 }
 
-export async function runMentionEmailWorker({ supabase, sendEmail, siteOrigin }: {
-  supabase: SupabaseClient; sendEmail: (request: SendEmailInput) => Promise<SendEmailResult>; siteOrigin: string
+export async function runMentionEmailWorker({ supabase, sendEmail, siteOrigin, senderId }: {
+  supabase: SupabaseClient; sendEmail: (request: SendEmailInput) => Promise<SendEmailResult>; siteOrigin: string; senderId?: string
 }) {
   const summary = { claimed: 0, sent: 0, failed: 0 }
   const from = process.env.ARRIVAL_EMAIL_FROM
@@ -35,7 +35,9 @@ export async function runMentionEmailWorker({ supabase, sendEmail, siteOrigin }:
     const origin = new URL(siteOrigin)
     if (origin.origin !== SITE_URL || origin.pathname !== '/' || origin.username || origin.password || origin.search || origin.hash) return summary
   } catch { return summary }
-  const { data, error } = await supabase.rpc('claim_mention_emails', { p_limit: 5 })
+  const { data, error } = senderId
+    ? await supabase.rpc('claim_immediate_mention_emails', { p_sender_id: senderId })
+    : await supabase.rpc('claim_mention_emails', { p_limit: 5 })
   if (error) {
     if (!['PGRST202', '42883'].includes(error.code)) console.error('Mention email claim failed', { code: error.code })
     return summary

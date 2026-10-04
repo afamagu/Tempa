@@ -22,3 +22,22 @@ describe('selected mention identities', () => {
     expect(mentionPublicationRpc('publish_dispatch', { p_body: 'plain' }, [mia])[1].p_mentions).toEqual([])
   })
 })
+
+import { executeMentionPublication } from './public-mentions'
+import { vi, afterEach } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
+afterEach(() => vi.unstubAllGlobals())
+it('wakes email only after successful selected-mention publication and preserves the result on network failure', async () => {
+ vi.stubGlobal('window', {})
+ const fetcher = vi.fn().mockRejectedValue(new Error('offline')); vi.stubGlobal('fetch', fetcher)
+ const result = { data: { id: 'saved' }, error: null }; const rpc = vi.fn().mockResolvedValue(result)
+ const client = { rpc } as unknown as SupabaseClient
+ expect(await executeMentionPublication(client, mentionPublicationRpc('publish_dispatch', { p_body: '@Mia' }, [mia]))).toBe(result)
+ expect(fetcher).toHaveBeenCalledTimes(1)
+ rpc.mockResolvedValue({ data: null, error: { message: 'Safety rejected' } })
+ await executeMentionPublication(client, mentionPublicationRpc('publish_dispatch', { p_body: '@Mia' }, [mia]))
+ expect(fetcher).toHaveBeenCalledTimes(1)
+ rpc.mockResolvedValue(result)
+ await executeMentionPublication(client, mentionPublicationRpc('publish_dispatch', { p_body: 'No mention' }, []))
+ expect(fetcher).toHaveBeenCalledTimes(1)
+})

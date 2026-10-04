@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePublicMentions } from '@/app/use-public-mentions'
-import { mentionPublicationRpc } from '@/lib/public-mentions'
+import { executeMentionPublication, mentionPublicationRpc } from '@/lib/public-mentions'
 import CorrespondentPicker from '@/app/correspondent-picker'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -124,7 +124,7 @@ export default function QuestionAnswer({
     setError(null)
 
     const trimmed = body.trim()
-    const { error: publishError } = await createClient().rpc(...mentionPublicationRpc('publish_question_answer', {
+    const { error: publishError } = await executeMentionPublication(createClient(), mentionPublicationRpc('publish_question_answer', {
       p_question_id: questionId,
       p_body: trimmed,
       p_safety_evaluation_id: safetyEvaluationId,

@@ -459,7 +459,8 @@
     "unavailable": "Esta mención ya no está disponible. Es posible que el texto se haya eliminado o que su visibilidad haya cambiado.",
     "home": "Volver al inicio",
     "previous": "Anterior",
-    "more": "Ver más"
+    "more": "Ver más",
+    "noticeTitle": "Te han mencionado"
   },
   "MentionEmails": {
     "heading": "Correos de menciones",

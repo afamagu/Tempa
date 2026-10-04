@@ -459,7 +459,8 @@
     "unavailable": "Cette mention n’est plus disponible. Le texte a peut-être été retiré ou sa visibilité a changé.",
     "home": "Retour à l’accueil",
     "previous": "Précédent",
-    "more": "Voir plus"
+    "more": "Voir plus",
+    "noticeTitle": "On vous a mentionné"
   },
   "MentionEmails": {
     "heading": "E-mails de mention",

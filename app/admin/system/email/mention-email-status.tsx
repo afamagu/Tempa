@@ -6,7 +6,7 @@ import { primaryButtonClass } from '@/app/profile/ui'
 
 export type MentionEmailStatus = {
   sendingEnabled: boolean; canManage: boolean; lastWorkerAt: string | null; counts: Record<string, number>;
-  recent: { mention_id: string; recipient: string | null; kind: string; status: string; attempts: number; last_error: string | null; updated_at: string }[]
+  recent: { mention_id: string; recipient: string | null; kind: string; status: string; attempts: number; last_error: string | null; updated_at: string; provider_message_id?: string | null }[]
 }
 export default function MentionEmailStatusView({ status }: { status: MentionEmailStatus | null }) {
   const router = useRouter()
@@ -23,7 +23,7 @@ export default function MentionEmailStatusView({ status }: { status: MentionEmai
   return <section className="mt-8 space-y-4 rounded-xl border border-accent/20 p-5">
     <h2 className="font-serif text-2xl">Mention emails</h2>
     {!status ? <p role="status">Mention email status is unavailable. Check the database migration and reload.</p> : <>
-      <p className="text-sm">Sending is {status.sendingEnabled ? 'enabled' : 'disabled'}. Only new mentions created while enabled enter the queue. Emails wait at least two minutes, then use the existing scheduler.</p>
+      <p className="text-sm">Sending is {status.sendingEnabled ? 'enabled' : 'disabled'}. Only new mentions created while enabled enter the queue. New mentions are attempted immediately after publication; the scheduler handles missed wake-ups and retries.</p>
       <p className="text-sm">Last worker check: {status.lastWorkerAt ? `${new Date(status.lastWorkerAt).toISOString().replace('T',' ').slice(0,19)} UTC` : 'Not observed yet. Wait for the next scheduler run, then reload.'}</p>
       <p className="text-sm text-foreground/70">Up to one email per 15 minutes and ten per day per recipient; at most two per day from people outside their correspondents. Other mentions remain in-app. “Sent” means accepted by the email provider, not confirmed inbox delivery.</p>
       {status.canManage && <button type="button" disabled={busy} className={primaryButtonClass} onClick={() => void toggle()}>{busy ? 'Saving…' : status.sendingEnabled ? 'Pause mention emails' : 'Enable future mention emails'}</button>}
@@ -31,7 +31,8 @@ export default function MentionEmailStatusView({ status }: { status: MentionEmai
       <dl className="flex flex-wrap gap-4 text-sm">{['pending','processing','sent','skipped','failed','manual_review'].map(key => <div key={key}><dt>{key.replace('_',' ')}</dt><dd className="text-xl">{status.counts[key] ?? 0}</dd></div>)}</dl>
       <ul className="divide-y divide-foreground/10">{status.recent.map(job => <li key={job.mention_id} className="py-3 text-sm">
         <p>{job.recipient ?? 'Unavailable member'} · {job.kind} · {job.status.replace('_',' ')}</p>
-        <p className="text-foreground/65">{job.attempts} attempts{job.last_error ? ` · ${job.last_error}` : ''}</p>
+        <p className="text-foreground/65">{job.attempts} attempts · {new Date(job.updated_at).toISOString().replace('T', ' ').slice(0,19)} UTC{job.last_error ? ` · ${job.last_error}` : ''}</p>
+        {job.provider_message_id && <p className="mt-1 break-all text-xs text-foreground/65">Provider reference: {job.provider_message_id}</p>}
       </li>)}</ul>
     </>}
   </section>
