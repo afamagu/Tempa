@@ -4,6 +4,22 @@ vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) 
 vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw Error(`redirect:${path}`) } }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
   auth: { getUser: async () => ({ data: { user: state.signedIn ? { id:'viewer' } : null } }) },
+  rpc: async () => ({
+    data: [{
+      active_limit: 8,
+      established_count: 0,
+      outgoing_pending_count: 0,
+      incoming_pending_count: 0,
+      committed_count: 0,
+      available_slots: 8,
+      outgoing_pending_limit: 2,
+      incoming_pending_limit: 2,
+      can_start_first_contact: true,
+      can_receive_first_contact: true,
+      grandfathered: false,
+    }],
+    error: null,
+  }),
   from: (table: string) => {
     const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: table === 'public_profiles' ? { pseudonym:'Maya' } : { id:'answer', user_id:'member', questions:{prompt:'Question'} } }) }
     return query
