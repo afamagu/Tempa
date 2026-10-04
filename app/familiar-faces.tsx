@@ -6,7 +6,7 @@ import ProfileIdentityMark from '@/app/profile-identity-mark'
 import EditorialByline from '@/app/editorial-byline'
 import { helperTextClass, metadataTextClass, sectionLabelClass } from '@/app/profile/ui'
 import type { DiscoveryEntry } from '@/app/room/discovery-results'
-import { markIntroductionPresented } from '@/app/letters/discover/actions'
+import { markIntroductionPresented } from '@/app/introduction-actions'
 
 export default function FamiliarFaces({
   entries,
