@@ -72,7 +72,7 @@ async function mount(values: Record<string, string> = { intent: 'Pen pals' }) {
 }
 
 const clickLabel = async (text: string) => {
-  const button = [...host.querySelectorAll('button')].find((candidate) => candidate.textContent === text)!
+  const button = [...host.querySelectorAll('button')].find((candidate) => candidate.textContent?.startsWith(text))!
   expect(button).toBeTruthy()
   await act(async () => button.click())
 }
@@ -171,7 +171,11 @@ describe('finite passive Discover and intentional broad discovery', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({ entries: [person(3)], hasMore: false, error: null })
     await mount()
-    await act(async () => intersect([{ isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver))
+    await act(async () => {
+      intersect([{ isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
     expect(host.querySelector('[role="alert"]')).toBeTruthy()
     await act(async () => intersect([{ isIntersecting: true }] as IntersectionObserverEntry[], {} as IntersectionObserver))
     expect(loadMorePeople).toHaveBeenCalledTimes(1)
