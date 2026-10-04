@@ -88,6 +88,29 @@ export function newCorrespondenceUnavailableMessage(
 }
 
 /**
+ * One restrained status line for ambient surfaces such as Home. This is not a
+ * meter or quota dashboard: it gives the member just enough information to
+ * understand whether there is room for someone new, while the canonical RPC
+ * remains the source of truth.
+ */
+export function correspondenceCapacitySummary(
+  capacity: RelationshipCapacity | null
+): string | null {
+  if (!capacity) return null
+
+  const unavailable = newCorrespondenceUnavailableMessage(capacity)
+  if (unavailable) {
+    if (capacity.availableSlots <= 0) return 'Your correspondence circle is full for now.'
+    return unavailable
+  }
+
+  if (capacity.availableSlots === 1) return 'Room for one more.'
+  if (capacity.availableSlots > 1) return `Room for ${capacity.availableSlots} more.`
+
+  return null
+}
+
+/**
  * PostgREST exposes PostgreSQL RAISE ... DETAIL through `details`, but keep
  * message/hint in the search too so the UI remains stable if the transport
  * representation changes. Only these fixed server codes are interpreted;
