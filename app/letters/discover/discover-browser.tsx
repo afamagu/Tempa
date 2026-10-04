@@ -11,6 +11,7 @@ import {
 import DiscoveryResults, { type DiscoveryEntry } from '@/app/room/discovery-results'
 import { appendDistinctPeople } from '@/app/room/people-browser'
 import { loadMorePeople } from '@/app/room/discovery-actions'
+import { loadPassiveIntroductions, markPassiveIntroductionPresented } from './actions'
 import DiscoverFilters from './discover-filters'
 
 export default function DiscoverBrowser({
@@ -39,6 +40,8 @@ export default function DiscoverBrowser({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<'failed' | 'signIn' | 'changed' | null>(initialUnavailable ? 'failed' : null)
   const sentinel = useRef<HTMLDivElement>(null)
+  const passiveResults = useRef<HTMLDivElement>(null)
+  const presentedThisVisit = useRef(new Set<string>())
   const visitSeed = useRef(seed)
   const automaticUsed = useRef(false)
   const generation = useRef(0)
@@ -85,6 +88,20 @@ export default function DiscoverBrowser({
     }
 
     try {
+      if (!intentional) {
+        const passive = await loadPassiveIntroductions()
+        if (!alive.current || version !== generation.current) return
+        if (passive.error) {
+          state.current.error = true
+          setError(passive.error)
+          return
+        }
+        state.current = { values: nextValues, entries: passive.entries, hasMore: false, error: false }
+        setEntries(passive.entries)
+        setHasMore(false)
+        return
+      }
+
       const page = await loadMorePeople(
         {
           ...discoveryRequest(nextValues, visitSeed.current),
@@ -100,7 +117,7 @@ export default function DiscoverBrowser({
         return
       }
       const combined = appendDistinctPeople(previous, page.entries)
-      const more = intentional && page.hasMore && combined.length > previous.length
+      const more = page.hasMore && combined.length > previous.length
       state.current = { values: nextValues, entries: combined, hasMore: more, error: false }
       setEntries(combined)
       setHasMore(more)
@@ -131,6 +148,9 @@ export default function DiscoverBrowser({
       ) return
       visitSeed.current = saved.seed
       automaticUsed.current = saved.automaticUsed
+      if (Array.isArray(saved.presentedIds)) {
+        presentedThisVisit.current = new Set(saved.presentedIds.filter((id: unknown) => typeof id === 'string'))
+      }
       state.current = { values: initialValues, entries: saved.entries, hasMore: saved.hasMore, error: false }
       requestAnimationFrame(() => {
         if (!alive.current) return
@@ -152,6 +172,7 @@ export default function DiscoverBrowser({
         hasMore: state.current.hasMore,
         seed: visitSeed.current,
         automaticUsed: automaticUsed.current,
+        presentedIds: [...presentedThisVisit.current],
         scrollY: window.scrollY,
       }))
     } catch {}
@@ -177,6 +198,28 @@ export default function DiscoverBrowser({
   }, [load])
 
   const intentional = hasIntentionalDiscoverCriteria(values)
+
+  // A passive introduction becomes an encounter only after the corresponding
+  // card is substantially visible. Fetching six rows alone must not manufacture
+  // familiarity for cards the member never actually reached.
+  useEffect(() => {
+    const root = passiveResults.current
+    if (intentional || !root || !entries.length || !('IntersectionObserver' in window)) return
+    const cards = Array.from(root.querySelectorAll<HTMLElement>('article'))
+    const byCard = new Map(cards.map((card, index) => [card, entries[index]?.userId]).filter((pair): pair is [HTMLElement, string] => Boolean(pair[1])))
+    const observer = new IntersectionObserver((records) => {
+      for (const record of records) {
+        if (!record.isIntersecting || record.intersectionRatio < 0.6) continue
+        const candidateId = byCard.get(record.target as HTMLElement)
+        if (!candidateId || presentedThisVisit.current.has(candidateId)) continue
+        presentedThisVisit.current.add(candidateId)
+        observer.unobserve(record.target)
+        void markPassiveIntroductionPresented(candidateId)
+      }
+    }, { threshold: 0.6 })
+    cards.forEach((card) => observer.observe(card))
+    return () => observer.disconnect()
+  }, [intentional, entries])
 
   useEffect(() => {
     const el = sentinel.current
@@ -216,7 +259,9 @@ export default function DiscoverBrowser({
           </div>
         )}
 
-        <DiscoveryResults entries={entries} returnTo={returnDestination()} profileLed />
+        <div ref={passiveResults}>
+          <DiscoveryResults entries={entries} returnTo={returnDestination()} profileLed />
+        </div>
 
         <div ref={sentinel} className="flex min-h-12 items-center justify-center" aria-live="polite">
           {pending ? (
@@ -230,7 +275,7 @@ export default function DiscoverBrowser({
             </div>
           ) : passiveEmptyBecauseFull ? (
             <p className="max-w-md text-center text-sm text-muted">
-              Your correspondence circle is full for now. Search if you have someone in mind, or keep reading the wider Tempa world.
+              Your correspondence circle is full for now. Search for a specific person, or keep reading the wider Tempa world.
             </p>
           ) : !entries.length ? (
             <p className="text-sm text-muted">{t('empty')}</p>
