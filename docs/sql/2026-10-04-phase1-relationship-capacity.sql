@@ -2,63 +2,31 @@
 -- TEMPA — PHASE 1: RELATIONSHIP CAPACITY FOUNDATION
 -- PREPARED 2026-10-04. REVIEW BEFORE PRODUCTION EXECUTION.
 --
--- PURPOSE
--- -------
--- Tempa's pilot deliberately keeps private correspondence small enough
--- for people to sustain. This migration makes that product rule a
--- database invariant instead of a UI convention.
---
--- Pilot rules encoded here:
+-- Pilot invariants:
 --   * 5 committed private correspondences by default.
---   * A controlled per-member override may raise that limit only to 6–10.
+--   * Controlled per-member experiment overrides may be 5–10.
 --   * No paid-capacity concept exists here.
---   * At most 2 unresolved OUTGOING first letters.
---   * At most 2 unresolved INCOMING first letters.
---   * An outgoing unresolved first letter reserves one sender slot.
---   * An incoming unresolved first letter does NOT reserve a recipient slot.
---   * The recipient consumes a slot only when their first reciprocal reply
---     establishes the correspondence.
+--   * Max 2 unresolved OUTGOING first letters.
+--   * Max 2 unresolved INCOMING first letters.
+--   * Outgoing unresolved first letters reserve sender capacity.
+--   * Incoming unresolved first letters do NOT reserve recipient capacity.
+--   * The first reciprocal reply establishes the correspondence and then
+--     consumes recipient capacity.
 --   * Existing established correspondences are never terminated merely
---     because a member is already at/above the pilot limit.
---   * Ongoing writing inside an established correspondence is never gated
---     by this capacity layer.
+--     because a member is already at/above the current limit.
+--   * Ongoing writing inside an established correspondence is never gated.
 --
--- ARCHITECTURE
--- ------------
--- Capacity is enforced on the durable database transitions, NOT by
--- duplicating checks in one particular UI or RPC version:
---
---   1) BEFORE INSERT on public.letters for a genuine first-contact root
---      (reply_to_id IS NULL + question_answer_id IS NOT NULL + pending
---      correspondence). This protects every first-contact write path.
---
---   2) BEFORE UPDATE on public.correspondences when pending -> active with
---      established_at set. This protects the first reciprocal reply even
---      if reply_to_letter is later replaced by another migration.
---
--- This is deliberate: docs/sql/2026-10-05-safety-checkpoint3-letter-wiring.sql
--- later replaces the letter RPC definitions to require Safety evaluations.
--- Trigger-level capacity enforcement therefore survives that replacement
--- and does not weaken or duplicate Safety's own chokepoint.
---
--- Concurrency is serialized with transaction-scoped advisory locks keyed
--- per member. First-contact inserts lock BOTH sender and recipient in
--- deterministic UUID order; establishment locks the accepting member.
--- Concurrent tabs/requests therefore cannot race past either the 5-slot
--- committed limit or either 2-first-letter limit.
---
--- PREREQUISITE
--- ------------
--- Requires the pending/active/closed correspondence lifecycle prepared by
--- the September correspondence hardening: a new first contact owns a
--- status='pending' correspondence, and its first reciprocal reply changes
--- it to status='active' and sets established_at.
+-- Enforcement deliberately lives on durable database state transitions:
+--   1) a root Letter inserted into a still-pending correspondence;
+--   2) pending -> active + established_at on first reciprocal reply.
+-- This survives later RPC rewrites (including Safety wiring) and covers
+-- every first-contact source, not only Question-answer entry points.
 -- ============================================================
 
 begin;
 
--- Fail loudly rather than installing against the superseded lifecycle in
--- which new correspondence rows began as active.
+-- Refuse to install against the superseded lifecycle where a new
+-- correspondence was active immediately. Phase 1 requires pending first.
 do $prerequisite$
 begin
   if to_regclass('public.correspondences') is null
@@ -88,9 +56,6 @@ $prerequisite$;
 -- ============================================================
 -- 1. CONTROLLED CAPACITY OVERRIDES
 -- ============================================================
--- Pilot default is 5. Overrides exist only so a deliberate experiment can
--- place a member at 6–10 without changing application code. There is no
--- subscription/commerce/paid-plan field by design.
 create table if not exists public.correspondence_capacity_overrides (
   user_id uuid primary key references auth.users(id) on delete cascade,
   active_correspondence_limit smallint not null
@@ -110,11 +75,8 @@ grant select, insert, update, delete on table public.correspondence_capacity_ove
 
 
 -- ============================================================
--- 2. CAPACITY LOCKS
+-- 2. TRANSACTION-SCOPED MEMBER LOCKS
 -- ============================================================
--- A stable member-keyed transaction lock. hashtextextended supplies the
--- signed bigint required by pg_advisory_xact_lock. Transaction-scoped means
--- no cleanup is required: commit/rollback releases it automatically.
 create or replace function tempa_private.lock_relationship_capacity(
   p_user_id uuid
 )
@@ -138,9 +100,6 @@ $function$;
 revoke all on function tempa_private.lock_relationship_capacity(uuid)
   from public, anon, authenticated, service_role;
 
--- Lock a pair in global UUID order. Every first-contact insertion uses this
--- helper, so overlapping sender/recipient pairs cannot deadlock by taking
--- the same two member locks in opposite order.
 create or replace function tempa_private.lock_relationship_capacity_pair(
   p_user_a uuid,
   p_user_b uuid
@@ -176,15 +135,12 @@ revoke all on function tempa_private.lock_relationship_capacity_pair(uuid, uuid)
 -- ============================================================
 -- 3. ONE CANONICAL CAPACITY STATE
 -- ============================================================
--- "Unresolved first letter" deliberately keys on BOTH the root letter and
--- its still-pending correspondence. This matters because a crossed first
--- contact can place two root letters (one each direction) inside the same
--- pending correspondence. Once either first reciprocal reply establishes
--- the episode, c.status becomes active and neither root remains a pending
--- reservation/incoming request for capacity purposes.
---
--- Effective expiry is respected even if the scheduled expiry job has not
--- yet closed the root letter: expires_at > now() is required.
+-- A genuine unresolved first contact is a root letter inside a pending,
+-- unestablished correspondence. This deliberately does NOT key on
+-- question_answer_id: member-question and future first-contact sources must
+-- receive exactly the same capacity treatment. Write Anytime root letters
+-- cannot be mistaken for first contacts because they belong to established
+-- active correspondences, never pending ones.
 create or replace function tempa_private.relationship_capacity_state(
   p_user_id uuid
 )
@@ -227,7 +183,6 @@ as $function$
     join public.correspondences c on c.id = l.correspondence_id
     where l.sender_id = p_user_id
       and l.reply_to_id is null
-      and l.question_answer_id is not null
       and l.status = 'sent'
       and l.expires_at > now()
       and c.status = 'pending'
@@ -239,7 +194,6 @@ as $function$
     join public.correspondences c on c.id = l.correspondence_id
     where l.recipient_id = p_user_id
       and l.reply_to_id is null
-      and l.question_answer_id is not null
       and l.status = 'sent'
       and l.expires_at > now()
       and c.status = 'pending'
@@ -265,10 +219,8 @@ revoke all on function tempa_private.relationship_capacity_state(uuid)
 
 
 -- ============================================================
--- 4. MEMBER-SAFE READ RPC
+-- 4. CALLER-ONLY CAPACITY READ RPC
 -- ============================================================
--- UI surfaces can ask the database once rather than reimplementing what
--- counts as full. It exposes only the caller's own aggregate state.
 create or replace function public.get_relationship_capacity()
 returns table (
   active_limit integer,
@@ -329,10 +281,9 @@ declare
   v_sender record;
   v_recipient record;
 begin
-  -- reply_to_id NULL also occurs for Write Anytime letters. A genuine
-  -- first-contact root is the only root that carries its Discovery
-  -- question_answer_id, and its correspondence must still be pending.
-  if new.reply_to_id is not null or new.question_answer_id is null then
+  -- A root letter alone is not enough: Write Anytime can also write a root
+  -- letter. The pending correspondence is the durable first-contact marker.
+  if new.reply_to_id is not null then
     return new;
   end if;
 
@@ -347,9 +298,9 @@ begin
     return new;
   end if;
 
-  -- Serialize BOTH constraints before counting. The existing RPC may have
-  -- already locked the correspondence row; these advisory locks protect
-  -- the cross-correspondence per-member totals that row locks cannot.
+  -- Lock both members in deterministic UUID order. This serializes the
+  -- sender's committed/outgoing count and recipient's incoming count across
+  -- concurrent tabs and different counterparties.
   perform tempa_private.lock_relationship_capacity_pair(new.sender_id, new.recipient_id);
 
   select * into v_sender
@@ -368,9 +319,8 @@ begin
   select * into v_recipient
   from tempa_private.relationship_capacity_state(new.recipient_id);
 
-  -- The recipient's ACTIVE capacity is intentionally irrelevant here:
-  -- incoming first letters do not consume an active slot. Only the
-  -- independent incoming-pending limit is enforced at arrival time.
+  -- Incoming first letters deliberately do not consume recipient active
+  -- capacity. Only the independent incoming-pending ceiling applies here.
   if v_recipient.incoming_pending_count >= v_recipient.incoming_pending_limit then
     raise exception 'This member is not taking another first letter right now.'
       using errcode = 'P0001', detail = 'RECIPIENT_FIRST_CONTACT_LIMIT_REACHED';
@@ -404,9 +354,6 @@ declare
   v_has_reserved_slot boolean := false;
   v_state record;
 begin
-  -- Only the one lifecycle edge that creates an established relationship.
-  -- Ordinary updates to an already-active correspondence and closure never
-  -- enter this branch.
   if not (
     old.status = 'pending'
     and old.established_at is null
@@ -416,10 +363,9 @@ begin
     return new;
   end if;
 
-  -- In the normal reply_to_letter path auth.uid() is exactly the person
-  -- accepting the incoming first letter. Keep a defensive fallback for a
-  -- trusted server path: the direct reply inserted earlier in the same
-  -- transaction identifies the participant who actually replied.
+  -- Normally reply_to_letter runs as the accepting authenticated member.
+  -- The fallback keeps a trusted/server execution resolvable from the direct
+  -- reply already inserted earlier in the same transaction.
   v_accepting_user := auth.uid();
 
   if v_accepting_user is null
@@ -430,7 +376,6 @@ begin
     join public.letters reply on reply.reply_to_id = root.id
     where root.correspondence_id = old.id
       and root.reply_to_id is null
-      and root.question_answer_id is not null
     order by reply.created_at desc, reply.id desc
     limit 1;
   end if;
@@ -442,18 +387,16 @@ begin
 
   perform tempa_private.lock_relationship_capacity(v_accepting_user);
 
-  -- Crossed first contacts are important: if the accepting member ALSO
-  -- sent an unresolved first letter inside this same pending episode, they
-  -- already reserved this correspondence in their committed total. Turning
-  -- that one reservation into an active relationship must not charge them
-  -- a second slot.
+  -- Crossed first contacts: if this accepting member also sent a still-live
+  -- root first letter inside the same pending correspondence, that episode
+  -- already reserves one of their committed slots. Establishment converts
+  -- that reservation into active; it must not charge a second slot.
   select exists (
     select 1
     from public.letters l
     where l.correspondence_id = old.id
       and l.sender_id = v_accepting_user
       and l.reply_to_id is null
-      and l.question_answer_id is not null
       and l.status = 'sent'
       and l.expires_at > now()
   ) into v_has_reserved_slot;
@@ -482,16 +425,13 @@ for each row
 execute function tempa_private.enforce_correspondence_establishment_capacity();
 
 
--- ============================================================
--- 7. DOCUMENT THE INVARIANTS WHERE FUTURE MIGRATIONS WILL SEE THEM
--- ============================================================
 comment on function public.get_relationship_capacity() is
-  'Caller-only canonical Phase 1 relationship capacity: active established relationships + unresolved outgoing first contacts consume committed capacity; unresolved incoming first contacts do not.';
+  'Caller-only canonical Phase 1 relationship capacity: established active relationships + unresolved outgoing first contacts consume committed capacity; unresolved incoming first contacts do not.';
 
 comment on trigger letters_enforce_first_contact_capacity on public.letters is
-  'Phase 1 invariant: max committed/private capacity, max 2 outgoing pending, max 2 incoming pending. Uses transaction-scoped per-member locks for race safety.';
+  'Phase 1 invariant: max committed/private capacity, max 2 outgoing pending, max 2 incoming pending, enforced for every root letter in a pending correspondence.';
 
 comment on trigger correspondences_enforce_establishment_capacity on public.correspondences is
-  'Phase 1 invariant: pending -> active establishment requires capacity for the accepting member unless this same correspondence already reserved their slot via a crossed outgoing first contact.';
+  'Phase 1 invariant: pending -> active establishment requires capacity for the accepting member unless this correspondence already reserved their slot via a crossed outgoing first contact.';
 
 commit;
