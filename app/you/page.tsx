@@ -9,6 +9,7 @@ import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { getMyWritingStyle } from '@/lib/writing-style-data'
 import { WRITING_STYLES } from '@/lib/writing-style'
+import { getMyWritingRhythm, writingRhythmLabel } from '@/lib/writing-rhythm'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { localeNativeName } from '@/i18n/config'
 
@@ -27,7 +28,7 @@ export default async function YouPage() {
     .maybeSingle()
   if (!profile) redirect('/profile')
 
-  const [waitingCount, markStatus, writingStyleId, locale, t] = await Promise.all([
+  const [waitingCount, markStatus, writingStyleId, rhythmState, locale, t] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getProfileMarkManagementStatus(supabase).catch(() => ({
       markId: profile.mark_id ?? null,
@@ -35,17 +36,18 @@ export default async function YouPage() {
       nextChangeAt: null,
     })),
     getMyWritingStyle(supabase, user.id),
+    getMyWritingRhythm(supabase),
     getLocale(),
     getTranslations('You'),
   ])
   const markId = markStatus.markId ?? profile.mark_id ?? null
   const markUrl = markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null
+  const rhythmLabel = writingRhythmLabel(rhythmState?.rhythm ?? null, locale)
 
   async function signOut() {
     'use server'
     const supabase = await createClient()
     await supabase.auth.signOut()
-    // F-15: the marker tells /sign-in to clear this browser's private drafts.
     redirect('/sign-in?signed_out=1')
   }
 
@@ -89,6 +91,13 @@ export default async function YouPage() {
             <div className="grid gap-2 sm:grid-cols-2">
               <Link href={`/minds/${user.id}`} className={controlClass}><span>View your profile</span><span aria-hidden>→</span></Link>
               <Link href="/you/archive" className={controlClass}><span>Your archive</span><span aria-hidden>→</span></Link>
+              <Link href="/you/correspondence" className={controlClass}>
+                <span>Correspondence</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-right text-[13px] text-muted">{rhythmLabel ?? 'Choose your rhythm'}</span>
+                  <span aria-hidden>→</span>
+                </span>
+              </Link>
               <Link href="/you/writing-style" className={controlClass}>
                 <span>Writing style</span>
                 <span className="flex items-center gap-2">
@@ -114,7 +123,7 @@ export default async function YouPage() {
             <p className={sectionLabelClass}>Tempa</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Link href="/you/guide" className={controlClass}><span>Tempa Guide</span><span aria-hidden>→</span></Link>
-              <Link href="/you/safety/blocked-minds" className={controlClass}><span>Blocked minds</span><span aria-hidden>→</span></Link>
+              <Link href="/you/safety/blocked-minds" className={controlClass}><span>Blocked members</span><span aria-hidden>→</span></Link>
               <Link href="/you/account" className={controlClass}><span>Account &amp; privacy</span><span aria-hidden>→</span></Link>
             </div>
           </section>

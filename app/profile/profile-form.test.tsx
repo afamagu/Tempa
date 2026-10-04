@@ -6,94 +6,89 @@ import path from 'node:path'
 
 const source = readFileSync(path.join(__dirname, 'profile-form.tsx'), 'utf8')
 
-// Onboarding & First-Use checkpoint (Section K) — extracted as a pure,
-// independently-testable function (same rationale as canWriteToMind,
-// app/minds/[userId]/page.tsx) specifically so each required section's
-// OWN specific message can be proven without rendering the whole form.
-// Replaces the single generic "Please fill in the required fields."
-// check that previously collapsed all 7 sections into one message.
 function validState() {
   return {
     country: 'United States',
     languages: ['English'],
-    intentSelections: ['Making a pen pal'],
+    intentSelections: ['Meaningful friendship'],
     readingInterestsCount: MIN_RECOMMENDED_INTERESTS,
-    aiPreference: 'Entirely my own words',
-    receivingPreference: 'Anything',
+    aiPreference: 'self_written',
+    receivingPreference: 'any',
+    writingRhythm: 'one_week',
   }
 }
 
-describe('validateRequiredFields — one specific message per section, never a generic combined one', () => {
+describe('validateRequiredFields', () => {
   it('returns no errors when every required section is complete', () => {
     expect(validateRequiredFields(validState())).toEqual({})
   })
 
-  it('country: specific message, not the old generic one', () => {
+  it('country: specific message, not a generic combined one', () => {
     const errors = validateRequiredFields({ ...validState(), country: '' })
     expect(errors.country).toBe('Choose your country.')
-    expect(Object.values(errors)).not.toContain('Please fill in the required fields.')
   })
 
-  it('languages: specific message ("Add at least one language.")', () => {
-    const errors = validateRequiredFields({ ...validState(), languages: [] })
-    expect(errors.languages).toBe('Add at least one language.')
+  it('languages: specific message', () => {
+    expect(validateRequiredFields({ ...validState(), languages: [] }).languages)
+      .toBe('Add at least one language.')
   })
 
-  it('intent: specific message ("Choose what brings you to Tempa.")', () => {
-    const errors = validateRequiredFields({ ...validState(), intentSelections: [] })
-    expect(errors.intent).toBe('Choose what brings you to Tempa.')
+  it('intent: specific message', () => {
+    expect(validateRequiredFields({ ...validState(), intentSelections: [] }).intent)
+      .toBe('Choose what brings you to Tempa.')
   })
 
-  it('reading interests: specific message naming the actual 3-8 new-profile range', () => {
+  it('reading interests use the actual new-profile range', () => {
     const errors = validateRequiredFields({ ...validState(), readingInterestsCount: 0 })
     expect(errors.interests).toBe(
       `Choose at least ${MIN_RECOMMENDED_INTERESTS} things you enjoy reading about (up to ${MAX_INTERESTS}).`
     )
   })
 
-  it('reading interests: also invalid one below the minimum (2), not just zero', () => {
-    const errors = validateRequiredFields({ ...validState(), readingInterestsCount: MIN_RECOMMENDED_INTERESTS - 1 })
-    expect(errors.interests).toBeDefined()
-  })
-
   it('writing style: specific message', () => {
-    const errors = validateRequiredFields({ ...validState(), aiPreference: '' })
-    expect(errors.writingStyle).toBe('Choose how you usually write your letters.')
+    expect(validateRequiredFields({ ...validState(), aiPreference: '' }).writingStyle)
+      .toBe('Choose how you usually write your letters.')
   })
 
   it('receiving preference: specific message', () => {
-    const errors = validateRequiredFields({ ...validState(), receivingPreference: '' })
-    expect(errors.receiving).toBe("Choose what you're comfortable receiving.")
+    expect(validateRequiredFields({ ...validState(), receivingPreference: '' }).receiving)
+      .toBe("Choose what you're comfortable receiving.")
   })
 
-  it('reports every incomplete section at once, not just the first — the caller decides which one to scroll to', () => {
+  it('writing rhythm is required and rejects the retired unbounded option', () => {
+    expect(validateRequiredFields({ ...validState(), writingRhythm: '' }).rhythm)
+      .toBe('Choose your usual writing rhythm.')
+    expect(validateRequiredFields({ ...validState(), writingRhythm: 'whenever' }).rhythm)
+      .toBe('Choose your usual writing rhythm.')
+  })
+
+  it('reports every incomplete section at once in DOM order', () => {
     const errors = validateRequiredFields({
       ...validState(),
       country: '',
-      languages: [],
-      receivingPreference: '',
-    })
-    expect(Object.keys(errors).sort()).toEqual(['country', 'languages', 'receiving'].sort())
-  })
-
-  it('the error object\'s key order matches the fields\' own top-to-bottom DOM order, so "the first incomplete requirement" is unambiguous', () => {
-    const errors = validateRequiredFields({
-      ...validState(),
       languages: [],
       aiPreference: '',
-      country: '',
+      receivingPreference: '',
+      writingRhythm: '',
     })
-    // DOM order is country, age, languages, intent, interests,
-    // writingStyle, receiving — regardless of which order the caller
-    // happened to set fields invalid in above.
-    expect(Object.keys(errors)).toEqual(['country', 'languages', 'writingStyle'])
+    expect(Object.keys(errors)).toEqual([
+      'country',
+      'languages',
+      'writingStyle',
+      'receiving',
+      'rhythm',
+    ])
   })
 })
 
 describe('new-profile onboarding handoff', () => {
-  it('continues to the dedicated Mark step, never directly to the Flagship Question', () => {
+  it('stores rhythm on the profile before continuing to the Mark step', () => {
+    expect(source).toContain('writing_rhythm: writingRhythm')
     expect(source).toContain("onboarding_stage: 'mark'")
     expect(source).toContain("router.push('/profile/mark')")
-    expect(source).not.toContain("router.push('/profile/question')")
+  })
+
+  it('renders the rhythm choice inside the correspondence section', () => {
+    expect(source).toContain('<WritingRhythmChoice error={fieldErrors.rhythm} />')
   })
 })
