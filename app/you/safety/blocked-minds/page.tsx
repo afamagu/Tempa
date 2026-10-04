@@ -10,13 +10,8 @@ import UnblockButton from './unblock-button'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 
 /**
- * Settings → Safety → Blocked minds — Safety & Trust Checkpoint 1B,
- * scope-aware per Checkpoint 1C. Shows only members the CURRENT viewer
- * has blocked (getBlockedProfiles, scoped server-side to the caller's
- * own blocked_users rows) — never a "blocked by" list, never a count
- * shown anywhere else in the product. Each row shows its own scope
- * ("Letters stopped" or "Blocked everywhere"); UnblockButton renders
- * the matching reversing/escalating actions for that scope.
+ * Settings → Safety → Blocked members. The legacy route name remains an
+ * internal URL for now; member-facing terminology uses people/members.
  */
 export default async function BlockedMindsPage() {
   const supabase = await createClient()
@@ -39,7 +34,7 @@ export default async function BlockedMindsPage() {
         <div className="w-full max-w-2xl space-y-6 py-10">
           <div className="space-y-1">
             <p className={sectionLabelClass}>You / Settings / Safety</p>
-            <h1 className={proseSubheadingClass}>Blocked minds</h1>
+            <h1 className={proseSubheadingClass}>Blocked members</h1>
           </div>
 
           {blocked.length === 0 ? (
