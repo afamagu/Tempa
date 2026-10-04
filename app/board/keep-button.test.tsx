@@ -4,12 +4,8 @@ import KeepButton from './keep-button'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }))
 
-// Board usability checkpoint (2026-09-09): the unselected label must
-// name the PERSON being kept ("Keep Evening Quill"), never a bare
-// "Keep" that could be misread as saving the Dispatch itself. Keep in
-// Mind is a relationship to a person, not to a piece of writing.
-describe('KeepButton — wording (item 4)', () => {
-  it('unselected label is "Keep <pseudonym>", not a bare "Keep"', () => {
+describe('KeepButton — wording', () => {
+  it('unselected label names the person being kept', () => {
     const html = renderToStaticMarkup(
       <KeepButton viewerId="viewer-1" keptUserId="author-1" keptPseudonym="Evening Quill" initiallyKept={false} />
     )
@@ -17,11 +13,12 @@ describe('KeepButton — wording (item 4)', () => {
     expect(html).not.toMatch(/>Keep</)
   })
 
-  it('selected label remains exactly "In mind"', () => {
+  it('selected label is Kept, with no retired mind terminology', () => {
     const html = renderToStaticMarkup(
       <KeepButton viewerId="viewer-1" keptUserId="author-1" keptPseudonym="Evening Quill" initiallyKept />
     )
-    expect(html).toContain('>In mind<')
+    expect(html).toContain('>Kept<')
+    expect(html.toLowerCase()).not.toContain('in mind')
   })
 
   it('never uses Follow/Subscribe/Watch/Favourite/Heart vocabulary', () => {
@@ -42,19 +39,19 @@ describe('KeepButton — wording (item 4)', () => {
     }
   })
 
-  it('the accessible name identifies the person, not the Dispatch', () => {
-    const html = renderToStaticMarkup(
+  it('the accessible name identifies the person without mind terminology', () => {
+    const unselected = renderToStaticMarkup(
       <KeepButton viewerId="viewer-1" keptUserId="author-1" keptPseudonym="Evening Quill" initiallyKept={false} />
     )
-    expect(html).toMatch(/aria-label="Keep Evening Quill in mind"/)
+    const selected = renderToStaticMarkup(
+      <KeepButton viewerId="viewer-1" keptUserId="author-1" keptPseudonym="Evening Quill" initiallyKept />
+    )
+    expect(unselected).toMatch(/aria-label="Keep Evening Quill"/)
+    expect(selected).toMatch(/aria-label="Kept Evening Quill — tap to remove"/)
   })
 })
 
-// Board live-test corrections (2026-09-10): toggling Keep must never
-// shift the surrounding layout — both possible labels are stacked in
-// the same CSS grid cell so the control always reserves the wider of
-// the two, with only one ever visually shown.
-describe('KeepButton — stable width regardless of toggle state (layout-shift fix)', () => {
+describe('KeepButton — stable width regardless of toggle state', () => {
   it('renders both possible labels in both states, with exactly one marked invisible', () => {
     const unselected = renderToStaticMarkup(
       <KeepButton viewerId="viewer-1" keptUserId="author-1" keptPseudonym="Evening Quill" initiallyKept={false} />
@@ -63,7 +60,7 @@ describe('KeepButton — stable width regardless of toggle state (layout-shift f
       <KeepButton viewerId="viewer-1" keptUserId="author-1" keptPseudonym="Evening Quill" initiallyKept />
     )
     for (const html of [unselected, selected]) {
-      expect(html).toContain('In mind')
+      expect(html).toContain('Kept')
       expect(html).toContain('Keep Evening Quill')
       expect((html.match(/invisible/g) ?? []).length).toBe(1)
     }
