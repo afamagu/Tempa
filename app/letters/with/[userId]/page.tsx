@@ -7,7 +7,13 @@ import {
   getWaitingLetterCount,
   getIncomingMailInTransit,
   incomingMailInTransitPersonIds,
+  getActiveEstablishedCorrespondenceWithUser,
+  isEstablishedForViewer,
 } from '@/lib/letters'
+import {
+  getCorrespondenceRhythm,
+  getMyWritingRhythm,
+} from '@/lib/writing-rhythm'
 import { sectionTitleClass, iconButtonClass, metadataTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
@@ -17,10 +23,8 @@ import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
 import RemoveFromLetterboxIcon from '@/app/letters/remove-from-letterbox-icon'
 import ArchiveList from './archive-list'
 import WriteQuillButton from './write-quill-button'
+import CorrespondenceRhythmControl from './correspondence-rhythm-control'
 
-// A plain, universally recognized back chevron — never an unfamiliar
-// or "branded" symbol invented for this one control. Same stroke-icon
-// language as every other icon in this app.
 function BackChevronIcon() {
   return (
     <svg
@@ -38,24 +42,6 @@ function BackChevronIcon() {
   )
 }
 
-/**
- * Letterbox Level 2 — the archive of letters shared with one specific
- * person, gathered across every correspondence episode the viewer
- * hasn't hidden with them (see getLetterArchiveWithUser). Reached only
- * from a Level 1 person card; opens the existing, untouched
- * individual-letter reader (/letters/[letterId]) when a card is
- * clicked.
- *
- * Account deletion deliberately keeps the OTHER participant's letters,
- * and a full block likewise leaves historical letters in Letterbox. In
- * either case public_profiles can no longer resolve the other person.
- * That missing profile must not destroy access to an otherwise-visible
- * archive, and it must not be used to infer WHY the profile vanished.
- * Historical mail therefore renders under a neutral identity while the
- * live profile link and write action disappear. If neither a profile nor
- * any visible correspondence exists, this is simply an invalid archive
- * URL and the segment's not-found state handles it.
- */
 export default async function LetterArchiveWithUserPage({
   params,
 }: {
@@ -63,46 +49,49 @@ export default async function LetterArchiveWithUserPage({
 }) {
   const { userId: otherUserId } = await params
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/sign-in')
-  }
+  if (!user) redirect('/sign-in')
+  if (otherUserId === user.id) redirect('/letters')
 
-  if (otherUserId === user.id) {
-    redirect('/letters')
-  }
-
-  const [{ data: profiles }, letters, waitingCount, visibleCorrespondenceIds, incomingInTransit] =
-    await Promise.all([
-      supabase
-        .from('public_profiles')
-        .select('id, pseudonym, mark_id')
-        .in('id', [user.id, otherUserId]),
-      getLetterArchiveWithUser(supabase, user.id, otherUserId),
-      getWaitingLetterCount(supabase, user.id),
-      getVisibleCorrespondenceIdsWithUser(supabase, user.id, otherUserId),
-      getIncomingMailInTransit(supabase),
-    ])
+  const [
+    { data: profiles },
+    letters,
+    waitingCount,
+    visibleCorrespondenceIds,
+    incomingInTransit,
+    activeCorrespondence,
+    myRhythm,
+  ] = await Promise.all([
+    supabase
+      .from('public_profiles')
+      .select('id, pseudonym, mark_id')
+      .in('id', [user.id, otherUserId]),
+    getLetterArchiveWithUser(supabase, user.id, otherUserId),
+    getWaitingLetterCount(supabase, user.id),
+    getVisibleCorrespondenceIdsWithUser(supabase, user.id, otherUserId),
+    getIncomingMailInTransit(supabase),
+    getActiveEstablishedCorrespondenceWithUser(supabase, user.id, otherUserId),
+    getMyWritingRhythm(supabase),
+  ])
 
   const otherProfile = (profiles ?? []).find((p) => p.id === otherUserId) ?? null
   const hasHistoricalAccess = letters.length > 0 || visibleCorrespondenceIds.length > 0
-  if (!otherProfile && !hasHistoricalAccess) {
-    notFound()
-  }
+  if (!otherProfile && !hasHistoricalAccess) notFound()
 
   const viewerPseudonym = (profiles ?? []).find((p) => p.id === user.id)?.pseudonym ?? 'You'
   const otherPseudonym = otherProfile?.pseudonym ?? 'A Tempa member'
   const otherMarkUrl = otherProfile?.mark_id
     ? publicProfileMarkUrl(supabase, `${otherProfile.mark_id}.png`)
     : null
-  // Same existence-only signal Letterbox Level 1 already shows for
-  // this person (incomingMailInTransitPersonIds) — scoped to THIS
-  // specific correspondent, never "some mail is on the way somewhere."
-  // No new query shape, no inspection of the hidden letter itself.
   const mailOnTheWayFromThisPerson = incomingMailInTransitPersonIds(incomingInTransit).has(otherUserId)
+
+  const establishedForViewer = activeCorrespondence
+    ? await isEstablishedForViewer(supabase, activeCorrespondence.id)
+    : false
+  const correspondenceRhythm = activeCorrespondence && establishedForViewer
+    ? await getCorrespondenceRhythm(supabase, activeCorrespondence.id)
+    : null
 
   return (
     <AppShell active="letters" waitingLetterCount={waitingCount}>
@@ -110,18 +99,16 @@ export default async function LetterArchiveWithUserPage({
         <div className="w-full max-w-2xl">
           <Link
             href="/letters"
-            aria-label="Back to Pen pals"
+            aria-label="Back to Letterbox"
             className="mb-4 inline-flex items-center gap-1 text-[13px] text-muted transition-colors hover:text-foreground"
           >
             <BackChevronIcon />
             Letterbox
           </Link>
+
           <div className="mb-6 space-y-3">
             <div className="flex items-start justify-between gap-3">
               {otherProfile ? (
-                /* Mindform + pseudonym form ONE link while the profile is
-                   actually visible. A missing profile is deliberately not
-                   replaced by a dead profile link. */
                 <Link
                   href={`/room/${otherProfile.id}`}
                   className="flex min-w-0 items-center gap-3 rounded-md transition-opacity hover:opacity-80"
@@ -152,6 +139,19 @@ export default async function LetterArchiveWithUserPage({
             </div>
 
             {mailOnTheWayFromThisPerson && <MailOnTheWay />}
+
+            {activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile && (
+              <div className="rounded-md border border-foreground/10 px-4 py-3">
+                <CorrespondenceRhythmControl
+                  correspondenceId={activeCorrespondence.id}
+                  counterpartPseudonym={otherProfile.pseudonym}
+                  defaultRhythm={myRhythm?.rhythm ?? null}
+                  initialViewerRhythm={correspondenceRhythm.viewerRhythm}
+                  initialUsesOverride={correspondenceRhythm.viewerUsesOverride}
+                  counterpartRhythm={correspondenceRhythm.counterpartRhythm}
+                />
+              </div>
+            )}
           </div>
 
           <ArchiveList
