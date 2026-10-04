@@ -1,4 +1,4 @@
-name: Phase 5 build diagnostic
+name: Phase 5 verification
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -18,12 +18,9 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Next build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
-          SUPABASE_SERVICE_ROLE_KEY: placeholder
-          NEXT_PUBLIC_SITE_URL: https://example.com
-        run: npm run build
-      - name: TypeScript check after Next type generation
-        run: npx tsc --noEmit
+      - name: Phase 5 relationship-discovery verifier
+        run: node scripts/check-phase5-relationship-discovery.mjs
+      - name: Affected Vitest suites
+        run: npx vitest run app/letters/discover/discover-browser.test.tsx 'app/write/[recipientId]/first-letter-composer.test.tsx' 'app/write/[recipientId]/page.test.tsx'
+      - name: Lint Phase 5 code
+        run: npx eslint app/familiar-faces.tsx app/home/familiar-faces-home.tsx app/home/room-invitations.tsx app/introduction-actions.ts app/letters/discover/actions.ts app/letters/discover/discover-browser.tsx app/letters/discover/page.tsx app/room/page.tsx lib/discover-browser-state.ts lib/familiar-faces.ts
