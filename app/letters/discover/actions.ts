@@ -68,7 +68,7 @@ export async function loadPassiveIntroductions(): Promise<{
   return { entries: entries.slice(0, 6), error: null }
 }
 
-export async function markPassiveIntroductionPresented(candidateId: string): Promise<void> {
+export async function markIntroductionPresented(candidateId: string): Promise<void> {
   if (typeof candidateId !== 'string' || !UUID.test(candidateId)) return
 
   const supabase = await createClient()
@@ -79,7 +79,7 @@ export async function markPassiveIntroductionPresented(candidateId: string): Pro
     p_candidate_id: candidateId,
   })
   if (error) {
-    console.error('[discover] mark_member_introduction_presented failed', {
+    console.error('[introductions] mark_member_introduction_presented failed', {
       message: error.message,
       code: error.code,
     })
