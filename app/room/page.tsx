@@ -5,9 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getRelationshipCapacity, newCorrespondenceUnavailableMessage } from '@/lib/relationship-capacity'
+import { getFamiliarFaces } from '@/lib/familiar-faces'
 import { readRoomAnswers, readRoomLibrary } from '@/lib/room-reading'
 import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
+import FamiliarFaces from '@/app/familiar-faces'
 import FeatureIntroduction from '@/app/feature-introduction'
 import FilterDisclosure from '@/app/minds/filter-disclosure'
 import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
@@ -26,9 +28,10 @@ export default async function RoomPage({ searchParams }: {
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect('/sign-in')
   const t = await getTranslations('RoomEngagement')
-  const [live, mine, waiting, introSeen, library, relationshipCapacity] = await Promise.all([
+  const [live, mine, waiting, introSeen, library, relationshipCapacity, familiarFaces] = await Promise.all([
     getCurrentRoomQuestion(client), getMyAnswers(client, user.id), getWaitingLetterCount(client, user.id),
     hasCompletedGuide(client, user.id, 'people'), readRoomLibrary(client), getRelationshipCapacity(client),
+    getFamiliarFaces(client, 3),
   ])
   let question = live
   if (params.question && params.question !== live?.id) {
@@ -72,6 +75,7 @@ export default async function RoomPage({ searchParams }: {
         {library.error ? <p role="alert" className="text-sm text-red-600">{library.error}</p> : <QuestionLibraryCards questions={earlier} />}
         <Link href="/room/questions" className={secondaryButtonClass}>Explore the question library</Link>
       </section>
+      {familiarFaces.length > 0 && <FamiliarFaces entries={familiarFaces} returnTo={returnTo} quiet />}
       <section className="border-t border-foreground/10 pt-6"><Link href="/letters/discover" className={secondaryButtonClass}>Discover People</Link></section>
     </main>
   </AppShell>
