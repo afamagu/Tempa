@@ -8,6 +8,7 @@ import {
   getCorrespondenceRhythm,
   rhythmStatusCopy,
   rhythmTimingState,
+  type CorrespondenceRhythmState,
 } from './writing-rhythm'
 
 export type RelationshipSurfaceState = 'established' | 'pending' | 'past'
@@ -35,6 +36,16 @@ type VisibleLetterRow = {
   reply_to_id: string | null
   created_at: string
   is_unread: boolean
+  body: string
+}
+
+type RelationshipEpisode = {
+  correspondenceId: string
+  state: RelationshipSurfaceState
+  pendingDirection: PendingDirection
+  activityAt: number
+  latestLetter: VisibleLetterRow | null
+  unreadCount: number
 }
 
 function otherParticipant(row: CorrespondenceRow, viewerId: string) {
@@ -43,11 +54,9 @@ function otherParticipant(row: CorrespondenceRow, viewerId: string) {
 
 /**
  * Viewer-safe lifecycle classification for one correspondence episode.
- *
- * A database row may already be status=active/established while the first
- * reciprocal reply is still travelling. We therefore require a reply that is
- * actually visible through letters_for_participant before the VIEWER sees the
- * relationship as established. This preserves Tempa's delayed-mail privacy.
+ * A database row can already be established while its first reciprocal reply
+ * is still travelling. The viewer therefore sees establishment only after a
+ * reply is actually visible through letters_for_participant.
  */
 export function classifyVisibleRelationshipEpisode(
   correspondence: Pick<CorrespondenceRow, 'status' | 'established_at'>,
@@ -75,10 +84,9 @@ const STATE_PRIORITY: Record<RelationshipSurfaceState, number> = {
 }
 
 /**
- * Collapse multiple historical episodes with the same person into the state
- * that matters now. A living established correspondence wins over a pending
- * or historical episode; a pending attempt wins over history. Recency breaks
- * ties within the same state.
+ * Collapse multiple episodes with the same person into the relationship that
+ * matters now. Living established correspondence outranks pending attempts;
+ * pending outranks history; recency only breaks ties inside the same state.
  */
 export function chooseRelationshipEpisode<T extends {
   state: RelationshipSurfaceState
@@ -90,13 +98,59 @@ export function chooseRelationshipEpisode<T extends {
   })[0] ?? null
 }
 
+function establishedStatus({
+  viewerId,
+  person,
+  episode,
+  rhythm,
+}: {
+  viewerId: string
+  person: LetterboxPerson
+  episode: RelationshipEpisode
+  rhythm: CorrespondenceRhythmState | null
+}) {
+  if (episode.unreadCount > 0) return 'Letter waiting'
+
+  const latestLetter = episode.latestLetter
+  const viewerTurn = latestLetter?.recipient_id === viewerId
+  const counterpartTurn = latestLetter?.sender_id === viewerId
+
+  if (viewerTurn && latestLetter && rhythm) {
+    const timing = rhythmTimingState({
+      waitingSince: latestLetter.created_at,
+      rhythm: rhythm.viewerRhythm,
+    })
+    return rhythmStatusCopy({
+      whoseTurn: 'viewer',
+      timing,
+      counterpartPseudonym: person.pseudonym,
+    }) ?? 'Your turn'
+  }
+
+  if (counterpartTurn && latestLetter && rhythm) {
+    const timing = rhythmTimingState({
+      waitingSince: latestLetter.created_at,
+      rhythm: rhythm.counterpartRhythm,
+    })
+    return rhythmStatusCopy({
+      whoseTurn: 'counterpart',
+      timing,
+      counterpartPseudonym: person.pseudonym,
+    }) ?? 'Quiet right now'
+  }
+
+  return latestLetter?.sender_id === viewerId
+    ? 'Quiet right now'
+    : 'Your correspondence continues'
+}
+
 /**
  * Shared Phase 4 relationship model for Home and Letterbox.
  *
- * It deliberately reads only viewer-visible letter metadata: no undelivered
- * body or reply is exposed. The mature getLetterboxPeople() function remains
- * responsible for identity/excerpt/unread aggregation; this helper layers the
- * canonical lifecycle/rhythm state over it.
+ * Only viewer-visible letter metadata is read. Identity data still comes from
+ * getLetterboxPeople(), but activity, excerpt, unread state and turn state are
+ * re-scoped to the chosen current episode so an old closed episode cannot make
+ * a current living relationship look unread or display stale context.
  */
 export async function getRelationshipSurfacePeople(
   supabase: SupabaseClient,
@@ -121,7 +175,7 @@ export async function getRelationshipSurfacePeople(
   const correspondenceIds = correspondences.map((row) => row.id)
   const { data: letterRows } = await supabase
     .from('letters_for_participant')
-    .select('correspondence_id, sender_id, recipient_id, reply_to_id, created_at, is_unread')
+    .select('correspondence_id, sender_id, recipient_id, reply_to_id, created_at, is_unread, body')
     .in('correspondence_id', correspondenceIds)
     .order('created_at', { ascending: false })
 
@@ -133,16 +187,7 @@ export async function getRelationshipSurfacePeople(
     lettersByCorrespondence.set(letter.correspondence_id, existing)
   }
 
-  const episodesByPerson = new Map<
-    string,
-    {
-      correspondenceId: string
-      state: RelationshipSurfaceState
-      pendingDirection: PendingDirection
-      activityAt: number
-      latestLetter: VisibleLetterRow | null
-    }[]
-  >()
+  const episodesByPerson = new Map<string, RelationshipEpisode[]>()
 
   for (const correspondence of correspondences) {
     const otherId = otherParticipant(correspondence, viewerId)
@@ -158,6 +203,9 @@ export async function getRelationshipSurfacePeople(
           ? 'outgoing'
           : 'incoming'
     const activityAt = latestLetter ? new Date(latestLetter.created_at).getTime() : 0
+    const unreadCount = episodeLetters.filter(
+      (letter) => letter.recipient_id === viewerId && letter.is_unread
+    ).length
 
     const existing = episodesByPerson.get(otherId) ?? []
     existing.push({
@@ -166,74 +214,68 @@ export async function getRelationshipSurfacePeople(
       pendingDirection,
       activityAt,
       latestLetter,
+      unreadCount,
     })
     episodesByPerson.set(otherId, existing)
   }
 
   const baseByPerson = new Map(people.map((person) => [person.userId, person]))
-  const result: RelationshipSurfacePerson[] = []
-
-  for (const [otherId, episodes] of episodesByPerson) {
-    const base = baseByPerson.get(otherId)
-    if (!base) continue
-
-    const chosen = chooseRelationshipEpisode(episodes)
-    if (!chosen) continue
-
-    let statusText: string
-
-    if (chosen.state === 'pending') {
-      statusText = chosen.pendingDirection === 'incoming'
-        ? 'A first letter is waiting'
-        : chosen.pendingDirection === 'outgoing'
-          ? 'Your first letter is waiting for a response'
-          : 'A correspondence is waiting to begin'
-    } else if (chosen.state === 'past') {
-      statusText = 'Past correspondence'
-    } else if (base.unreadCount > 0) {
-      statusText = 'Letter waiting'
-    } else {
-      const latestLetter = chosen.latestLetter
-      const viewerTurn = latestLetter?.recipient_id === viewerId
-      const counterpartTurn = latestLetter?.sender_id === viewerId
-      const rhythm = await getCorrespondenceRhythm(supabase, chosen.correspondenceId)
-
-      if (viewerTurn && latestLetter && rhythm) {
-        const timing = rhythmTimingState({
-          waitingSince: latestLetter.created_at,
-          rhythm: rhythm.viewerRhythm,
-        })
-        statusText = rhythmStatusCopy({
-          whoseTurn: 'viewer',
-          timing,
-          counterpartPseudonym: base.pseudonym,
-        }) ?? 'Your turn'
-      } else if (counterpartTurn && latestLetter && rhythm) {
-        const timing = rhythmTimingState({
-          waitingSince: latestLetter.created_at,
-          rhythm: rhythm.counterpartRhythm,
-        })
-        statusText = rhythmStatusCopy({
-          whoseTurn: 'counterpart',
-          timing,
-          counterpartPseudonym: base.pseudonym,
-        }) ?? 'Quiet right now'
-      } else {
-        statusText = base.lastLetterFromViewer ? 'Quiet right now' : 'Your correspondence continues'
-      }
-    }
-
-    result.push({
-      ...base,
-      relationshipState: chosen.state,
-      pendingDirection: chosen.pendingDirection,
-      livingCorrespondenceId: chosen.state === 'past' ? null : chosen.correspondenceId,
-      statusText,
+  const selected = [...episodesByPerson.entries()]
+    .map(([otherId, episodes]) => {
+      const base = baseByPerson.get(otherId)
+      const chosen = chooseRelationshipEpisode(episodes)
+      return base && chosen ? { otherId, base, chosen } : null
     })
-  }
+    .filter((item): item is NonNullable<typeof item> => item !== null)
 
-  return result.sort((a, b) => {
-    const stateDifference = STATE_PRIORITY[b.relationshipState] - STATE_PRIORITY[a.relationshipState]
-    return stateDifference !== 0 ? stateDifference : b.activityAt - a.activityAt
-  })
+  // Pilot capacity keeps the established set deliberately small. Fetch each
+  // participant-only rhythm concurrently so Home/Letterbox do not serialize
+  // one network round trip per correspondent.
+  const rhythmEntries = await Promise.all(
+    selected
+      .filter(({ chosen }) => chosen.state === 'established')
+      .map(async ({ chosen }) => [
+        chosen.correspondenceId,
+        await getCorrespondenceRhythm(supabase, chosen.correspondenceId),
+      ] as const)
+  )
+  const rhythmByCorrespondence = new Map(rhythmEntries)
+
+  return selected
+    .map(({ base, chosen }) => {
+      let statusText: string
+
+      if (chosen.state === 'pending') {
+        statusText = chosen.pendingDirection === 'incoming'
+          ? 'A first letter is waiting'
+          : chosen.pendingDirection === 'outgoing'
+            ? 'Your first letter is waiting for a response'
+            : 'A correspondence is waiting to begin'
+      } else if (chosen.state === 'past') {
+        statusText = 'Past correspondence'
+      } else {
+        statusText = establishedStatus({
+          viewerId,
+          person: base,
+          episode: chosen,
+          rhythm: rhythmByCorrespondence.get(chosen.correspondenceId) ?? null,
+        })
+      }
+
+      return {
+        ...base,
+        activityAt: chosen.activityAt || base.activityAt,
+        unreadCount: chosen.unreadCount,
+        latestExcerpt: chosen.latestLetter?.body ?? base.latestExcerpt,
+        lastLetterFromViewer: chosen.latestLetter?.sender_id === viewerId,
+        relationshipState: chosen.state,
+        pendingDirection: chosen.pendingDirection,
+        livingCorrespondenceId: chosen.state === 'past' ? null : chosen.correspondenceId,
+        statusText,
+      }
+    })
+    .sort((a, b) => {
+      const stateDifference = STATE_PRIORITY[b.relationshipState] - STATE_PRIORITY[a.relationshipState]
+      return stateDifference !== 0 ? stateDifference : b.activityAt - a.activityAt
+    })
 }
