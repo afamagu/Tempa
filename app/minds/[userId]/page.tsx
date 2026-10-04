@@ -9,6 +9,10 @@ import {
   getActiveCorrespondencePartnerIds,
   getContactedAnswerIds,
 } from '@/lib/letters'
+import {
+  getRelationshipCapacity,
+  newCorrespondenceUnavailableMessage,
+} from '@/lib/relationship-capacity'
 import { getPublishedDispatchesByAuthor, getPinnedDispatch } from '@/lib/dispatches'
 import { getBlockScope } from '@/lib/blocking'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
@@ -17,6 +21,7 @@ import {
   sectionTitleClass,
   sectionLabelClass,
   metadataTextClass,
+  helperTextClass,
   primaryButtonClass,
   secondaryButtonClass,
   quietLinkClass,
@@ -98,7 +103,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -108,6 +113,7 @@ export default async function PublicProfilePage({
     getMemberWritingStyles(supabase, [userId]),
     getEditorialBylines(supabase),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, viewer.id, userId),
+    isSelf ? Promise.resolve(null) : getRelationshipCapacity(supabase),
   ])
   const [{ data: memberQuestions }, { data: legacyQuestions }, { data: eligibleAnswers }, incomingFirstContact] = await Promise.all([
     supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
@@ -129,12 +135,16 @@ export default async function PublicProfilePage({
   const primaryWriteAnchor = eligibleAnswers?.find(a => a.id === primaryAnswer?.id) ?? eligibleAnswers?.[0] ?? null
   const alreadyCorresponding = activePartnerIds.has(userId)
   const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryWriteAnchor?.id ?? primaryAnswer.id) : false
-  const showWriteToMind = canWriteToMind({
+  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
+  const canBeginNewCorrespondence = newCorrespondenceMessage === null
+  const structurallyCanWriteToMind = canWriteToMind({
     isSelf,
     alreadyCorresponding,
     hasCurrentAnswer: primaryWriteAnchor !== null,
     currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted || firstContact !== null,
   })
+  const showWriteToMind = structurallyCanWriteToMind && canBeginNewCorrespondence
+  const hasPendingEpisode = !alreadyCorresponding && (firstContact !== null || incomingFirstContact?.status === 'sent')
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
     .filter(Boolean)
     .join(' · ')
@@ -163,8 +173,9 @@ export default async function PublicProfilePage({
           </div>
 
           <ProfileQuestions key={`${userId}:${JSON.stringify(memberQuestions ?? [])}`} ownerId={userId} name={profile.pseudonym} own={isSelf} initial={memberQuestions ?? []} legacy={legacyQuestions ?? []}
-            writeHref={isSelf ? null : alreadyCorresponding ? `/letters/with/${userId}/write` : firstContact || (incomingFirstContact?.status === 'sent') ? null : eligibleAnswers?.[0] ? `/write/${userId}?a=${eligibleAnswers[0].id}` : null}
-            pendingLetterHref={!alreadyCorresponding && (firstContact || incomingFirstContact?.status === 'sent') ? `/letters/${firstContact?.id ?? incomingFirstContact?.id}` : undefined}
+            writeHref={isSelf ? null : alreadyCorresponding ? `/letters/with/${userId}/write` : hasPendingEpisode ? null : canBeginNewCorrespondence && eligibleAnswers?.[0] ? `/write/${userId}?a=${eligibleAnswers[0].id}` : null}
+            pendingLetterHref={hasPendingEpisode ? `/letters/${firstContact?.id ?? incomingFirstContact?.id}` : undefined}
+            writeUnavailableMessage={!isSelf && !alreadyCorresponding && !hasPendingEpisode ? newCorrespondenceMessage : null}
             returnTo={profileReturn ?? `/room/${userId}`} />
 
           {primaryAnswer && (
@@ -227,6 +238,11 @@ export default async function PublicProfilePage({
                 </Link>
               ) : firstContact ? (
                 <Link href={`/letters/${firstContact.id}`} className={secondaryButtonClass}>View your letter to {profile.pseudonym}</Link>
+              ) : structurallyCanWriteToMind && newCorrespondenceMessage ? (
+                <div className="space-y-1">
+                  <p className={sectionLabelClass}>Room for someone new</p>
+                  <p className={helperTextClass}>{newCorrespondenceMessage}</p>
+                </div>
               ) : null}
 
               <div className="flex flex-wrap items-center gap-4">
