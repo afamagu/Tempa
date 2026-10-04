@@ -11,8 +11,8 @@ import { helperTextClass, quietLinkClass, secondaryButtonClass, sectionLabelClas
 export type ProfileQuestion = { id: string; body: string; is_profile_visible: boolean; moderation_status: string; withdrawn_at: string | null; credit_if_used: boolean; selected: boolean; created_at?: string }
 type LegacyQuestion = { id: string; body: string; credit_if_used: boolean }
 
-export default function ProfileQuestions({ ownerId, name, own, initial, legacy, writeHref, returnTo, pendingLetterHref }: {
-  ownerId: string; name: string; own: boolean; initial: ProfileQuestion[]; legacy: LegacyQuestion[]; writeHref: string | null; returnTo: string; pendingLetterHref?: string
+export default function ProfileQuestions({ ownerId, name, own, initial, legacy, writeHref, returnTo, pendingLetterHref, writeUnavailableMessage }: {
+  ownerId: string; name: string; own: boolean; initial: ProfileQuestion[]; legacy: LegacyQuestion[]; writeHref: string | null; returnTo: string; pendingLetterHref?: string; writeUnavailableMessage?: string | null
 }) {
   const router = useRouter()
   const [rows, setRows] = useState(initial)
@@ -68,7 +68,7 @@ export default function ProfileQuestions({ ownerId, name, own, initial, legacy, 
           <button disabled={busy} onClick={() => void manage(q, 'withdraw')} className={quietLinkClass}>Remove question</button>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={busy} checked={q.credit_if_used} onChange={e => void manage(q, 'credit', e.target.checked)} />Show my name and Mark in the Room</label>
         </div>}
-      </> : writeHref ? <Link className={secondaryButtonClass} href={`${writeHref}${writeHref.includes('?') ? '&' : '?'}mq=${encodeURIComponent(q.id)}&returnTo=${encodeURIComponent(returnTo)}`}>Write to {name} about this</Link> : pendingLetterHref ? <Link href={pendingLetterHref} className={secondaryButtonClass}>Continue through your existing letter</Link> : <p className={helperTextClass}>Writing will be available when a current response is published.</p>}
+      </> : writeHref ? <Link className={secondaryButtonClass} href={`${writeHref}${writeHref.includes('?') ? '&' : '?'}mq=${encodeURIComponent(q.id)}&returnTo=${encodeURIComponent(returnTo)}`}>Write to {name} about this</Link> : pendingLetterHref ? <Link href={pendingLetterHref} className={secondaryButtonClass}>Continue through your existing letter</Link> : <p className={helperTextClass}>{writeUnavailableMessage ?? 'Writing will be available when a current response is published.'}</p>}
     </article>)}
     {own && (hasMore || visibleCount < rows.length) && <button disabled={busy} onClick={() => void more()} className={secondaryButtonClass}>Your question history</button>}
     {own && legacy.length > 0 && <details className="space-y-3"><summary className="cursor-pointer text-sm text-foreground/65">Your earlier private suggestions ({legacy.length})</summary>
