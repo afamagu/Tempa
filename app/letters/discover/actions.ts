@@ -85,3 +85,7 @@ export async function markIntroductionPresented(candidateId: string): Promise<vo
     })
   }
 }
+
+// Existing passive-Discover call sites keep their narrow semantic name while
+// Familiar Faces can use the shared encounter recorder above.
+export const markPassiveIntroductionPresented = markIntroductionPresented
