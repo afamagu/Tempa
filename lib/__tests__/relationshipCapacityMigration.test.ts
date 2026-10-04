@@ -66,14 +66,14 @@ describe('Phase 1 relationship capacity migration', () => {
     expect(state).not.toMatch(/est\.n\s*\+\s*outp\.n\s*\+\s*inp\.n/)
   })
 
-  it('recognizes only live unresolved first-contact roots as pending', () => {
+  it('recognizes every live root letter in a pending correspondence, independent of its discovery source', () => {
     const state = extractFunctionBody('tempa_private.relationship_capacity_state')
     expect(state).toContain('l.reply_to_id is null')
-    expect(state).toContain('l.question_answer_id is not null')
     expect(state).toContain("l.status = 'sent'")
     expect(state).toContain('l.expires_at > now()')
     expect(state).toContain("c.status = 'pending'")
     expect(state).toContain('c.established_at is null')
+    expect(state).not.toContain('question_answer_id')
   })
 
   it('serializes per-member capacity changes with transaction advisory locks', () => {
@@ -94,9 +94,11 @@ describe('Phase 1 relationship capacity migration', () => {
     expect(codeOnly).toContain('execute function tempa_private.enforce_first_contact_capacity();')
 
     const firstContact = extractFunctionBody('tempa_private.enforce_first_contact_capacity')
-    expect(firstContact).toContain('new.reply_to_id is not null or new.question_answer_id is null')
+    expect(firstContact).toContain('if new.reply_to_id is not null then')
+    expect(firstContact).toContain("v_correspondence.status <> 'pending'")
     expect(firstContact).toContain('lock_relationship_capacity_pair(new.sender_id, new.recipient_id)')
     expect(firstContact).toContain('v_sender.committed_count >= v_sender.active_limit')
+    expect(firstContact).not.toContain('question_answer_id')
     expect(firstContact).not.toContain('v_recipient.committed_count')
   })
 
