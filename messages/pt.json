@@ -460,5 +460,18 @@
     "home": "Voltar ao início",
     "previous": "Anterior",
     "more": "Ver mais"
+  },
+  "MentionEmails": {
+    "heading": "E-mails de menções",
+    "help": "Receba e-mails sobre menções não lidas em Dispatches e respostas. Desativá-los não oculta as menções na Tempa.",
+    "label": "Receber e-mails de menções de",
+    "everyone": "Todos",
+    "correspondents": "Apenas meus correspondentes",
+    "off": "Ninguém — apenas na Tempa",
+    "save": "Salvar preferência",
+    "saving": "Salvando…",
+    "saved": "Preferência salva.",
+    "failed": "Não foi possível salvar. Tente novamente.",
+    "unavailable": "As preferências estão indisponíveis. Recarregue a página."
   }
 }
