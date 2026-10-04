@@ -98,6 +98,7 @@ export default async function HomePage() {
   )
   const capacitySummary = correspondenceCapacitySummary(relationshipCapacity)
   const establishedPeople = relationshipPeople.filter((person) => person.relationshipState === 'established')
+  const establishedWithoutWaitingMail = establishedPeople.filter((person) => person.unreadCount === 0)
   const pendingPeople = relationshipPeople.filter((person) => person.relationshipState === 'pending')
 
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
@@ -221,14 +222,14 @@ export default async function HomePage() {
                 </div>
               )}
 
-              {establishedPeople.length > 0 && (
+              {establishedWithoutWaitingMail.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <p className={sectionLabelClass}>Your correspondence</p>
                     <Link href="/letters" className={quietLinkClass}>Open Letterbox</Link>
                   </div>
                   <div className="divide-y divide-foreground/10 border-y border-foreground/10">
-                    {establishedPeople.slice(0, 5).map((person) => (
+                    {establishedWithoutWaitingMail.slice(0, 5).map((person) => (
                       <Link
                         key={person.userId}
                         href={`/letters/with/${person.userId}`}
@@ -242,9 +243,7 @@ export default async function HomePage() {
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[15px] font-medium text-foreground">{person.pseudonym}</p>
-                          <p className={`truncate ${person.unreadCount > 0 ? 'text-[13px] font-medium text-accent' : metadataTextClass}`}>
-                            {person.statusText}
-                          </p>
+                          <p className={`truncate ${metadataTextClass}`}>{person.statusText}</p>
                         </div>
                       </Link>
                     ))}
