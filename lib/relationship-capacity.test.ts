@@ -1,5 +1,57 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getRelationshipCapacity } from './relationship-capacity'
+import {
+  establishmentCapacityMessage,
+  firstContactCapacityMessage,
+  getRelationshipCapacity,
+  relationshipCapacityFailure,
+} from './relationship-capacity'
+
+describe('relationship capacity error mapping', () => {
+  it('recognizes fixed server detail codes without exposing arbitrary database text', () => {
+    expect(
+      relationshipCapacityFailure({
+        message: 'You are already at your correspondence capacity.',
+        details: 'RELATIONSHIP_CAPACITY_REACHED',
+      })
+    ).toBe('RELATIONSHIP_CAPACITY_REACHED')
+
+    expect(
+      relationshipCapacityFailure({
+        details: 'OUTGOING_FIRST_CONTACT_LIMIT_REACHED',
+      })
+    ).toBe('OUTGOING_FIRST_CONTACT_LIMIT_REACHED')
+
+    expect(
+      relationshipCapacityFailure({
+        hint: 'RECIPIENT_FIRST_CONTACT_LIMIT_REACHED',
+      })
+    ).toBe('RECIPIENT_FIRST_CONTACT_LIMIT_REACHED')
+
+    expect(relationshipCapacityFailure({ message: 'some unrelated database failure' })).toBeNull()
+  })
+
+  it('gives distinct first-contact messages for sender capacity, sender pending limit, and recipient pending limit', () => {
+    expect(
+      firstContactCapacityMessage({ details: 'RELATIONSHIP_CAPACITY_REACHED' }, 'Maya')
+    ).toContain('correspondence circle is full')
+
+    expect(
+      firstContactCapacityMessage({ details: 'OUTGOING_FIRST_CONTACT_LIMIT_REACHED' }, 'Maya')
+    ).toContain('two first letters waiting for replies')
+
+    expect(
+      firstContactCapacityMessage({ details: 'RECIPIENT_FIRST_CONTACT_LIMIT_REACHED' }, 'Maya')
+    ).toBe('Maya already has two new letters waiting for a response. Try again when they have room for another.')
+  })
+
+  it('uses a separate establishment message and does not misclassify unrelated errors', () => {
+    expect(establishmentCapacityMessage({ details: 'RELATIONSHIP_CAPACITY_REACHED' })).toContain(
+      'keep this letter and reply when a place opens'
+    )
+    expect(establishmentCapacityMessage({ details: 'OUTGOING_FIRST_CONTACT_LIMIT_REACHED' })).toBeNull()
+    expect(establishmentCapacityMessage({ message: 'network issue' })).toBeNull()
+  })
+})
 
 describe('getRelationshipCapacity', () => {
   it('maps the canonical RPC row without recomputing any capacity rules client-side', async () => {
