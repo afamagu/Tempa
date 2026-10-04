@@ -10,6 +10,7 @@ import AppShell from '@/app/app-shell'
 import { pageTitleClass, helperTextClass } from '@/app/profile/ui'
 import LettersTabs from '../letters-tabs'
 import DiscoverBrowser from './discover-browser'
+import { loadPassiveIntroductions } from './actions'
 import {
   discoveryRequest,
   hasIntentionalDiscoverCriteria,
@@ -51,14 +52,23 @@ export default async function DiscoverPage({
     getRelationshipCapacity(supabase),
   ])
 
-  // Blank Discover is not a replacement-shopping feed. When the member has
-  // no room for another private correspondence we render no passive set at
-  // all, while explicit search/filter remains available and broad.
+  // Blank Discover is deliberately finite and encounter-backed. Intentional
+  // search/filter remains broad discovery and does not manufacture familiarity.
   const mayShowPassiveIntroductions = relationshipCapacity?.canStartFirstContact !== false
-  const page = !intentional && !mayShowPassiveIntroductions
-    ? EMPTY_PAGE
-    : await getDiscoveryPage(supabase, request)
-  const entries = await discoveryEntries(supabase, page.candidates)
+  let page = EMPTY_PAGE
+  let entries = [] as Awaited<ReturnType<typeof discoveryEntries>>
+  let initialUnavailable = false
+
+  if (intentional) {
+    page = await getDiscoveryPage(supabase, request)
+    entries = await discoveryEntries(supabase, page.candidates)
+    initialUnavailable = !!page.unavailable
+  } else if (mayShowPassiveIntroductions) {
+    const passive = await loadPassiveIntroductions()
+    entries = passive.entries
+    initialUnavailable = passive.error === 'failed'
+  }
+
   const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
 
   return (
@@ -84,7 +94,7 @@ export default async function DiscoverPage({
             initialValues={values}
             initialEntries={entries}
             initialHasMore={intentional && page.filteredCount > entries.length}
-            initialUnavailable={!!page.unavailable}
+            initialUnavailable={initialUnavailable}
             seed={seed}
             passiveIntroductionsEnabled={mayShowPassiveIntroductions}
           />
