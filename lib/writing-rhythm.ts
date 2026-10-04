@@ -55,12 +55,74 @@ type CorrespondenceRhythmRow = {
   counterpart_approximate_days: number | null
 }
 
+const RHYTHM_COPY = {
+  en: {
+    heading: 'Your usual rhythm',
+    help: 'This is not a deadline. It gives the other person a rough idea of what silence normally means for you.',
+    values: {
+      few_days: { label: 'Within a few days', description: 'A short pause is normal.' },
+      one_week: { label: 'About a week', description: 'You usually like to answer within roughly a week.' },
+      two_weeks: { label: 'Within two weeks', description: 'You prefer a slower correspondence.' },
+      one_month: { label: 'I write slowly — up to a month', description: 'Long gaps are normal for you, but there is still a rough horizon.' },
+    },
+  },
+  fr: {
+    heading: 'Votre rythme habituel',
+    help: 'Ce n’est pas une échéance. Cela donne à l’autre personne une idée approximative de ce que signifie normalement votre silence.',
+    values: {
+      few_days: { label: 'Sous quelques jours', description: 'Une courte pause est normale.' },
+      one_week: { label: 'Environ une semaine', description: 'Vous aimez généralement répondre sous environ une semaine.' },
+      two_weeks: { label: 'Dans les deux semaines', description: 'Vous préférez une correspondance plus lente.' },
+      one_month: { label: 'J’écris lentement — jusqu’à un mois', description: 'Les longues pauses sont normales pour vous, mais il existe tout de même un horizon approximatif.' },
+    },
+  },
+  es: {
+    heading: 'Tu ritmo habitual',
+    help: 'No es una fecha límite. Le da a la otra persona una idea aproximada de lo que suele significar tu silencio.',
+    values: {
+      few_days: { label: 'En unos días', description: 'Una pausa corta es normal.' },
+      one_week: { label: 'Aproximadamente una semana', description: 'Normalmente te gusta responder en alrededor de una semana.' },
+      two_weeks: { label: 'En un plazo de dos semanas', description: 'Prefieres una correspondencia más pausada.' },
+      one_month: { label: 'Escribo despacio — hasta un mes', description: 'Las pausas largas son normales para ti, pero sigue habiendo un horizonte aproximado.' },
+    },
+  },
+  pt: {
+    heading: 'O seu ritmo habitual',
+    help: 'Isto não é um prazo. Dá à outra pessoa uma noção aproximada do que o seu silêncio normalmente significa.',
+    values: {
+      few_days: { label: 'Dentro de alguns dias', description: 'Uma pausa curta é normal.' },
+      one_week: { label: 'Cerca de uma semana', description: 'Normalmente prefere responder dentro de aproximadamente uma semana.' },
+      two_weeks: { label: 'Dentro de duas semanas', description: 'Prefere uma correspondência mais lenta.' },
+      one_month: { label: 'Escrevo devagar — até um mês', description: 'Pausas longas são normais para si, mas continua a existir um horizonte aproximado.' },
+    },
+  },
+} as const
+
+export type WritingRhythmLocale = keyof typeof RHYTHM_COPY
+
+export function writingRhythmCopy(locale: string) {
+  const base = locale.split('-')[0] as WritingRhythmLocale
+  return RHYTHM_COPY[base] ?? RHYTHM_COPY.en
+}
+
+export function writingRhythmOptions(locale: string) {
+  const copy = writingRhythmCopy(locale)
+  return (Object.keys(WRITING_RHYTHMS) as WritingRhythm[]).map((value) => ({
+    value,
+    label: copy.values[value].label,
+    description: copy.values[value].description,
+  }))
+}
+
 export function isWritingRhythm(value: unknown): value is WritingRhythm {
   return typeof value === 'string' && value in WRITING_RHYTHMS
 }
 
-export function writingRhythmLabel(rhythm: WritingRhythm | null | undefined): string | null {
-  return rhythm ? WRITING_RHYTHMS[rhythm].label : null
+export function writingRhythmLabel(
+  rhythm: WritingRhythm | null | undefined,
+  locale = 'en'
+): string | null {
+  return rhythm ? writingRhythmCopy(locale).values[rhythm].label : null
 }
 
 export function writingRhythmApproximateDays(rhythm: WritingRhythm | null | undefined): number | null {
