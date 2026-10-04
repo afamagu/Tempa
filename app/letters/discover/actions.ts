@@ -5,8 +5,6 @@ import { discoveryEntries } from '@/lib/discovery-entries'
 import { getRelationshipCapacity } from '@/lib/relationship-capacity'
 import type { DiscoveryEntry } from '@/app/room/discovery-results'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 type IntroductionRow = {
   candidate_id: string
   pseudonym: string
@@ -67,25 +65,3 @@ export async function loadPassiveIntroductions(): Promise<{
   )
   return { entries: entries.slice(0, 6), error: null }
 }
-
-export async function markIntroductionPresented(candidateId: string): Promise<void> {
-  if (typeof candidateId !== 'string' || !UUID.test(candidateId)) return
-
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.id === candidateId) return
-
-  const { error } = await supabase.rpc('mark_member_introduction_presented', {
-    p_candidate_id: candidateId,
-  })
-  if (error) {
-    console.error('[introductions] mark_member_introduction_presented failed', {
-      message: error.message,
-      code: error.code,
-    })
-  }
-}
-
-// Existing passive-Discover call sites keep their narrow semantic name while
-// Familiar Faces can use the shared encounter recorder above.
-export const markPassiveIntroductionPresented = markIntroductionPresented
