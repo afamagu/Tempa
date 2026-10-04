@@ -96,7 +96,7 @@ describe('PeopleGrid — status and context', () => {
     )
     expect(html).toContain('2 unread letters')
     expect(html).toContain('Letter waiting')
-    expect(html).toContain('Mail on the way')
+    expect(html).toContain('A letter is on the way')
   })
 })
 
