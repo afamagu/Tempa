@@ -63,6 +63,31 @@ function toRelationshipCapacity(row: RelationshipCapacityRow): RelationshipCapac
 }
 
 /**
+ * Calm, caller-only UI copy for places that could BEGIN a new private
+ * correspondence. We consume fields already calculated by the canonical RPC;
+ * no surface independently counts Letters or Correspondences.
+ *
+ * null means either the member can start a first contact or the capacity read
+ * failed. In the latter case the UI stays usable and the database remains the
+ * final authority at send time rather than inventing a client-side capacity.
+ */
+export function newCorrespondenceUnavailableMessage(
+  capacity: RelationshipCapacity | null
+): string | null {
+  if (!capacity || capacity.canStartFirstContact) return null
+
+  if (capacity.availableSlots <= 0) {
+    return 'Your correspondence circle is full for now. When a place opens, you can write to someone new.'
+  }
+
+  if (capacity.outgoingPendingCount >= capacity.outgoingPendingLimit) {
+    return 'You already have two first letters waiting for replies. When one is answered or closes, you can write to someone new.'
+  }
+
+  return 'You can’t begin another correspondence right now. When there is room for someone new, you can write again.'
+}
+
+/**
  * PostgREST exposes PostgreSQL RAISE ... DETAIL through `details`, but keep
  * message/hint in the search too so the UI remains stable if the transport
  * representation changes. Only these fixed server codes are interpreted;
