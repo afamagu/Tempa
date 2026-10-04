@@ -5,9 +5,15 @@ import {
   getWaitingLetterCount,
   getActiveCorrespondencePartnerIds,
   getContactedAnswerIds,
+  getFirstContact,
+  isEffectivelyExpired,
 } from '@/lib/letters'
 import { getMyAnswers } from '@/lib/questions'
 import { canWriteToMind } from '@/app/minds/[userId]/page'
+import {
+  getRelationshipCapacity,
+  newCorrespondenceUnavailableMessage,
+} from '@/lib/relationship-capacity'
 import {
   getDispatchById,
   getDispatchMoments,
@@ -28,9 +34,15 @@ import { getDispatchReplies } from '@/lib/replies'
 import { isDispatchWorthReading } from '@/lib/worth-reading'
 import { splitParagraphs } from '@/lib/moments'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
-import { sectionTitleClass, metadataTextClass, sectionLabelClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
+import {
+  sectionTitleClass,
+  metadataTextClass,
+  sectionLabelClass,
+  helperTextClass,
+  quietLinkClass,
+  iconButtonClass,
+} from '@/app/profile/ui'
 import { formatDateTimeFull } from '@/lib/format-date'
-import { iconButtonClass } from '@/app/profile/ui'
 import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
 import FeatureIntroduction from '@/app/feature-introduction'
@@ -55,16 +67,7 @@ import { getDispatchWritingStyles } from '@/lib/writing-style-data'
 
 function FlagIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
       <path d="M5 3v18" />
       <path d="M5 4h13l-3 4 3 4H5" />
     </svg>
@@ -73,31 +76,13 @@ function FlagIcon() {
 
 function BackArrowIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
       <path d="M11 5 4 12l7 7" />
       <path d="M4 12h16" />
     </svg>
   )
 }
 
-/**
- * The Dispatch reader — the writing is the hero. NO horizontal swipe,
- * NO next-on-swipe, NO automatic next Dispatch, NO "Up next": Close/
- * back is the only way out, and opening another Dispatch always
- * requires a separate, deliberate tap from the Board or a profile.
- * getDispatchById relies entirely on RLS to decide visibility — a
- * missing id and a genuinely private/unpublished one are
- * indistinguishable here by design, both rendering notFound().
- */
 export default async function DispatchPage({
   params,
   searchParams,
@@ -108,25 +93,14 @@ export default async function DispatchPage({
   const { dispatchId } = await params
   const resolvedSearchParams = await searchParams
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/sign-in')
-  }
+  if (!user) redirect('/sign-in')
 
   const dispatch = await getDispatchById(supabase, dispatchId)
-
-  if (!dispatch) {
-    notFound()
-  }
+  if (!dispatch) notFound()
 
   const isAuthor = dispatch.authorId === user.id
-  // Official/Sponsored Dispatches (lib/dispatch-identity.ts): author_id is
-  // the creating admin, so every member-identity lookup/action (Keep in
-  // Mind, Write to this mind, profile link, Pin) is skipped for them —
-  // none may ever target that admin's personal account.
   const isMemberDispatch = dispatch.identity.kind === 'member'
   const officialEditHref =
     dispatch.publishedAs === 'tempa'
@@ -135,12 +109,6 @@ export default async function DispatchPage({
         ? `/admin/content/sponsored/${dispatch.id}/edit`
         : undefined
 
-  // Admin Command Center Phase 2A-1 — a hidden Dispatch's row only ever
-  // reaches this point for its own author (dispatches_select_published's
-  // RLS already returns null — notFound() above — for anyone else).
-  // The author gets a calm, restrained notice here instead of the
-  // normal reading view — never the reporter/moderator identity or the
-  // internal moderation reason, matching Decision 2 exactly.
   if (dispatch.moderationStatus === 'hidden') {
     const waitingCount = await getWaitingLetterCount(supabase, user.id)
     return (
@@ -149,10 +117,7 @@ export default async function DispatchPage({
           <div className="w-full max-w-sm space-y-4 text-center">
             <p className={sectionTitleClass}>{dispatch.title}</p>
             <p className={helperTextClass}>Hidden by TEMPA.</p>
-            <Link
-              href="/board"
-              className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
-            >
+            <Link href="/board" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
               <BackArrowIcon />
               Back to The Board
             </Link>
@@ -162,12 +127,6 @@ export default async function DispatchPage({
     )
   }
 
-  // Reading Trail (Home Phase 1) — only ever present when THIS exact
-  // link was generated from an already-ranked board_feed_page result
-  // (a Home section card, the ambient strip, or a normal /board feed
-  // card); a bare direct/shared URL or a search-result card carries
-  // none of these params, so trailContext is null and no trail is
-  // manufactured — see lib/dispatches.ts's own "READING TRAIL" section.
   const trailContext = parseReadingTrailParams(resolvedSearchParams)
 
   const [
@@ -187,63 +146,34 @@ export default async function DispatchPage({
     contactedAnswerIds,
     readingIntroSeen,
     dispatchWritingStyles,
+    outgoingFirstContact,
+    incomingFirstContact,
+    relationshipCapacity,
   ] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getDispatchMoments(supabase, dispatch.id),
     getDispatchViewState(supabase, user.id, dispatch.id),
     isAuthor || !isMemberDispatch ? Promise.resolve(false) : isKeepingMind(supabase, user.id, dispatch.authorId),
-    // Only the author can SELECT dispatch_shares at all (RLS); a
-    // non-author's Share button simply starts from "not yet known" and
-    // still works correctly via share_dispatch's own get-or-create.
     isAuthor ? getActiveDispatchShare(supabase, dispatch.id) : Promise.resolve(null),
-    // Needed only so Delete can clean up this Dispatch's own storage
-    // objects afterward — see author-actions-menu.tsx.
     isAuthor ? getDispatchMomentsForEditing(supabase, dispatch.id) : Promise.resolve([]),
     isAuthor && isMemberDispatch
       ? supabase.from('profiles').select('pinned_dispatch_id').eq('id', user.id).maybeSingle()
       : Promise.resolve({ data: null }),
     getDispatchReplies(supabase, dispatch.id),
-    // Board Phase 2C — Worth Reading is a private per-viewer mark, and
-    // (like Keep in Mind) a member cannot mark their own Dispatch, so
-    // the author's own view never needs this lookup at all.
     isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
-    // Home Phase 1B — up to CONTINUE_READING_COUNT subsequent rows in
-    // the SAME session/ordering, never just one.
     trailContext ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
-    // Dispatch Postcards Checkpoint 2 — at most one, resolved once here;
-    // null renders nothing (see LetterheadPostcard's own conditional
-    // rendering below).
     getDispatchPostcard(supabase, dispatch.id),
-    // Dispatch → Correspondence Entry Point checkpoint — the EXACT same
-    // three data sources app/minds/[userId]/page.tsx already reads to
-    // decide "Write to this mind" vs "Open your correspondence" vs
-    // nothing, applied to the Dispatch's own author instead of an
-    // arbitrary profile id. No new eligibility logic, no new RPC/table —
-    // this is a pure reuse of the existing correspondence contract (see
-    // canWriteToMind below). The author's own view never needs any of
-    // this — "write to yourself" is nonsensical and always suppressed.
     isAuthor || !isMemberDispatch ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
     isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
     isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id),
-    // Post-onboarding corrections checkpoint (Q2) — the first-read
-    // Dispatch introduction, same account-persisted guide_completions
-    // gate every other FeatureIntroduction in this codebase uses. This
-    // is the AUTHENTICATED reader only (app/board/[dispatchId]/page.tsx);
-    // the anonymous/public shared-Dispatch reader (/d/[shareToken]) is a
-    // wholly separate page that never imports this component at all, so
-    // it structurally can't show here.
     hasCompletedGuide(supabase, user.id, 'dispatch_reading'),
-    // Writing Style — the style this Dispatch was PUBLISHED in; changing
-    // the author's profile style later never restyles it.
     getDispatchWritingStyles(supabase, [dispatch.id]),
+    isAuthor || !isMemberDispatch ? Promise.resolve(null) : getFirstContact(supabase, user.id, dispatch.authorId),
+    isAuthor || !isMemberDispatch ? Promise.resolve(null) : getFirstContact(supabase, dispatch.authorId, user.id),
+    isAuthor || !isMemberDispatch ? Promise.resolve(null) : getRelationshipCapacity(supabase),
   ])
-  const webState = isAuthor ? await getDispatchWebState(supabase, dispatch.id) : null
 
-  // Each card's OWN trailQuery carries the SAME session plus ITS OWN
-  // cursor (BoardShelfCard builds the actual href from dispatch.id +
-  // this query string), so a reader who picks the 2nd/3rd/4th
-  // suggestion — not just the first — still starts the trail correctly
-  // from THAT item onward.
+  const webState = isAuthor ? await getDispatchWebState(supabase, dispatch.id) : null
   const continueReadingCards = trailContext
     ? nextTrailItems.map((item) => ({
         item,
@@ -253,45 +183,29 @@ export default async function DispatchPage({
         ).toString(),
       }))
     : []
-
   const isPinned = isAuthor && pinnedRow.data?.pinned_dispatch_id === dispatch.id
-
-  // Smoke-test contract completion checkpoint (Section G) — a UI HINT
-  // only, deciding whether the Edit Dispatch affordance is even offered
-  // ("the product should not tease an unavailable action"). The real
-  // authority is update_dispatch itself, re-checked fresh on every
-  // save. `replies` above is read under the viewer's OWN RLS-governed
-  // session, which can undercount a Reply that's currently moderator-
-  // hidden and authored by someone other than this Dispatch's author
-  // (see canEditDispatch's own doc comment in lib/dispatches.ts) — an
-  // accepted imprecision for a hint, never a safety gap, since the RPC
-  // itself checks unconditional row existence regardless of this value.
   const dispatchEditable = canEditDispatch({
     isAuthor,
     withinEditWindow: isWithinDispatchEditWindow(dispatch.publishedAt),
     replyExists: replies.length > 0,
   })
 
-  // Dispatch → Correspondence Entry Point checkpoint — identical
-  // derivation to app/minds/[userId]/page.tsx's own primaryAnswer/
-  // alreadyCorresponding/showWriteToMind (the SAME exported pure
-  // predicate, the SAME two ids-based checks), just keyed on the
-  // Dispatch's author instead of whichever profile page a viewer opened.
-  // When isAuthor, authorAnswers/activePartnerIds/contactedAnswerIds are
-  // all empty by construction (see the Promise.all above), so this
-  // always resolves to showWriteToMind=false, alreadyCorresponding=false
-  // — never a self-correspondence affordance.
   const authorPrimaryAnswer = authorAnswers.find((a) => a.isPrimary) ?? null
   const alreadyCorrespondingWithAuthor = isMemberDispatch && activePartnerIds.has(dispatch.authorId)
   const authorPrimaryAnswerAlreadyContacted = authorPrimaryAnswer
     ? contactedAnswerIds.has(authorPrimaryAnswer.id)
     : false
-  const showWriteToAuthor = isMemberDispatch && canWriteToMind({
+  const structurallyCanWriteToAuthor = isMemberDispatch && canWriteToMind({
     isSelf: isAuthor,
     alreadyCorresponding: alreadyCorrespondingWithAuthor,
     hasCurrentAnswer: authorPrimaryAnswer !== null,
-    currentAnswerAlreadyContacted: authorPrimaryAnswerAlreadyContacted,
+    currentAnswerAlreadyContacted: authorPrimaryAnswerAlreadyContacted || outgoingFirstContact !== null,
   })
+  const incomingIsLive = incomingFirstContact?.status === 'sent' && !isEffectivelyExpired(incomingFirstContact, false)
+  const outgoingIsLive = outgoingFirstContact?.status === 'sent' && !isEffectivelyExpired(outgoingFirstContact, false)
+  const pendingFirstContact = outgoingIsLive ? outgoingFirstContact : incomingIsLive ? incomingFirstContact : null
+  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
+  const showWriteToAuthor = structurallyCanWriteToAuthor && !pendingFirstContact && newCorrespondenceMessage === null
 
   const { body: cleanBody } = stripRichBodyMarker(dispatch.body)
   const paragraphCount = splitParagraphs(cleanBody).length
@@ -301,10 +215,7 @@ export default async function DispatchPage({
     <AppShell active="board" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
-          <Link
-            href="/board"
-            className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
-          >
+          <Link href="/board" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
             <BackArrowIcon />
             The Board
           </Link>
@@ -312,10 +223,7 @@ export default async function DispatchPage({
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-3">
               {isMemberDispatch ? (
-                <Link
-                  href={`/minds/${dispatch.authorId}`}
-                  className="flex min-w-0 items-center gap-3 hover:opacity-80"
-                >
+                <Link href={`/minds/${dispatch.authorId}`} className="flex min-w-0 items-center gap-3 hover:opacity-80">
                   <ProfileIdentityMark
                     identifier={dispatch.authorId}
                     markUrl={dispatch.authorMarkUrl ?? null}
@@ -335,13 +243,12 @@ export default async function DispatchPage({
                   </div>
                 </Link>
               ) : (
-                // Tempa: emblem + "Tempa". Sponsored: "Sponsored" + sponsor.
-                // Never the creating admin's Mark/pseudonym/country/profile.
                 <div className="min-w-0 space-y-1">
                   <DispatchIdentityLabel identity={dispatch.identity} size="md" />
                   <p className={metadataTextClass}>{formatDateTimeFull(dispatch.publishedAt)}</p>
                 </div>
               )}
+
               <div className="flex shrink-0 items-start gap-1">
                 <ShareDispatchButton
                   dispatchId={dispatch.id}
@@ -385,21 +292,10 @@ export default async function DispatchPage({
             </div>
 
             <h1 className={sectionTitleClass}>{dispatch.title}</h1>
-
             {dispatch.topics.length > 0 && <TopicChips topics={dispatch.topics} />}
-
-            {/* Public Dispatch web pages — the author's standing "Members
-                only / Public on the web" control (null state = choice not
-                available yet, nothing rendered). */}
             {webState && <WebVisibilityControl dispatchId={dispatch.id} initial={webState} />}
-
             {moments.some((m) => m.imageUrl) && <MomentHint dispatchId={dispatch.id} />}
 
-            {/* Dispatch Postcards Checkpoint 2 — reuses LetterheadPostcard
-                verbatim (closed thumbnail, tap to open the real front/
-                back/Living-Reveal PostcardObject overlay), positioned
-                with the Dispatch's own header/body content, above the
-                reader. No attached Postcard renders nothing here. */}
             {postcard && (
               <div className="flex justify-end">
                 <LetterheadPostcard
@@ -411,15 +307,6 @@ export default async function DispatchPage({
               </div>
             )}
 
-            {/* Post-onboarding corrections checkpoint (Q2) — shown once,
-                immediately before the reading surface itself, the first
-                time this member opens a Dispatch to read (never on the
-                Board, and never stacked with the Board introduction,
-                which is a separate page). Explains the overall reading
-                grammar; MomentHint below stays separate contextual
-                microcopy specifically about Moments — the two are
-                deliberately not merged. Replayable later from You →
-                Tempa Guide. */}
             {!readingIntroSeen && (
               <FeatureIntroduction guideKey="dispatch_reading" title="Reading a Dispatch" ctaLabel="Start reading">
                 <p>
@@ -442,56 +329,33 @@ export default async function DispatchPage({
               />
             </div>
 
-            {/* Sponsored Dispatches may carry one restrained external link. */}
             {dispatch.identity.kind === 'sponsored' && dispatch.identity.sponsor.ctaUrl && (
               <div className="flex justify-end">
                 <SponsorCta identity={dispatch.identity} />
               </div>
             )}
 
-            {/* Dispatch/author actions row (Small Dispatch Reader Layout
-                Correction) — Worth Reading and the correspondence entry
-                point are siblings of the SAME row, not stacked with the
-                latter reading like a Replies affordance. Worth Reading
-                stays at its existing left position; "Write to this
-                mind"/"Open your correspondence" moves to the row's right
-                edge. The row deliberately does not wrap: at very narrow
-                widths the restrained text link may wrap within its own
-                right-aligned flex item, but it remains paired with Worth
-                Reading instead of becoming a separate stacked action.
-                The divider that used to sit directly
-                above the correspondence link now sits below the whole
-                row, so Replies only ever begins after BOTH actions have
-                been presented as a single "Dispatch/author actions"
-                concept — see this page's own test for the exact DOM
-                relationship this establishes. */}
             {!isAuthor && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <WorthReadingButton dispatchId={dispatch.id} initiallyMarked={worthReading} />
 
-                  {/* Dispatch → Correspondence Entry Point checkpoint — a
-                      quiet, editorial invitation into the EXISTING private
-                      correspondence flow, never a social engagement bar. Same
-                      three-state contract as app/minds/[userId]/page.tsx
-                      (write / already-corresponding / nothing), reusing its
-                      exact destinations — no new writing flow, no relationship
-                      label ("Correspondent" etc.) ever shown. quietLinkClass
-                      (a restrained underlined text link, not a button) keeps
-                      this visually subordinate to the Dispatch itself, and
-                      deliberately NOT sticky/floating — an ordinary in-flow
-                      element, safe on mobile alongside AppShell's bottom nav. */}
                   <div className="min-w-0 text-right leading-snug">
-                    {(showWriteToAuthor || alreadyCorrespondingWithAuthor) &&
-                      (showWriteToAuthor && authorPrimaryAnswer ? (
-                        <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}`} className={quietLinkClass}>
-                          Write to this mind
-                        </Link>
-                      ) : (
-                        <Link href="/letters" className={quietLinkClass}>
-                          Open your correspondence
-                        </Link>
-                      ))}
+                    {alreadyCorrespondingWithAuthor ? (
+                      <Link href="/letters" className={quietLinkClass}>
+                        Open your correspondence
+                      </Link>
+                    ) : pendingFirstContact ? (
+                      <Link href={`/letters/${pendingFirstContact.id}`} className={quietLinkClass}>
+                        View your letter with {dispatch.authorPseudonym}
+                      </Link>
+                    ) : showWriteToAuthor && authorPrimaryAnswer ? (
+                      <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}&source=dispatch`} className={quietLinkClass}>
+                        Write to {dispatch.authorPseudonym}
+                      </Link>
+                    ) : structurallyCanWriteToAuthor && newCorrespondenceMessage ? (
+                      <span className={helperTextClass}>{newCorrespondenceMessage}</span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -501,56 +365,21 @@ export default async function DispatchPage({
 
             <RepliesSection dispatchId={dispatch.id} viewerId={user.id} initialReplies={replies} />
 
-            {/* Reading Trail (Home Phase 1B, desktop card quality
-                revisited in Phase 1C) — a compact "next reads" shelf,
-                restrained editorial navigation rather than a single
-                title-only link: up to CONTINUE_READING_COUNT subsequent
-                rows from the SAME deterministic session/ordering, using
-                the SAME BoardShelfCard language Home already uses
-                (identity, country, title, excerpt — no counts, no Worth Reading
-                metric, no popularity label). Renders ONLY when this
-                exact page load carried valid trail params AND
-                board_feed_page actually has at least one next row for
-                that cursor — a direct/shared URL, a search result, or
-                simply reaching the end of the ordering all render
-                nothing here. Mobile: native horizontal overflow +
-                scroll-snap, one card substantially visible, no library,
-                no dots, no auto-advance — unchanged from Phase 1B.
-                Desktop: Phase 1C widens this from a cramped 3-per-row
-                rail to 2 comfortably-sized cards (BoardShelfCard's own
-                'continue' size — see board-shelf-card.tsx), so a full
-                pseudonym, a 2-line title, and real editorial excerpt
-                copy all have room to breathe instead of truncating
-                hard. A single remaining item renders gracefully with no
-                fake carousel affordance — the row simply doesn't
-                overflow. */}
             {continueReadingCards.length > 0 && (
               <div className="border-t border-foreground/10 pt-4">
                 <p className={sectionLabelClass}>Read next</p>
                 <div className="no-scrollbar mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:pb-0">
                   {continueReadingCards.map(({ item, trailQuery }) => (
                     <div key={item.id} className="w-[85%] shrink-0 snap-start sm:w-auto sm:shrink">
-                      <BoardShelfCard
-                        dispatch={item}
-                        trailQuery={trailQuery}
-                        size="continue"
-                      />
+                      <BoardShelfCard dispatch={item} trailQuery={trailQuery} size="continue" />
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Bottom-of-letter return nav (pre-beta UX polish batch 1) —
-                the same destination as the top back link, so a reader who
-                reaches the end of a very long Dispatch never has to
-                scroll back up to return to the Board. Deliberately an
-                ordinary in-flow link, not sticky/floating. */}
             <div className="border-t border-foreground/10 pt-4">
-              <Link
-                href="/board"
-                className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground"
-              >
+              <Link href="/board" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
                 <BackArrowIcon />
                 Back to The Board
               </Link>

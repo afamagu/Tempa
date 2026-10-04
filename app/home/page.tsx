@@ -21,6 +21,7 @@ import {
   letterPreviewText,
   isRichBody,
 } from '@/lib/letters'
+import { getRelationshipCapacity, correspondenceCapacitySummary } from '@/lib/relationship-capacity'
 import {
   getHomeBoardCandidates,
   partitionHomeSections,
@@ -71,6 +72,7 @@ export default async function HomePage() {
     currentRoomQuestion,
     myAnswers,
     introductionQuestion,
+    relationshipCapacity,
   ] = await Promise.all([
     supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
@@ -82,10 +84,12 @@ export default async function HomePage() {
     getCurrentRoomQuestion(supabase),
     getMyAnswers(supabase, user.id),
     getIntroductionReminderQuestion(supabase, user.id),
+    getRelationshipCapacity(supabase),
   ])
 
   if (!profile) redirect('/profile')
   const reminderSnoozed = introductionReminderSnoozed((await cookies()).get(introductionReminderCookie(user.id))?.value)
+  const capacitySummary = correspondenceCapacitySummary(relationshipCapacity)
 
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
@@ -220,6 +224,13 @@ export default async function HomePage() {
                 </div>
               ) : (
                 <p className={helperTextClass}>Nothing waiting right now.</p>
+              )}
+
+              {capacitySummary && (
+                <div className="rounded-md border border-foreground/10 bg-surface-shell px-4 py-3">
+                  <p className={sectionLabelClass}>Your correspondence</p>
+                  <p className={`mt-1 ${helperTextClass}`}>{capacitySummary}</p>
+                </div>
               )}
 
               {mailOnTheWay && <MailOnTheWay />}

@@ -6,7 +6,8 @@ import {
   getIncomingMailInTransit,
   incomingMailInTransitPersonIds,
 } from '@/lib/letters'
-import { pageTitleClass } from '@/app/profile/ui'
+import { getRelationshipCapacity, newCorrespondenceUnavailableMessage } from '@/lib/relationship-capacity'
+import { pageTitleClass, helperTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MemberNotices from '@/app/member-notices'
 import LetterboxSearch from './letterbox-search'
@@ -38,12 +39,14 @@ export default async function LettersPage() {
     redirect('/sign-in')
   }
 
-  const [people, waitingCount, incomingInTransit] = await Promise.all([
+  const [people, waitingCount, incomingInTransit, relationshipCapacity] = await Promise.all([
     getLetterboxPeople(supabase, user.id),
     getWaitingLetterCount(supabase, user.id),
     getIncomingMailInTransit(supabase),
+    getRelationshipCapacity(supabase),
   ])
   const mailInTransitPersonIds = incomingMailInTransitPersonIds(incomingInTransit)
+  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
 
   return (
     <AppShell active="letters" waitingLetterCount={waitingCount}>
@@ -56,6 +59,7 @@ export default async function LettersPage() {
           <MemberNotices />
           <h1 className={pageTitleClass}>{t('heading')}</h1>
           <LettersTabs active="penPals" />
+          {newCorrespondenceMessage && <div className="mb-6 rounded-md border border-foreground/10 bg-surface-shell px-4 py-3"><p className="text-xs uppercase tracking-widest text-foreground/55">Your correspondence</p><p className={`mt-1 ${helperTextClass}`}>{newCorrespondenceMessage} Your existing correspondences remain open.</p></div>}
           <LetterboxSearch people={people} mailInTransitPersonIds={mailInTransitPersonIds} />
         </div>
       </main>

@@ -12,6 +12,10 @@ import {
   resolveFirstContactDisplayStatus,
 } from '@/lib/letters'
 import {
+  getRelationshipCapacity,
+  newCorrespondenceUnavailableMessage,
+} from '@/lib/relationship-capacity'
+import {
   sectionLabelClass,
   helperTextClass,
   secondaryButtonClass,
@@ -61,10 +65,16 @@ export default async function WriteToPage({
     const correspondence = await getActiveEstablishedCorrespondenceWithUser(supabase, user.id, recipientId)
     if (correspondence && await isEstablishedForViewer(supabase, correspondence.id)) redirect(`/letters/with/${recipientId}/write?mq=${encodeURIComponent(mq)}&returnTo=${encodeURIComponent(backHref)}`)
   }
-  if (mq) {
-    const incoming = await getFirstContact(supabase, recipientId, user.id)
-    if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) redirect(`/letters/${incoming.id}`)
+
+  // A private relationship has only one first-contact episode at a time.
+  // If this person has already written to the viewer, every generic /write
+  // entry point should continue through that incoming letter rather than
+  // manufacture a crossed pair of first letters.
+  const incoming = await getFirstContact(supabase, recipientId, user.id)
+  if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) {
+    redirect(`/letters/${incoming.id}`)
   }
+
   const existing = await getFirstContact(supabase, user.id, recipientId)
 
   if (existing) {
@@ -127,14 +137,35 @@ export default async function WriteToPage({
   // The Room is now the canonical place to recover that context.
   if (!answerId) redirect('/room')
 
-  const { data: answer } = await supabase
-    .from('question_answers')
-    .select('id, user_id, questions(prompt)')
-    .eq('id', answerId)
-    .eq('user_id', recipientId)
-    .maybeSingle()
+  const [{ data: answer }, capacity] = await Promise.all([
+    supabase
+      .from('question_answers')
+      .select('id, user_id, questions(prompt)')
+      .eq('id', answerId)
+      .eq('user_id', recipientId)
+      .maybeSingle(),
+    getRelationshipCapacity(supabase),
+  ])
 
   if (!answer) redirect('/room')
+
+  const capacityMessage = newCorrespondenceUnavailableMessage(capacity)
+  if (capacityMessage) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="w-full max-w-md space-y-5 py-10 text-center">
+          <p className={sectionLabelClass}>Room for someone new</p>
+          <p className={helperTextClass}>{capacityMessage}</p>
+          <p className={helperTextClass}>
+            You can still read {recipient.pseudonym}&apos;s profile and public writing.
+          </p>
+          <Link href={backHref} className={secondaryButtonClass}>
+            Back to {backHref === '/home' ? nav('home') : backHref.startsWith('/letters/discover') ? letters('discover') : backHref.startsWith('/room/') ? recipient.pseudonym : nav('room')}
+          </Link>
+        </div>
+      </main>
+    )
+  }
 
   const question = Array.isArray(answer.questions) ? answer.questions[0] : answer.questions
 

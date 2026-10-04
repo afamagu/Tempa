@@ -27,6 +27,7 @@ import {
   clearFirstContactDraft,
 } from '@/lib/letter-editor-draft'
 import { getMyAccountStatus, accountBlockedMessage, type AccountStatus } from '@/lib/account-status'
+import { firstContactCapacityMessage } from '@/lib/relationship-capacity'
 import {
   evaluateSafety,
   SAFETY_CANNOT_SEND_MESSAGE,
@@ -169,7 +170,10 @@ export default function FirstLetterComposer({
           message: sendError.message,
           code: sendError.code,
         })
-        if (sendError.code === '23505') {
+        const capacityMessage = firstContactCapacityMessage(sendError, recipientPseudonym)
+        if (capacityMessage) {
+          setError(capacityMessage)
+        } else if (sendError.code === '23505') {
           setError(`You've already written to ${recipientPseudonym}.`)
         } else {
           setError(accountBlockedMessage(myStatus) ?? 'Could not send your letter. Please try again.')

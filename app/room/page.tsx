@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
+import { getRelationshipCapacity, newCorrespondenceUnavailableMessage } from '@/lib/relationship-capacity'
 import { readRoomAnswers, readRoomLibrary } from '@/lib/room-reading'
 import { hasCompletedGuide } from '@/lib/guide'
 import AppShell from '@/app/app-shell'
@@ -25,9 +26,9 @@ export default async function RoomPage({ searchParams }: {
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect('/sign-in')
   const t = await getTranslations('RoomEngagement')
-  const [live, mine, waiting, introSeen, library] = await Promise.all([
+  const [live, mine, waiting, introSeen, library, relationshipCapacity] = await Promise.all([
     getCurrentRoomQuestion(client), getMyAnswers(client, user.id), getWaitingLetterCount(client, user.id),
-    hasCompletedGuide(client, user.id, 'people'), readRoomLibrary(client),
+    hasCompletedGuide(client, user.id, 'people'), readRoomLibrary(client), getRelationshipCapacity(client),
   ])
   let question = live
   if (params.question && params.question !== live?.id) {
@@ -47,9 +48,11 @@ export default async function RoomPage({ searchParams }: {
   const current = question?.id === live?.id
   const answered = mine.some(a => a.questionId === question?.id)
   const earlier = library.questions.filter(q => !q.is_current)
+  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
   return <AppShell active="room" waitingLetterCount={waiting}>
     <main className="mx-auto w-full max-w-3xl space-y-10 px-6 py-10">
       <header className="space-y-2"><h1 className={pageTitleClass}>{t('title')}</h1><p className="font-serif text-xl text-foreground/80">Read what people have written. Let a conversation begin there.</p></header>
+      {newCorrespondenceMessage && <div className="rounded-md border border-foreground/10 bg-surface-shell px-4 py-3"><p className="text-xs uppercase tracking-widest text-foreground/55">Room for someone new</p><p className={`mt-1 ${helperTextClass}`}>{newCorrespondenceMessage} The Room stays open to read and explore.</p></div>}
       {!introSeen && <FeatureIntroduction guideKey="people" title={t('readRoom')} ctaLabel={t('enterRoom')}><p>{t('guideIntro')}</p></FeatureIntroduction>}
       {question && <section className="space-y-6" aria-labelledby="room-question-heading">
         <div className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
