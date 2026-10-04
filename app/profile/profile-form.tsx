@@ -20,6 +20,7 @@ import {
 import ChoiceGroup from './choice-group'
 import SearchableSelect from './searchable-select'
 import SearchableMultiSelect from './searchable-multi-select'
+import WritingRhythmChoice from './writing-rhythm-choice'
 import { inputClass, sectionLabelClass, helperTextClass, fieldLabelClass } from './ui'
 import {
   INTEREST_TAXONOMY,
@@ -29,6 +30,7 @@ import {
 } from '@/lib/interests'
 import { isReservedPseudonym, RESERVED_PSEUDONYM_MESSAGE } from '@/lib/reserved-pseudonyms'
 import { setProfileInterests } from '@/lib/profile-interests'
+import { isWritingRhythm, writingRhythmCopy } from '@/lib/writing-rhythm'
 
 type PseudonymStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken' | 'reserved'
 
@@ -53,6 +55,7 @@ export type RequiredFieldKey =
   | 'interests'
   | 'writingStyle'
   | 'receiving'
+  | 'rhythm'
 
 export function validateRequiredFields(state: {
   country: string
@@ -61,6 +64,7 @@ export function validateRequiredFields(state: {
   readingInterestsCount: number
   aiPreference: string
   receivingPreference: string
+  writingRhythm: string
 }): Partial<Record<RequiredFieldKey, string>> {
   const errors: Partial<Record<RequiredFieldKey, string>> = {}
   if (!state.country) errors.country = 'Choose your country.'
@@ -71,6 +75,7 @@ export function validateRequiredFields(state: {
   }
   if (!state.aiPreference) errors.writingStyle = 'Choose how you usually write your letters.'
   if (!state.receivingPreference) errors.receiving = "Choose what you're comfortable receiving."
+  if (!isWritingRhythm(state.writingRhythm)) errors.rhythm = 'Choose your usual writing rhythm.'
   return errors
 }
 
@@ -175,6 +180,15 @@ export default function ProfileForm({ userId }: { userId: string }) {
     for (const key of keys) {
       if (key === 'interests') {
         result[key] = t('fieldErrors.interests', { min: MIN_RECOMMENDED_INTERESTS, max: MAX_INTERESTS })
+      } else if (key === 'rhythm') {
+        const base = locale.split('-')[0]
+        result[key] = base === 'fr'
+          ? 'Choisissez votre rythme habituel.'
+          : base === 'es'
+            ? 'Elige tu ritmo habitual.'
+            : base === 'pt'
+              ? 'Escolha o seu ritmo habitual.'
+              : 'Choose your usual writing rhythm.'
       } else {
         result[key] = t(`fieldErrors.${key}` as 'fieldErrors.country' | 'fieldErrors.languages' | 'fieldErrors.intent' | 'fieldErrors.writingStyle' | 'fieldErrors.receiving')
       }
@@ -195,9 +209,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
     let cancelled = false
     const timeout = setTimeout(async () => {
       const supabase = createClient()
-      const { data, error } = await supabase.rpc('is_pseudonym_available', {
-        candidate: value,
-      })
+      const { data, error } = await supabase.rpc('is_pseudonym_available', { candidate: value })
 
       if (cancelled || checkIdRef.current !== requestId) return
 
@@ -210,13 +222,8 @@ export default function ProfileForm({ userId }: { userId: string }) {
         setSuggestions([])
       } else {
         setPseudonymStatus('taken')
-        const { data: suggestionData } = await supabase.rpc(
-          'suggest_available_pseudonyms',
-          { base: value, needed: 3 }
-        )
-        if (!cancelled && checkIdRef.current === requestId) {
-          setSuggestions(suggestionData ?? [])
-        }
+        const { data: suggestionData } = await supabase.rpc('suggest_available_pseudonyms', { base: value, needed: 3 })
+        if (!cancelled && checkIdRef.current === requestId) setSuggestions(suggestionData ?? [])
       }
     }, 500)
 
@@ -235,7 +242,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
     })
   }
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setFormError(null)
     setFieldErrors({})
@@ -249,6 +256,9 @@ export default function ProfileForm({ userId }: { userId: string }) {
       return
     }
 
+    const formData = new FormData(e.currentTarget)
+    const writingRhythm = String(formData.get('writing_rhythm') ?? '')
+
     const errors = validateRequiredFields({
       country,
       languages,
@@ -256,6 +266,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
       readingInterestsCount: readingInterests.length,
       aiPreference,
       receivingPreference,
+      writingRhythm,
     })
     const invalidKeys = Object.keys(errors) as RequiredFieldKey[]
     const firstInvalidKey = invalidKeys[0]
@@ -264,6 +275,8 @@ export default function ProfileForm({ userId }: { userId: string }) {
       scrollToField(firstInvalidKey)
       return
     }
+
+    if (!isWritingRhythm(writingRhythm)) return
 
     setSubmitting(true)
     const supabase = createClient()
@@ -298,6 +311,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
       intent_other: intentSelections.includes('Something else') ? intentOther.trim() || null : null,
       ai_preference: aiPreference,
       receiving_preference: receivingPreference,
+      writing_rhythm: writingRhythm,
     })
 
     if (insertError) {
@@ -337,16 +351,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
             <div className="space-y-1.5">
               <label htmlFor="pseudonym" className={fieldLabelClass}>{t('nameLabel')}</label>
-              <input
-                id="pseudonym"
-                ref={pseudonymFieldRef}
-                value={pseudonym}
-                onChange={(e) => setPseudonym(e.target.value)}
-                placeholder={t('namePlaceholder')}
-                autoComplete="off"
-                aria-invalid={pseudonymStatus === 'invalid' || pseudonymStatus === 'taken' || pseudonymStatus === 'reserved'}
-                className={inputClass}
-              />
+              <input id="pseudonym" ref={pseudonymFieldRef} value={pseudonym} onChange={(e) => setPseudonym(e.target.value)} placeholder={t('namePlaceholder')} autoComplete="off" aria-invalid={pseudonymStatus === 'invalid' || pseudonymStatus === 'taken' || pseudonymStatus === 'reserved'} className={inputClass} />
               <p className={helperTextClass}>{t('nameHelp')}</p>
               {pseudonymStatus === 'invalid' && formError === null && <p className="text-xs text-red-600">{pseudonymValidationMessage(pseudonym)}</p>}
               {pseudonymStatus === 'reserved' && formError === null && <p className="text-xs text-red-600" role="alert">{t('reserved')}</p>}
@@ -355,15 +360,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
               {pseudonymStatus === 'taken' && (
                 <div className="space-y-2">
                   <p className="text-sm text-red-600">{t('taken')}</p>
-                  {suggestions.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {suggestions.map((suggestion) => (
-                        <button key={suggestion} type="button" onClick={() => setPseudonym(suggestion)} className="rounded-full border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]">
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {suggestions.length > 0 && <div className="flex flex-wrap gap-2">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => setPseudonym(suggestion)} className="rounded-full border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]">{suggestion}</button>)}</div>}
                 </div>
               )}
             </div>
@@ -376,13 +373,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
 
             <div className="space-y-1.5">
               <label htmlFor="region" className={fieldLabelClass}>{t('region')} <span className="text-muted">({common('optional')})</span></label>
-              {!country ? (
-                <input disabled placeholder={t('selectCountryFirst')} className={inputClass} />
-              ) : hasStructuredRegions ? (
-                <SearchableSelect id="region" value={region} onChange={setRegion} options={regionOptions} placeholder={t('searchRegions')} />
-              ) : (
-                <input id="region" value={region} onChange={(e) => setRegion(e.target.value)} className={inputClass} />
-              )}
+              {!country ? <input disabled placeholder={t('selectCountryFirst')} className={inputClass} /> : hasStructuredRegions ? <SearchableSelect id="region" value={region} onChange={setRegion} options={regionOptions} placeholder={t('searchRegions')} /> : <input id="region" value={region} onChange={(e) => setRegion(e.target.value)} className={inputClass} />}
             </div>
 
             <div className="space-y-1.5" ref={registerFieldRef('languages')}>
@@ -430,19 +421,13 @@ export default function ProfileForm({ userId }: { userId: string }) {
               <ChoiceGroup ariaLabel={t('receivingQuestion')} options={receivingOptions} selected={receivingPreference ? [receivingPreference] : []} onToggle={setReceivingPreference} layout="pill" />
               {fieldErrors.receiving && <p className="text-xs text-red-600" role="alert">{fieldErrors.receiving}</p>}
             </div>
+            <div ref={registerFieldRef('rhythm')}>
+              <WritingRhythmChoice error={fieldErrors.rhythm} />
+            </div>
           </section>
 
           {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <button
-            type="submit"
-            disabled={
-              submitting ||
-              pseudonymStatus === 'checking' ||
-              pseudonymStatus === 'taken' ||
-              pseudonymStatus === 'reserved'
-            }
-            className="w-full rounded-md bg-accent text-accent-foreground px-4 py-3 text-base font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
-          >
+          <button type="submit" disabled={submitting || pseudonymStatus === 'checking' || pseudonymStatus === 'taken' || pseudonymStatus === 'reserved'} className="w-full rounded-md bg-accent text-accent-foreground px-4 py-3 text-base font-medium transition-colors hover:bg-accent/90 disabled:opacity-50">
             {submitting ? common('saving') : common('continue')}
           </button>
         </form>
