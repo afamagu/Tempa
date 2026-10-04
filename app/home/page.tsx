@@ -16,12 +16,12 @@ import {
   getWaitingLetterCount,
   getIncomingMailInTransit,
   excludeHiddenMailInTransit,
-  hasVisibleReply,
   hasIncomingMailInTransit,
   letterPreviewText,
   isRichBody,
 } from '@/lib/letters'
 import { getRelationshipCapacity, correspondenceCapacitySummary } from '@/lib/relationship-capacity'
+import { getRelationshipSurfacePeople } from '@/lib/relationship-surface'
 import {
   getHomeBoardCandidates,
   partitionHomeSections,
@@ -40,6 +40,7 @@ import {
   sectionTitleClass,
   primaryButtonClass,
   secondaryButtonClass,
+  metadataTextClass,
 } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MemberNotices from '@/app/member-notices'
@@ -52,6 +53,7 @@ import RoomAnswerCard, { type HomeRoomAnswer } from './room-answer-card'
 import AnnouncementTeaser from './announcement-teaser'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import { editorialTitleFor, getEditorialBylines } from '@/lib/editorial-byline'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 
 const HOME_BOARD_COUNT = 3
 
@@ -73,6 +75,7 @@ export default async function HomePage() {
     myAnswers,
     introductionQuestion,
     relationshipCapacity,
+    relationshipPeople,
   ] = await Promise.all([
     supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
@@ -85,11 +88,17 @@ export default async function HomePage() {
     getMyAnswers(supabase, user.id),
     getIntroductionReminderQuestion(supabase, user.id),
     getRelationshipCapacity(supabase),
+    getRelationshipSurfacePeople(supabase, user.id),
   ])
 
   if (!profile) redirect('/profile')
-  const reminderSnoozed = introductionReminderSnoozed((await cookies()).get(introductionReminderCookie(user.id))?.value)
+
+  const reminderSnoozed = introductionReminderSnoozed(
+    (await cookies()).get(introductionReminderCookie(user.id))?.value
+  )
   const capacitySummary = correspondenceCapacitySummary(relationshipCapacity)
+  const establishedPeople = relationshipPeople.filter((person) => person.relationshipState === 'established')
+  const pendingPeople = relationshipPeople.filter((person) => person.relationshipState === 'pending')
 
   const { items: boardItems, sessionStartedAt: boardSessionStartedAt, seed: boardSeed } = boardCandidates
   const { featured, fromMindsYouKeep, serendipity } = partitionHomeSections(boardItems)
@@ -127,34 +136,18 @@ export default async function HomePage() {
   const incomingInTransit = excludeHiddenMailInTransit(incomingInTransitRaw, hiddenCorrespondenceIds)
   const mailOnTheWay = hasIncomingMailInTransit(incomingInTransit)
   const awaitingReply = deriveArrivals(allLetters, user.id)
-  const hasActiveCorrespondence = hasVisibleReply(allLetters)
   const singleAwaiting = awaitingReply.length === 1 ? awaitingReply[0] : null
+  const relationshipByUserId = new Map(relationshipPeople.map((person) => [person.userId, person]))
+  const singleAwaitingPerson = singleAwaiting ? relationshipByUserId.get(singleAwaiting.senderId) ?? null : null
 
   const roomCandidates = currentRoomQuestion
     ? await getHomeQuestionAnswers(supabase, user.id, currentRoomQuestion)
     : []
   await recordRoomExposureOpportunities(user.id, roomCandidates, 'home_room')
 
-  const [announcementImageUrl, singleAwaitingSender, editorialBylines] = await Promise.all([
+  const [announcementImageUrl, editorialBylines] = await Promise.all([
     activeAnnouncement?.heroImagePath
       ? resolveAnnouncementImageUrl(supabase, activeAnnouncement.heroImagePath).then((result) => result.url)
-      : Promise.resolve(null),
-    singleAwaiting
-      ? supabase
-          .from('public_profiles')
-          .select('pseudonym, mark_id')
-          .eq('id', singleAwaiting.senderId)
-          .maybeSingle()
-          .then(({ data }) =>
-            data
-              ? {
-                  pseudonym: data.pseudonym as string,
-                  markUrl: data.mark_id
-                    ? publicProfileMarkUrl(supabase, `${data.mark_id}.png`)
-                    : null,
-                }
-              : null
-          )
       : Promise.resolve(null),
     getEditorialBylines(supabase),
   ])
@@ -177,20 +170,25 @@ export default async function HomePage() {
     <AppShell active="home" waitingLetterCount={waitingCount}>
       <main className="min-h-screen p-6">
         <div className="py-10">
-          <div className="mx-auto w-full max-w-md">
-            {introductionQuestion && !reminderSnoozed && <IntroductionReminder userId={user.id} questionId={introductionQuestion.id} />}
+          <div className="mx-auto w-full max-w-xl">
             <MemberNotices />
             <PublicMentions />
-            <div className="space-y-6">
-              <h1 className={pageTitleClass}>Arrivals</h1>
 
-              {awaitingReply.length > 0 ? (
+            <section aria-labelledby="what-matters-heading" className="space-y-6">
+              <div>
+                <p className={sectionLabelClass}>Home</p>
+                <h1 id="what-matters-heading" className={`${pageTitleClass} mt-1`}>
+                  What matters now
+                </h1>
+              </div>
+
+              {awaitingReply.length > 0 && (
                 <div className="space-y-2">
-                  {singleAwaiting && singleAwaitingSender && (
+                  {singleAwaiting && singleAwaitingPerson && (
                     <ArrivalSenderLink
                       senderId={singleAwaiting.senderId}
-                      pseudonym={singleAwaitingSender.pseudonym}
-                      markUrl={singleAwaitingSender.markUrl}
+                      pseudonym={singleAwaitingPerson.pseudonym}
+                      markUrl={singleAwaitingPerson.markUrl ?? null}
                     />
                   )}
                   <Link
@@ -198,13 +196,19 @@ export default async function HomePage() {
                     className="block rounded-md border border-accent/40 px-5 py-5 transition-colors hover:border-accent/70"
                   >
                     <p className={sectionTitleClass}>
-                      {awaitingReply.length === 1
-                        ? '1 letter waiting'
-                        : `${awaitingReply.length} letters waiting`}
+                      {singleAwaiting && singleAwaitingPerson?.relationshipState === 'pending'
+                        ? `A first letter from ${singleAwaitingPerson.pseudonym}`
+                        : awaitingReply.length === 1
+                          ? 'A letter is waiting'
+                          : `${awaitingReply.length} letters are waiting`}
                     </p>
-                    <p className={`${helperTextClass} mt-1`}>Someone has written to you.</p>
+                    <p className={`${helperTextClass} mt-1`}>
+                      {singleAwaitingPerson?.relationshipState === 'pending'
+                        ? 'They would like to begin a correspondence.'
+                        : 'Open it when you are ready to write back.'}
+                    </p>
                     {singleAwaiting && (
-                      <div className="mt-2 rounded-md bg-surface-shell p-3">
+                      <div className="mt-3 border-l-2 border-foreground/10 pl-3">
                         <p className="line-clamp-2 whitespace-pre-wrap font-serif text-[14px] leading-snug text-foreground/70">
                           <FormattedText
                             text={letterPreviewText(singleAwaiting.body)}
@@ -215,27 +219,79 @@ export default async function HomePage() {
                     )}
                   </Link>
                 </div>
-              ) : hasActiveCorrespondence ? (
-                <div className="rounded-md border border-foreground/10 px-5 py-5">
-                  <p className={sectionTitleClass}>Your correspondence continues.</p>
-                  <Link href="/letters" className={`${quietLinkClass} mt-2`}>
-                    Open Letterbox
-                  </Link>
-                </div>
-              ) : (
-                <p className={helperTextClass}>Nothing waiting right now.</p>
               )}
 
-              {capacitySummary && (
-                <div className="rounded-md border border-foreground/10 bg-surface-shell px-4 py-3">
-                  <p className={sectionLabelClass}>Your correspondence</p>
-                  <p className={`mt-1 ${helperTextClass}`}>{capacitySummary}</p>
+              {establishedPeople.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className={sectionLabelClass}>Your correspondence</p>
+                    <Link href="/letters" className={quietLinkClass}>Open Letterbox</Link>
+                  </div>
+                  <div className="divide-y divide-foreground/10 border-y border-foreground/10">
+                    {establishedPeople.slice(0, 5).map((person) => (
+                      <Link
+                        key={person.userId}
+                        href={`/letters/with/${person.userId}`}
+                        className="flex items-center gap-3 py-3.5 transition-colors hover:bg-foreground/[.02] sm:px-2"
+                      >
+                        <ProfileIdentityMark
+                          identifier={person.userId}
+                          markUrl={person.markUrl ?? null}
+                          label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined}
+                          size="md"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-medium text-foreground">{person.pseudonym}</p>
+                          <p className={`truncate ${person.unreadCount > 0 ? 'text-[13px] font-medium text-accent' : metadataTextClass}`}>
+                            {person.statusText}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pendingPeople.some((person) => person.pendingDirection === 'outgoing') && (
+                <div className="space-y-2">
+                  <p className={sectionLabelClass}>First letters</p>
+                  {pendingPeople
+                    .filter((person) => person.pendingDirection === 'outgoing')
+                    .slice(0, 2)
+                    .map((person) => (
+                      <Link
+                        key={person.userId}
+                        href={`/letters/with/${person.userId}`}
+                        className="flex items-center justify-between gap-4 border-b border-foreground/10 py-3 last:border-b-0"
+                      >
+                        <span className="font-serif text-[15px] text-foreground">{person.pseudonym}</span>
+                        <span className={`${metadataTextClass} text-right`}>{person.statusText}</span>
+                      </Link>
+                    ))}
                 </div>
               )}
 
               {mailOnTheWay && <MailOnTheWay />}
               <RoomInvitations />
-            </div>
+
+              {introductionQuestion && !reminderSnoozed && (
+                <IntroductionReminder userId={user.id} questionId={introductionQuestion.id} />
+              )}
+
+              {capacitySummary && (
+                <div className="border-l-2 border-accent/35 pl-4">
+                  <p className={sectionLabelClass}>Your correspondence</p>
+                  <p className={`mt-1 ${helperTextClass}`}>{capacitySummary}</p>
+                </div>
+              )}
+
+              {awaitingReply.length === 0 && establishedPeople.length === 0 && pendingPeople.length === 0 && !mailOnTheWay && (
+                <div className="rounded-md border border-foreground/10 px-5 py-5">
+                  <p className={sectionTitleClass}>Nothing needs your attention right now.</p>
+                  <p className={`${helperTextClass} mt-1`}>The Room and Board are still open whenever you feel like reading.</p>
+                </div>
+              )}
+            </section>
           </div>
 
           {(currentRoomQuestion || homeRoomAnswers.length > 0 || homeBoardItems.length > 0) && (
@@ -257,7 +313,7 @@ export default async function HomePage() {
 
                   {homeRoomAnswers.length > 0 && (
                     <div className="space-y-4">
-                      <p className={sectionLabelClass}>{t('peopleSaid')}</p>
+                      <p className={sectionLabelClass}>Three perspectives</p>
                       <div className="grid gap-4 md:grid-cols-3">
                         {homeRoomAnswers.map((answer) => (
                           <RoomAnswerCard key={answer.userId} answer={answer} />
@@ -266,11 +322,13 @@ export default async function HomePage() {
                     </div>
                   )}
 
-                  {homeRoomAnswers.length > 0 && <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    <Link href={`/room?question=${currentRoomQuestion.id}`} className={secondaryButtonClass}>
-                      {t('moreAnswers')}
-                    </Link>
-                  </div>}
+                  {homeRoomAnswers.length > 0 && (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                      <Link href={`/room?question=${currentRoomQuestion.id}`} className={secondaryButtonClass}>
+                        {t('moreAnswers')}
+                      </Link>
+                    </div>
+                  )}
                 </section>
               )}
 
