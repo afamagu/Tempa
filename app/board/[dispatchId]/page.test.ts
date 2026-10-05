@@ -80,7 +80,8 @@ describe('Dispatch detail page — correspondence entry point', () => {
   })
 
   it('routes a fresh eligible person into the existing private-write flow', () => {
-    expect(source).toContain('href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}&source=dispatch`}')
+    expect(source).toContain('d=${dispatch.id}&source=dispatch&returnTo=${encodeURIComponent(dispatchReturnHref)}')
+    expect(source).toContain('Write from this')
   })
 
   it('opens existing correspondence instead of offering another first letter', () => {
@@ -96,7 +97,7 @@ describe('Dispatch detail page — correspondence entry point', () => {
   })
 
   it('uses person language and never exposes the retired mind terminology', () => {
-    expect(source).toContain('Write to {dispatch.authorPseudonym}')
+    expect(source).toContain('Write from this')
     expect(executable).not.toContain('Write to this mind')
   })
 
@@ -149,5 +150,32 @@ describe('Dispatch detail page — attached Postcard', () => {
     const reader = source.indexOf('<DispatchReader')
     expect(postcard).toBeGreaterThan(-1)
     expect(reader).toBeGreaterThan(postcard)
+  })
+})
+
+describe('Dispatch detail page — Phase 11 origin and finite Board return', () => {
+  it('preserves the exact Dispatch as the private-letter return destination', () => {
+    expect(source).toContain('const dispatchReturnHref =')
+    expect(source).toContain('returnTo=${encodeURIComponent(dispatchReturnHref)}')
+  })
+
+  it('returns a finite-session reader to the same Board session', () => {
+    expect(source).toContain('const boardReturnHref = trailContext')
+    expect(source).toContain('sessionStartedAt')
+    expect(source).toContain('seed')
+    expect((source.match(/href=\\{boardReturnHref\\}/g) ?? []).length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+
+describe('Dispatch detail page — finite Board boundary', () => {
+  it('does not expose Read next candidates when entered from the finite Board', () => {
+    expect(source).toContain("const fromFiniteBoard = resolvedSearchParams.from === 'finite_board'")
+    expect(source).toContain('trailContext && !fromFiniteBoard ? getNextTrailItems')
+  })
+
+  it('keeps the existing continuation shelf available for non-Board reading trails such as Home', () => {
+    expect(source).toContain('{continueReadingCards.length > 0 && (')
+    expect(source).toContain('getNextTrailItems(supabase, trailContext, dispatch.id)')
   })
 })

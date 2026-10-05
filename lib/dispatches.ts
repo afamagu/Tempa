@@ -717,6 +717,189 @@ export async function getBoardFeedPage(
   return { items, nextCursor }
 }
 
+
+export const BOARD_FINITE_CANDIDATE_COUNT = 48
+export const BOARD_CROSSED_PATHS_MAX = 3
+export const BOARD_KEPT_MAX = 2
+export const BOARD_UNEXPECTED_MAX = 1
+
+export type FiniteBoardComposition = {
+  crossedPaths: BoardFeedItem[]
+  kept: BoardFeedItem[]
+  unexpected: BoardFeedItem[]
+}
+
+type BoardEncounterHistoryRow = {
+  candidate_id: string
+  last_presented_at: string | null
+  consumed_at: string | null
+  presented_count: number
+}
+
+/**
+ * Phase 11 finite Board composition.
+ *
+ * The ranking engine remains board_feed_page: this function does not create a
+ * second popularity/recommendation algorithm. It asks that existing
+ * session-stable feed for one bounded candidate window, then composes a tiny
+ * editorial Board from relationship signals Tempa already has:
+ *
+ *   1. up to 3 Dispatches from people the viewer genuinely encountered before
+ *      and has not been presented again within the seven-day re-encounter
+ *      cooldown;
+ *   2. up to 2 Dispatches from people the viewer Keeps in Mind;
+ *   3. up to 1 unexpected Dispatch from outside both of those familiar pools.
+ *
+ * Sections never duplicate a Dispatch. Keep pieces are reserved first so the
+ * explicit signal remains visible, while the same author may still appear in
+ * Crossed Paths through different writing. The existing feed order is preserved within
+ * each section, so unseen-first/fairness/author diversity and the session seed
+ * remain authoritative. Public reading is deliberately independent of
+ * correspondence capacity.
+ */
+export function composeFiniteBoardItems(
+  items: BoardFeedItem[],
+  crossedAuthorIds: Set<string>,
+  viewerId: string
+): FiniteBoardComposition {
+  // A member's own Dispatch is not a passive discovery encounter. Official
+  // Tempa/Sponsored writing remains eligible for Something unexpected even
+  // when the creating admin happens to be the current viewer.
+  const candidates = items.filter(
+    (item) => !(item.publishedAs === 'member' && item.authorId === viewerId)
+  )
+
+  const used = new Set<string>()
+
+  function take(
+    limit: number,
+    predicate: (item: BoardFeedItem) => boolean
+  ): BoardFeedItem[] {
+    const picked: BoardFeedItem[] = []
+    for (const item of candidates) {
+      if (picked.length >= limit) break
+      if (used.has(item.id) || !predicate(item)) continue
+      used.add(item.id)
+      picked.push(item)
+    }
+    return picked
+  }
+
+  // Reserve explicit Keep items first. A kept author may still also appear in
+  // Crossed Paths through a DIFFERENT Dispatch; only duplicate pieces are
+  // suppressed, not meaningful overlap between relationship signals.
+  const kept = take(
+    BOARD_KEPT_MAX,
+    (item) => item.publishedAs === 'member' && item.isKept
+  )
+
+  const crossedPaths = take(
+    BOARD_CROSSED_PATHS_MAX,
+    (item) =>
+      item.publishedAs === 'member' &&
+      crossedAuthorIds.has(item.authorId)
+  )
+
+  const unexpected = take(
+    BOARD_UNEXPECTED_MAX,
+    (item) =>
+      item.publishedAs !== 'member' ||
+      (!item.isFamiliar && !crossedAuthorIds.has(item.authorId))
+  )
+
+  return { crossedPaths, kept, unexpected }
+}
+
+export async function getFiniteBoardComposition(
+  supabase: SupabaseClient,
+  viewerId: string,
+  params: { sessionStartedAt: string; seed: string }
+): Promise<FiniteBoardComposition> {
+  const [{ items }, { data: historyRows }, { data: answerReadRows }, { data: dispatchViewRows }] =
+    await Promise.all([
+      getBoardFeedPage(supabase, {
+        sessionStartedAt: params.sessionStartedAt,
+        seed: params.seed,
+        cursor: null,
+        limit: BOARD_FINITE_CANDIDATE_COUNT,
+      }),
+      supabase
+        .from('member_introduction_history')
+        .select('candidate_id,last_presented_at,consumed_at,presented_count')
+        .eq('viewer_id', viewerId)
+        .gte('presented_count', 1)
+        .limit(200),
+      supabase
+        .from('member_answer_reads')
+        .select('answer_id,first_read_at')
+        .eq('viewer_id', viewerId)
+        .order('first_read_at', { ascending: false })
+        .limit(200),
+      supabase
+        .from('dispatch_views')
+        .select('dispatch_id,viewed_at')
+        .eq('viewer_id', viewerId)
+        .order('viewed_at', { ascending: false })
+        .limit(200),
+    ])
+
+  const answerIds = (answerReadRows ?? []).map((row) => row.answer_id as string)
+  const viewedDispatchIds = (dispatchViewRows ?? []).map((row) => row.dispatch_id as string)
+
+  const [{ data: answerOwners }, { data: viewedDispatchOwners }] = await Promise.all([
+    answerIds.length
+      ? supabase.from('question_answers').select('id,user_id').in('id', answerIds)
+      : Promise.resolve({ data: [] as { id: string; user_id: string }[] }),
+    viewedDispatchIds.length
+      ? supabase.from('dispatches').select('id,author_id').in('id', viewedDispatchIds)
+      : Promise.resolve({ data: [] as { id: string; author_id: string }[] }),
+  ])
+
+  const latestEncounterByAuthor = new Map<string, number>()
+  const noteEncounter = (authorId: string | null | undefined, at: string | null | undefined) => {
+    if (!authorId || authorId === viewerId || !at) return
+    const time = Date.parse(at)
+    if (!Number.isFinite(time)) return
+    latestEncounterByAuthor.set(authorId, Math.max(latestEncounterByAuthor.get(authorId) ?? 0, time))
+  }
+
+  for (const row of (historyRows ?? []) as BoardEncounterHistoryRow[]) {
+    const latest = Math.max(
+      row.last_presented_at ? Date.parse(row.last_presented_at) : 0,
+      row.consumed_at ? Date.parse(row.consumed_at) : 0
+    )
+    if (latest > 0) {
+      latestEncounterByAuthor.set(
+        row.candidate_id,
+        Math.max(latestEncounterByAuthor.get(row.candidate_id) ?? 0, latest)
+      )
+    }
+  }
+
+  const answerOwnerById = new Map(
+    ((answerOwners ?? []) as { id: string; user_id: string }[]).map((row) => [row.id, row.user_id])
+  )
+  for (const row of (answerReadRows ?? []) as { answer_id: string; first_read_at: string }[]) {
+    noteEncounter(answerOwnerById.get(row.answer_id), row.first_read_at)
+  }
+
+  const viewedDispatchOwnerById = new Map(
+    ((viewedDispatchOwners ?? []) as { id: string; author_id: string }[]).map((row) => [row.id, row.author_id])
+  )
+  for (const row of (dispatchViewRows ?? []) as { dispatch_id: string; viewed_at: string }[]) {
+    noteEncounter(viewedDispatchOwnerById.get(row.dispatch_id), row.viewed_at)
+  }
+
+  const cutoff = Date.parse(params.sessionStartedAt) - 7 * 24 * 60 * 60 * 1000
+  const crossedAuthorIds = new Set(
+    [...latestEncounterByAuthor.entries()]
+      .filter(([, latest]) => latest > 0 && latest <= cutoff)
+      .map(([authorId]) => authorId)
+  )
+
+  return composeFiniteBoardItems(items, crossedAuthorIds, viewerId)
+}
+
 /**
  * One author's published, visible Dispatches, newest first — the
  * profile-integration list (app/minds/[userId]/page.tsx). Same RLS/

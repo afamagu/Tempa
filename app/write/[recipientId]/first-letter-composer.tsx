@@ -52,6 +52,8 @@ export default function FirstLetterComposer({
   questionAnswerId,
   questionPrompt,
   memberQuestionId,
+  dispatchId,
+  dispatchTitle,
   backHref = '/room',
   backLabel = 'The Room',
 }: {
@@ -59,11 +61,17 @@ export default function FirstLetterComposer({
   recipientPseudonym: string
   questionAnswerId: string
   memberQuestionId?: string
+  dispatchId?: string
+  dispatchTitle?: string
   questionPrompt: string | null
   backHref?: string
   backLabel?: string
 }) {
-  const draftKey = memberQuestionId ? `${recipientId}:mq:${memberQuestionId}` : recipientId
+  const draftKey = memberQuestionId
+    ? `${recipientId}:mq:${memberQuestionId}`
+    : dispatchId
+      ? `${recipientId}:dispatch:${dispatchId}`
+      : recipientId
   const [sending, setSending] = useState(false)
   const composerRootRef = useRef<HTMLElement | null>(null)
   useKeyboardDismiss(composerRootRef)
@@ -156,8 +164,15 @@ export default function FirstLetterComposer({
 
     try {
       const supabase = createClient()
-      const { error: sendError } = await supabase.rpc(memberQuestionId ? 'send_first_letter_from_member_question' : 'send_first_letter', {
+      const rpcName = memberQuestionId
+        ? 'send_first_letter_from_member_question'
+        : dispatchId
+          ? 'send_first_letter_from_dispatch'
+          : 'send_first_letter'
+
+      const { error: sendError } = await supabase.rpc(rpcName, {
         ...(memberQuestionId ? { p_member_question_id: memberQuestionId } : {}),
+        ...(dispatchId ? { p_dispatch_id: dispatchId } : {}),
         p_recipient_id: recipientId,
         p_question_answer_id: questionAnswerId,
         p_body: body,
@@ -218,12 +233,17 @@ export default function FirstLetterComposer({
         <div className="space-y-2">
           <p className={sectionLabelClass}>Writing to</p>
           <h1 className={proseSubheadingClass}>{recipientPseudonym}</h1>
-          {questionPrompt && (
+          {dispatchId && dispatchTitle ? (
+            <div className="space-y-1">
+              <p className={helperTextClass}>In response to their Dispatch:</p>
+              <p className={contextQuestionClass}>{dispatchTitle}</p>
+            </div>
+          ) : questionPrompt ? (
             <div className="space-y-1">
               <p className={helperTextClass}>{memberQuestionId ? `A question from ${recipientPseudonym}` : 'In response to their answer to:'}</p>
               <p className={contextQuestionClass}>{questionPrompt}</p>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-4">

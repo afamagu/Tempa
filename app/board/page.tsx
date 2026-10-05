@@ -6,9 +6,9 @@ import { hasCompletedGuide } from '@/lib/guide'
 import {
   searchDispatches,
   getKeptUserIds,
-  getBoardFeedPage,
+  getFiniteBoardComposition,
   generateBoardSeed,
-  BOARD_FEED_PAGE_SIZE,
+  readingTrailSearchParams,
   type DispatchListItem,
 } from '@/lib/dispatches'
 import { pageTitleClass, helperTextClass, quietLinkClass } from '@/app/profile/ui'
@@ -18,29 +18,15 @@ import DispatchCard from './dispatch-card'
 import DispatchSearch from './dispatch-search'
 import KeepButton from './keep-button'
 import WriteDispatchButton from './write-dispatch-button'
-import BoardFeed from './board-feed'
+import BoardCrossedPathImpression from './board-crossed-path-impression'
 
 /**
- * The Board — a normal vertically scrolling discovery/list page, never
- * Reels/Stories/an animated feed. Search results (when ?q is present)
- * are shown newest-first only, without any tiering — a deliberate
- * lookup, not passive discovery — and never touch the session/cursor
- * machinery below at all.
+ * The Board — finite passive discovery plus intentional Search.
  *
- * Board Feed Foundation checkpoint (Phase 2A) — the non-search path now
- * carries an explicit Board browsing session in its own URL:
- * `?s=<session_started_at>&seed=<seed>`. Neither value is persisted
- * anywhere (no new database table) — the FIRST request of a session
- * (no `s`/`seed` present) mints both and redirects once to the
- * canonical URL carrying them, so a plain browser refresh (which
- * re-requests that same URL) reuses the SAME session rather than
- * silently starting a new one. "Load more" (see board-feed.tsx) and a
- * genuine "back" navigation after opening one Dispatch both naturally
- * reuse the same URL/session too. An explicit Refresh is simply a link
- * back to plain `/board` — hitting the page with neither value present
- * triggers the same mint-and-redirect path, producing a fresh
- * session_started_at and seed (see getBoardFeedPage/board_feed_page for
- * exactly what that changes and what it deliberately doesn't).
+ * A non-search visit is stable for one URL-carried session (s + seed) and
+ * renders a bounded editorial composition. There is no passive pagination or
+ * refresh-for-more control. Search is deliberately separate and may return a
+ * broader explicit result set.
  */
 export default async function BoardPage({
   searchParams,
@@ -63,27 +49,27 @@ export default async function BoardPage({
     redirect(`/board?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
   }
 
-  // Kept as two distinctly-typed results, never unified into one
-  // polymorphic variable — search results (plain DispatchListItem[],
-  // no tiering of any kind) must never be given reading-trail cursor
-  // fields they don't actually have; only a genuine board_feed_page
-  // result (BoardFeedItem[]) carries those. Both branches still run
-  // fully in parallel with the other two calls below.
-  const [waitingCount, keptUserIds, searchResults, boardFeedResult, introSeen] = await Promise.all([
+  // Search and passive Board composition stay separate: Search is an
+  // intentional lookup; the finite Board is a bounded session-stable surface.
+  const [waitingCount, keptUserIds, searchResults, finiteBoard, introSeen] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getKeptUserIds(supabase, user.id),
     query ? searchDispatches(supabase, query).then(items => ({ items, failed: false })).catch(() => ({ items: [], failed: true })) : Promise.resolve(null),
-    query ? Promise.resolve(null) : getBoardFeedPage(supabase, { sessionStartedAt: s!, seed: seed!, cursor: null }),
+    query ? Promise.resolve(null) : getFiniteBoardComposition(supabase, user.id, { sessionStartedAt: s!, seed: seed! }),
     hasCompletedGuide(supabase, user.id, 'board'),
   ])
 
-  const dispatches: DispatchListItem[] = query ? searchResults!.items : boardFeedResult!.items
+  const dispatches: DispatchListItem[] = query ? searchResults!.items : []
 
-  // Board list Moment preview (Board live-test corrections, 2026-09-10):
-  // the same batched first-Moment lookup Home's shelf already uses (see
-  // getFirstMomentThumbnails) — one call per page, whether this is the
-  // first page or a later "Load more" page (see board-feed.tsx), never
-  // per-card.
+  const finiteTrailQuery = (dispatch: NonNullable<typeof finiteBoard>['crossedPaths'][number]) => {
+    const params = readingTrailSearchParams(
+      { sessionStartedAt: s!, seed: seed! },
+      dispatch
+    )
+    params.set('from', 'finite_board')
+    return params.toString()
+  }
+
   return (
     <AppShell active="board" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
@@ -116,21 +102,21 @@ export default async function BoardPage({
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DispatchSearch key={query} initialQuery={query} sessionStartedAt={s} seed={seed} />
-              <Link href="/board" className={quietLinkClass}>
-                Refresh the Board
+            {query && (
+              <Link href={s && seed ? `/board?s=${encodeURIComponent(s)}&seed=${encodeURIComponent(seed)}` : '/board'} className={quietLinkClass}>
+                Clear search
               </Link>
+            )}
           </div>
 
-          {searchResults?.failed ? (<p role="alert" className={helperTextClass}>Search is temporarily unavailable. Please try Search again, or clear it to return to the Board.</p>) : dispatches.length === 0 ? (
+          {searchResults?.failed ? (<p role="alert" className={helperTextClass}>Search is temporarily unavailable. Please try Search again, or clear it to return to the Board.</p>) : query && dispatches.length === 0 ? (
             <div className="space-y-2">
-              {query ? (
-                <p className={helperTextClass}>No Dispatches match &ldquo;{query}&rdquo;.</p>
-              ) : (
-                <>
-                  <p className={helperTextClass}>No Dispatches here yet.</p>
-                  <p className={helperTextClass}>Be the first to leave one, or check back later.</p>
-                </>
-              )}
+              <p className={helperTextClass}>No Dispatches match &ldquo;{query}&rdquo;.</p>
+            </div>
+          ) : !query && finiteBoard && finiteBoard.crossedPaths.length === 0 && finiteBoard.kept.length === 0 && finiteBoard.unexpected.length === 0 ? (
+            <div className="space-y-2 text-center">
+              <p className="font-serif text-xl text-foreground">That’s the Board for now.</p>
+              <p className={helperTextClass}>Nothing has been placed here just now. Search if you’re looking for something particular, or come back another time.</p>
             </div>
           ) : query ? (
             <div className="space-y-4">
@@ -151,16 +137,96 @@ export default async function BoardPage({
                 />
               ))}
             </div>
-          ) : (
-            <BoardFeed
-              viewerId={user.id}
-              sessionStartedAt={s!}
-              seed={seed!}
-              initialDispatches={boardFeedResult!.items}
-              initialCursor={boardFeedResult!.nextCursor}
-              initialKeptUserIds={[...keptUserIds]}
-              pageSize={BOARD_FEED_PAGE_SIZE}
-            />
+          ) : finiteBoard && (
+            <div className="space-y-10">
+              {finiteBoard.crossedPaths.length > 0 && (
+                <section className="space-y-4" aria-labelledby="board-crossed-paths">
+                  <div className="space-y-1">
+                    <h2 id="board-crossed-paths" className="font-serif text-2xl text-foreground">From people you’ve crossed paths with</h2>
+                    <p className={helperTextClass}>You’ve crossed paths before. Here’s something new from them.</p>
+                  </div>
+                  <div className="space-y-4">
+                    {finiteBoard.crossedPaths.map((dispatch) => (
+                      <BoardCrossedPathImpression key={dispatch.id} candidateId={dispatch.authorId}>
+                        <DispatchCard
+                          dispatch={dispatch}
+                          trailQuery={finiteTrailQuery(dispatch)}
+                          keepSlot={
+                            dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
+                              <KeepButton
+                                viewerId={user.id}
+                                keptUserId={dispatch.authorId}
+                                keptPseudonym={dispatch.authorPseudonym}
+                                initiallyKept={keptUserIds.has(dispatch.authorId)}
+                              />
+                            ) : undefined
+                          }
+                        />
+                      </BoardCrossedPathImpression>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {finiteBoard.kept.length > 0 && (
+                <section className="space-y-4" aria-labelledby="board-kept">
+                  <div className="space-y-1">
+                    <h2 id="board-kept" className="font-serif text-2xl text-foreground">From people you Keep in Mind</h2>
+                    <p className={helperTextClass}>Fresh writing from people you chose to remember.</p>
+                  </div>
+                  <div className="space-y-4">
+                    {finiteBoard.kept.map((dispatch) => (
+                      <DispatchCard
+                        key={dispatch.id}
+                        dispatch={dispatch}
+                        trailQuery={finiteTrailQuery(dispatch)}
+                        keepSlot={
+                          dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
+                            <KeepButton
+                              viewerId={user.id}
+                              keptUserId={dispatch.authorId}
+                              keptPseudonym={dispatch.authorPseudonym}
+                              initiallyKept={keptUserIds.has(dispatch.authorId)}
+                            />
+                          ) : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {finiteBoard.unexpected.length > 0 && (
+                <section className="space-y-4" aria-labelledby="board-unexpected">
+                  <div className="space-y-1">
+                    <h2 id="board-unexpected" className="font-serif text-2xl text-foreground">Something unexpected</h2>
+                    <p className={helperTextClass}>One piece from beyond the people already familiar to you.</p>
+                  </div>
+                  {finiteBoard.unexpected.map((dispatch) => (
+                    <DispatchCard
+                      key={dispatch.id}
+                      dispatch={dispatch}
+                      trailQuery={finiteTrailQuery(dispatch)}
+                      keepSlot={
+                        dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
+                          <KeepButton
+                            viewerId={user.id}
+                            keptUserId={dispatch.authorId}
+                            keptPseudonym={dispatch.authorPseudonym}
+                            initiallyKept={keptUserIds.has(dispatch.authorId)}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </section>
+              )}
+
+              <div className="space-y-2 border-t border-foreground/10 pt-6 text-center">
+                <p className="font-serif text-xl text-foreground">That’s the Board for now.</p>
+                <p className={helperTextClass}>Search if you’re looking for something particular, or come back another time.</p>
+              </div>
+            </div>
           )}
         </div>
       </main>

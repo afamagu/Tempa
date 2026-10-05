@@ -37,7 +37,7 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
 describe('FirstLetterComposer — Safety-gated send (Checkpoint 3)', () => {
   it('evaluates via evaluateSafety before ever calling send_first_letter', () => {
     const evaluateIndex = source.indexOf('evaluateSafety({')
-    const rpcIndex = source.indexOf("supabase.rpc(memberQuestionId ? 'send_first_letter_from_member_question'")
+    const rpcIndex = source.indexOf('supabase.rpc(rpcName')
     expect(evaluateIndex, 'expected a call to evaluateSafety').toBeGreaterThan(-1)
     expect(rpcIndex, 'expected a call to send_first_letter').toBeGreaterThan(-1)
     expect(evaluateIndex).toBeLessThan(rpcIndex)
@@ -70,5 +70,26 @@ describe('FirstLetterComposer — Safety-gated send (Checkpoint 3)', () => {
   it('re-reads the editor fresh inside sendLetter rather than trusting a value captured before the warning dialog opened', () => {
     const sendLetterBody = source.slice(source.indexOf('async function sendLetter'), source.indexOf('if (sent) {'))
     expect(sendLetterBody).toContain('docToPlainBody(editor.getJSON()')
+  })
+})
+
+
+describe('FirstLetterComposer — Dispatch-origin first contact', () => {
+  it('keeps the Question answer as the Safety evaluation anchor', () => {
+    expect(source).toContain("evaluateSafety({ surface: 'first_letter', recipientId, questionAnswerId, body })")
+  })
+
+  it('selects the Dispatch wrapper only when dispatchId is present', () => {
+    expect(source).toContain("? 'send_first_letter_from_dispatch'")
+    expect(source).toContain('...(dispatchId ? { p_dispatch_id: dispatchId } : {})')
+  })
+
+  it('uses a Dispatch-specific local draft key so contexts cannot overwrite one another', () => {
+    expect(source).toContain("`${recipientId}:dispatch:${dispatchId}`")
+  })
+
+  it('shows the Dispatch title instead of mislabeling the Safety Question as the origin', () => {
+    expect(source).toContain('In response to their Dispatch:')
+    expect(source).toContain('{dispatchTitle}')
   })
 })
