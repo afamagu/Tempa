@@ -32,6 +32,15 @@ describe('classifyVisibleRelationshipEpisode', () => {
     ).toBe('pending')
   })
 
+  it('keeps a paused established relationship distinct from past history', () => {
+    expect(
+      classifyVisibleRelationshipEpisode(
+        { status: 'paused', established_at: '2026-10-04T10:00:00Z' },
+        true
+      )
+    ).toBe('paused')
+  })
+
   it('classifies a closed episode as past', () => {
     expect(
       classifyVisibleRelationshipEpisode(
@@ -49,6 +58,14 @@ describe('chooseRelationshipEpisode', () => {
       { id: 'living', state: 'established' as const, activityAt: 100 },
     ])
     expect(chosen?.id).toBe('living')
+  })
+
+  it('prefers a paused living relationship over old closed history', () => {
+    const chosen = chooseRelationshipEpisode([
+      { id: 'old', state: 'past' as const, activityAt: 300 },
+      { id: 'paused', state: 'paused' as const, activityAt: 100 },
+    ])
+    expect(chosen?.id).toBe('paused')
   })
 
   it('prefers a new pending attempt over old closed history', () => {
