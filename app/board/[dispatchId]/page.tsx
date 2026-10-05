@@ -117,7 +117,7 @@ export default async function DispatchPage({
           <div className="w-full max-w-sm space-y-4 text-center">
             <p className={sectionTitleClass}>{dispatch.title}</p>
             <p className={helperTextClass}>Hidden by TEMPA.</p>
-            <Link href="/board" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
+            <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
               <BackArrowIcon />
               Back to The Board
             </Link>
@@ -128,6 +128,15 @@ export default async function DispatchPage({
   }
 
   const trailContext = parseReadingTrailParams(resolvedSearchParams)
+  const returnQuery = new URLSearchParams()
+  for (const [key, value] of Object.entries(resolvedSearchParams)) {
+    if (typeof value === 'string') returnQuery.set(key, value)
+    else if (Array.isArray(value)) value.forEach((entry) => returnQuery.append(key, entry))
+  }
+  const dispatchReturnHref = `/board/${dispatch.id}${returnQuery.size ? `?${returnQuery.toString()}` : ''}`
+  const boardReturnHref = trailContext
+    ? `/board?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
+    : '/board'
 
   const [
     waitingCount,
@@ -215,7 +224,7 @@ export default async function DispatchPage({
     <AppShell active="board" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
-          <Link href="/board" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
+          <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
             <BackArrowIcon />
             The Board
           </Link>
@@ -350,8 +359,11 @@ export default async function DispatchPage({
                         View your letter with {dispatch.authorPseudonym}
                       </Link>
                     ) : showWriteToAuthor && authorPrimaryAnswer ? (
-                      <Link href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}&source=dispatch`} className={quietLinkClass}>
-                        Write to {dispatch.authorPseudonym}
+                      <Link
+                        href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}&d=${dispatch.id}&source=dispatch&returnTo=${encodeURIComponent(dispatchReturnHref)}`}
+                        className={quietLinkClass}
+                      >
+                        Write from this
                       </Link>
                     ) : structurallyCanWriteToAuthor && newCorrespondenceMessage ? (
                       <span className={helperTextClass}>{newCorrespondenceMessage}</span>
@@ -379,7 +391,7 @@ export default async function DispatchPage({
             )}
 
             <div className="border-t border-foreground/10 pt-4">
-              <Link href="/board" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
+              <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
                 <BackArrowIcon />
                 Back to The Board
               </Link>
