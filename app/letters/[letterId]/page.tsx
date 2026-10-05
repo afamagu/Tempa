@@ -18,6 +18,7 @@ import {
   shouldMarkLetterOpened,
   closeReasonForSender,
 } from '@/lib/letters'
+import { getReturnCardPostcards, isReturnCardAvailable } from '@/lib/return-cards'
 import { hasCompletedGuide } from '@/lib/guide'
 import { getLetterWritingStyles } from '@/lib/writing-style-data'
 import { getBlockScope } from '@/lib/blocking'
@@ -39,6 +40,7 @@ import ClosureStatusNotice from './closure-status-notice'
 import ContactSharingNote from './contact-sharing-note'
 import ClosureRecommendations from '@/app/letters/closure-recommendations'
 import WriteQuillButton from '@/app/letters/with/[userId]/write-quill-button'
+import ReturnCardAction from './return-card-action'
 
 function BackArrowIcon() {
   return (
@@ -59,23 +61,10 @@ function BackArrowIcon() {
 }
 
 /**
- * The individual-letter reader — one opened letter, never the whole
- * correspondence rendered underneath it (the giant thread presentation
- * is retired). Reached from a Level 2 archive card
- * (/letters/with/[otherUserId]); back navigation returns there, never
- * to a generic thread.
- *
- * There is no per-letter "Reply" anymore — once a correspondence is
- * established, the SAME persistent floating quill used on the person
- * archive is the one way to write, regardless of which letter is open
- * or who sent it (see resolveLetterActionState, lib/letters.ts). It
- * links to the plain composer route with no ?replyTo — write_letter
- * still fully supports p_reply_to_id (nothing about that capability
- * was removed), there is simply no UI here driving it right now. The
- * one exception is the un-replied first-contact letter itself, still
- * governed by the old special establishment rules
- * (FirstContactResponse below) — that reply is what SETS
- * established_at, so it can never go through the quill/write_letter.
+ * One individual letter, never a thread. The pending first-contact reply
+ * remains the only relationship-establishing action; established mail uses
+ * the persistent quill. Phase 7 adds a separate Return Card affordance for
+ * an overdue incoming letter without changing either letter path.
  */
 export default async function LetterPage({
   params,
@@ -89,8 +78,6 @@ export default async function LetterPage({
   } = await supabase.auth.getUser()
 
   if (!user) {
-    // Arrival emails link to this exact letter. Keep the destination through
-    // sign-in; the existing sign-in flow validates `next` before using it.
     redirect(`/sign-in?next=${encodeURIComponent(`/letters/${letterId}`)}`)
   }
 
@@ -130,22 +117,24 @@ export default async function LetterPage({
     getLetterPostcardsForLetters(supabase, [target.id]),
     getFirstLockedPhotoLetterMoment(supabase, target.correspondenceId),
     getBlockScope(supabase, otherPartyId),
-    // Phase 1 — the recipient-only contact-sharing reminder for THIS
-    // letter (letter_safety_notices' own RLS also enforces recipient-only).
     isRecipientOfTarget
       ? supabase.from('letter_safety_notices').select('kind').eq('letter_id', target.id).maybeSingle()
       : Promise.resolve({ data: null }),
-    // Account lifecycle — whether the other person is taking a break.
-    // correspondents_on_break only ever answers for people who already
-    // share letters with the caller.
     supabase.rpc('correspondents_on_break', { p_user_ids: [otherPartyId] }),
-    // Writing Style — the style this letter was SENT in (snapshot), never
-    // the sender's current choice. Missing = Tempa's classic prose.
     getLetterWritingStyles(supabase, [target.id]),
   ])
+
   const letterWritingStyleId = letterWritingStyles.get(target.id) ?? null
   const otherIsOnBreak = Array.isArray(onBreakIds) && (onBreakIds as unknown[]).length > 0
   const letterPostcard = letterPostcardsByLetterId.get(target.id) ?? null
+
+  const returnCardAvailable =
+    establishedForViewer && isRecipientOfTarget && !otherIsOnBreak
+      ? await isReturnCardAvailable(supabase, target.id)
+      : false
+  const returnCardPostcards = returnCardAvailable
+    ? await getReturnCardPostcards(supabase)
+    : []
 
   const pseudonymById = new Map((profiles ?? []).map((p) => [p.id, p.pseudonym]))
   const markUrlById = new Map(
@@ -156,9 +145,6 @@ export default async function LetterPage({
   )
   const otherPseudonym = pseudonymById.get(otherPartyId) ?? 'A member'
 
-  // Correspondence-level context (the originating Question) — only
-  // ever set on the root first-contact letter, so this naturally only
-  // renders when target IS that letter.
   let context: string | null = null
   if (target.questionAnswerId) {
     const { data: answerRow } = await supabase
@@ -174,46 +160,22 @@ export default async function LetterPage({
     context = question?.prompt ?? null
   }
 
-  const { data: memberQuestionContext } = await supabase.from('member_question_letter_contexts').select('prompt_snapshot').eq('letter_id', target.id).maybeSingle()
+  const { data: memberQuestionContext } = await supabase
+    .from('member_question_letter_contexts')
+    .select('prompt_snapshot')
+    .eq('letter_id', target.id)
+    .maybeSingle()
   if (memberQuestionContext) context = memberQuestionContext.prompt_snapshot
 
   const { senderName, recipientName } = resolveLetterDirection(target, pseudonymById)
   const senderProfileHref = target.senderId === user.id ? null : `/minds/${target.senderId}`
 
-  // The raw DB-level fact — established_at set at all, regardless of
-  // who sent the reply that set it or whether this viewer can see it
-  // yet. Still correct for isEffectivelyExpired below: a surviving
-  // crossed-direction root's own decay suppression is about the
-  // correspondence's lifecycle (has it moved past the strict
-  // first-contact regime at all), not about what THIS viewer has been
-  // shown — that letter is already unconditionally visible to both
-  // participants regardless (see target's own fetch via
-  // letters_for_participant), so there is no confidentiality concern
-  // here to fix.
   const established = correspondence?.establishedAt != null
-
-  // established must gate expiry BEFORE anything else derives from it —
-  // an established correspondence's ordinary letters (reply_to_id=null
-  // for a quill-sent one included) must never be treated as an expired,
-  // unaccepted first contact merely because 72 hours passed. See
-  // isEffectivelyExpired's own doc comment.
   const targetExpired = isEffectivelyExpired(target, established)
   const targetEffectiveStatus = targetExpired ? 'closed' : target.status
   const targetEffectiveClosedBy = targetExpired ? 'system' : target.closedBy
-
   const isFirstContactLetter = target.replyToId === null
 
-  // Everything below actually DISCLOSES establishment to this viewer
-  // (Moments, PhotoConsent, the Write Anytime quill, and the
-  // first-contact response UI's own suppression) — unlike
-  // isEffectivelyExpired above, these must use establishedForViewer,
-  // not the raw DB fact, or the original Letter-1 sender learns Letter
-  // 2 exists before it's actually delivered to them. See
-  // isEstablishedForViewer's own doc comment (lib/letters.ts).
-  //
-  // The single source of truth for which action surface renders — see
-  // resolveLetterActionState's own doc comment for why this is one
-  // function rather than two independently-computed booleans.
   const { showFirstContactResponse, showWriteQuill } = resolveLetterActionState(
     establishedForViewer,
     isFirstContactLetter,
@@ -222,11 +184,6 @@ export default async function LetterPage({
   )
   const writeHref = establishedForViewer ? `/letters/with/${otherPartyId}/write` : null
 
-  // Computed once, shared by both the normal reader's LetterReader
-  // below and (when this is the un-replied first-contact letter) the
-  // reply composer's "View [pseudonym]'s letter" reference panel —
-  // both render the SAME target letter, so they must see the same
-  // photo-consent state, not two independently-built objects.
   const targetPhotoConsent = correspondence
     ? {
         correspondenceId: correspondence.id,
@@ -237,15 +194,6 @@ export default async function LetterPage({
         otherPseudonym,
       }
     : undefined
-
-  // Letter 1/2 stay text-only; Letter 3 onward carries Moments — but
-  // ONLY once Letter 2 has actually delivered (deliver_at <= now()),
-  // for BOTH participants, not merely established_at being set.
-  // establishedForViewer is the Write Anytime signal (the Letter-2
-  // sender is entitled to keep writing immediately); momentsQualified
-  // (isMomentsQualifiedForViewer, fetched above) is the stricter,
-  // separate signal those subsequent letters need before they may
-  // carry a Moment. See that function's own doc comment (lib/letters.ts).
 
   const showWalkthrough = momentsQualified && !guideCompleted && writeHref !== null
   const showMomentsNotice = momentsQualified && guideCompleted && !momentsNoticeAcknowledged && writeHref !== null
@@ -308,12 +256,6 @@ export default async function LetterPage({
             </div>
           )}
 
-          {/* Release Polish Pass — the closure status now reads as quiet
-              correspondence METADATA (ClosureStatusNotice: narrow clay
-              accent rule + envelope glyph), deliberately given its own
-              separation from PhotoConsent above and the historical
-              letter below, rather than sharing one homogeneous bordered
-              box with either. */}
           {targetEffectiveStatus === 'closed' && (
             <div className="mt-4">
               {targetEffectiveClosedBy === 'recipient' ? (
@@ -378,29 +320,12 @@ export default async function LetterPage({
               </div>
             </div>
 
-            {/* Letter-Level Postcards V1 (2026-09-13) — the same
-                canonical letterhead enclosure slot Preview uses,
-                positioned above the body, never inline with it. A
-                historical inline Postcard Moment (type='postcard')
-                needs no slot at all — it renders exactly where it always
-                has, inside LetterBody below. */}
             {letterPostcard && (
               <div className="mt-4">
                 <LetterheadPostcard
-                  // Admin Phase 2A-2 — the frozen presentation identity
-                  // that actually shipped with this letter (title,
-                  // location, collection, postmark/footer text, and
-                  // artwork), never whatever the catalogue's CURRENT
-                  // entry for the same key defines today.
                   base={letterPostcardToBaseContent(letterPostcard.version)}
                   revealLine={letterPostcard.revealLine}
                   backMessage={letterPostcard.backMessage}
-                  // Final pre-migration architecture correction
-                  // (2026-09-14) — the FROZEN signature from send time,
-                  // never the live-resolved senderName used for the
-                  // letter header just above (which intentionally stays
-                  // dynamic). A sent Postcard's own back must never
-                  // silently rewrite itself if the sender later renames.
                   senderPseudonym={letterPostcard.senderPseudonymSnapshot}
                 />
               </div>
@@ -441,17 +366,20 @@ export default async function LetterPage({
             )}
           </div>
 
+          {returnCardAvailable && returnCardPostcards.length > 0 && (
+            <ReturnCardAction
+              sourceLetterId={target.id}
+              postcards={returnCardPostcards}
+              otherPseudonym={otherPseudonym}
+            />
+          )}
+
           {targetEffectiveStatus === 'closed' && isFirstContactLetter && !isRecipientOfTarget && (
             <div className="mt-6">
               <ClosureRecommendations letterId={target.id} />
             </div>
           )}
 
-          {/* Bottom-of-letter return nav (pre-beta UX polish batch 1) —
-              the same destination/context as the top back link, so a
-              reader who reaches the end of a very long letter never has
-              to scroll back up just to return to the correspondence.
-              Deliberately an ordinary in-flow link, not sticky/floating. */}
           <div className="mt-10 border-t border-foreground/10 pt-4">
             <Link
               href={`/letters/with/${otherPartyId}`}

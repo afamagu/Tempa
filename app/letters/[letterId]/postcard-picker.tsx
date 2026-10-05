@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { buildMarketplace, loadMarketplace, type Marketplace } from '@/lib/marketplace'
 import type { PostcardCatalogEntry } from '@/lib/postcards'
@@ -19,18 +19,29 @@ import CatalogueBrowser from '@/app/marketplace/catalogue-browser'
  * passes the live ACTIVE catalogue and gets back a postcard key; sending,
  * Safety, snapshot versioning and the server ownership check are exactly
  * as before.
+ *
+ * Phase 7 adds `strictCatalog` as an opt-in only. Return Cards pass a
+ * server-narrowed Complimentary catalogue, and strict mode prevents any
+ * non-Postcard marketplace product from appearing in that picker. Existing
+ * callers keep the exact previous behavior by default.
  */
 
-// One marketplace read per page session (the composers re-open the picker
-// freely); refreshed after five minutes, and after a Postcard is chosen.
-let cached: { at: number; value: Promise<Marketplace> } | null = null
+// Cache is scoped to the supplied catalogue identity, not just time. That
+// matters now that Return Cards intentionally pass a narrower subset: opening
+// that picker must never poison a later ordinary Letter picker for five minutes.
+let cached: { at: number; catalogueSignature: string; value: Promise<Marketplace> } | null = null
+
+function catalogueSignature(postcards: PostcardCatalogEntry[]) {
+  return postcards.map((postcard) => postcard.key).sort().join('|')
+}
 
 function readMarketplace(postcards: PostcardCatalogEntry[]): Promise<Marketplace> {
-  if (!cached || Date.now() - cached.at > 5 * 60_000) {
+  const signature = catalogueSignature(postcards)
+  if (!cached || cached.catalogueSignature !== signature || Date.now() - cached.at > 5 * 60_000) {
     const value = loadMarketplace(createClient(), postcards)
-    cached = { at: Date.now(), value }
+    cached = { at: Date.now(), catalogueSignature: signature, value }
     value.catch(() => {
-      cached = null
+      if (cached?.value === value) cached = null
     })
   }
   return cached.value
@@ -55,11 +66,13 @@ export default function PostcardPicker({
   postcards,
   onSelect,
   onCancel,
+  strictCatalog = false,
 }: {
   /** The live, active DB catalogue — fetched by the caller. */
   postcards: PostcardCatalogEntry[]
   onSelect: (postcardKey: string) => void
   onCancel: () => void
+  strictCatalog?: boolean
 }) {
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null)
 
@@ -75,6 +88,17 @@ export default function PostcardPicker({
     }
   }, [postcards])
 
+  const visibleMarketplace = useMemo(() => {
+    if (!marketplace || !strictCatalog) return marketplace
+    const keys = new Set(postcards.map((postcard) => postcard.key))
+    return {
+      ...marketplace,
+      items: marketplace.items.filter(
+        (item) => item.kind === 'postcard' && item.postcardKey !== null && keys.has(item.postcardKey)
+      ),
+    }
+  }, [marketplace, postcards, strictCatalog])
+
   // Both composers place this catalogue in a full-viewport scroll
   // container. Lock the document beneath it so mobile swipes scroll the
   // postcards rather than the composer or the browser's pull-to-refresh.
@@ -88,9 +112,9 @@ export default function PostcardPicker({
 
   return (
     <div className="mx-auto w-full max-w-6xl rounded-lg border border-foreground/10 bg-background p-4 sm:p-6">
-      {marketplace ? (
+      {visibleMarketplace ? (
         <CatalogueBrowser
-          marketplace={marketplace}
+          marketplace={visibleMarketplace}
           mode="pick"
           onPick={(key) => {
             cached = null
