@@ -27,6 +27,11 @@ describe('Board page — finite Phase 11 composition', () => {
     expect(unexpected).toBeGreaterThan(kept)
   })
 
+  it('marks finite-Board reader links so Dispatch detail cannot reopen the old endless trail', () => {
+    expect(source).toContain("params.set('from', 'finite_board')")
+    expect(source).toContain('trailQuery={finiteTrailQuery(dispatch)}')
+  })
+
   it('ends passive browsing explicitly', () => {
     expect(source).toContain('That’s the Board for now.')
     expect(source).toContain('Search if you’re looking for something particular, or come back another time.')
