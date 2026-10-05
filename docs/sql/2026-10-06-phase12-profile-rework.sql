@@ -67,7 +67,8 @@ begin
 
   return query
   select
-    v_state.incoming_pending_count < v_state.incoming_pending_limit,
+    tempa_private.author_content_publicly_visible(p_user_id)
+      and v_state.incoming_pending_count < v_state.incoming_pending_limit,
     v_rhythm;
 end;
 $function$;
@@ -123,6 +124,14 @@ select
     )
   ) > 0
     as canonical_capacity_reused,
+
+  position(
+    'author_content_publicly_visible'
+    in pg_get_functiondef(
+      'public.get_public_profile_correspondence_state(uuid)'::regprocedure
+    )
+  ) > 0
+    as lifecycle_visibility_reused,
 
   position(
     'incoming_pending_count < v_state.incoming_pending_limit'
