@@ -7,10 +7,14 @@ import { getMyWritingStyle } from '@/lib/writing-style-data'
 
 export default async function QuestionWritePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ questionId: string }>
+  searchParams?: Promise<{ source?: string }>
 }) {
   const { questionId } = await params
+  const source = (await searchParams)?.source
+  const returnTo = source === 'home_room' ? '/home' : source === 'room' ? '/room' : undefined
   const supabase = await createClient()
   const {
     data: { user },
@@ -40,6 +44,8 @@ export default async function QuestionWritePage({
     <>
     <div className="mx-auto max-w-2xl px-6 pt-4"><RoomQuestionCredit questionId={question.id} /></div>
     <QuestionAnswer
+      key={question.id}
+      returnTo={returnTo}
       userId={user.id}
       questionId={question.id}
       prompt={question.prompt}

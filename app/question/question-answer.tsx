@@ -38,6 +38,7 @@ function readDraft(questionId: string, userId: string): string | null {
 
 export default function QuestionAnswer({
   userId,
+  returnTo,
   questionId,
   prompt,
   initialAnswer,
@@ -49,6 +50,7 @@ export default function QuestionAnswer({
   writingStyleId = null,
 }: {
   userId: string
+  returnTo?: '/home' | '/room'
   questionId: string
   prompt: string
   initialAnswer: string | null
@@ -173,8 +175,8 @@ export default function QuestionAnswer({
               <div className="rounded-md bg-surface-shell p-4 sm:p-5"><AuthoredProse styleId={writingStyleId}><p className="whitespace-pre-wrap">{publishedBody}</p></AuthoredProse></div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
-                {isFlagship ? t('enterRoom') : t('backResponses')}
+              <Link href={returnTo ?? (isFlagship ? '/room' : '/you/archive?tab=responses')} className={secondaryButtonClass}>
+                {returnTo === '/home' ? 'Back to Home' : returnTo === '/room' ? t('backRoom') : isFlagship ? t('enterRoom') : t('backResponses')}
               </Link>
               {canEditResponse && (
                 <button
@@ -204,8 +206,8 @@ export default function QuestionAnswer({
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex flex-wrap gap-3">
               {!(onboarding && !hadExistingAnswer) && (
-                <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
-                  {isFlagship ? t('backRoom') : t('backResponses')}
+                <Link href={returnTo ?? (isFlagship ? '/room' : '/you/archive?tab=responses')} className={secondaryButtonClass}>
+                  {returnTo === '/home' ? 'Back to Home' : returnTo === '/room' ? t('backRoom') : isFlagship ? t('backRoom') : t('backResponses')}
                 </Link>
               )}
               <button type="button" onClick={handlePublish} disabled={!canPublish} className={primaryButtonClass}>

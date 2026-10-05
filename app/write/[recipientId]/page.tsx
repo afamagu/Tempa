@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { introductionReturnPath } from '@/lib/introduction-navigation'
+import { getCorrespondenceLifecycleWithMember } from '@/lib/correspondence-lifecycle'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -61,6 +62,16 @@ export default async function WriteToPage({
 
   const { data: memberQuestion } = mq ? await supabase.from('member_questions').select('id, body').eq('id', mq).eq('author_id', recipientId).eq('is_profile_visible', true).eq('moderation_status', 'visible').is('withdrawn_at', null).maybeSingle() : { data: null }
   if (mq && !memberQuestion) redirect(backHref)
+
+  const lifecycle = await getCorrespondenceLifecycleWithMember(supabase, recipientId)
+
+  // Public Room reading remains open to existing correspondents. If this
+  // relationship is paused, a private-reply attempt returns to the same
+  // preserved correspondence where Pause/Resume controls live; it must never
+  // fall through into first-contact logic or create a second episode.
+  if (lifecycle?.status === 'paused' && lifecycle.establishedAt) {
+    redirect(`/letters/with/${recipientId}`)
+  }
 
   // Phase 6 lifecycle completion: a crossed pair of first letters can leave
   // one historical root status='sent' after the reciprocal reply establishes

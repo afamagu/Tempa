@@ -3,45 +3,98 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import QuestionAnswerBrowser from './question-answer-browser'
-const { load, intersect } = vi.hoisted(() => ({ load: vi.fn(), intersect: { current: null as null | IntersectionObserverCallback } }))
+
+const { load } = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock('./reading-actions', () => ({ loadRoomAnswers: load }))
-vi.mock('./discovery-results', () => ({ default: ({ entries }: { entries: { response: { id: string } }[] }) => <div>{entries.map(e => <p key={e.response.id}>{e.response.id}</p>)}</div> }))
-const entries = (start: number, count: number) => Array.from({ length: count }, (_, n) => ({ userId: `u${start+n}`, pseudonym: 'Mia', country: '', genderDisplay: null, ageRange: '', markUrl: null, response: { id: `a${start+n}`, body: 'Answer', prompt: 'Question' } }))
-const page = (start: number, count: number, hasMore = true) => ({ entries: entries(start,count), cursor: { createdAt: '2026-10-01T00:00:00Z', answerId: `a${start+count-1}` }, hasMore, error: null })
-let host: HTMLDivElement; let root: Root
+vi.mock('./discovery-results', () => ({
+  default: ({ entries }: { entries: { response: { id: string } }[] }) => (
+    <div>{entries.map((entry) => <p key={entry.response.id}>{entry.response.id}</p>)}</div>
+  ),
+}))
+
+const entries = (start: number, count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    userId: `00000000-0000-0000-0000-${String(start + index + 1).padStart(12, '0')}`,
+    pseudonym: 'Mia',
+    country: '',
+    genderDisplay: null,
+    ageRange: '',
+    markUrl: null,
+    response: {
+      id: `a${start + index}`,
+      body: 'Answer',
+      prompt: 'Question',
+    },
+  }))
+
+const page = (start: number, count: number, hasMore = true) => {
+  const resultEntries = entries(start, count)
+  return {
+    entries: resultEntries,
+    shownUserIds: resultEntries.map((entry) => entry.userId),
+    hasMore,
+    error: null,
+  }
+}
+
+let host: HTMLDivElement
+let root: Root
+
 beforeEach(async () => {
-  load.mockReset(); intersect.current=null
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, IntersectionObserver: class { constructor(cb: IntersectionObserverCallback) { intersect.current=cb } observe() {} disconnect() {} } })
-  host=document.createElement('div');document.body.append(host);root=createRoot(host)
-  await act(async () => root.render(<QuestionAnswerBrowser questionId="question" initial={page(0,3)} filters={{}} returnTo="/room?question=question" />))
+  load.mockReset()
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root.render(
+      <QuestionAnswerBrowser
+        questionId="00000000-0000-0000-0000-000000000999"
+        initial={page(0, 6)}
+        filters={{}}
+        returnTo="/room?question=00000000-0000-0000-0000-000000000999"
+      />
+    )
+  })
 })
-afterEach(async () => { await act(async () => root.unmount());host.remove();vi.unstubAllGlobals() })
-async function visible() { await act(async () => intersect.current?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)) }
+
+afterEach(async () => {
+  await act(async () => root.unmount())
+  host.remove()
+})
+
 describe('question-specific Room pagination', () => {
-  it('automatically adds only three, then waits for an explicit click', async () => {
-    load.mockResolvedValueOnce(page(3,3)).mockResolvedValueOnce(page(6,6,false))
-    await visible();expect(host.querySelectorAll('p')).toHaveLength(6)
-    await visible();expect(load).toHaveBeenCalledTimes(1)
+  it('starts with six and loads the next six only after Keep looking', async () => {
+    load.mockResolvedValueOnce(page(6, 6, false))
+
+    expect(host.querySelectorAll('p')).toHaveLength(6)
+    expect(load).not.toHaveBeenCalled()
+
     await act(async () => host.querySelector('button')!.click())
+
     expect(host.querySelectorAll('p')).toHaveLength(12)
-    expect(load.mock.calls.map(c=>c[3])).toEqual([3,6])
-    expect(load.mock.calls.every(c=>c[0]==='question')).toBe(true)
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(load.mock.calls[0][3]).toBe(6)
     expect(host.querySelector('button')).toBeNull()
   })
-  it('retains existing answers on failure and supports a manual retry without automatic loops', async () => {
-    load.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(page(3,3))
-    await visible();expect(host.querySelectorAll('p')).toHaveLength(4)
-    expect(host.querySelector('[role="alert"]')).not.toBeNull()
-    await visible();expect(load).toHaveBeenCalledTimes(1)
+
+  it('passes every previously shown identity so later batches cannot repeat people', async () => {
+    load.mockResolvedValueOnce(page(6, 2, false))
+
     await act(async () => host.querySelector('button')!.click())
-    expect(host.querySelectorAll('p')).toHaveLength(6)
-    expect(host.querySelector('[role="alert"]')).toBeNull()
+
+    expect(load.mock.calls[0][1]).toEqual(page(0, 6).shownUserIds)
   })
-  it('prevents duplicate in-flight requests and duplicate answer cards', async () => {
-    let finish!: (value: ReturnType<typeof page>) => void
-    load.mockImplementationOnce(() => new Promise(resolve => { finish=resolve }))
-    await visible();await visible();expect(load).toHaveBeenCalledTimes(1)
-    await act(async () => finish(page(2,3,false)))
-    expect(host.querySelectorAll('p')).toHaveLength(5)
+
+  it('retains existing answers on failure and supports an explicit retry', async () => {
+    load.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(page(6, 2, false))
+
+    await act(async () => host.querySelector('button')!.click())
+    expect(host.querySelectorAll('p')).toHaveLength(7)
+    expect(host.querySelector('[role="alert"]')).not.toBeNull()
+
+    await act(async () => host.querySelector('button')!.click())
+    expect(host.querySelectorAll('p')).toHaveLength(8)
+    expect(host.querySelector('[role="alert"]')).toBeNull()
   })
 })

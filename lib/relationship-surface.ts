@@ -11,7 +11,7 @@ import {
   type CorrespondenceRhythmState,
 } from './writing-rhythm'
 
-export type RelationshipSurfaceState = 'established' | 'pending' | 'past'
+export type RelationshipSurfaceState = 'established' | 'pending' | 'paused' | 'past'
 export type PendingDirection = 'incoming' | 'outgoing' | null
 
 export type RelationshipSurfacePerson = LetterboxPerson & {
@@ -70,6 +70,10 @@ export function classifyVisibleRelationshipEpisode(
     return 'established'
   }
 
+  if (correspondence.status === 'paused' && correspondence.established_at !== null && hasVisibleReply) {
+    return 'paused'
+  }
+
   if (correspondence.status === 'pending' || (correspondence.status === 'active' && !hasVisibleReply)) {
     return 'pending'
   }
@@ -78,7 +82,8 @@ export function classifyVisibleRelationshipEpisode(
 }
 
 const STATE_PRIORITY: Record<RelationshipSurfaceState, number> = {
-  established: 3,
+  established: 4,
+  paused: 3,
   pending: 2,
   past: 1,
 }
@@ -245,7 +250,9 @@ export async function getRelationshipSurfacePeople(
     .map(({ base, chosen }) => {
       let statusText: string
 
-      if (chosen.state === 'pending') {
+      if (chosen.state === 'paused') {
+        statusText = 'Paused for now'
+      } else if (chosen.state === 'pending') {
         statusText = chosen.pendingDirection === 'incoming'
           ? 'A first letter is waiting'
           : chosen.pendingDirection === 'outgoing'

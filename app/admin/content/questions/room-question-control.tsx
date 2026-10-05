@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { makeCurrentRoomQuestion, type AdminQuestion } from '@/lib/admin-questions'
+import { startRoomQuestion, type AdminQuestion } from '@/lib/admin-questions'
 import { primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import { adminBadgeClass, adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
 
@@ -19,11 +19,11 @@ export default function RoomQuestionControl({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function makeCurrent() {
-    if (!selectedId || selectedId === current?.id) return
+  async function makeCurrent(restart = false) {
+    if (!selectedId || (!restart && selectedId === current?.id)) return
     setBusy(true)
     setError(null)
-    const { error: actionError } = await makeCurrentRoomQuestion(createClient(), selectedId)
+    const { error: actionError } = await startRoomQuestion(createClient(), restart && current ? current.id : selectedId, restart)
     setBusy(false)
     if (actionError) {
       setError(actionError.message || 'Could not change the current Room Question.')
@@ -52,6 +52,22 @@ export default function RoomQuestionControl({
         <p className={adminMetadataClass}>Members will not see a weekly Room Question until one is selected.</p>
       )}
 
+      {current && (
+        <div className="space-y-2 rounded-md bg-surface-shell px-3 py-3">
+          <p className={adminMetadataClass}>
+            Start a fresh week when you want to reuse the wording without carrying old answers into the new round.
+          </p>
+          <button
+            type="button"
+            className={secondaryButtonClass}
+            disabled={busy}
+            onClick={() => void makeCurrent(true)}
+          >
+            {busy ? 'Starting…' : 'Start a fresh week with this Question'}
+          </button>
+        </div>
+      )}
+
       {candidates.length > 0 && (
         <div className="space-y-2">
           <label className="block text-xs font-medium uppercase tracking-wider text-foreground/55" htmlFor="room-question-select">
@@ -74,7 +90,7 @@ export default function RoomQuestionControl({
               type="button"
               className={primaryButtonClass}
               disabled={busy || !selectedId || selectedId === current?.id}
-              onClick={makeCurrent}
+              onClick={() => void makeCurrent()}
             >
               {busy ? 'Changing…' : 'Make this the current Room Question'}
             </button>
