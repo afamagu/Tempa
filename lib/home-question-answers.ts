@@ -1,38 +1,102 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DiscoveryCandidate } from './discovery'
 
-/** Question reading is not matchmaking: correspondents remain eligible.
- * Scan in bounded pages so a long read history never hides later unread answers. */
-export async function getHomeQuestionAnswers(client: SupabaseClient, viewerId: string, question: { id: string; prompt: string }): Promise<DiscoveryCandidate[]> {
-  const result: DiscoveryCandidate[] = []
-  const seen = new Set<string>()
-  const pageSize = 48
-  for (let offset = 0; result.length < 3; offset += pageSize) {
-    const { data: answers, error } = await client.from('question_answers')
-      .select('id, question_id, user_id, body, created_at').eq('question_id', question.id)
-      .eq('moderation_status', 'visible').neq('user_id', viewerId)
-      .order('created_at', { ascending: true }).order('id', { ascending: true }).range(offset, offset + pageSize - 1)
-    if (error) return []
-    if (!answers?.length) break
-    const [{ data: profiles, error: profileError }, { data: reads, error: readError }] = await Promise.all([
-      client.from('public_profiles').select('id, pseudonym, country, mark_id').in('id', answers.map(a => a.user_id)),
-      client.from('member_answer_reads').select('answer_id').eq('viewer_id', viewerId).in('answer_id', answers.map(a => a.id)),
-    ])
-    if (profileError || readError) return []
-    const visibility = await Promise.all((profiles ?? []).map(async p => {
-      const { data, error } = await client.rpc('member_question_author_visible', { p_author: p.id })
-      return { profile: p, visible: !error && data === true }
-    }))
-    const byId = new Map(visibility.filter(p => p.visible).map(p => [p.profile.id, p.profile]))
-    const readIds = new Set((reads ?? []).map(r => r.answer_id))
-    for (const a of answers) {
-      const p = byId.get(a.user_id)
-      if (!p || a.question_id !== question.id || readIds.has(a.id) || seen.has(a.user_id)) continue
-      seen.add(a.user_id)
-      result.push({ answerId: a.id, userId: a.user_id, pseudonym: p.pseudonym, country: p.country ?? '', markId: p.mark_id, gender: null, genderCustom: null, ageRange: '', body: a.body, prompt: question.prompt })
-      if (result.length === 3) break
+type HomeRoomRow = {
+  answer_id: string
+  user_id: string
+  body: string
+  pseudonym: string
+  country: string | null
+  gender: string | null
+  gender_custom: string | null
+  age_range: string | null
+  mark_id: string | null
+  prompt: string
+}
+
+function noveltyScore(candidate: DiscoveryCandidate, selected: DiscoveryCandidate[]) {
+  if (selected.length === 0) return 0
+
+  const countries = new Set(selected.map((entry) => entry.country).filter(Boolean))
+  const genders = new Set(selected.map((entry) => entry.gender).filter(Boolean))
+  const ages = new Set(selected.map((entry) => entry.ageRange).filter(Boolean))
+
+  return (
+    (!candidate.country || countries.has(candidate.country) ? 0 : 3) +
+    (!candidate.gender || genders.has(candidate.gender) ? 0 : 2) +
+    (!candidate.ageRange || ages.has(candidate.ageRange) ? 0 : 1)
+  )
+}
+
+/**
+ * Select three perspectives from a small fairness-ranked candidate window.
+ * Fairness still defines the pool and tie order; diversity only chooses among
+ * that bounded front-of-pool set so Home does not become a popularity or
+ * demographic-ranking surface.
+ */
+export function selectThreePerspectives(
+  candidates: DiscoveryCandidate[],
+  limit = 3
+): DiscoveryCandidate[] {
+  const pool = [...candidates]
+  const selected: DiscoveryCandidate[] = []
+
+  while (pool.length > 0 && selected.length < limit) {
+    let bestIndex = 0
+    let bestScore = noveltyScore(pool[0], selected)
+
+    for (let index = 1; index < pool.length; index += 1) {
+      const score = noveltyScore(pool[index], selected)
+      if (score > bestScore) {
+        bestScore = score
+        bestIndex = index
+      }
     }
-    if (answers.length < pageSize) break
+
+    selected.push(pool.splice(bestIndex, 1)[0])
   }
-  return result
+
+  return selected
+}
+
+/**
+ * Home's Three Perspectives comes from the same fair current-Question pool as
+ * The Room. We ask for a bounded six-person window, then select three varied
+ * perspectives from that window. Reading history never removes an answer and
+ * current capacity never closes the public reading surface.
+ */
+export async function getHomeQuestionAnswers(
+  client: SupabaseClient,
+  viewerId: string,
+  question: { id: string; prompt: string }
+): Promise<DiscoveryCandidate[]> {
+  void viewerId
+
+  const { data, error } = await client.rpc('room_read_question_answer_batch', {
+    p_question_id: question.id,
+    p_exclude_user_ids: [],
+    p_limit: 6,
+    p_country: null,
+    p_gender: null,
+    p_age: null,
+  })
+
+  if (error || !Array.isArray(data)) return []
+
+  const candidates = (data as HomeRoomRow[])
+    .slice(0, 6)
+    .map((row) => ({
+      answerId: row.answer_id,
+      userId: row.user_id,
+      pseudonym: row.pseudonym,
+      country: row.country ?? '',
+      gender: row.gender,
+      genderCustom: row.gender_custom,
+      ageRange: row.age_range ?? '',
+      markId: row.mark_id,
+      body: row.body,
+      prompt: row.prompt || question.prompt,
+    }))
+
+  return selectThreePerspectives(candidates, 3)
 }
