@@ -433,16 +433,13 @@ export function canReconsiderPhotoFree(
 
 // The live, authoritative correspondence lifecycle (see
 // docs/sql/2026-08-31-correspondences.sql's correspondences_status_check):
-// only two values exist, there is no separate 'pending' status.
-//   active  — the episode is open: set the moment the row is created
-//             (Letter 1 sent, no reply yet), and remains 'active'
-//             through any ongoing back-and-forth. Moments eligibility
-//             keys off is_first_reply inside reply_to_letter (see
-//             docs/sql/2026-09-01-letter2-moments-gate-fix.sql), never
-//             off this column.
-//   closed  — the episode ended (a first-contact letter closed or
-//             expired before any reply — see docs/tempa-build-guide.md).
-export type CorrespondenceStatus = 'active' | 'closed'
+// current values are pending / active / paused / closed.
+//   pending — first-contact episode awaiting the reciprocal reply.
+//   active  — established correspondence; ordinary writing is allowed.
+//   paused  — established history is preserved but writing is disabled until
+//             both participants agree to resume and both have capacity.
+//   closed  — terminal for this episode. Historical letters remain.
+export type CorrespondenceStatus = 'pending' | 'active' | 'paused' | 'closed'
 
 export type Correspondence = {
   id: string

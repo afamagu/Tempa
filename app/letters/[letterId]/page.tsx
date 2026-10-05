@@ -176,13 +176,14 @@ export default async function LetterPage({
   const targetEffectiveClosedBy = targetExpired ? 'system' : target.closedBy
   const isFirstContactLetter = target.replyToId === null
 
+  const writingAvailable = establishedForViewer && correspondence?.status === 'active'
   const { showFirstContactResponse, showWriteQuill } = resolveLetterActionState(
-    establishedForViewer,
+    writingAvailable,
     isFirstContactLetter,
     isRecipientOfTarget,
     targetEffectiveStatus
   )
-  const writeHref = establishedForViewer ? `/letters/with/${otherPartyId}/write` : null
+  const writeHref = writingAvailable ? `/letters/with/${otherPartyId}/write` : null
 
   const targetPhotoConsent = correspondence
     ? {
