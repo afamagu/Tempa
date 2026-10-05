@@ -19,6 +19,11 @@ export default function OtherAnswersDisclosure({
   ownerPseudonym,
   isSelf = false,
   writingStyleId = null,
+  ownerId,
+  writeReturnTo,
+  allowFirstContact = false,
+  pendingLetterHref,
+  writeUnavailableMessage,
 }: {
   answers: MyQuestionAnswer[]
   showReport: boolean
@@ -35,6 +40,11 @@ export default function OtherAnswersDisclosure({
   isSelf?: boolean
   /** The owner's current Writing Style. */
   writingStyleId?: string | null
+  ownerId?: string
+  writeReturnTo?: string
+  allowFirstContact?: boolean
+  pendingLetterHref?: string
+  writeUnavailableMessage?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -73,6 +83,13 @@ export default function OtherAnswersDisclosure({
                 body={a.body}
                 showReport={showReport}
                 writingStyleId={writingStyleId}
+                writeHref={
+                  !isSelf && allowFirstContact && ownerId
+                    ? `/write/${ownerId}?a=${encodeURIComponent(a.id)}&source=room_profile${writeReturnTo ? `&returnTo=${encodeURIComponent(writeReturnTo)}` : ''}`
+                    : null
+                }
+                pendingLetterHref={!isSelf ? pendingLetterHref : undefined}
+                writeUnavailableMessage={!isSelf ? writeUnavailableMessage : null}
               />
             )
           )}
