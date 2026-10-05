@@ -52,7 +52,7 @@ export default async function NotificationsPage() {
             </Link>
             <h1 className={proseSubheadingClass}>Notifications</h1>
             <p className={helperTextClass}>
-              Choose the few occasions when Tempa may quietly get your attention.
+              Tempa quietly keeps you informed about the people and letters that need your attention. These are on by default; make things quieter anytime.
             </p>
           </div>
 
@@ -88,13 +88,17 @@ export default async function NotificationsPage() {
           {roomPreferenceError ? (
             <p className={helperTextClass}>{t('preferenceUnavailable')}</p>
           ) : (
-            <RoomInvitationPreference initialEnabled={roomPreference?.emails_enabled ?? true} />
+            <div id="room-invitations" className="scroll-mt-6">
+              <RoomInvitationPreference initialEnabled={roomPreference?.emails_enabled ?? true} />
+            </div>
           )}
           <Link href="/you/mentions" className={secondaryButtonClass}>{mentions('all')}</Link>
           {mentionPreferenceError ? (
             <p id="mention-emails" role="status">{mentionEmails('unavailable')}</p>
           ) : (
-            <MentionEmailPreference initialAudience={mentionPreference?.audience ?? 'everyone'} />
+            <div id="mention-emails" className="scroll-mt-6">
+              <MentionEmailPreference initialAudience={mentionPreference?.audience ?? 'everyone'} />
+            </div>
           )}
         </div>
       </main>
