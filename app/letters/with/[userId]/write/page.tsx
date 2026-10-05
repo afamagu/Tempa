@@ -17,6 +17,7 @@ import { hasAcknowledgedCorrespondenceFeature } from '@/lib/acknowledgements'
 import type { Moment } from '@/lib/moments'
 import { helperTextClass, secondaryButtonClass, systemHeadingClass } from '@/app/profile/ui'
 import MomentsComposer from '@/app/letters/[letterId]/moments-composer'
+import { getCorrespondenceLifecycleWithMember } from '@/lib/correspondence-lifecycle'
 
 function BackArrowIcon() {
   return (
@@ -79,7 +80,7 @@ export default async function WriteToPersonPage({
     redirect('/letters')
   }
 
-  const [{ data: profiles }, correspondence] = await Promise.all([
+  const [{ data: profiles }, correspondence, lifecycle] = await Promise.all([
     // Letter-Level Postcards V1, pre-migration audit correction
     // (2026-09-14): the composer's own Postcard preview needs the
     // CURRENT member's own pseudonym (never a snapshot — see
@@ -88,6 +89,7 @@ export default async function WriteToPersonPage({
     // second round trip.
     supabase.from('public_profiles').select('id, pseudonym').in('id', [user.id, otherUserId]),
     getActiveEstablishedCorrespondenceWithUser(supabase, user.id, otherUserId),
+    getCorrespondenceLifecycleWithMember(supabase, otherUserId),
   ])
 
   const profile = (profiles ?? []).find((p) => p.id === otherUserId) ?? null
@@ -112,12 +114,17 @@ export default async function WriteToPersonPage({
   const establishedForViewer = correspondence ? await isEstablishedForViewer(supabase, correspondence.id) : false
 
   if (!correspondence || !establishedForViewer) {
+    const unavailableMessage =
+      lifecycle?.status === 'paused' && lifecycle.establishedAt
+        ? `This correspondence with ${profile.pseudonym} is paused. Return to the correspondence to ask to resume it.`
+        : lifecycle?.status === 'closed' && lifecycle.endedBy
+          ? `This correspondence with ${profile.pseudonym} has ended. Your letters are still in your Letterbox.`
+          : `You don't have an established correspondence with ${profile.pseudonym} yet.`
+
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-4 text-center">
-          <p className={helperTextClass}>
-            You don&apos;t have an established correspondence with {profile.pseudonym} yet.
-          </p>
+          <p className={helperTextClass}>{unavailableMessage}</p>
           <Link href={cancelHref} className={secondaryButtonClass}>
             Back to {profile.pseudonym}
           </Link>
