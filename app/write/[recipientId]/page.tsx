@@ -83,7 +83,7 @@ export default async function WriteToPage({
   if (establishedCorrespondence && establishedForViewer) {
     const query = new URLSearchParams()
     if (mq) query.set('mq', mq)
-    if (backHref !== '/room') query.set('returnTo', backHref)
+    if (mq || backHref !== '/room') query.set('returnTo', backHref)
     redirect(`/letters/with/${recipientId}/write${query.size ? `?${query}` : ''}`)
   }
 
