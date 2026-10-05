@@ -69,14 +69,22 @@ export async function setReplyReminderPreference(
 
 /**
  * Returns only reminder episodes that are still valid now. The RPC performs
- * the authoritative relationship/rhythm/block/account revalidation. Missing
- * Phase 8 database objects fail closed to an empty list during deployment.
+ * the authoritative relationship/rhythm/block/account revalidation.
+ *
+ * This is an enhancement to Letterbox, never a dependency of Letterbox: any
+ * read failure fails closed to no reminder so a transient optional-notification
+ * problem cannot take down the member's correspondence surface.
  */
 export async function getMyReplyReminders(supabase: SupabaseClient): Promise<ReplyReminder[]> {
   const { data, error } = await supabase.rpc('get_my_reply_reminders')
   if (error) {
-    if (isForwardDeployMissing(error)) return []
-    throw error
+    if (!isForwardDeployMissing(error)) {
+      console.error('[reply-reminders] get_my_reply_reminders failed', {
+        code: error.code,
+        message: error.message,
+      })
+    }
+    return []
   }
 
   return ((data ?? []) as Array<{
