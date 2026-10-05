@@ -161,3 +161,20 @@ export async function setQuestionPosition(
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }
 }
+
+
+/** Start a Room week atomically. If the selected wording already owns answers,
+ * the database creates a fresh Question identity so old answers never become
+ * answers to the new weekly round. */
+export async function startRoomQuestion(
+  supabase: SupabaseClient,
+  questionId: string,
+  restart = false
+): Promise<{ data: string | null; error: AdminError }> {
+  const { data, error } = await supabase.rpc('admin_start_room_question', {
+    p_question_id: questionId,
+    p_restart: restart,
+  })
+  if (error) return { data: null, error: { message: error.message, code: error.code } }
+  return { data: data as string, error: null }
+}
