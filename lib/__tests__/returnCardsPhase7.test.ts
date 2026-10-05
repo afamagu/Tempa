@@ -17,6 +17,14 @@ function functionBody(name: string) {
   return migration.slice(bodyStart, bodyEnd)
 }
 
+function executableSql(body: string) {
+  return body
+    .split('\n')
+    .map((line) => line.replace(/--.*$/, ''))
+    .join('\n')
+    .toLowerCase()
+}
+
 describe('Phase 7 Return Card database contract', () => {
   it('enforces one Return Card per source substantive letter', () => {
     expect(migration).toMatch(/source_letter_id uuid not null unique/)
@@ -38,7 +46,7 @@ describe('Phase 7 Return Card database contract', () => {
   })
 
   it('cannot establish, reply to, or otherwise mutate substantive correspondence state', () => {
-    const body = functionBody('send_return_card').toLowerCase()
+    const body = executableSql(functionBody('send_return_card'))
     expect(body).not.toContain('update public.letters')
     expect(body).not.toContain('update public.correspondences')
     expect(body).not.toContain('insert into public.letters')
