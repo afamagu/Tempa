@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const state = vi.hoisted(() => ({ signedIn: true, established: false }))
+const state = vi.hoisted(() => ({ signedIn: true, established: false, paused: false }))
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key === 'home' ? 'Home' : 'The Room' }))
 vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw Error(`redirect:${path}`) } }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
@@ -25,6 +25,7 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
     return query
   },
 }) }))
+vi.mock('@/lib/correspondence-lifecycle', () => ({ getCorrespondenceLifecycleWithMember: async () => state.paused ? { status:'paused', establishedAt:'2026-10-05T00:00:00Z' } : null }))
 vi.mock('@/lib/letters', () => ({
   getActiveEstablishedCorrespondenceWithUser: async () => state.established ? { id:'corr' } : null,
   isEstablishedForViewer: async () => state.established,
@@ -36,7 +37,7 @@ vi.mock('@/lib/letters', () => ({
 vi.mock('./first-letter-composer', () => ({ default: () => null }))
 vi.mock('@/app/letters/closure-recommendations', () => ({ default: () => null }))
 import WriteToPage from './page'
-beforeEach(() => { state.signedIn = true; state.established = false })
+beforeEach(() => { state.signedIn = true; state.established = false; state.paused = false })
 describe('First-letter return context', () => {
   it('direct introductions return to Home without changing answer context', async () => {
     const page = await WriteToPage({ params:Promise.resolve({recipientId:'member'}),searchParams:Promise.resolve({a:'answer',source:'member_introduction',returnTo:'/home'}) })
@@ -56,6 +57,14 @@ describe('First-letter return context', () => {
     state.signedIn = false
     await expect(WriteToPage({params:Promise.resolve({recipientId:'member'}),searchParams:Promise.resolve({a:'answer',source:'member_introduction',returnTo:'/home'})})).rejects.toThrow(`redirect:/sign-in?next=${encodeURIComponent('/write/member?a=answer&source=member_introduction&returnTo=%2Fhome')}`)
   })
+  it('routes a paused Room reply back to the preserved correspondence', async () => {
+    state.paused = true
+    await expect(WriteToPage({
+      params: Promise.resolve({ recipientId:'member' }),
+      searchParams: Promise.resolve({ a:'answer', source:'room', returnTo:'/room' }),
+    })).rejects.toThrow('redirect:/letters/with/member')
+  })
+
   it('routes a visibly established crossed-contact episode into Write Anytime before stale roots can render pending copy', async () => {
     state.established = true
     await expect(WriteToPage({params:Promise.resolve({recipientId:'member'}),searchParams:Promise.resolve({a:'answer',returnTo:'/home'})})).rejects.toThrow('redirect:/letters/with/member/write?returnTo=%2Fhome')
