@@ -1,28 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { buildMarketplace, loadMarketplace, type Marketplace } from '@/lib/marketplace'
 import type { PostcardCatalogEntry } from '@/lib/postcards'
 import CatalogueBrowser from '@/app/marketplace/catalogue-browser'
 
 /**
- * Tempa's own postcard catalog — never the device photo library.
+ * Tempa's own Postcard catalog — never the device photo library.
  *
- * Commerce Checkpoint 3 — the Letter / Dispatch picker is now the same
- * catalogue system as the marketplace (app/marketplace/catalogue-browser),
- * in "pick" mode: compact still tiles, search, discovery views, a detail
- * view with front/back and a deliberate motion preview, and "Use this
- * Postcard" only for what this member may send (Complimentary, or a
- * premium Postcard they have unlocked). Received Keepsakes are still
- * never offered as sendable. The caller's contract is unchanged: it
- * passes the live ACTIVE catalogue and gets back a postcard key; sending,
- * Safety, snapshot versioning and the server ownership check are exactly
- * as before.
+ * `strictCatalog` is deliberately opt-in. Ordinary Letter/Dispatch callers
+ * retain the marketplace behavior they already have. Return Cards pass true
+ * because their server-provided catalogue has already been narrowed to
+ * currently published Complimentary Postcards; no Gift or other marketplace
+ * item may leak back into that relationship-only picker.
  */
 
-// One marketplace read per page session (the composers re-open the picker
-// freely); refreshed after five minutes, and after a Postcard is chosen.
 let cached: { at: number; value: Promise<Marketplace> } | null = null
 
 function readMarketplace(postcards: PostcardCatalogEntry[]): Promise<Marketplace> {
@@ -36,8 +29,6 @@ function readMarketplace(postcards: PostcardCatalogEntry[]): Promise<Marketplace
   return cached.value
 }
 
-/** If commerce data cannot be read at all, never block sending: offer the
- * active catalogue exactly as before commerce (the server still enforces). */
 function degraded(postcards: PostcardCatalogEntry[]): Marketplace {
   return buildMarketplace({
     postcards,
@@ -55,11 +46,12 @@ export default function PostcardPicker({
   postcards,
   onSelect,
   onCancel,
+  strictCatalog = false,
 }: {
-  /** The live, active DB catalogue — fetched by the caller. */
   postcards: PostcardCatalogEntry[]
   onSelect: (postcardKey: string) => void
   onCancel: () => void
+  strictCatalog?: boolean
 }) {
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null)
 
@@ -75,9 +67,17 @@ export default function PostcardPicker({
     }
   }, [postcards])
 
-  // Both composers place this catalogue in a full-viewport scroll
-  // container. Lock the document beneath it so mobile swipes scroll the
-  // postcards rather than the composer or the browser's pull-to-refresh.
+  const visibleMarketplace = useMemo(() => {
+    if (!marketplace || !strictCatalog) return marketplace
+    const keys = new Set(postcards.map((postcard) => postcard.key))
+    return {
+      ...marketplace,
+      items: marketplace.items.filter(
+        (item) => item.kind === 'postcard' && item.postcardKey !== null && keys.has(item.postcardKey)
+      ),
+    }
+  }, [marketplace, postcards, strictCatalog])
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -88,9 +88,9 @@ export default function PostcardPicker({
 
   return (
     <div className="mx-auto w-full max-w-6xl rounded-lg border border-foreground/10 bg-background p-4 sm:p-6">
-      {marketplace ? (
+      {visibleMarketplace ? (
         <CatalogueBrowser
-          marketplace={marketplace}
+          marketplace={visibleMarketplace}
           mode="pick"
           onPick={(key) => {
             cached = null
