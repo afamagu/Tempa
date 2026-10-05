@@ -14,6 +14,7 @@ import {
   getCorrespondenceRhythm,
   getMyWritingRhythm,
 } from '@/lib/writing-rhythm'
+import { getReturnCardsForCorrespondences } from '@/lib/return-cards'
 import { sectionTitleClass, iconButtonClass, metadataTextClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
@@ -22,6 +23,7 @@ import MailOnTheWay from '@/app/mail-on-the-way'
 import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
 import RemoveFromLetterboxIcon from '@/app/letters/remove-from-letterbox-icon'
 import ArchiveList from './archive-list'
+import ReturnCardHistory from './return-card-history'
 import WriteQuillButton from './write-quill-button'
 import CorrespondenceRhythmControl from './correspondence-rhythm-control'
 
@@ -92,6 +94,7 @@ export default async function LetterArchiveWithUserPage({
   const correspondenceRhythm = activeCorrespondence && establishedForViewer
     ? await getCorrespondenceRhythm(supabase, activeCorrespondence.id)
     : null
+  const returnCards = await getReturnCardsForCorrespondences(supabase, visibleCorrespondenceIds)
 
   return (
     <AppShell active="letters" waitingLetterCount={waitingCount}>
@@ -153,6 +156,12 @@ export default async function LetterArchiveWithUserPage({
               </div>
             )}
           </div>
+
+          <ReturnCardHistory
+            cards={returnCards}
+            viewerId={user.id}
+            otherPseudonym={otherPseudonym}
+          />
 
           <ArchiveList
             letters={letters}
