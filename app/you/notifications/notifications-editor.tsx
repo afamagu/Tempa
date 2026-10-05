@@ -37,7 +37,7 @@ export default function NotificationsEditor({ initialEnabled }: { initialEnabled
   }
 
   return (
-    <div className="space-y-4">
+    <section id="letter-arrivals" className="scroll-mt-6 space-y-4">
       <label className="flex items-center justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] text-foreground">
         <span>Email me when a letter arrives</span>
         <input
@@ -50,8 +50,7 @@ export default function NotificationsEditor({ initialEnabled }: { initialEnabled
       </label>
 
       <p className={helperTextClass}>
-        This email only ever says a letter has arrived and links back here — never the letter
-        itself, a Moment, or a Postcard.
+        On by default. The email only says a letter has arrived and links back to Tempa — never the letter itself, a Moment, or a Postcard.
       </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -67,6 +66,6 @@ export default function NotificationsEditor({ initialEnabled }: { initialEnabled
         </button>
         {saved && !saving && <p className={helperTextClass}>Saved.</p>}
       </div>
-    </div>
+    </section>
   )
 }
