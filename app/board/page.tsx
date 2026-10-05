@@ -61,6 +61,15 @@ export default async function BoardPage({
 
   const dispatches: DispatchListItem[] = query ? searchResults!.items : []
 
+  const finiteTrailQuery = (dispatch: NonNullable<typeof finiteBoard>['crossedPaths'][number]) => {
+    const params = readingTrailSearchParams(
+      { sessionStartedAt: s!, seed: seed! },
+      dispatch
+    )
+    params.set('from', 'finite_board')
+    return params.toString()
+  }
+
   return (
     <AppShell active="board" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
@@ -105,9 +114,9 @@ export default async function BoardPage({
               <p className={helperTextClass}>No Dispatches match &ldquo;{query}&rdquo;.</p>
             </div>
           ) : !query && finiteBoard && finiteBoard.crossedPaths.length === 0 && finiteBoard.kept.length === 0 && finiteBoard.unexpected.length === 0 ? (
-            <div className="space-y-2">
-              <p className={helperTextClass}>Nothing has been placed on your Board just now.</p>
-              <p className={helperTextClass}>Search if you’re looking for something particular, or come back another time.</p>
+            <div className="space-y-2 text-center">
+              <p className="font-serif text-xl text-foreground">That’s the Board for now.</p>
+              <p className={helperTextClass}>Nothing has been placed here just now. Search if you’re looking for something particular, or come back another time.</p>
             </div>
           ) : query ? (
             <div className="space-y-4">
@@ -141,7 +150,7 @@ export default async function BoardPage({
                       <BoardCrossedPathImpression key={dispatch.id} candidateId={dispatch.authorId}>
                         <DispatchCard
                           dispatch={dispatch}
-                          trailQuery={readingTrailSearchParams({ sessionStartedAt: s!, seed: seed! }, dispatch).toString()}
+                          trailQuery={finiteTrailQuery(dispatch)}
                           keepSlot={
                             dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
                               <KeepButton
@@ -170,7 +179,7 @@ export default async function BoardPage({
                       <DispatchCard
                         key={dispatch.id}
                         dispatch={dispatch}
-                        trailQuery={readingTrailSearchParams({ sessionStartedAt: s!, seed: seed! }, dispatch).toString()}
+                        trailQuery={finiteTrailQuery(dispatch)}
                         keepSlot={
                           dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
                             <KeepButton
@@ -197,7 +206,7 @@ export default async function BoardPage({
                     <DispatchCard
                       key={dispatch.id}
                       dispatch={dispatch}
-                      trailQuery={readingTrailSearchParams({ sessionStartedAt: s!, seed: seed! }, dispatch).toString()}
+                      trailQuery={finiteTrailQuery(dispatch)}
                       keepSlot={
                         dispatch.identity.kind === 'member' && dispatch.authorId !== user.id ? (
                           <KeepButton
