@@ -717,6 +717,125 @@ export async function getBoardFeedPage(
   return { items, nextCursor }
 }
 
+
+export const BOARD_FINITE_CANDIDATE_COUNT = 48
+export const BOARD_CROSSED_PATHS_MAX = 3
+export const BOARD_KEPT_MAX = 1
+export const BOARD_UNEXPECTED_MAX = 1
+
+export type FiniteBoardComposition = {
+  crossedPaths: BoardFeedItem[]
+  kept: BoardFeedItem[]
+  unexpected: BoardFeedItem[]
+}
+
+type BoardEncounterHistoryRow = {
+  candidate_id: string
+  last_presented_at: string | null
+  consumed_at: string | null
+  presented_count: number
+}
+
+function latestEncounterAt(row: BoardEncounterHistoryRow): number {
+  const presented = row.last_presented_at ? Date.parse(row.last_presented_at) : 0
+  const consumed = row.consumed_at ? Date.parse(row.consumed_at) : 0
+  return Math.max(presented, consumed)
+}
+
+/**
+ * Phase 11 finite Board composition.
+ *
+ * The ranking engine remains board_feed_page: this function does not create a
+ * second popularity/recommendation algorithm. It asks that existing
+ * session-stable feed for one bounded candidate window, then composes a tiny
+ * editorial Board from relationship signals Tempa already has:
+ *
+ *   1. up to 3 Dispatches from people the viewer genuinely encountered before
+ *      and has not been presented again within the seven-day re-encounter
+ *      cooldown;
+ *   2. up to 1 Dispatch from a person the viewer Keeps in Mind;
+ *   3. up to 1 unexpected Dispatch from outside both of those familiar pools.
+ *
+ * Sections never duplicate a Dispatch. A kept author is reserved for the Keep
+ * section before crossed-path selection so the stronger explicit signal does
+ * not silently erase that section. The existing feed order is preserved within
+ * each section, so unseen-first/fairness/author diversity and the session seed
+ * remain authoritative. Public reading is deliberately independent of
+ * correspondence capacity.
+ */
+export async function getFiniteBoardComposition(
+  supabase: SupabaseClient,
+  viewerId: string,
+  params: { sessionStartedAt: string; seed: string }
+): Promise<FiniteBoardComposition> {
+  const [{ items }, { data: historyRows }] = await Promise.all([
+    getBoardFeedPage(supabase, {
+      sessionStartedAt: params.sessionStartedAt,
+      seed: params.seed,
+      cursor: null,
+      limit: BOARD_FINITE_CANDIDATE_COUNT,
+    }),
+    supabase
+      .from('member_introduction_history')
+      .select('candidate_id,last_presented_at,consumed_at,presented_count')
+      .eq('viewer_id', viewerId)
+      .gte('presented_count', 1)
+      .limit(200),
+  ])
+
+  const cutoff = Date.parse(params.sessionStartedAt) - 7 * 24 * 60 * 60 * 1000
+  const crossedAuthorIds = new Set(
+    ((historyRows ?? []) as BoardEncounterHistoryRow[])
+      .filter((row) => latestEncounterAt(row) > 0 && latestEncounterAt(row) <= cutoff)
+      .map((row) => row.candidate_id)
+  )
+
+  // A member's own Dispatch is not a passive discovery encounter. Official
+  // Tempa/Sponsored writing remains eligible for Something unexpected even
+  // when the creating admin happens to be the current viewer.
+  const candidates = items.filter(
+    (item) => !(item.publishedAs === 'member' && item.authorId === viewerId)
+  )
+
+  const used = new Set<string>()
+  function take(
+    limit: number,
+    predicate: (item: BoardFeedItem) => boolean
+  ): BoardFeedItem[] {
+    const picked: BoardFeedItem[] = []
+    for (const item of candidates) {
+      if (picked.length >= limit) break
+      if (used.has(item.id) || !predicate(item)) continue
+      used.add(item.id)
+      picked.push(item)
+    }
+    return picked
+  }
+
+  // Reserve the explicit Keep signal first, even though the rendered section
+  // order begins with crossed paths.
+  const kept = take(
+    BOARD_KEPT_MAX,
+    (item) => item.publishedAs === 'member' && item.isKept
+  )
+
+  const crossedPaths = take(
+    BOARD_CROSSED_PATHS_MAX,
+    (item) =>
+      item.publishedAs === 'member' &&
+      crossedAuthorIds.has(item.authorId)
+  )
+
+  const unexpected = take(
+    BOARD_UNEXPECTED_MAX,
+    (item) =>
+      !item.isFamiliar &&
+      !crossedAuthorIds.has(item.authorId)
+  )
+
+  return { crossedPaths, kept, unexpected }
+}
+
 /**
  * One author's published, visible Dispatches, newest first — the
  * profile-integration list (app/minds/[userId]/page.tsx). Same RLS/
