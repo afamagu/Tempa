@@ -23,8 +23,13 @@ function isForwardDeployMissing(error: { code?: string | null } | null): boolean
 }
 
 /**
- * Reply reminders are intentionally opt-in. During a forward deploy where
- * Phase 8 has not reached the database yet, the safe preference is OFF/OFF.
+ * Tempa's correspondence notifications are on by default. A missing row means
+ * the member has never changed the default, so both the in-product reminder
+ * and its companion email read as enabled. An explicit row always wins.
+ *
+ * If Phase 8 itself has not reached the database during a forward deploy, we
+ * still fail closed to OFF/OFF rather than claiming a notification path exists
+ * when its backing contract is unavailable.
  */
 export async function getReplyReminderPreference(
   supabase: SupabaseClient,
@@ -43,11 +48,15 @@ export async function getReplyReminderPreference(
     return { ok: false, error }
   }
 
+  if (!data) {
+    return { ok: true, value: { remindersEnabled: true, emailEnabled: true } }
+  }
+
   return {
     ok: true,
     value: {
-      remindersEnabled: Boolean(data?.reminders_enabled),
-      emailEnabled: Boolean(data?.email_enabled),
+      remindersEnabled: Boolean(data.reminders_enabled),
+      emailEnabled: Boolean(data.email_enabled),
     },
   }
 }
