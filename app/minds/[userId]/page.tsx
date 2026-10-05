@@ -167,7 +167,7 @@ export default async function PublicProfilePage({
   const structurallyCanWriteToMind = canWriteToMind({
     isSelf,
     alreadyCorresponding: alreadyCorresponding || pausedCorrespondence,
-    hasCurrentAnswer: primaryWriteAnchor !== null,
+    hasCurrentAnswer: firstWriteAnchorId !== null,
     currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted || firstContact !== null,
   })
   const showWriteToMind = structurallyCanWriteToMind && canBeginNewCorrespondence
