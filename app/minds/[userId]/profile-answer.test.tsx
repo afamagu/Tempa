@@ -49,16 +49,31 @@ describe('ProfileAnswer', () => {
     expect(html).toContain('aria-expanded="false"')
   })
 
-  it('shows "Primary Minds answer" only when isPrimary is true', () => {
+  it('labels the primary response as the Introduction and never exposes retired Minds terminology', () => {
     const primary = renderToStaticMarkup(
       <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} isPrimary showReport={false} />
     )
-    expect(primary).toContain('Primary Minds answer')
+    expect(primary).toContain('Introduction')
+    expect(primary).not.toContain('Minds')
 
     const notPrimary = renderToStaticMarkup(
       <ProfileAnswer id="a-1" prompt={PROMPT} body={SHORT_BODY} showReport={false} />
     )
-    expect(notPrimary).not.toContain('Primary Minds answer')
+    expect(notPrimary).not.toContain('Introduction')
+  })
+
+  it('attaches a restrained Write from this action to the exact writing when supplied', () => {
+    const html = renderToStaticMarkup(
+      <ProfileAnswer
+        id="a-1"
+        prompt={PROMPT}
+        body={SHORT_BODY}
+        showReport={false}
+        writeHref="/write/member?a=a-1&source=room_profile"
+      />
+    )
+    expect(html).toContain('Write from this')
+    expect(html).toContain('/write/member?a=a-1')
   })
 })
 
