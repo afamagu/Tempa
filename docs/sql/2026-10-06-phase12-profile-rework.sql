@@ -82,6 +82,46 @@ grant execute on function public.get_public_profile_correspondence_state(uuid)
 comment on function public.get_public_profile_correspondence_state(uuid) is
   'Authenticated public-profile metadata only: whether a visible member can receive another first contact, plus their chosen default writing rhythm. Exposes no counts or private correspondence state.';
 
+
+-- One bounded answer-origin read for the public profile. This reuses the Phase
+-- 10 predicate for every returned id; it does not create a second definition
+-- of "can this answer start a private first contact?"
+create or replace function public.get_profile_writable_answer_ids(
+  p_user_id uuid,
+  p_limit integer default 50
+)
+returns table (
+  answer_id uuid
+)
+language sql
+stable
+security definer
+set search_path = 'pg_catalog'
+as $function$
+  select a.id
+  from public.question_answers a
+  where auth.uid() is not null
+    and exists (
+      select 1
+      from public.public_profiles p
+      where p.id = p_user_id
+    )
+    and a.user_id = p_user_id
+    and a.moderation_status = 'visible'
+    and public.room_answer_can_start_letter(a.id, p_user_id)
+  order by a.updated_at desc nulls last, a.created_at desc, a.id
+  limit least(greatest(coalesce(p_limit, 50), 1), 100)
+$function$;
+
+revoke all on function public.get_profile_writable_answer_ids(uuid, integer)
+  from public, anon;
+
+grant execute on function public.get_profile_writable_answer_ids(uuid, integer)
+  to authenticated;
+
+comment on function public.get_profile_writable_answer_ids(uuid, integer) is
+  'Viewer-safe public-profile answer origins. Every returned id is authorized by room_answer_can_start_letter; no alternative first-contact rule is introduced.';
+
 commit;
 
 
@@ -140,6 +180,19 @@ select
     )
   ) > 0
     as inbound_first_contact_gate_reused,
+
+  to_regprocedure(
+    'public.get_profile_writable_answer_ids(uuid,integer)'
+  ) is not null
+    as profile_answer_origin_rpc_ready,
+
+  position(
+    'public.room_answer_can_start_letter'
+    in pg_get_functiondef(
+      'public.get_profile_writable_answer_ids(uuid,integer)'::regprocedure
+    )
+  ) > 0
+    as exact_answer_origin_authority_reused,
 
   position(
     'writing_rhythm'
