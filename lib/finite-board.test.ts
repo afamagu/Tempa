@@ -88,12 +88,7 @@ describe('Phase 11 finite Board selection', () => {
       id:'official',
       authorId:'staff-account',
       publishedAs:'tempa',
-      identity: {
-        kind:'tempa',
-        displayName:'Tempa',
-        country:null,
-        markUrl:null,
-      },
+      identity: { kind:'tempa', name:'Tempa' },
     } as Partial<BoardFeedItem> & { id:string; authorId:string })
     const result = composeFiniteBoardItems(
       [official],
