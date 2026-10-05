@@ -180,6 +180,7 @@ export default function ReturnCardAction({
             <div className="fixed inset-0 z-[60] overflow-y-auto bg-background p-4 sm:p-6">
               <PostcardPicker
                 postcards={postcards}
+                strictCatalog
                 onSelect={(key) => {
                   setSelectedKey(key)
                   setPicking(false)
