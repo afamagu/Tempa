@@ -53,11 +53,14 @@ export default function ReplyReminderPreference({
   }
 
   return (
-    <section className="space-y-4 border-t border-foreground/10 pt-6">
+    <section id="reply-reminders" className="scroll-mt-6 space-y-4 border-t border-foreground/10 pt-6">
       <div className="space-y-1">
         <h2 className="font-serif text-lg text-foreground">Reply reminders</h2>
         <p className={helperTextClass}>
-          One quiet reminder when a letter has waited beyond the writing rhythm you chose. Never a countdown, and never repeated for the same letter.
+          Tempa sends one quiet reminder when a letter moves beyond your writing rhythm. It never becomes a countdown and never repeats for the same letter.
+        </p>
+        <p className="text-[12px] leading-5 text-muted">
+          On by default. Make this quieter whenever you prefer.
         </p>
       </div>
 
