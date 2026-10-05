@@ -83,6 +83,26 @@ describe('Phase 11 finite Board selection', () => {
     expect(result.unexpected.map((entry) => entry.id)).toEqual(['unexpected'])
   })
 
+  it('does not classify official writing by the staff account that created it', () => {
+    const official = item({
+      id:'official',
+      authorId:'staff-account',
+      publishedAs:'tempa',
+      identity: {
+        kind:'tempa',
+        displayName:'Tempa',
+        country:null,
+        markUrl:null,
+      },
+    } as Partial<BoardFeedItem> & { id:string; authorId:string })
+    const result = composeFiniteBoardItems(
+      [official],
+      new Set(['staff-account']),
+      'viewer'
+    )
+    expect(result.unexpected.map((entry) => entry.id)).toEqual(['official'])
+  })
+
   it('never passively recommends the viewer own member Dispatch', () => {
     const result = composeFiniteBoardItems(
       [
