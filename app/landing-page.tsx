@@ -68,20 +68,20 @@ function HeroCollage() {
 const people = [
   {
     name: 'Maya',
-    quote: '“I have strong opinions about people who put raisins where raisins don’t belong.”',
-    latest: 'The strange intimacy of people you rarely see',
+    quote: '“Sunday in my family usually means lunch at two and nobody actually leaving before six.”',
+    latest: 'Nairobi, Kenya',
     kind: 'maya',
   },
   {
     name: 'Lowtide',
-    quote: '“I keep a list of things strangers have said to me on trains. It’s longer than I’d like to admit.”',
-    latest: 'In defence of the slow reply',
+    quote: '“I take the same train home most evenings. The woman at the kiosk knows which tea I buy.”',
+    latest: 'Osaka, Japan',
     kind: 'lowtide',
   },
   {
     name: 'Second Kettle',
-    quote: '“Most of my best decisions were made by accident and defended on purpose.”',
-    latest: 'What my grandmother knew about waiting',
+    quote: '“Every Tuesday my brother calls while I make dinner. We spend twenty minutes complaining about nothing important.”',
+    latest: 'Porto Alegre, Brazil',
     kind: 'kettle',
   },
 ]
@@ -101,11 +101,11 @@ export default function LandingPage() {
         <div className={styles.heroCopy}>
           <h1>
             <span>Meet people around the world.</span>
-            <em>Actually get to know them.</em>
+            <em>Get to know the person, not the profile.</em>
           </h1>
-          <p className={styles.tagline}>No audience to build. No followers to collect.</p>
-          <p className={styles.intro}>Tempa is for people who want to meet people from elsewhere in the world and actually get to know them — not just follow their profiles.</p>
-          <p className={styles.reveal}>You encounter people through what they think and write. If someone interests you, write them privately.</p>
+          <p className={styles.tagline}>Meet them through what they write.</p>
+          <p className={styles.intro}>If someone interests you, write privately. They write back, or they don’t — and a quiet week is a pace, not a disappearance.</p>
+          <p className={styles.reveal}>No audience to build. No followers to collect. No public persona to keep feeding.</p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryButton} href={JOIN_HREF}>Enter Tempa</Link>
             <a className={styles.textLink} href="#read">See how Tempa works ↓</a>
@@ -126,7 +126,7 @@ export default function LandingPage() {
       <section className={`${styles.section} ${styles.dispatchSection}`} id="read">
         <div className={styles.sectionHeading}>
           <p className={styles.eyebrow}>HOW TEMPA STARTS</p>
-          <h2>Start with something <em>someone had to say.</em></h2><p>On Tempa, you encounter people through what they think, notice and choose to share — before you ever decide whether you want to know them better.</p>
+          <h2>Start with something <em>someone had to say.</em></h2><p>Read what someone thinks, notices or has lived through. If their words make you curious about the person behind them, you can write.</p>
         </div>
         <DispatchCard />
         <p className={styles.curious}>Interested in the person behind the words?</p>
@@ -142,13 +142,13 @@ export default function LandingPage() {
           <Image width={708} height={675} sizes="330px" className={styles.markScene} src="/landing/mark-scene.webp" alt="Evening Quill’s abstract personal Mark" loading="lazy" />
           <p>Evening Quill</p>
         </div>
-        <p>Every Mark begins with a photograph that means something to its owner. The photograph never leaves their device. <em>Everyone else sees only the Mark it becomes.</em></p>
+        <p>A Mark gives someone a presence without asking them to perform a public identity. It begins with a private photograph that never leaves their device. <em>Everyone else sees only the Mark it becomes.</em></p>
       </section>
 
       <section className={`${styles.section} ${styles.questionSection}`}>
         <div className={styles.sectionCopy}>
           <p className={styles.eyebrow}>A QUESTION</p>
-          <h2>Find out how someone thinks.</h2>
+          <h2>See how someone thinks.</h2>
         </div>
         <article className={styles.questionCard}>
           <p className={styles.questionLabel}>THIS WEEK’S QUESTION</p>
@@ -162,9 +162,9 @@ export default function LandingPage() {
 
       <section className={`${styles.section} ${styles.letterSection}`}>
         <div className={styles.sectionCopy}>
-          <p className={styles.eyebrow}>A LETTER</p>
+          <p className={styles.eyebrow}>A PRIVATE LETTER</p>
           <h2>If someone interests you, write to them.</h2>
-          <p>Private letters are where the public profile ends and the conversation begins.</p>
+          <p>A reply begins a correspondence. Tempa is built for a few correspondences at a time, not an endless stream of new people.</p>
           <div className={styles.typeChoices} aria-label="Example writing styles">
             <span className={styles.typeLinen}>Linen</span>
             <span className={styles.typePencil}>Pencil</span>
@@ -185,13 +185,13 @@ export default function LandingPage() {
 
       <section className={styles.arrivalBand}>
         <Image width={384} height={261} sizes="(max-width: 699px) 40vw, 220px" className={styles.envelopeArt} src="/landing/envelope.webp" alt="" loading="lazy" />
-        <p>Not every conversation<br />needs to be instant.<br /><strong>Some people are worth taking time to know.</strong></p>
+        <p>Not every reply<br />needs to be instant.<br /><strong>A quiet week can just be a quiet week.</strong></p>
       </section>
 
       <section className={`${styles.section} ${styles.peopleSection}`}>
         <div className={styles.sectionCopy}>
           <p className={styles.eyebrow}>PEOPLE</p>
-          <h2>Meet people, <em>not profiles.</em></h2>
+          <h2>Meet people beyond <em>your usual world.</em></h2>
         </div>
         <div className={styles.peopleList}>
           {people.map((person) => (
@@ -200,31 +200,31 @@ export default function LandingPage() {
               <div>
                 <h3>{person.name}</h3>
                 <p className={styles.personQuote}>{person.quote}</p>
-                <p className={styles.latest}><span>Latest ·</span> {person.latest}</p>
+                <p className={styles.latest}><span>From ·</span> {person.latest}</p>
               </div>
             </article>
           ))}
         </div>
       </section>
         <section className={styles.consentCopy}>
-          <p>What you say comes first.</p>
+          <p>No audience to build.</p>
+          <p>A few correspondences at a time — <em>not an endless stream of new people.</em></p>
           <p>Photos only when you <em>both</em> say yes.</p>
-          <p>You can always decline — kindly.</p>
         </section>
 
       <section className={`${styles.section} ${styles.postcardSection}`}>
         <p className={styles.eyebrow}>A POSTCARD · STORIES WE CARRY</p>
         <Image width={810} height={930} sizes="(max-width: 699px) 90vw, 530px" className={styles.postcardScene} src="/landing/postcard-scene.webp" alt="An illustrated mountain-lake postcard, with Lowtide’s handwritten note to Evening Quill on its back" loading="lazy" />
         <div className={styles.sectionCopy}>
-          <h2>A little piece of your world.</h2>
+          <h2>A small piece of your day.</h2>
           <p>Illustrated Postcards you write on, front and back. Send one with a letter, or on its own.</p>
         </div>
       </section>
 
       <section className={styles.closing}>
         <div className={styles.closingThread} aria-hidden="true" />
-        <p className={styles.steps}>Read what someone thinks.<br />Write when someone interests you.<br />See where the conversation goes.</p>
-        <h2>Meet someone outside your world.</h2>
+        <p className={styles.steps}>Read what someone thinks.<br />Write when someone interests you.<br />Let the correspondence find its own pace.</p>
+        <h2>Find someone you want to keep writing to.</h2>
         <Link className={styles.primaryButton} href={JOIN_HREF}>Enter Tempa</Link>
       </section>
 
