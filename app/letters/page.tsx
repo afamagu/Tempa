@@ -10,11 +10,13 @@ import {
   getRelationshipCapacity,
   correspondenceCapacitySummary,
 } from '@/lib/relationship-capacity'
+import { getMyReplyReminders } from '@/lib/reply-reminders'
 import { pageTitleClass, helperTextClass, sectionLabelClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import MemberNotices from '@/app/member-notices'
 import LetterboxSearch from './letterbox-search'
 import LettersTabs from './letters-tabs'
+import ReplyReminders from './reply-reminders'
 import { getTranslations } from 'next-intl/server'
 
 /**
@@ -33,11 +35,12 @@ export default async function LettersPage() {
 
   if (!user) redirect('/sign-in')
 
-  const [people, waitingCount, incomingInTransit, relationshipCapacity] = await Promise.all([
+  const [people, waitingCount, incomingInTransit, relationshipCapacity, replyReminders] = await Promise.all([
     getRelationshipSurfacePeople(supabase, user.id),
     getWaitingLetterCount(supabase, user.id),
     getIncomingMailInTransit(supabase),
     getRelationshipCapacity(supabase),
+    getMyReplyReminders(supabase),
   ])
 
   const mailInTransitPersonIds = incomingMailInTransitPersonIds(incomingInTransit)
@@ -57,6 +60,8 @@ export default async function LettersPage() {
               <p className={`mt-1 ${helperTextClass}`}>{capacitySummary}</p>
             </div>
           )}
+
+          <ReplyReminders reminders={replyReminders} />
 
           <LetterboxSearch
             people={people}
