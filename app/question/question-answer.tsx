@@ -206,7 +206,7 @@ export default function QuestionAnswer({
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex flex-wrap gap-3">
               {!(onboarding && !hadExistingAnswer) && (
-                <Link href={isFlagship ? '/room' : '/you/archive?tab=responses'} className={secondaryButtonClass}>
+                <Link href={returnTo ?? (isFlagship ? '/room' : '/you/archive?tab=responses')} className={secondaryButtonClass}>
                   {returnTo === '/home' ? 'Back to Home' : returnTo === '/room' ? t('backRoom') : isFlagship ? t('backRoom') : t('backResponses')}
                 </Link>
               )}
