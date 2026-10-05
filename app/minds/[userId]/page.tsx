@@ -81,7 +81,6 @@ export default async function PublicProfilePage({
   if (originReturn) profileContext.set('returnTo', originReturn)
   if (typeof selectedAnswerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedAnswerId)) profileContext.set('answer', selectedAnswerId)
   const profileReturn = profileContext.size ? `/room/${userId}?${profileContext}` : null
-  const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
   const supabase = await createClient()
   const { data: { user: viewer } } = await supabase.auth.getUser()
   if (!viewer) redirect(`/sign-in?next=${encodeURIComponent(profileReturn ?? `/room/${userId}`)}`)
@@ -135,21 +134,15 @@ export default async function PublicProfilePage({
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  const writableAnswerIds = new Set<string>()
-  if (!isSelf) {
-    const checks = await Promise.all(
-      rawAnswers
-        .filter((answer) => answer.moderationStatus === 'visible')
-        .map(async (answer) => {
-          const { data } = await supabase.rpc('room_answer_can_start_letter', {
-            p_answer: answer.id,
-            p_author: userId,
-          })
-          return data === true ? answer.id : null
-        })
-    )
-    for (const id of checks) if (id) writableAnswerIds.add(id)
-  }
+  const { data: writableAnswerRows } = isSelf
+    ? { data: [] as { answer_id: string }[] }
+    : await supabase.rpc('get_profile_writable_answer_ids', {
+        p_user_id: userId,
+        p_limit: 50,
+      })
+  const writableAnswerIds = new Set(
+    ((writableAnswerRows ?? []) as { answer_id: string }[]).map((row) => row.answer_id)
+  )
   const firstWriteAnchorId =
     rawAnswers.find((answer) => writableAnswerIds.has(answer.id))?.id ?? null
   const primaryWriteAnchor = primaryAnswer && writableAnswerIds.has(primaryAnswer.id) ? primaryAnswer : null
