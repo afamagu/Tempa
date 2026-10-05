@@ -28,10 +28,11 @@ function identityLine(entry: DiscoveryEntry) {
   return [entry.country, entry.genderDisplay, entry.ageRange].filter(Boolean).join(' · ')
 }
 
-function profileHref(userId: string, returnTo: string, answerId?: string) {
+function profileHref(userId: string, returnTo: string, answerId?: string, reading = false) {
   const params = new URLSearchParams()
   if (returnTo) params.set('returnTo', returnTo)
   if (answerId) params.set('answer', answerId)
+  if (reading) params.set('reading', '1')
   return `/room/${userId}${params.size ? `?${params}` : ''}`
 }
 
@@ -46,7 +47,7 @@ function IdentityMark({ entry, size = 'sm' }: { entry: DiscoveryEntry; size?: 's
   )
 }
 
-export default function DiscoveryResults({ entries, returnTo = '/room', profileLed = false, horizontal = false, questionReading = false }: { entries: DiscoveryEntry[]; returnTo?: string; profileLed?: boolean; horizontal?: boolean; questionReading?: boolean }) {
+export default function DiscoveryResults({ entries, returnTo = '/room', profileLed = false, horizontal = false, questionReading = false, viewerId }: { entries: DiscoveryEntry[]; returnTo?: string; profileLed?: boolean; horizontal?: boolean; questionReading?: boolean; viewerId?: string }) {
   const router = useRouter()
   const [openId, setOpenId] = useState<string | null>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -153,7 +154,29 @@ export default function DiscoveryResults({ entries, returnTo = '/room', profileL
                   <button type="button" onClick={showPrevious} disabled={!hasPrevious} aria-label="Previous response" className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25">←</button>
                   <button type="button" onClick={showNext} disabled={!hasNext} aria-label="Next response" className="rounded-full px-3 py-2 text-lg leading-none transition-colors hover:bg-foreground/[.04] disabled:cursor-default disabled:opacity-25">→</button>
                 </div>
-                {questionReading ? <Link href={profileHref(openEntry.userId, returnTo, openEntry.response.id)} className={primaryButtonClass}>Visit {openEntry.pseudonym}&apos;s profile to write</Link> : <button type="button" onClick={() => router.push(`/write/${openEntry.userId}?a=${openEntry.response.id}&source=room&returnTo=${encodeURIComponent(profileHref(openEntry.userId, returnTo, openEntry.response.id))}`)} className={primaryButtonClass}>Write to {openEntry.pseudonym}</button>}
+                {questionReading && openEntry.userId === viewerId ? (
+                  <Link
+                    href={`/question/${openEntry.response.id}?source=room`}
+                    className={primaryButtonClass}
+                  >
+                    Your answer
+                  </Link>
+                ) : questionReading ? (
+                  <Link
+                    href={`/write/${openEntry.userId}?a=${openEntry.response.id}&source=room&returnTo=${encodeURIComponent(profileHref(openEntry.userId, returnTo, openEntry.response.id, true))}`}
+                    className={primaryButtonClass}
+                  >
+                    Reply privately
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/write/${openEntry.userId}?a=${openEntry.response.id}&source=room&returnTo=${encodeURIComponent(profileHref(openEntry.userId, returnTo, openEntry.response.id))}`)}
+                    className={primaryButtonClass}
+                  >
+                    Write to {openEntry.pseudonym}
+                  </button>
+                )}
               </div>
               <Link href={profileHref(openEntry.userId, returnTo, openEntry.response.id)} className={quietLinkClass}>Read more from {openEntry.pseudonym}</Link>
             </div>
