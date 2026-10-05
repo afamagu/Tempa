@@ -26,6 +26,8 @@ import ArchiveList from './archive-list'
 import ReturnCardHistory from './return-card-history'
 import WriteQuillButton from './write-quill-button'
 import CorrespondenceRhythmControl from './correspondence-rhythm-control'
+import CorrespondenceLifecycleControl from './correspondence-lifecycle-control'
+import { getCorrespondenceLifecycleWithMember } from '@/lib/correspondence-lifecycle'
 
 function BackChevronIcon() {
   return (
@@ -64,6 +66,7 @@ export default async function LetterArchiveWithUserPage({
     incomingInTransit,
     activeCorrespondence,
     myRhythm,
+    lifecycle,
   ] = await Promise.all([
     supabase
       .from('public_profiles')
@@ -75,6 +78,7 @@ export default async function LetterArchiveWithUserPage({
     getIncomingMailInTransit(supabase),
     getActiveEstablishedCorrespondenceWithUser(supabase, user.id, otherUserId),
     getMyWritingRhythm(supabase),
+    getCorrespondenceLifecycleWithMember(supabase, otherUserId),
   ])
 
   const otherProfile = (profiles ?? []).find((p) => p.id === otherUserId) ?? null
@@ -143,6 +147,14 @@ export default async function LetterArchiveWithUserPage({
 
             {mailOnTheWayFromThisPerson && <MailOnTheWay />}
 
+            {lifecycle && otherProfile && (
+              <CorrespondenceLifecycleControl
+                lifecycle={lifecycle}
+                viewerId={user.id}
+                counterpartPseudonym={otherProfile.pseudonym}
+              />
+            )}
+
             {activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile && (
               <div className="rounded-md border border-foreground/10 px-4 py-3">
                 <CorrespondenceRhythmControl
@@ -172,7 +184,9 @@ export default async function LetterArchiveWithUserPage({
           />
         </div>
       </main>
-      {otherProfile && <WriteQuillButton otherUserId={otherProfile.id} otherPseudonym={otherProfile.pseudonym} />}
+      {otherProfile && activeCorrespondence && establishedForViewer && (
+        <WriteQuillButton otherUserId={otherProfile.id} otherPseudonym={otherProfile.pseudonym} />
+      )}
     </AppShell>
   )
 }
