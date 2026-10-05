@@ -38,6 +38,9 @@ import EditorialByline from '@/app/editorial-byline'
 import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
 import { introductionReturnPath } from '@/lib/introduction-navigation'
+import { getPublicProfileCorrespondenceState } from '@/lib/profile-correspondence-state'
+import { writingRhythmLabel } from '@/lib/writing-rhythm'
+import { getCorrespondenceLifecycleWithMember } from '@/lib/correspondence-lifecycle'
 import PeopleProfileBack from './people-profile-back'
 
 function genderDisplay(gender: string | null, genderCustom: string | null) {
@@ -103,7 +106,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -114,6 +117,8 @@ export default async function PublicProfilePage({
     getEditorialBylines(supabase),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, viewer.id, userId),
     isSelf ? Promise.resolve(null) : getRelationshipCapacity(supabase),
+    getPublicProfileCorrespondenceState(supabase, userId),
+    isSelf ? Promise.resolve(null) : getCorrespondenceLifecycleWithMember(supabase, userId),
   ])
   const [{ data: memberQuestions }, { data: legacyQuestions }, { data: eligibleAnswers }, incomingFirstContact] = await Promise.all([
     supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
@@ -134,17 +139,25 @@ export default async function PublicProfilePage({
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const primaryWriteAnchor = eligibleAnswers?.find(a => a.id === primaryAnswer?.id) ?? eligibleAnswers?.[0] ?? null
   const alreadyCorresponding = activePartnerIds.has(userId)
+  const pausedCorrespondence = lifecycle?.status === 'paused' && lifecycle.establishedAt !== null
   const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryWriteAnchor?.id ?? primaryAnswer.id) : false
-  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
-  const canBeginNewCorrespondence = newCorrespondenceMessage === null
+  const senderUnavailableMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
+  const recipientUnavailableMessage =
+    publicCorrespondenceState && !publicCorrespondenceState.canReceiveFirstContact
+      ? `${profile.pseudonym} isn’t taking another first letter right now.`
+      : null
+  const firstContactUnavailableMessage = senderUnavailableMessage ?? recipientUnavailableMessage
+  const canBeginNewCorrespondence = firstContactUnavailableMessage === null
   const structurallyCanWriteToMind = canWriteToMind({
     isSelf,
-    alreadyCorresponding,
+    alreadyCorresponding: alreadyCorresponding || pausedCorrespondence,
     hasCurrentAnswer: primaryWriteAnchor !== null,
     currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted || firstContact !== null,
   })
   const showWriteToMind = structurallyCanWriteToMind && canBeginNewCorrespondence
-  const hasPendingEpisode = !alreadyCorresponding && (firstContact !== null || incomingFirstContact?.status === 'sent')
+  const hasPendingEpisode = !alreadyCorresponding && !pausedCorrespondence && (firstContact !== null || incomingFirstContact?.status === 'sent')
+  const pendingLetterHref = hasPendingEpisode ? `/letters/${firstContact?.id ?? incomingFirstContact?.id}` : undefined
+  const publicRhythmLabel = writingRhythmLabel(publicCorrespondenceState?.writingRhythm ?? null)
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
     .filter(Boolean)
     .join(' · ')
