@@ -96,9 +96,7 @@ export default async function NotificationsPage() {
           {mentionPreferenceError ? (
             <p id="mention-emails" role="status">{mentionEmails('unavailable')}</p>
           ) : (
-            <div id="mention-emails" className="scroll-mt-6">
-              <MentionEmailPreference initialAudience={mentionPreference?.audience ?? 'everyone'} />
-            </div>
+            <MentionEmailPreference initialAudience={mentionPreference?.audience ?? 'everyone'} />
           )}
         </div>
       </main>
