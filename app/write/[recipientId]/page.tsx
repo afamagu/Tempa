@@ -61,9 +61,30 @@ export default async function WriteToPage({
 
   const { data: memberQuestion } = mq ? await supabase.from('member_questions').select('id, body').eq('id', mq).eq('author_id', recipientId).eq('is_profile_visible', true).eq('moderation_status', 'visible').is('withdrawn_at', null).maybeSingle() : { data: null }
   if (mq && !memberQuestion) redirect(backHref)
-  if (mq) {
-    const correspondence = await getActiveEstablishedCorrespondenceWithUser(supabase, user.id, recipientId)
-    if (correspondence && await isEstablishedForViewer(supabase, correspondence.id)) redirect(`/letters/with/${recipientId}/write?mq=${encodeURIComponent(mq)}&returnTo=${encodeURIComponent(backHref)}`)
+
+  // Phase 6 lifecycle completion: a crossed pair of first letters can leave
+  // one historical root status='sent' after the reciprocal reply establishes
+  // the SHARED correspondence. The correspondence is authoritative. Once this
+  // viewer can actually see that reply through Mail Call, /write must continue
+  // into Write Anytime before inspecting either old root; otherwise the stale
+  // root can falsely render "waiting for a reply" inside an already-established
+  // relationship. The visibility check preserves the existing Mail Call gate:
+  // the original sender still cannot enter Write Anytime before the reply is
+  // delivered to them.
+  const establishedCorrespondence = await getActiveEstablishedCorrespondenceWithUser(
+    supabase,
+    user.id,
+    recipientId
+  )
+  const establishedForViewer = establishedCorrespondence
+    ? await isEstablishedForViewer(supabase, establishedCorrespondence.id)
+    : false
+
+  if (establishedCorrespondence && establishedForViewer) {
+    const query = new URLSearchParams()
+    if (mq) query.set('mq', mq)
+    if (mq || backHref !== '/room') query.set('returnTo', backHref)
+    redirect(`/letters/with/${recipientId}/write${query.size ? `?${query}` : ''}`)
   }
 
   // A private relationship has only one first-contact episode at a time.
@@ -79,13 +100,13 @@ export default async function WriteToPage({
 
   if (existing) {
     const expired = isEffectivelyExpired(existing, false)
-    const establishedForViewer =
+    const establishedForExistingViewer =
       existing.status === 'replied'
         ? await isEstablishedForViewer(supabase, existing.correspondenceId)
         : false
     const effectiveStatus = expired
       ? 'closed'
-      : resolveFirstContactDisplayStatus(existing.status, establishedForViewer)
+      : resolveFirstContactDisplayStatus(existing.status, establishedForExistingViewer)
     const effectiveClosedBy = expired ? 'system' : existing.closedBy
 
     return (
