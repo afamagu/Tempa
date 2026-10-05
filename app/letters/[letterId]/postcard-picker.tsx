@@ -7,28 +7,48 @@ import type { PostcardCatalogEntry } from '@/lib/postcards'
 import CatalogueBrowser from '@/app/marketplace/catalogue-browser'
 
 /**
- * Tempa's own Postcard catalog — never the device photo library.
+ * Tempa's own postcard catalog — never the device photo library.
  *
- * `strictCatalog` is deliberately opt-in. Ordinary Letter/Dispatch callers
- * retain the marketplace behavior they already have. Return Cards pass true
- * because their server-provided catalogue has already been narrowed to
- * currently published Complimentary Postcards; no Gift or other marketplace
- * item may leak back into that relationship-only picker.
+ * Commerce Checkpoint 3 — the Letter / Dispatch picker is now the same
+ * catalogue system as the marketplace (app/marketplace/catalogue-browser),
+ * in "pick" mode: compact still tiles, search, discovery views, a detail
+ * view with front/back and a deliberate motion preview, and "Use this
+ * Postcard" only for what this member may send (Complimentary, or a
+ * premium Postcard they have unlocked). Received Keepsakes are still
+ * never offered as sendable. The caller's contract is unchanged: it
+ * passes the live ACTIVE catalogue and gets back a postcard key; sending,
+ * Safety, snapshot versioning and the server ownership check are exactly
+ * as before.
+ *
+ * Phase 7 adds `strictCatalog` as an opt-in only. Return Cards pass a
+ * server-narrowed Complimentary catalogue, and strict mode prevents any
+ * non-Postcard marketplace product from appearing in that picker. Existing
+ * callers keep the exact previous behavior by default.
  */
 
-let cached: { at: number; value: Promise<Marketplace> } | null = null
+// Cache is scoped to the supplied catalogue identity, not just time. That
+// matters now that Return Cards intentionally pass a narrower subset: opening
+// that picker must never poison a later ordinary Letter picker for five minutes.
+let cached: { at: number; catalogueSignature: string; value: Promise<Marketplace> } | null = null
+
+function catalogueSignature(postcards: PostcardCatalogEntry[]) {
+  return postcards.map((postcard) => postcard.key).sort().join('|')
+}
 
 function readMarketplace(postcards: PostcardCatalogEntry[]): Promise<Marketplace> {
-  if (!cached || Date.now() - cached.at > 5 * 60_000) {
+  const signature = catalogueSignature(postcards)
+  if (!cached || cached.catalogueSignature !== signature || Date.now() - cached.at > 5 * 60_000) {
     const value = loadMarketplace(createClient(), postcards)
-    cached = { at: Date.now(), value }
+    cached = { at: Date.now(), catalogueSignature: signature, value }
     value.catch(() => {
-      cached = null
+      if (cached?.value === value) cached = null
     })
   }
   return cached.value
 }
 
+/** If commerce data cannot be read at all, never block sending: offer the
+ * active catalogue exactly as before commerce (the server still enforces). */
 function degraded(postcards: PostcardCatalogEntry[]): Marketplace {
   return buildMarketplace({
     postcards,
@@ -48,6 +68,7 @@ export default function PostcardPicker({
   onCancel,
   strictCatalog = false,
 }: {
+  /** The live, active DB catalogue — fetched by the caller. */
   postcards: PostcardCatalogEntry[]
   onSelect: (postcardKey: string) => void
   onCancel: () => void
@@ -78,6 +99,9 @@ export default function PostcardPicker({
     }
   }, [marketplace, postcards, strictCatalog])
 
+  // Both composers place this catalogue in a full-viewport scroll
+  // container. Lock the document beneath it so mobile swipes scroll the
+  // postcards rather than the composer or the browser's pull-to-refresh.
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
