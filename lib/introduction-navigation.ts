@@ -7,7 +7,8 @@ export function introductionReturnPath(value: string | null | undefined): string
   const url = new URL(path, 'https://jointempa.com')
   if (url.pathname === '/home') return '/home'
   if (url.pathname === '/room' || url.pathname === '/letters/discover'
-    || /^\/room\/[^/]+$/.test(url.pathname)) return path
+    || /^\/room\/[^/]+$/.test(url.pathname)
+    || /^\/board\/[0-9a-f-]+$/i.test(url.pathname)) return path
   return null
 }
 export function introductionDestinations(candidateId: string, answerId: string) {
