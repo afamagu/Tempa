@@ -736,12 +736,6 @@ type BoardEncounterHistoryRow = {
   presented_count: number
 }
 
-function latestEncounterAt(row: BoardEncounterHistoryRow): number {
-  const presented = row.last_presented_at ? Date.parse(row.last_presented_at) : 0
-  const consumed = row.consumed_at ? Date.parse(row.consumed_at) : 0
-  return Math.max(presented, consumed)
-}
-
 /**
  * Phase 11 finite Board composition.
  *
@@ -753,12 +747,12 @@ function latestEncounterAt(row: BoardEncounterHistoryRow): number {
  *   1. up to 3 Dispatches from people the viewer genuinely encountered before
  *      and has not been presented again within the seven-day re-encounter
  *      cooldown;
- *   2. up to 1 Dispatch from a person the viewer Keeps in Mind;
+ *   2. up to 2 Dispatches from people the viewer Keeps in Mind;
  *   3. up to 1 unexpected Dispatch from outside both of those familiar pools.
  *
- * Sections never duplicate a Dispatch. A kept author is reserved for the Keep
- * section before crossed-path selection so the stronger explicit signal does
- * not silently erase that section. The existing feed order is preserved within
+ * Sections never duplicate a Dispatch. Keep pieces are reserved first so the
+ * explicit signal remains visible, while the same author may still appear in
+ * Crossed Paths through different writing. The existing feed order is preserved within
  * each section, so unseen-first/fairness/author diversity and the session seed
  * remain authoritative. Public reading is deliberately independent of
  * correspondence capacity.
