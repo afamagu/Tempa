@@ -763,6 +763,59 @@ function latestEncounterAt(row: BoardEncounterHistoryRow): number {
  * remain authoritative. Public reading is deliberately independent of
  * correspondence capacity.
  */
+export function composeFiniteBoardItems(
+  items: BoardFeedItem[],
+  crossedAuthorIds: Set<string>,
+  viewerId: string
+): FiniteBoardComposition {
+  // A member's own Dispatch is not a passive discovery encounter. Official
+  // Tempa/Sponsored writing remains eligible for Something unexpected even
+  // when the creating admin happens to be the current viewer.
+  const candidates = items.filter(
+    (item) => !(item.publishedAs === 'member' && item.authorId === viewerId)
+  )
+
+  const used = new Set<string>()
+
+  function take(
+    limit: number,
+    predicate: (item: BoardFeedItem) => boolean
+  ): BoardFeedItem[] {
+    const picked: BoardFeedItem[] = []
+    for (const item of candidates) {
+      if (picked.length >= limit) break
+      if (used.has(item.id) || !predicate(item)) continue
+      used.add(item.id)
+      picked.push(item)
+    }
+    return picked
+  }
+
+  // Reserve explicit Keep items first. A kept author may still also appear in
+  // Crossed Paths through a DIFFERENT Dispatch; only duplicate pieces are
+  // suppressed, not meaningful overlap between relationship signals.
+  const kept = take(
+    BOARD_KEPT_MAX,
+    (item) => item.publishedAs === 'member' && item.isKept
+  )
+
+  const crossedPaths = take(
+    BOARD_CROSSED_PATHS_MAX,
+    (item) =>
+      item.publishedAs === 'member' &&
+      crossedAuthorIds.has(item.authorId)
+  )
+
+  const unexpected = take(
+    BOARD_UNEXPECTED_MAX,
+    (item) =>
+      !item.isFamiliar &&
+      !crossedAuthorIds.has(item.authorId)
+  )
+
+  return { crossedPaths, kept, unexpected }
+}
+
 export async function getFiniteBoardComposition(
   supabase: SupabaseClient,
   viewerId: string,
@@ -850,51 +903,7 @@ export async function getFiniteBoardComposition(
       .map(([authorId]) => authorId)
   )
 
-  // A member's own Dispatch is not a passive discovery encounter. Official
-  // Tempa/Sponsored writing remains eligible for Something unexpected even
-  // when the creating admin happens to be the current viewer.
-  const candidates = items.filter(
-    (item) => !(item.publishedAs === 'member' && item.authorId === viewerId)
-  )
-
-  const used = new Set<string>()
-  function take(
-    limit: number,
-    predicate: (item: BoardFeedItem) => boolean
-  ): BoardFeedItem[] {
-    const picked: BoardFeedItem[] = []
-    for (const item of candidates) {
-      if (picked.length >= limit) break
-      if (used.has(item.id) || !predicate(item)) continue
-      used.add(item.id)
-      picked.push(item)
-    }
-    return picked
-  }
-
-  // Reserve explicit Keep items first. A kept author may still also appear in
-  // Crossed Paths through a DIFFERENT Dispatch; only duplicate pieces are
-  // suppressed, not meaningful overlap between relationship signals.
-  const kept = take(
-    BOARD_KEPT_MAX,
-    (item) => item.publishedAs === 'member' && item.isKept
-  )
-
-  const crossedPaths = take(
-    BOARD_CROSSED_PATHS_MAX,
-    (item) =>
-      item.publishedAs === 'member' &&
-      crossedAuthorIds.has(item.authorId)
-  )
-
-  const unexpected = take(
-    BOARD_UNEXPECTED_MAX,
-    (item) =>
-      !item.isFamiliar &&
-      !crossedAuthorIds.has(item.authorId)
-  )
-
-  return { crossedPaths, kept, unexpected }
+  return composeFiniteBoardItems(items, crossedAuthorIds, viewerId)
 }
 
 /**
