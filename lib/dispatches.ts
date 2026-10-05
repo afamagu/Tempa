@@ -803,8 +803,8 @@ export function composeFiniteBoardItems(
   const unexpected = take(
     BOARD_UNEXPECTED_MAX,
     (item) =>
-      !item.isFamiliar &&
-      !crossedAuthorIds.has(item.authorId)
+      item.publishedAs !== 'member' ||
+      (!item.isFamiliar && !crossedAuthorIds.has(item.authorId))
   )
 
   return { crossedPaths, kept, unexpected }
