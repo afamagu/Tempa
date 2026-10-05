@@ -21,7 +21,7 @@ export default function OtherAnswersDisclosure({
   writingStyleId = null,
   ownerId,
   writeReturnTo,
-  allowFirstContact = false,
+  writableAnswerIds = [],
   pendingLetterHref,
   writeUnavailableMessage,
 }: {
@@ -42,7 +42,7 @@ export default function OtherAnswersDisclosure({
   writingStyleId?: string | null
   ownerId?: string
   writeReturnTo?: string
-  allowFirstContact?: boolean
+  writableAnswerIds?: string[]
   pendingLetterHref?: string
   writeUnavailableMessage?: string | null
 }) {
@@ -84,7 +84,7 @@ export default function OtherAnswersDisclosure({
                 showReport={showReport}
                 writingStyleId={writingStyleId}
                 writeHref={
-                  !isSelf && allowFirstContact && ownerId
+                  !isSelf && ownerId && writableAnswerIds.includes(a.id)
                     ? `/write/${ownerId}?a=${encodeURIComponent(a.id)}&source=room_profile${writeReturnTo ? `&returnTo=${encodeURIComponent(writeReturnTo)}` : ''}`
                     : null
                 }
