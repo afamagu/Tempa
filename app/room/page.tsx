@@ -8,6 +8,7 @@ import { getRelationshipCapacity, newCorrespondenceUnavailableMessage } from '@/
 import { getFamiliarFaces } from '@/lib/familiar-faces'
 import { readRoomAnswers, readRoomLibrary } from '@/lib/room-reading'
 import { hasCompletedGuide } from '@/lib/guide'
+import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
 import AppShell from '@/app/app-shell'
 import FamiliarFaces from '@/app/familiar-faces'
 import FeatureIntroduction from '@/app/feature-introduction'
@@ -48,6 +49,7 @@ export default async function RoomPage({ searchParams }: {
   for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value)
   const returnTo = query.size ? `/room?${query}` : '/room'
   const answers = question ? await readRoomAnswers(client, question.id, filters, [], 6) : null
+  if (answers?.entries.length) await recordRoomExposureOpportunities(user.id, answers.entries, 'room_question')
   const current = question?.id === live?.id
   const answered = mine.some(a => a.questionId === question?.id)
   const earlier = library.questions.filter(q => !q.is_current)
