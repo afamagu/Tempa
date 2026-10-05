@@ -120,10 +120,9 @@ export default async function PublicProfilePage({
     getPublicProfileCorrespondenceState(supabase, userId),
     isSelf ? Promise.resolve(null) : getCorrespondenceLifecycleWithMember(supabase, userId),
   ])
-  const [{ data: memberQuestions }, { data: legacyQuestions }, { data: eligibleAnswers }, incomingFirstContact] = await Promise.all([
+  const [{ data: memberQuestions }, { data: legacyQuestions }, incomingFirstContact] = await Promise.all([
     supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
     isSelf ? supabase.rpc('my_unpublished_question_suggestions') : Promise.resolve({ data: [] }),
-    supabase.from('question_answers').select('id, questions!inner(is_active)').eq('user_id', userId).eq('is_current', true).eq('moderation_status', 'visible').eq('questions.is_active', true).limit(12),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, userId, viewer.id),
   ])
   const writingStyleId = writingStyles.get(userId) ?? null
@@ -137,7 +136,24 @@ export default async function PublicProfilePage({
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  const primaryWriteAnchor = eligibleAnswers?.find(a => a.id === primaryAnswer?.id) ?? eligibleAnswers?.[0] ?? null
+  const writableAnswerIds = new Set<string>()
+  if (!isSelf) {
+    const checks = await Promise.all(
+      rawAnswers
+        .filter((answer) => answer.moderationStatus === 'visible')
+        .map(async (answer) => {
+          const { data } = await supabase.rpc('room_answer_can_start_letter', {
+            p_answer: answer.id,
+            p_author: userId,
+          })
+          return data === true ? answer.id : null
+        })
+    )
+    for (const id of checks) if (id) writableAnswerIds.add(id)
+  }
+  const firstWriteAnchorId =
+    rawAnswers.find((answer) => writableAnswerIds.has(answer.id))?.id ?? null
+  const primaryWriteAnchor = primaryAnswer && writableAnswerIds.has(primaryAnswer.id) ? primaryAnswer : null
   const alreadyCorresponding = activePartnerIds.has(userId)
   const pausedCorrespondence = lifecycle?.status === 'paused' && lifecycle.establishedAt !== null
   const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryWriteAnchor?.id ?? primaryAnswer.id) : false
