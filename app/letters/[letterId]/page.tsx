@@ -160,11 +160,18 @@ export default async function LetterPage({
     context = question?.prompt ?? null
   }
 
-  const { data: memberQuestionContext } = await supabase
-    .from('member_question_letter_contexts')
-    .select('prompt_snapshot')
-    .eq('letter_id', target.id)
-    .maybeSingle()
+  const [{ data: memberQuestionContext }, { data: dispatchContext }] = await Promise.all([
+    supabase
+      .from('member_question_letter_contexts')
+      .select('prompt_snapshot')
+      .eq('letter_id', target.id)
+      .maybeSingle(),
+    supabase
+      .from('dispatch_letter_contexts')
+      .select('dispatch_id, title_snapshot')
+      .eq('letter_id', target.id)
+      .maybeSingle(),
+  ])
   if (memberQuestionContext) context = memberQuestionContext.prompt_snapshot
 
   const { senderName, recipientName } = resolveLetterDirection(target, pseudonymById)
@@ -229,11 +236,15 @@ export default async function LetterPage({
             <p className={`mt-3 ${metadataTextClass}`}>{otherPseudonym} is taking a break from Tempa.</p>
           )}
 
-          {context && (
+          {dispatchContext ? (
+            <p className={`mt-4 line-clamp-2 ${metadataTextClass}`}>
+              Started from a Dispatch: &ldquo;{dispatchContext.title_snapshot}&rdquo;
+            </p>
+          ) : context ? (
             <p className={`mt-4 line-clamp-2 ${metadataTextClass}`}>
               Started from: &ldquo;{context}&rdquo;
             </p>
-          )}
+          ) : null}
 
           {showMomentsNotice && writeHref && (
             <MomentsAvailableNotice
