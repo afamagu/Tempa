@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const state = vi.hoisted(() => ({ signedIn: true }))
+const state = vi.hoisted(() => ({ signedIn: true, established: false }))
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key === 'home' ? 'Home' : 'The Room' }))
 vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw Error(`redirect:${path}`) } }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
@@ -21,15 +21,22 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
     error: null,
   }),
   from: (table: string) => {
-    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: table === 'public_profiles' ? { pseudonym:'Maya' } : { id:'answer', user_id:'member', questions:{prompt:'Question'} } }) }
+    const query = { select: () => query, eq: () => query, is: () => query, maybeSingle: async () => ({ data: table === 'public_profiles' ? { pseudonym:'Maya' } : { id:'answer', user_id:'member', questions:{prompt:'Question'} } }) }
     return query
   },
 }) }))
-vi.mock('@/lib/letters', () => ({ getFirstContact: async () => null, closeReasonForSender: vi.fn(), isEffectivelyExpired: vi.fn(), isEstablishedForViewer: vi.fn(), resolveFirstContactDisplayStatus: vi.fn() }))
+vi.mock('@/lib/letters', () => ({
+  getActiveEstablishedCorrespondenceWithUser: async () => state.established ? { id:'corr' } : null,
+  isEstablishedForViewer: async () => state.established,
+  getFirstContact: async () => null,
+  closeReasonForSender: vi.fn(),
+  isEffectivelyExpired: vi.fn(),
+  resolveFirstContactDisplayStatus: vi.fn(),
+}))
 vi.mock('./first-letter-composer', () => ({ default: () => null }))
 vi.mock('@/app/letters/closure-recommendations', () => ({ default: () => null }))
 import WriteToPage from './page'
-beforeEach(() => { state.signedIn = true })
+beforeEach(() => { state.signedIn = true; state.established = false })
 describe('First-letter return context', () => {
   it('direct introductions return to Home without changing answer context', async () => {
     const page = await WriteToPage({ params:Promise.resolve({recipientId:'member'}),searchParams:Promise.resolve({a:'answer',source:'member_introduction',returnTo:'/home'}) })
@@ -48,5 +55,9 @@ describe('First-letter return context', () => {
   it('a signed-out writer retains the complete writing/return destination through sign-in', async () => {
     state.signedIn = false
     await expect(WriteToPage({params:Promise.resolve({recipientId:'member'}),searchParams:Promise.resolve({a:'answer',source:'member_introduction',returnTo:'/home'})})).rejects.toThrow(`redirect:/sign-in?next=${encodeURIComponent('/write/member?a=answer&source=member_introduction&returnTo=%2Fhome')}`)
+  })
+  it('routes a visibly established crossed-contact episode into Write Anytime before stale roots can render pending copy', async () => {
+    state.established = true
+    await expect(WriteToPage({params:Promise.resolve({recipientId:'member'}),searchParams:Promise.resolve({a:'answer',returnTo:'/home'})})).rejects.toThrow('redirect:/letters/with/member/write?returnTo=%2Fhome')
   })
 })
