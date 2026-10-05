@@ -100,6 +100,17 @@ export default async function DispatchPage({
   const dispatch = await getDispatchById(supabase, dispatchId)
   if (!dispatch) notFound()
 
+  const trailContext = parseReadingTrailParams(resolvedSearchParams)
+  const returnQuery = new URLSearchParams()
+  for (const [key, value] of Object.entries(resolvedSearchParams)) {
+    if (typeof value === 'string') returnQuery.set(key, value)
+    else if (Array.isArray(value)) value.forEach((entry) => returnQuery.append(key, entry))
+  }
+  const dispatchReturnHref = `/board/${dispatch.id}${returnQuery.size ? `?${returnQuery.toString()}` : ''}`
+  const boardReturnHref = trailContext
+    ? `/board?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
+    : '/board'
+
   const isAuthor = dispatch.authorId === user.id
   const isMemberDispatch = dispatch.identity.kind === 'member'
   const officialEditHref =
@@ -126,17 +137,6 @@ export default async function DispatchPage({
       </AppShell>
     )
   }
-
-  const trailContext = parseReadingTrailParams(resolvedSearchParams)
-  const returnQuery = new URLSearchParams()
-  for (const [key, value] of Object.entries(resolvedSearchParams)) {
-    if (typeof value === 'string') returnQuery.set(key, value)
-    else if (Array.isArray(value)) value.forEach((entry) => returnQuery.append(key, entry))
-  }
-  const dispatchReturnHref = `/board/${dispatch.id}${returnQuery.size ? `?${returnQuery.toString()}` : ''}`
-  const boardReturnHref = trailContext
-    ? `/board?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
-    : '/board'
 
   const [
     waitingCount,
