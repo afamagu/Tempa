@@ -4,8 +4,14 @@ import type { DiscoveryCandidate } from './discovery'
 import { discoveryEntries } from './discovery-entries'
 
 export type RoomQuestion = { id: string; prompt: string; published_at: string | null; is_current: boolean; is_flagship: boolean }
-export type RoomCursor = { shownUserIds: string[] }
 export type RoomFilters = { country?: string; gender?: string; age?: string }
+
+export type RoomAnswerPage = {
+  entries: Awaited<ReturnType<typeof discoveryEntries>>
+  shownUserIds: string[]
+  hasMore: boolean
+  error: string | null
+}
 
 export async function readRoomAnswers(
   client: SupabaseClient,
@@ -13,7 +19,7 @@ export async function readRoomAnswers(
   filters: RoomFilters = {},
   shownUserIds: string[] = [],
   limit = 6
-) {
+): Promise<RoomAnswerPage> {
   const size = Math.min(Math.max(limit, 1), 12)
   const { data, error } = await client.rpc('room_read_question_answer_batch', {
     p_question_id: questionId,
