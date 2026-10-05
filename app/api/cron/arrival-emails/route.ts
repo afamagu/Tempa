@@ -4,17 +4,14 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { runArrivalEmailWorker } from '@/lib/email/arrival-worker'
 import { runRoomInvitationEmailWorker } from '@/lib/email/room-invitation-worker'
 import { runMentionEmailWorker } from '@/lib/email/mention-worker'
+import { runReplyReminderEmailWorker } from '@/lib/email/reply-reminder-worker'
 import { sendEmail } from '@/lib/email/provider'
 
 /**
- * Scheduler entrypoint for the arrival-email worker. Vercel Cron calls
- * this with GET and an `Authorization: Bearer $CRON_SECRET` header
- * (set automatically from the project's CRON_SECRET env var); POST is
- * also accepted for a manual trigger or an external scheduler, same
- * auth. No other route in this app requires a bearer secret — this one
- * has no user session to check, so the secret comparison below is the
- * entire authorization boundary, done in constant time to avoid a
- * timing side-channel on the secret itself.
+ * Scheduler entrypoint for Tempa's mail workers. Vercel Cron calls this with
+ * GET and an `Authorization: Bearer $CRON_SECRET` header (set automatically
+ * from the project's CRON_SECRET env var); POST is also accepted for a manual
+ * trigger or external scheduler, same auth. The comparison is constant-time.
  */
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
@@ -45,13 +42,31 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       siteOrigin,
       artOrigin: process.env.ARRIVAL_EMAIL_ART_ORIGIN || null,
     })
+
     await runRoomInvitationEmailWorker({ supabase: createServiceClient(), sendEmail, siteOrigin })
-    // This optional queue must never change the success of letter delivery.
+
+    // Optional queues must never change the success of core letter delivery.
     try {
       await runMentionEmailWorker({ supabase: createServiceClient(), sendEmail, siteOrigin })
     } catch {
       console.error('Mention email worker unavailable')
     }
+
+    // Phase 8 is deliberately fail-isolated during forward deployment: before
+    // its migration lands, a missing RPC/table cannot break arrival emails.
+    // enqueue_reply_reminders still runs whenever this worker is available,
+    // even while its own provider kill switch is OFF, because the enqueue also
+    // powers the quiet in-app Letterbox reminders.
+    try {
+      await runReplyReminderEmailWorker({
+        supabase: createServiceClient(),
+        sendEmail,
+        siteOrigin,
+      })
+    } catch (error) {
+      console.error('Reply reminder worker unavailable', error)
+    }
+
     return NextResponse.json(summary)
   } catch (error) {
     console.error('arrival-emails cron run failed', error)
