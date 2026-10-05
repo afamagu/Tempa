@@ -101,6 +101,7 @@ export default async function DispatchPage({
   if (!dispatch) notFound()
 
   const trailContext = parseReadingTrailParams(resolvedSearchParams)
+  const fromFiniteBoard = resolvedSearchParams.from === 'finite_board'
   const returnQuery = new URLSearchParams()
   for (const [key, value] of Object.entries(resolvedSearchParams)) {
     if (typeof value === 'string') returnQuery.set(key, value)
@@ -170,7 +171,7 @@ export default async function DispatchPage({
       : Promise.resolve({ data: null }),
     getDispatchReplies(supabase, dispatch.id),
     isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
-    trailContext ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
+    trailContext && !fromFiniteBoard ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
     getDispatchPostcard(supabase, dispatch.id),
     isAuthor || !isMemberDispatch ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
     isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
