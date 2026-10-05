@@ -166,3 +166,16 @@ describe('Dispatch detail page — Phase 11 origin and finite Board return', () 
     expect((source.match(/href=\\{boardReturnHref\\}/g) ?? []).length).toBeGreaterThanOrEqual(1)
   })
 })
+
+
+describe('Dispatch detail page — finite Board boundary', () => {
+  it('does not expose Read next candidates when entered from the finite Board', () => {
+    expect(source).toContain("const fromFiniteBoard = resolvedSearchParams.from === 'finite_board'")
+    expect(source).toContain('trailContext && !fromFiniteBoard ? getNextTrailItems')
+  })
+
+  it('keeps the existing continuation shelf available for non-Board reading trails such as Home', () => {
+    expect(source).toContain('{continueReadingCards.length > 0 && (')
+    expect(source).toContain('getNextTrailItems(supabase, trailContext, dispatch.id)')
+  })
+})
