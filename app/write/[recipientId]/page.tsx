@@ -31,10 +31,10 @@ export default async function WriteToPage({
   searchParams,
 }: {
   params: Promise<{ recipientId: string }>
-  searchParams: Promise<{ a?: string; source?: string; returnTo?: string; mq?: string }>
+  searchParams: Promise<{ a?: string; source?: string; returnTo?: string; mq?: string; d?: string }>
 }) {
   const { recipientId } = await params
-  const { a: answerId, source, returnTo, mq } = await searchParams
+  const { a: answerId, source, returnTo, mq, d: dispatchId } = await searchParams
   const backHref = introductionReturnPath(returnTo) ?? '/room'
   const nav = await getTranslations('Nav')
   const letters = await getTranslations('Letters')
@@ -46,6 +46,7 @@ export default async function WriteToPage({
     if (answerId) query.set('a', answerId)
     if (source) query.set('source', source)
     if (mq) query.set('mq', mq)
+    if (dispatchId) query.set('d', dispatchId)
     if (backHref !== '/room') query.set('returnTo', backHref)
     redirect(`/sign-in?next=${encodeURIComponent(`/write/${recipientId}${query.size ? `?${query}` : ''}`)}`)
   }
@@ -62,6 +63,22 @@ export default async function WriteToPage({
 
   const { data: memberQuestion } = mq ? await supabase.from('member_questions').select('id, body').eq('id', mq).eq('author_id', recipientId).eq('is_profile_visible', true).eq('moderation_status', 'visible').is('withdrawn_at', null).maybeSingle() : { data: null }
   if (mq && !memberQuestion) redirect(backHref)
+
+  const { data: dispatchContext } =
+    source === 'dispatch' && dispatchId
+      ? await supabase
+          .from('dispatches')
+          .select('id, title, author_id, status, moderation_status, published_as')
+          .eq('id', dispatchId)
+          .eq('author_id', recipientId)
+          .eq('status', 'published')
+          .eq('moderation_status', 'visible')
+          .maybeSingle()
+      : { data: null }
+
+  if (source === 'dispatch' && (!dispatchId || !dispatchContext || (dispatchContext.published_as ?? 'member') !== 'member')) {
+    redirect('/board')
+  }
 
   const lifecycle = await getCorrespondenceLifecycleWithMember(supabase, recipientId)
 
@@ -182,6 +199,16 @@ export default async function WriteToPage({
   if (!answer) redirect('/room')
 
   const capacityMessage = newCorrespondenceUnavailableMessage(capacity)
+  const backLabel =
+    backHref === '/home'
+      ? nav('home')
+      : backHref.startsWith('/letters/discover')
+        ? letters('discover')
+        : backHref.startsWith('/room/')
+          ? recipient.pseudonym
+          : backHref.startsWith('/board/')
+            ? 'the Dispatch'
+            : nav('room')
   if (capacityMessage) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
@@ -192,7 +219,7 @@ export default async function WriteToPage({
             You can still read {recipient.pseudonym}&apos;s profile and public writing.
           </p>
           <Link href={backHref} className={secondaryButtonClass}>
-            Back to {backHref === '/home' ? nav('home') : backHref.startsWith('/letters/discover') ? letters('discover') : backHref.startsWith('/room/') ? recipient.pseudonym : nav('room')}
+            Back to {backLabel}
           </Link>
         </div>
       </main>
@@ -210,7 +237,9 @@ export default async function WriteToPage({
       questionPrompt={memberQuestion?.body ?? question?.prompt ?? null}
       memberQuestionId={memberQuestion?.id}
       backHref={backHref}
-      backLabel={backHref === '/home' ? nav('home') : backHref.startsWith('/letters/discover') ? letters('discover') : backHref.startsWith('/room/') ? recipient.pseudonym : nav('room')}
+      backLabel={backLabel}
+      dispatchId={dispatchContext?.id}
+      dispatchTitle={dispatchContext?.title}
     />
   )
 }
