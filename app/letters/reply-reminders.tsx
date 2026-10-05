@@ -19,7 +19,7 @@ export default function ReplyReminders({ reminders }: { reminders: ReplyReminder
                 {reminder.counterpartPseudonym}&apos;s letter is still waiting for you.
               </p>
               <p className={helperTextClass}>
-                You asked Tempa to remind you after your writing rhythm passed. There is no deadline here.
+                This letter has moved beyond your writing rhythm. There is no deadline here.
               </p>
             </div>
             <Link
