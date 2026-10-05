@@ -156,7 +156,7 @@ export default function DiscoveryResults({ entries, returnTo = '/room', profileL
                 </div>
                 {questionReading && openEntry.userId === viewerId ? (
                   <Link
-                    href={`/question/${openEntry.response.id}?source=room`}
+                    href={profileHref(openEntry.userId, returnTo, openEntry.response.id)}
                     className={primaryButtonClass}
                   >
                     Your answer
