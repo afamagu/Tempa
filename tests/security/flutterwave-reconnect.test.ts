@@ -33,8 +33,7 @@ describe('Flutterwave v3 reconnect diagnostics', () => {
 
   it('probes the documented v3 transactions endpoint without creating a charge', () => {
     expect(flutterwave).toContain('${API}/transactions?from=')
-    expect(flutterwave).not.toContain('testFlutterwaveConnection')
-      ? undefined
-      : expect(flutterwave.slice(flutterwave.indexOf('testFlutterwaveConnection'))).not.toContain("method: 'POST'")
+    const probe = flutterwave.slice(flutterwave.indexOf('export async function testFlutterwaveConnection'))
+    expect(probe).not.toContain("method: 'POST'")
   })
 })
