@@ -81,7 +81,7 @@ export default function SourceLetterPanel({
         aria-modal="true"
         aria-label={`${pseudonym}'s letter`}
         onClick={(e) => e.stopPropagation()}
-        className="relative mt-10 flex h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-background sm:mt-0 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-lg sm:border sm:border-foreground/10"
+        className="relative mt-10 flex h-[calc(100dvh-2.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-background sm:mt-0 sm:h-auto sm:max-h-[85dvh] sm:w-full sm:max-w-2xl sm:rounded-lg sm:border sm:border-foreground/10"
       >
         <div className="flex items-center justify-between gap-3 border-b border-foreground/10 px-5 py-4">
           <h2 className="truncate text-[15px] font-medium text-foreground">{pseudonym}&rsquo;s letter</h2>
