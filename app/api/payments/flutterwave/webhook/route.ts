@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { flutterwaveConfig, webhookSignatureValid } from '@/lib/payments/flutterwave'
+import { flutterwaveWebhookConfig, webhookSignatureValid } from '@/lib/payments/flutterwave'
 import { verifyAndSettle } from '@/lib/payments/settlement'
 
 /**
@@ -20,7 +20,7 @@ import { verifyAndSettle } from '@/lib/payments/settlement'
 const MAX_BYTES = 64 * 1024
 
 export async function POST(request: Request) {
-  const cfg = flutterwaveConfig()
+  const cfg = flutterwaveWebhookConfig()
   if (!cfg.ok) return NextResponse.json({ error: 'not_configured' }, { status: 503 })
 
   if (!webhookSignatureValid(cfg.config, request.headers.get('verif-hash'))) {
