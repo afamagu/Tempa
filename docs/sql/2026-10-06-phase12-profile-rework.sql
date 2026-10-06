@@ -126,7 +126,7 @@ commit;
 
 
 -- ============================================================
--- READ-ONLY VERIFICATION — EVERY BOOLEAN SHOULD BE TRUE
+-- READ-ONLY VERIFICATION — 12 BOOLEANS, EVERY ONE SHOULD BE TRUE
 -- ============================================================
 
 select
