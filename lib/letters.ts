@@ -22,6 +22,9 @@ export type Letter = {
   body: string
   status: LetterStatus
   createdAt: string
+  /** Viewer-specific mailbox chronology. Incoming = actual arrival;
+   * outgoing = send time. Falls back to createdAt for pre-migration tests. */
+  mailboxAt?: string
   expiresAt: string
   /**
    * True only when the current viewer is this letter's recipient and it
@@ -148,6 +151,7 @@ type LetterRow = {
   body: string
   status: LetterStatus
   created_at: string
+  mailbox_at: string
   expires_at: string
   is_unread: boolean
   replied_at: string | null
@@ -167,6 +171,7 @@ function toLetter(row: LetterRow): Letter {
     body: row.body,
     status: row.status,
     createdAt: row.created_at,
+    mailboxAt: row.mailbox_at,
     expiresAt: row.expires_at,
     isUnread: row.is_unread,
     repliedAt: row.replied_at,
@@ -182,7 +187,7 @@ function toLetter(row: LetterRow): Letter {
 // opened_at column to select here at all, by design.
 const LETTERS_VIEW = 'letters_for_participant'
 const LETTER_COLUMNS =
-  'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
+  'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, mailbox_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
 
 /**
  * True once a GENUINELY UNESTABLISHED first-contact letter's 72-hour
@@ -330,7 +335,7 @@ export async function getMyLetters(supabase: SupabaseClient, userId: string): Pr
     .from(LETTERS_VIEW)
     .select(LETTER_COLUMNS)
     .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   return (data ?? []).map((row) => toLetter(row as LetterRow))
 }
@@ -1467,9 +1472,9 @@ export async function getLetterboxPeople(
 
   const { data: letterRows } = await supabase
     .from(LETTERS_VIEW)
-    .select('correspondence_id, created_at, sender_id, recipient_id, is_unread, body')
+    .select('correspondence_id, created_at, mailbox_at, sender_id, recipient_id, is_unread, body')
     .in('correspondence_id', visibleIds)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   const latestLetterByCorrespondence = new Map<
     string,
@@ -1481,7 +1486,7 @@ export async function getLetterboxPeople(
     // first row seen per correspondence is already its latest.
     if (!latestLetterByCorrespondence.has(row.correspondence_id)) {
       latestLetterByCorrespondence.set(row.correspondence_id, {
-        createdAt: row.created_at,
+        createdAt: row.mailbox_at ?? row.created_at,
         body: row.body,
         senderId: row.sender_id,
       })
@@ -1652,7 +1657,7 @@ export async function getLetterArchiveWithUser(
     .from(LETTERS_VIEW)
     .select(LETTER_COLUMNS)
     .in('correspondence_id', visibleIds)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   const removedLetterIds = new Set((removedLetters ?? []).map((row) => row.letter_id))
   const letters = (data ?? [])
