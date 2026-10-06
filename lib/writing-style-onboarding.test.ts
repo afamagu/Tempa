@@ -13,7 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const complete = { authenticated: true, hasProfile: true, onboardingStage: 'complete' as OnboardingStage }
 
-describe('Writing Style — onboarding order: Mark → Flagship Question → Writing Style → Tempa', () => {
+describe('Writing Style — onboarding order: Mark → Flagship Question → Writing Style → Home', () => {
   it('earlier steps always win: Mark and Question are never skipped or restarted by the style step', () => {
     for (const onboardingStage of ['mark', 'question'] as const) {
       const dest = resolveOnboardingDestination(
@@ -25,20 +25,20 @@ describe('Writing Style — onboarding order: Mark → Flagship Question → Wri
   })
 
   it('after the Flagship Question (stage complete, no style yet) the member is sent to the style step, carrying where they were going', () => {
-    expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/minds')).toBe(
-      `${WRITING_STYLE_PATH}?next=%2Fminds`
+    expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/home')).toBe(
+      `${WRITING_STYLE_PATH}?next=%2Fhome`
     )
     expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/letters/abc?x=1')).toBe(
       writingStyleStepHref('/letters/abc?x=1')
     )
   })
 
-  it('the Flagship completion screen continues to the step, then People', () => {
-    expect(WRITING_STYLE_ONBOARDING_HREF).toBe('/profile/writing-style?next=%2Fminds')
+  it('the Flagship completion screen continues to the style step, then Home', () => {
+    expect(WRITING_STYLE_ONBOARDING_HREF).toBe('/profile/writing-style?next=%2Fhome')
   })
 
   it('refresh/back to the step itself is never redirected away while the choice is pending (no loop)', () => {
-    for (const path of [WRITING_STYLE_PATH, `${WRITING_STYLE_PATH}?next=%2Fminds`]) {
+    for (const path of [WRITING_STYLE_PATH, `${WRITING_STYLE_PATH}?next=%2Fhome`]) {
       expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, path)).toBe(path)
     }
   })
