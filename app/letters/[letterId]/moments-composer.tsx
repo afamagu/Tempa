@@ -992,6 +992,18 @@ export default function MomentsComposer({
       />
 
       <div className="space-y-2">
+        {sourceLetter && (
+          <div className="sticky top-2 z-20 flex justify-end pointer-events-none">
+            <button
+              type="button"
+              data-keep-keyboard
+              onClick={() => setShowSourceLetter(true)}
+              className="pointer-events-auto rounded-full border border-foreground/15 bg-background/95 px-3 py-2 text-[13px] font-medium text-foreground/75 shadow-sm backdrop-blur transition-colors hover:text-foreground"
+            >
+              Read {recipientPseudonym}&rsquo;s letter
+            </button>
+          </div>
+        )}
         <WritingToolbar editor={editor} />
         <EditorContent editor={editor} />
       </div>
@@ -1090,11 +1102,7 @@ export default function MomentsComposer({
             SourceLetterPanel as a sibling overlay above this same JSX
             tree; the Tiptap editor below is never unmounted or touched
             by opening/closing it, so nothing typed is ever lost. */}
-        {sourceLetter && (
-          <button type="button" onClick={() => setShowSourceLetter(true)} className={secondaryButtonClass}>
-            View {recipientPseudonym}&rsquo;s letter
-          </button>
-        )}
+
         {/* WRITE → PREVIEW → SEND: the composer's own primary/final
             action is now Preview, never a direct send — Send itself
             only ever happens from inside LetterPreview below, which
@@ -1141,7 +1149,10 @@ export default function MomentsComposer({
       {sourceLetter && (
         <SourceLetterPanel
           open={showSourceLetter}
-          onClose={() => setShowSourceLetter(false)}
+          onClose={() => {
+            setShowSourceLetter(false)
+            requestAnimationFrame(() => editor?.commands.focus())
+          }}
           pseudonym={recipientPseudonym}
           viewerId={viewerId}
           letterId={sourceLetter.id}
