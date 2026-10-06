@@ -10,6 +10,7 @@ import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { getMyWritingStyle } from '@/lib/writing-style-data'
 import { WRITING_STYLES } from '@/lib/writing-style'
 import { getMyWritingRhythm, writingRhythmLabel } from '@/lib/writing-rhythm'
+import { getCreditBalance } from '@/lib/commerce'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { localeNativeName } from '@/i18n/config'
 
@@ -28,7 +29,7 @@ export default async function YouPage() {
     .maybeSingle()
   if (!profile) redirect('/profile')
 
-  const [waitingCount, markStatus, writingStyleId, rhythmState, locale, t] = await Promise.all([
+  const [waitingCount, markStatus, writingStyleId, rhythmState, creditBalanceResult, locale, t] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getProfileMarkManagementStatus(supabase).catch(() => ({
       markId: profile.mark_id ?? null,
@@ -37,12 +38,14 @@ export default async function YouPage() {
     })),
     getMyWritingStyle(supabase, user.id),
     getMyWritingRhythm(supabase),
+    getCreditBalance(supabase),
     getLocale(),
     getTranslations('You'),
   ])
   const markId = markStatus.markId ?? profile.mark_id ?? null
   const markUrl = markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null
   const rhythmLabel = writingRhythmLabel(rhythmState?.rhythm ?? null, locale)
+  const creditBalance = creditBalanceResult.data ?? 0
 
   async function signOut() {
     'use server'
@@ -113,6 +116,16 @@ export default async function YouPage() {
                 </span>
               </Link>
               <Link href="/you/interests" className={controlClass}><span>Reading interests</span><span aria-hidden>→</span></Link>
+              <Link
+                href="/you/credits"
+                className={`${controlClass} border-accent/25 bg-accent/[.04]`}
+              >
+                <span className="font-semibold">Credits</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-right text-[13px] text-muted">{creditBalance.toLocaleString()} available</span>
+                  <span aria-hidden>→</span>
+                </span>
+              </Link>
               <Link href="/you/postcards" className={controlClass}><span>Postcards</span><span aria-hidden>→</span></Link>
               <Link href="/you/keepsakes" className={controlClass}><span>Keepsakes</span><span aria-hidden>→</span></Link>
               <Link href="/you/notifications" className={controlClass}><span>Notifications</span><span aria-hidden>→</span></Link>
