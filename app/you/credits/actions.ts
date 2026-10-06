@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { commerceError, COMMERCE_ERROR_COPY } from '@/lib/commerce'
 import { checkoutReturnOrigin } from '@/lib/payments/return-origin'
-import { flutterwaveConfig, initializePayment } from '@/lib/payments/flutterwave'
+import { flutterwaveApiConfig, initializePayment } from '@/lib/payments/flutterwave'
 
 /**
  * Commerce Checkpoint 5 — start a Credits checkout (Flutterwave TEST MODE).
@@ -32,7 +32,7 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
       || typeof idempotencyKey !== 'string') {
     return { status: 'error', message: COMMERCE_ERROR_COPY.invalid_request }
   }
-  const cfg = flutterwaveConfig()
+  const cfg = flutterwaveApiConfig()
   if (!cfg.ok) return unavailable()
 
   const supabase = await createClient()
