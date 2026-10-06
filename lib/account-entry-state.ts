@@ -26,7 +26,7 @@ type EntryStateRow = {
 }
 
 export async function readProxyAccountEntry(supabase: SupabaseClient, userId: string): Promise<ProxyAccountEntry> {
-  const [entryResult, languageResult] = await Promise.all([
+  const [entryResult, languageResult, pilotResult] = await Promise.all([
     supabase.rpc('current_account_entry_state', {
       p_terms_version: CURRENT_TERMS_VERSION,
       p_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
@@ -36,6 +36,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
       .select('language_confirmed_at, interface_locale')
       .eq('user_id', userId)
       .maybeSingle(),
+    supabase.rpc('current_pilot_access'),
   ])
 
   const { data, error } = entryResult
@@ -50,6 +51,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
   const interfaceLocale = !languageResult.error && isInterfaceLocale(languageRow?.interface_locale)
     ? languageRow.interface_locale
     : undefined
+  const pilotAccess = pilotResult.error ? undefined : pilotResult.data === true
 
   if (!error && row) {
     return {
@@ -57,6 +59,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
       interfaceLocale,
       state: {
         authenticated: true,
+        pilotAccess,
         languageConfirmed,
         eligibilityStatus: (row.eligibility_status as EligibilityStatus | null) ?? null,
         eligibleOn: null,
@@ -68,14 +71,15 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
     }
   }
 
-  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale)
+  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale, pilotAccess)
 }
 
 async function readLegacyProxyAccountEntry(
   supabase: SupabaseClient,
   userId: string,
   languageConfirmed: boolean | undefined,
-  interfaceLocale: InterfaceLocale | undefined
+  interfaceLocale: InterfaceLocale | undefined,
+  pilotAccess: boolean | undefined
 ): Promise<ProxyAccountEntry> {
   const [{ data: accountStatus }, { data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
     supabase.rpc('current_account_status'),
@@ -89,6 +93,7 @@ async function readLegacyProxyAccountEntry(
     interfaceLocale,
     state: {
       authenticated: true,
+      pilotAccess,
       languageConfirmed,
       eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
       eligibleOn: null,
