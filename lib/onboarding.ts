@@ -19,7 +19,7 @@ export type OnboardingState = {
 export const WRITING_STYLE_PATH = '/profile/writing-style'
 
 /** Where The First Question's completion screen continues to. */
-export const WRITING_STYLE_ONBOARDING_HREF = `${WRITING_STYLE_PATH}?next=%2Froom`
+export const WRITING_STYLE_ONBOARDING_HREF = `${WRITING_STYLE_PATH}?next=%2Fhome`
 
 // Routes that must stay reachable before a style is chosen: the step
 // itself, account & privacy (pausing/closing an account is never held

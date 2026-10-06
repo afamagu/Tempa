@@ -238,6 +238,7 @@
     "readingInterests": "¿Sobre qué te gusta leer?",
     "interestsHelp": "Elige al menos {min}. Puedes cambiarlos cuando quieras.",
     "correspondence": "Tu correspondencia",
+    "correspondenceCapacity": "Tempa está pensado para unas pocas correspondencias a la vez. Puedes tener hasta cinco correspondencias activas, mientras La Sala y El Tablero siguen abiertos para leer y descubrir.",
     "writingQuestion": "¿Cómo sueles escribir tus cartas?",
     "receivingQuestion": "¿Qué te parece bien recibir?",
     "checkNameError": "No se pudo comprobar ese nombre en este momento. Inténtalo de nuevo.",

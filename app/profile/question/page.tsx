@@ -9,10 +9,10 @@ export function resolveOnboardingQuestionDestination(state: {
   onboardingStage: 'mark' | 'question' | 'complete' | null
   hasFlagshipQuestion: boolean
   hasFlagshipAnswer: boolean
-}): 'render' | 'recover' | '/profile' | '/profile/mark' | '/room' {
+}): 'render' | 'recover' | '/profile' | '/profile/mark' | '/home' {
   if (!state.hasProfile) return '/profile'
   if (state.onboardingStage === 'mark') return '/profile/mark'
-  if (state.onboardingStage === 'complete') return '/room'
+  if (state.onboardingStage === 'complete') return '/home'
   if (!state.hasFlagshipQuestion || state.hasFlagshipAnswer) return 'recover'
   return 'render'
 }
@@ -33,14 +33,14 @@ export default async function OnboardingQuestionPage() {
 
   if (!profile) redirect('/profile')
   if (profile.onboarding_stage === 'mark') redirect('/profile/mark')
-  if (profile.onboarding_stage === 'complete') redirect('/room')
+  if (profile.onboarding_stage === 'complete') redirect('/home')
 
   const flagship = await getFlagshipQuestion(supabase)
 
   if (!flagship) {
     const { error } = await supabase.rpc('complete_flagship_onboarding')
     if (error) return <OnboardingRecoveryError />
-    redirect('/room')
+    redirect('/home')
   }
 
   const { data: answer } = await supabase
@@ -53,7 +53,7 @@ export default async function OnboardingQuestionPage() {
   if (answer) {
     const { error } = await supabase.rpc('complete_flagship_onboarding')
     if (error) return <OnboardingRecoveryError />
-    redirect('/room')
+    redirect('/home')
   }
 
   return (

@@ -238,6 +238,7 @@
     "readingInterests": "Sur quoi aimez-vous lire ?",
     "interestsHelp": "Choisissez-en au moins {min}. Vous pourrez les modifier à tout moment.",
     "correspondence": "Votre correspondance",
+    "correspondenceCapacity": "Tempa est conçu pour quelques correspondances à la fois. Vous pouvez avoir jusqu’à cinq correspondances actives, tandis que La Salle et Le Tableau restent ouverts à la lecture et à la découverte.",
     "writingQuestion": "Comment écrivez-vous habituellement vos lettres ?",
     "receivingQuestion": "Que souhaitez-vous recevoir ?",
     "checkNameError": "Impossible de vérifier ce nom pour le moment. Veuillez réessayer.",

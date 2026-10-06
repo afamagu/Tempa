@@ -410,7 +410,10 @@ export default function ProfileForm({ userId }: { userId: string }) {
           </section>
 
           <section className="space-y-6">
-            <p className={sectionLabelClass}>{t('correspondence')}</p>
+            <div className="space-y-1.5">
+              <p className={sectionLabelClass}>{t('correspondence')}</p>
+              <p className={helperTextClass}>{t('correspondenceCapacity')}</p>
+            </div>
             <div className="space-y-1.5" ref={registerFieldRef('writingStyle')}>
               <p className={fieldLabelClass}>{t('writingQuestion')}</p>
               <ChoiceGroup ariaLabel={t('writingQuestion')} options={writingStyleOptions} selected={aiPreference ? [aiPreference] : []} onToggle={setAiPreference} layout="card" />
