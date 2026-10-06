@@ -272,7 +272,7 @@ export default async function PublicProfilePage({
             writableAnswerIds={exactWritableOtherAnswerIds}
           />
 
-          {(availabilityCopy || publicRhythmLabel || !isSelf) && (
+          {(availabilityCopy || publicRhythmLabel || alreadyCorresponding || pausedCorrespondence || hasPendingEpisode || senderUnavailableMessage) && (
             <section className="space-y-3 border-t border-foreground/10 pt-6" aria-labelledby="profile-correspondence">
               <p id="profile-correspondence" className={sectionLabelClass}>Correspondence</p>
 
