@@ -331,10 +331,11 @@ export default function FirstContactResponse({
               this open/close, so nothing already typed is ever lost. */}
           <button
             type="button"
+            data-keep-keyboard
             onClick={() => setShowSourceLetter(true)}
-            className="text-[13px] text-foreground/60 underline decoration-foreground/20 underline-offset-4 transition-colors hover:text-foreground/90 hover:decoration-foreground/50"
+            className="sticky top-2 z-20 rounded-full border border-foreground/15 bg-background/95 px-3 py-2 text-[13px] font-medium text-foreground/75 shadow-sm backdrop-blur transition-colors hover:text-foreground"
           >
-            View {recipientPseudonym}&rsquo;s letter
+            Read {recipientPseudonym}&rsquo;s letter
           </button>
         </div>
         <div className="space-y-2">
@@ -397,7 +398,10 @@ export default function FirstContactResponse({
       {content}
       <SourceLetterPanel
         open={showSourceLetter}
-        onClose={() => setShowSourceLetter(false)}
+        onClose={() => {
+          setShowSourceLetter(false)
+          requestAnimationFrame(() => editor?.commands.focus())
+        }}
         pseudonym={recipientPseudonym}
         viewerId={viewerId}
         letterId={letterId}
