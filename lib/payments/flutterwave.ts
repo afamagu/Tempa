@@ -19,18 +19,30 @@ import { majorToMinor, minorToMajorString } from '@/lib/money'
 const API = 'https://api.flutterwave.com/v3'
 const TIMEOUT_MS = 15_000
 
-export type FlutterwaveConfig = { secretKey: string; webhookHash: string }
+export type FlutterwaveApiConfig = { secretKey: string }
+export type FlutterwaveWebhookConfig = FlutterwaveApiConfig & { webhookHash: string }
 
-export type FlutterwaveConfigState =
-  | { ok: true; config: FlutterwaveConfig }
+export type FlutterwaveConfigState<T> =
+  | { ok: true; config: T }
   | { ok: false; reason: 'missing' | 'not_test_key' }
 
-export function flutterwaveConfig(env: NodeJS.ProcessEnv = process.env): FlutterwaveConfigState {
+export function flutterwaveApiConfig(
+  env: NodeJS.ProcessEnv = process.env
+): FlutterwaveConfigState<FlutterwaveApiConfig> {
   const secretKey = env.FLUTTERWAVE_SECRET_KEY?.trim()
-  const webhookHash = env.FLUTTERWAVE_WEBHOOK_HASH?.trim()
-  if (!secretKey || !webhookHash) return { ok: false, reason: 'missing' }
+  if (!secretKey) return { ok: false, reason: 'missing' }
   if (!secretKey.startsWith('FLWSECK_TEST-')) return { ok: false, reason: 'not_test_key' }
-  return { ok: true, config: { secretKey, webhookHash } }
+  return { ok: true, config: { secretKey } }
+}
+
+export function flutterwaveWebhookConfig(
+  env: NodeJS.ProcessEnv = process.env
+): FlutterwaveConfigState<FlutterwaveWebhookConfig> {
+  const api = flutterwaveApiConfig(env)
+  if (!api.ok) return api
+  const webhookHash = env.FLUTTERWAVE_WEBHOOK_HASH?.trim()
+  if (!webhookHash) return { ok: false, reason: 'missing' }
+  return { ok: true, config: { ...api.config, webhookHash } }
 }
 
 export type PaymentStatus = 'successful' | 'failed' | 'cancelled' | 'pending'
@@ -53,14 +65,14 @@ export type VerifiedTransaction = {
 }
 
 /** Constant-time comparison of the `verif-hash` header with our secret hash. */
-export function webhookSignatureValid(config: FlutterwaveConfig, header: string | null): boolean {
+export function webhookSignatureValid(config: FlutterwaveWebhookConfig, header: string | null): boolean {
   if (!header) return false
   const a = Buffer.from(header)
   const b = Buffer.from(config.webhookHash)
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-async function call(config: FlutterwaveConfig, path: string, init?: RequestInit): Promise<unknown | null> {
+async function call(config: FlutterwaveApiConfig, path: string, init?: RequestInit): Promise<unknown | null> {
   try {
     const res = await fetch(`${API}${path}`, {
       ...init,
@@ -89,12 +101,12 @@ export function parseVerification(body: unknown): VerifiedTransaction | null {
   }
 }
 
-export async function verifyTransaction(config: FlutterwaveConfig, transactionId: string): Promise<VerifiedTransaction | null> {
+export async function verifyTransaction(config: FlutterwaveApiConfig, transactionId: string): Promise<VerifiedTransaction | null> {
   if (!/^\d{1,20}$/.test(transactionId)) return null
   return parseVerification(await call(config, `/transactions/${transactionId}/verify`))
 }
 
-export async function verifyByReference(config: FlutterwaveConfig, reference: string): Promise<VerifiedTransaction | null> {
+export async function verifyByReference(config: FlutterwaveApiConfig, reference: string): Promise<VerifiedTransaction | null> {
   if (!/^TEMPA-[0-9A-F]{32}$/.test(reference)) return null
   return parseVerification(await call(config, `/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`))
 }
@@ -111,7 +123,7 @@ export function isFlutterwaveCheckoutUrl(link: string): boolean {
 }
 
 export async function initializePayment(
-  config: FlutterwaveConfig,
+  config: FlutterwaveApiConfig,
   input: { reference: string; amountMinor: number; currency: string; email: string; redirectUrl: string; title: string }
 ): Promise<{ link: string } | null> {
   const amount = minorToMajorString(input.amountMinor, input.currency)
@@ -130,4 +142,50 @@ export async function initializePayment(
   })) as { status?: string; data?: { link?: string } } | null
   const link = body?.status === 'success' ? body.data?.link : undefined
   return link && isFlutterwaveCheckoutUrl(link) ? { link } : null
+}
+
+
+export type FlutterwaveConnectionCheck =
+  | { ok: true; status: 'connected' }
+  | { ok: false; status: 'missing_config' | 'wrong_key_type' | 'unauthorized' | 'provider_error' }
+
+/**
+ * Read-only credential probe for Admin → Commerce diagnostics.
+ * It never creates a charge and never returns provider data: it performs an
+ * authenticated transaction-list request for today's date and keeps only the
+ * HTTP status. 200 proves the v3 test secret can authenticate.
+ */
+export async function testFlutterwaveConnection(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<FlutterwaveConnectionCheck> {
+  const cfg = flutterwaveApiConfig(env)
+  if (!cfg.ok) {
+    return {
+      ok: false,
+      status: cfg.reason === 'not_test_key' ? 'wrong_key_type' : 'missing_config',
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  try {
+    const res = await fetch(
+      `${API}/transactions?from=${today}&to=${today}&page=1`,
+      {
+        headers: {
+          Authorization: `Bearer ${cfg.config.secretKey}`,
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+        },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      }
+    )
+    if (res.ok) return { ok: true, status: 'connected' }
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, status: 'unauthorized' }
+    }
+    return { ok: false, status: 'provider_error' }
+  } catch {
+    return { ok: false, status: 'provider_error' }
+  }
 }
