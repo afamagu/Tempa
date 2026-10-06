@@ -122,26 +122,88 @@ export function isFlutterwaveCheckoutUrl(link: string): boolean {
   }
 }
 
+export type FlutterwaveCheckoutInit =
+  | { ok: true; link: string }
+  | {
+      ok: false
+      reason: 'invalid_amount' | 'provider_rejected' | 'invalid_checkout_url' | 'network_error'
+      httpStatus: number | null
+      providerMessage: string | null
+    }
+
+function safeProviderMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  const raw = (body as { message?: unknown }).message
+  if (typeof raw !== 'string') return null
+  const cleaned = raw.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return cleaned ? cleaned.slice(0, 240) : null
+}
+
 export async function initializePayment(
   config: FlutterwaveApiConfig,
   input: { reference: string; amountMinor: number; currency: string; email: string; redirectUrl: string; title: string }
-): Promise<{ link: string } | null> {
+): Promise<FlutterwaveCheckoutInit> {
   const amount = minorToMajorString(input.amountMinor, input.currency)
-  if (!amount) return null
-  const body = (await call(config, '/payments', {
-    method: 'POST',
-    body: JSON.stringify({
-      tx_ref: input.reference,
-      amount,
-      currency: input.currency,
-      redirect_url: input.redirectUrl,
-      customer: { email: input.email },
-      customizations: { title: 'Tempa', description: input.title },
-      meta: { tempa_reference: input.reference },
-    }),
-  })) as { status?: string; data?: { link?: string } } | null
-  const link = body?.status === 'success' ? body.data?.link : undefined
-  return link && isFlutterwaveCheckoutUrl(link) ? { link } : null
+  if (!amount) {
+    return { ok: false, reason: 'invalid_amount', httpStatus: null, providerMessage: null }
+  }
+
+  try {
+    const res = await fetch(`${API}/payments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.secretKey}`,
+        'Content-Type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        tx_ref: input.reference,
+        amount,
+        currency: input.currency,
+        redirect_url: input.redirectUrl,
+        customer: { email: input.email },
+        customizations: { title: 'Tempa', description: input.title },
+        meta: { tempa_reference: input.reference },
+      }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    const body = (await res.json().catch(() => null)) as {
+      status?: string
+      message?: string
+      data?: { link?: string }
+    } | null
+    const providerMessage = safeProviderMessage(body)
+
+    if (!res.ok || body?.status !== 'success') {
+      return {
+        ok: false,
+        reason: 'provider_rejected',
+        httpStatus: res.status,
+        providerMessage,
+      }
+    }
+
+    const link = body.data?.link
+    if (!link || !isFlutterwaveCheckoutUrl(link)) {
+      return {
+        ok: false,
+        reason: 'invalid_checkout_url',
+        httpStatus: res.status,
+        providerMessage,
+      }
+    }
+
+    return { ok: true, link }
+  } catch {
+    return {
+      ok: false,
+      reason: 'network_error',
+      httpStatus: null,
+      providerMessage: null,
+    }
+  }
 }
 
 
