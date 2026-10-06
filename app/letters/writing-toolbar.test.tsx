@@ -14,12 +14,15 @@ import WritingToolbar from './writing-toolbar'
 function fakeEditor(active: { bold?: boolean; italic?: boolean }): Editor {
   return {
     isActive: (name: string) => Boolean(active[name as 'bold' | 'italic']),
+    can: () => ({ undo: () => true, redo: () => true }),
   } as unknown as Editor
 }
 
 describe('WritingToolbar', () => {
-  it('has real, accessibly-named Bold and Italic buttons, plus the emoji trigger', () => {
+  it('has touch-accessible Undo/Redo alongside Bold, Italic and Emoji', () => {
     const html = renderToStaticMarkup(<WritingToolbar editor={fakeEditor({})} />)
+    expect(html).toContain('aria-label="Undo"')
+    expect(html).toContain('aria-label="Redo"')
     expect(html).toContain('aria-label="Bold"')
     expect(html).toContain('aria-label="Italic"')
     expect(html).toContain('aria-label="Insert emoji"')
@@ -49,7 +52,7 @@ describe('WritingToolbar', () => {
     expect(html).toMatch(/aria-label="Bold"[^>]*aria-pressed="false"/)
   })
 
-  it('never adds controls beyond Bold, Italic, and Emoji — no underline, headings, links, or colors', () => {
+  it('keeps formatting deliberately narrow — no underline, headings, links, or colors', () => {
     const html = renderToStaticMarkup(<WritingToolbar editor={fakeEditor({})} />)
     expect(html.toLowerCase()).not.toContain('underline')
     expect(html.toLowerCase()).not.toContain('heading')
