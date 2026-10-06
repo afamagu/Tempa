@@ -129,6 +129,7 @@ export type FlutterwaveCheckoutInit =
       reason: 'invalid_amount' | 'provider_rejected' | 'invalid_checkout_url' | 'network_error'
       httpStatus: number | null
       providerMessage: string | null
+      checkoutHost: string | null
     }
 
 function safeProviderMessage(body: unknown): string | null {
@@ -145,7 +146,7 @@ export async function initializePayment(
 ): Promise<FlutterwaveCheckoutInit> {
   const amount = minorToMajorString(input.amountMinor, input.currency)
   if (!amount) {
-    return { ok: false, reason: 'invalid_amount', httpStatus: null, providerMessage: null }
+    return { ok: false, reason: 'invalid_amount', httpStatus: null, providerMessage: null, checkoutHost: null }
   }
 
   try {
@@ -182,16 +183,26 @@ export async function initializePayment(
         reason: 'provider_rejected',
         httpStatus: res.status,
         providerMessage,
+        checkoutHost: null,
       }
     }
 
     const link = body.data?.link
     if (!link || !isFlutterwaveCheckoutUrl(link)) {
+      let checkoutHost: string | null = null
+      if (typeof link === 'string') {
+        try {
+          checkoutHost = new URL(link).hostname || null
+        } catch {
+          checkoutHost = null
+        }
+      }
       return {
         ok: false,
         reason: 'invalid_checkout_url',
         httpStatus: res.status,
         providerMessage,
+        checkoutHost,
       }
     }
 
@@ -202,6 +213,7 @@ export async function initializePayment(
       reason: 'network_error',
       httpStatus: null,
       providerMessage: null,
+      checkoutHost: null,
     }
   }
 }
