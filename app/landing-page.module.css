@@ -76,6 +76,14 @@
   max-width: 420px;
   margin: 28px 0 40px
 }
+.pilotStatus {
+  margin: -22px 0 28px;
+  font-family: Arial,sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: .03em;
+  color: #6f695f
+}
 .heroActions {
   display: flex;
   align-items: center;
