@@ -2,7 +2,13 @@
 
 import { useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getReadingPlaceState, recordReadingProgress } from '@/lib/reading-places'
+import {
+  getReadingPlaceState,
+  recordReadingProgress,
+  readCachedReadingPlace,
+  writeCachedReadingPlace,
+  serverReadingPlaceTimestamp,
+} from '@/lib/reading-places'
 import { findScrollRoot, getCurrentReadingAnchor, scrollToAnchor } from '@/app/reading-position'
 import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
@@ -54,16 +60,83 @@ export default function LetterReader({
 
     const supabase = createClient()
     const scrollRoot = findScrollRoot(container)
+    const scrollTarget: Window | HTMLElement = scrollRoot ?? window
+    let localSaveTimer: number | null = null
+
+    const rememberCurrentLocally = () => {
+      const anchor = getCurrentReadingAnchor(container, scrollRoot)
+      if (!anchor) return null
+      savedResumeRef.current = anchor
+      return writeCachedReadingPlace(
+        viewerId,
+        'letter',
+        letterId,
+        anchor.paragraphIndex,
+        anchor.charOffset
+      )
+    }
+
+    const cached = readCachedReadingPlace(viewerId, 'letter', letterId)
+    if (cached) {
+      scrollToAnchor(container, scrollRoot, cached.paragraphIndex, cached.charOffset, 'auto')
+      savedResumeRef.current = {
+        paragraphIndex: cached.paragraphIndex,
+        charOffset: cached.charOffset,
+      }
+    }
+
+    const onScroll = () => {
+      if (localSaveTimer !== null) return
+      localSaveTimer = window.setTimeout(() => {
+        localSaveTimer = null
+        rememberCurrentLocally()
+      }, 120)
+    }
+    scrollTarget.addEventListener('scroll', onScroll, { passive: true })
 
     getReadingPlaceState(supabase, viewerId, 'letter', letterId).then((state) => {
       if (cancelled) return
 
-      if (state.resumeParagraphIndex !== null) {
-        scrollToAnchor(container, scrollRoot, state.resumeParagraphIndex, state.resumeCharOffset, 'auto')
+      const latestLocal = readCachedReadingPlace(viewerId, 'letter', letterId)
+      const serverTimestamp = serverReadingPlaceTimestamp(state)
+
+      if (
+        state.resumeParagraphIndex !== null &&
+        (!latestLocal || serverTimestamp > latestLocal.updatedAt)
+      ) {
+        scrollToAnchor(
+          container,
+          scrollRoot,
+          state.resumeParagraphIndex,
+          state.resumeCharOffset,
+          'auto'
+        )
         savedResumeRef.current = {
           paragraphIndex: state.resumeParagraphIndex,
           charOffset: state.resumeCharOffset,
         }
+        writeCachedReadingPlace(
+          viewerId,
+          'letter',
+          letterId,
+          state.resumeParagraphIndex,
+          state.resumeCharOffset
+        )
+      } else if (
+        latestLocal &&
+        state.resumeParagraphIndex !== null &&
+        serverTimestamp <= latestLocal.updatedAt
+      ) {
+        // The local device moved more recently than the durable row. Bring
+        // cross-device storage forward without delaying or re-scrolling UI.
+        void recordReadingProgress(
+          supabase,
+          viewerId,
+          'letter',
+          letterId,
+          latestLocal.paragraphIndex,
+          latestLocal.charOffset
+        )
       }
 
       const interval = window.setInterval(() => {
@@ -76,6 +149,13 @@ export default function LetterReader({
           anchor.charOffset !== previous.charOffset
         ) {
           savedResumeRef.current = anchor
+          writeCachedReadingPlace(
+            viewerId,
+            'letter',
+            letterId,
+            anchor.paragraphIndex,
+            anchor.charOffset
+          )
           void recordReadingProgress(
             supabase,
             viewerId,
@@ -89,21 +169,19 @@ export default function LetterReader({
 
       cleanupRef.current = () => {
         window.clearInterval(interval)
-        const anchor = getCurrentReadingAnchor(container, scrollRoot)
-        const previous = savedResumeRef.current
-        if (
-          anchor &&
-          (!previous ||
-            anchor.paragraphIndex !== previous.paragraphIndex ||
-            anchor.charOffset !== previous.charOffset)
-        ) {
+        if (localSaveTimer !== null) {
+          window.clearTimeout(localSaveTimer)
+          localSaveTimer = null
+        }
+        const local = rememberCurrentLocally()
+        if (local) {
           void recordReadingProgress(
             supabase,
             viewerId,
             'letter',
             letterId,
-            anchor.paragraphIndex,
-            anchor.charOffset
+            local.paragraphIndex,
+            local.charOffset
           )
         }
       }
@@ -111,6 +189,8 @@ export default function LetterReader({
 
     return () => {
       cancelled = true
+      scrollTarget.removeEventListener('scroll', onScroll)
+      if (localSaveTimer !== null) window.clearTimeout(localSaveTimer)
       cleanupRef.current?.()
       cleanupRef.current = null
     }
