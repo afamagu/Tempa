@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { createServiceClient } from '@/lib/supabase/service'
-import { flutterwaveConfig, verifyByReference, verifyTransaction, type VerifiedTransaction } from './flutterwave'
+import { flutterwaveApiConfig, verifyByReference, verifyTransaction, type VerifiedTransaction } from './flutterwave'
 
 /**
  * Commerce Checkpoint 5 — the ONE path from a payment signal to Credits.
@@ -75,7 +75,7 @@ export async function verifyAndSettle(input: {
   eventType: string
   rawPayload?: string | null
 }): Promise<SettlementResult> {
-  const cfg = flutterwaveConfig()
+  const cfg = flutterwaveApiConfig()
   if (!cfg.ok) return { ok: false, error: 'not_configured' }
 
   const verified = input.transactionId
