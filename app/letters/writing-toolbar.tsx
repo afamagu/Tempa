@@ -5,6 +5,24 @@ import { iconButtonClass } from '@/app/profile/ui'
 import Tooltip from '@/app/profile/tooltip'
 import EmojiPicker from './emoji-picker'
 
+function UndoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+      <path d="M9 7 4 12l5 5" />
+      <path d="M4 12h9a6 6 0 0 1 6 6" />
+    </svg>
+  )
+}
+
+function RedoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+      <path d="m15 7 5 5-5 5" />
+      <path d="M20 12h-9a6 6 0 0 0-6 6" />
+    </svg>
+  )
+}
+
 function BoldIcon() {
   return (
     <svg
@@ -71,6 +89,28 @@ export default function WritingToolbar({ editor }: { editor: Editor | null }) {
 
   return (
     <div className="flex items-center gap-1 border-b border-foreground/10 pb-2">
+      <Tooltip label="Undo">
+        <button
+          type="button"
+          onClick={() => editor?.chain().focus().undo().run()}
+          disabled={!editor || !editor.can().undo()}
+          aria-label="Undo"
+          className={iconButtonClass}
+        >
+          <UndoIcon />
+        </button>
+      </Tooltip>
+      <Tooltip label="Redo">
+        <button
+          type="button"
+          onClick={() => editor?.chain().focus().redo().run()}
+          disabled={!editor || !editor.can().redo()}
+          aria-label="Redo"
+          className={iconButtonClass}
+        >
+          <RedoIcon />
+        </button>
+      </Tooltip>
       <Tooltip label="Bold (Cmd/Ctrl+B)">
         <button
           type="button"
