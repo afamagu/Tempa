@@ -116,7 +116,14 @@ export async function verifyByReference(config: FlutterwaveApiConfig, reference:
 export function isFlutterwaveCheckoutUrl(link: string): boolean {
   try {
     const url = new URL(link)
-    return url.protocol === 'https:' && (url.hostname === 'flutterwave.com' || url.hostname.endsWith('.flutterwave.com'))
+    if (url.protocol !== 'https:') return false
+
+    const host = url.hostname.toLowerCase()
+    return (
+      host === 'flutterwave.com' ||
+      host.endsWith('.flutterwave.com') ||
+      host === 'checkout-v2.dev-flutterwave.com'
+    )
   } catch {
     return false
   }

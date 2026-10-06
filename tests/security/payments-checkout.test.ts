@@ -157,6 +157,8 @@ describe('checkout initialisation', () => {
       expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'USD', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' }), link).toMatchObject({ ok: false, reason: 'invalid_checkout_url' })
     }
     expect(isFlutterwaveCheckoutUrl('https://checkout-testing.flutterwave.com/v3/hosted/pay/x')).toBe(true)
+    expect(isFlutterwaveCheckoutUrl('https://checkout-v2.dev-flutterwave.com/v3/hosted/pay/x')).toBe(true)
+    expect(isFlutterwaveCheckoutUrl('https://evil.dev-flutterwave.com/v3/hosted/pay/x')).toBe(false)
   })
 
   it('an unknown currency is never initialised', async () => {
