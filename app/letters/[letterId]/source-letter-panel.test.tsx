@@ -36,8 +36,9 @@ describe('SourceLetterPanel — the "View [pseudonym]\'s letter" reference overl
 
   it('is a near-full-height sheet on mobile and a centered, max-height-bounded dialog on desktop (sm: overrides)', () => {
     const html = renderToStaticMarkup(<SourceLetterPanel open {...baseProps} />)
+    expect(html).toContain('h-[calc(100dvh-2.5rem)]')
     expect(html).toContain('sm:h-auto')
-    expect(html).toContain('sm:max-h-[85vh]')
+    expect(html).toContain('sm:max-h-[85dvh]')
     expect(html).toContain('sm:items-center')
     expect(html).toContain('sm:justify-center')
   })
