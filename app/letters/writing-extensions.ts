@@ -31,3 +31,17 @@ import type { AnyExtension } from '@tiptap/core'
 export function baseWritingExtensions(): AnyExtension[] {
   return [Document, Paragraph, Text, HardBreak, History, Bold, Italic]
 }
+
+
+/**
+ * Native text-entry hints shared by every long-form Tempa editor.
+ * These do not transform stored text; they tell mobile keyboards to use
+ * ordinary prose behavior (sentence capitalization, spellcheck and text
+ * input) and mark the editor as a keyboard-preserving interaction area.
+ */
+export const nativeWritingAttributes: Record<string, string> = {
+  autocapitalize: 'sentences',
+  spellcheck: 'true',
+  inputmode: 'text',
+  'data-keep-keyboard': 'true',
+}
