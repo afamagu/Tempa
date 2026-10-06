@@ -3,7 +3,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { formatMoney, majorToMinor, minorToMajorString } from '@/lib/money'
 import {
-  flutterwaveConfig,
+  flutterwaveApiConfig,
+  flutterwaveWebhookConfig,
   initializePayment,
   isFlutterwaveCheckoutUrl,
   normalizeStatus,
@@ -53,16 +54,22 @@ describe('money: exact integer minor units', () => {
 })
 
 describe('configuration: TEST MODE only, secrets server-side', () => {
-  it('needs both the secret key and the webhook hash', () => {
-    expect(flutterwaveConfig({} as NodeJS.ProcessEnv)).toEqual({ ok: false, reason: 'missing' })
-    expect(flutterwaveConfig({ FLUTTERWAVE_SECRET_KEY: TEST.secretKey } as unknown as NodeJS.ProcessEnv)).toEqual({ ok: false, reason: 'missing' })
+  it('checkout needs only the test secret key; webhook config additionally needs the hash', () => {
+    expect(flutterwaveApiConfig({} as NodeJS.ProcessEnv)).toEqual({ ok: false, reason: 'missing' })
+    expect(flutterwaveApiConfig({ FLUTTERWAVE_SECRET_KEY: TEST.secretKey } as unknown as NodeJS.ProcessEnv))
+      .toEqual({ ok: true, config: { secretKey: TEST.secretKey } })
+    expect(flutterwaveWebhookConfig({ FLUTTERWAVE_SECRET_KEY: TEST.secretKey } as unknown as NodeJS.ProcessEnv))
+      .toEqual({ ok: false, reason: 'missing' })
+    expect(flutterwaveWebhookConfig({
+      FLUTTERWAVE_SECRET_KEY: TEST.secretKey,
+      FLUTTERWAVE_WEBHOOK_HASH: TEST.webhookHash,
+    } as unknown as NodeJS.ProcessEnv))
+      .toEqual({ ok: true, config: TEST })
   })
 
   it('refuses a live secret key in Checkpoint 5', () => {
-    expect(flutterwaveConfig({ FLUTTERWAVE_SECRET_KEY: 'FLWSECK-live-key-X', FLUTTERWAVE_WEBHOOK_HASH: 'h' } as unknown as NodeJS.ProcessEnv))
+    expect(flutterwaveApiConfig({ FLUTTERWAVE_SECRET_KEY: 'FLWSECK-live-key-X' } as unknown as NodeJS.ProcessEnv))
       .toEqual({ ok: false, reason: 'not_test_key' })
-    expect(flutterwaveConfig({ FLUTTERWAVE_SECRET_KEY: TEST.secretKey, FLUTTERWAVE_WEBHOOK_HASH: TEST.webhookHash } as unknown as NodeJS.ProcessEnv))
-      .toEqual({ ok: true, config: TEST })
   })
 
   it('provider modules are server-only and never imported by client code; no Flutterwave secret is NEXT_PUBLIC', () => {
