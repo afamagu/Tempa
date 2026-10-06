@@ -144,7 +144,7 @@ describe('checkout initialisation', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 'success', data: { link: 'https://checkout.flutterwave.com/v3/hosted/pay/abc' } }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const r = await initializePayment(TEST, { reference: REF, amountMinor: 750000, currency: 'NGN', email: 'm@example.com', redirectUrl: 'https://jointempa.com/you/credits/return', title: '500 Credits' })
-    expect(r).toEqual({ link: 'https://checkout.flutterwave.com/v3/hosted/pay/abc' })
+    expect(r).toEqual({ ok: true, link: 'https://checkout.flutterwave.com/v3/hosted/pay/abc' })
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://api.flutterwave.com/v3/payments')
     const sent = JSON.parse(String(init.body))
@@ -154,7 +154,7 @@ describe('checkout initialisation', () => {
   it('refuses any link that is not Flutterwave’s own https checkout', async () => {
     for (const link of ['https://evil.example/pay', 'http://checkout.flutterwave.com/x', 'https://flutterwave.com.evil.example/x', 'javascript:alert(1)']) {
       vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'success', data: { link } }), { status: 200 })))
-      expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'USD', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' }), link).toBeNull()
+      expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'USD', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' }), link).toMatchObject({ ok: false, reason: 'invalid_checkout_url' })
     }
     expect(isFlutterwaveCheckoutUrl('https://checkout-testing.flutterwave.com/v3/hosted/pay/x')).toBe(true)
   })
@@ -162,8 +162,29 @@ describe('checkout initialisation', () => {
   it('an unknown currency is never initialised', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'XYZ', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' })).toBeNull()
+    expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'XYZ', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' })).toEqual({ ok: false, reason: 'invalid_amount', httpStatus: null, providerMessage: null })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns a short provider rejection message in test mode without leaking secrets', async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ status: 'error', message: 'This currency is not enabled for your account.' }),
+      { status: 400 }
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await initializePayment(TEST, {
+      reference: REF,
+      amountMinor: 1000,
+      currency: 'ZAR',
+      email: 'm@example.com',
+      redirectUrl: 'https://jointempa.com/x',
+      title: '300 Credits',
+    })).toEqual({
+      ok: false,
+      reason: 'provider_rejected',
+      httpStatus: 400,
+      providerMessage: 'This currency is not enabled for your account.',
+    })
   })
 
   it('the member returns only to a known Tempa origin', () => {

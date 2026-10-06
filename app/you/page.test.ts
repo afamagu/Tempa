@@ -47,3 +47,13 @@ describe('/you — Mark-aware identity with grandfathered fallback', () => {
     expect(source).toContain('href="/you/mark"')
   })
 })
+
+
+describe('/you — Credits visibility', () => {
+  it('shows Credits directly under You with the current balance', () => {
+    expect(source).toContain("getCreditBalance(supabase)")
+    expect(source).toContain('href="/you/credits"')
+    expect(source).toContain('<span className="font-semibold">Credits</span>')
+    expect(source).toContain('{creditBalance.toLocaleString()} available')
+  })
+})

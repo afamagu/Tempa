@@ -61,9 +61,20 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
     redirectUrl: `${origin}/you/credits/return`,
     title: order.product,
   })
-  if (!init) {
-    console.error('[payments] checkout initialisation failed', { reference: order.reference })
-    return { status: 'error', message: 'We couldn’t open the payment page. Please try again in a moment.' }
+  if (!init.ok) {
+    console.error('[payments] checkout initialisation failed', {
+      reference: order.reference,
+      reason: init.reason,
+      httpStatus: init.httpStatus,
+    })
+    const providerDetail =
+      order.mode === 'test' && init.providerMessage
+        ? ` Flutterwave says: ${init.providerMessage}`
+        : ''
+    return {
+      status: 'error',
+      message: `We couldn’t open the payment page.${providerDetail || ' Please try again in a moment.'}`,
+    }
   }
   return { status: 'redirect', url: init.link }
 }
