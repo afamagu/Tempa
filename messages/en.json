@@ -238,6 +238,7 @@
     "readingInterests": "What do you love reading about?",
     "interestsHelp": "Choose at least {min}. You can change these anytime.",
     "correspondence": "Your correspondence",
+    "correspondenceCapacity": "Tempa is built for a few correspondences at a time. You can have up to five active correspondences, while The Room and The Board stay open for reading and discovery.",
     "writingQuestion": "How do you usually write your letters?",
     "receivingQuestion": "What are you comfortable receiving?",
     "checkNameError": "Could not check that name right now. Please try again.",
