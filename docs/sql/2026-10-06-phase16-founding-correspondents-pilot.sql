@@ -342,8 +342,9 @@ grant execute on function public.admin_list_pilot_invites()
 -- ------------------------------------------------------------
 -- No body/content column is read. A "turn" is one sent letter in the same
 -- correspondence. Survival at N days means an established correspondence was
--- old enough to be evaluated AND had at least one sent letter on/after its
--- N-day anniversary.
+-- old enough to be evaluated AND had at least one letter created on/after
+-- its N-day anniversary. A letter remains a turn even when its lifecycle
+-- status later changes from sent to replied/closed.
 create or replace function public.admin_pilot_health()
 returns jsonb
 language plpgsql
@@ -376,20 +377,17 @@ begin
       pp.status,
       pp.established_at,
       pp.created_at,
-      count(l.id) filter (where l.status = 'sent')::integer as sent_turns,
+      count(l.id)::integer as letter_turns,
       bool_or(
-        l.status = 'sent'
-        and pp.established_at is not null
+        pp.established_at is not null
         and l.created_at >= pp.established_at + interval '30 days'
       ) as active_after_30,
       bool_or(
-        l.status = 'sent'
-        and pp.established_at is not null
+        pp.established_at is not null
         and l.created_at >= pp.established_at + interval '60 days'
       ) as active_after_60,
       bool_or(
-        l.status = 'sent'
-        and pp.established_at is not null
+        pp.established_at is not null
         and l.created_at >= pp.established_at + interval '90 days'
       ) as active_after_90
     from pilot_pairs pp
@@ -398,10 +396,10 @@ begin
   ),
   aggregate as (
     select
-      count(*) filter (where sent_turns >= 1)::integer as first_contact_correspondences,
+      count(*) filter (where letter_turns >= 1)::integer as first_contact_correspondences,
       count(*) filter (where established_at is not null)::integer as established_correspondences,
-      count(*) filter (where established_at is not null and sent_turns >= 3)::integer as third_turn_correspondences,
-      count(*) filter (where established_at is not null and sent_turns >= 5)::integer as fifth_turn_correspondences,
+      count(*) filter (where established_at is not null and letter_turns >= 3)::integer as third_turn_correspondences,
+      count(*) filter (where established_at is not null and letter_turns >= 5)::integer as fifth_turn_correspondences,
 
       count(*) filter (
         where established_at is not null
