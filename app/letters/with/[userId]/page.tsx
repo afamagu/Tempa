@@ -9,6 +9,7 @@ import {
   incomingMailInTransitPersonIds,
   getActiveEstablishedCorrespondenceWithUser,
   isEstablishedForViewer,
+  letterPreviewText,
 } from '@/lib/letters'
 import {
   getCorrespondenceRhythm,
@@ -28,6 +29,8 @@ import WriteQuillButton from './write-quill-button'
 import CorrespondenceRhythmControl from './correspondence-rhythm-control'
 import CorrespondenceLifecycleControl from './correspondence-lifecycle-control'
 import { getCorrespondenceLifecycleWithMember } from '@/lib/correspondence-lifecycle'
+import { getCorrespondencePrivateMemory } from '@/lib/private-memory'
+import PrivateMemoryControl from './private-memory-control'
 
 function BackChevronIcon() {
   return (
@@ -99,6 +102,19 @@ export default async function LetterArchiveWithUserPage({
     ? await getCorrespondenceRhythm(supabase, activeCorrespondence.id)
     : null
   const returnCards = await getReturnCardsForCorrespondences(supabase, visibleCorrespondenceIds)
+  const privateMemory =
+    lifecycle?.establishedAt
+      ? await getCorrespondencePrivateMemory(supabase, lifecycle.correspondenceId)
+      : null
+
+  const latestLetter = letters[0] ?? null
+  const latestLetterContext = latestLetter
+    ? {
+        senderLabel: latestLetter.senderId === user.id ? 'You' : otherPseudonym,
+        excerpt: letterPreviewText(latestLetter.body),
+        href: `/letters/${latestLetter.id}`,
+      }
+    : null
 
   return (
     <AppShell active="letters" waitingLetterCount={waitingCount}>
@@ -166,6 +182,15 @@ export default async function LetterArchiveWithUserPage({
                   counterpartRhythm={correspondenceRhythm.counterpartRhythm}
                 />
               </div>
+            )}
+
+            {lifecycle?.establishedAt && (
+              <PrivateMemoryControl
+                correspondenceId={lifecycle.correspondenceId}
+                counterpartPseudonym={otherPseudonym}
+                initialNote={privateMemory?.noteText ?? null}
+                latestLetterContext={latestLetterContext}
+              />
             )}
           </div>
 
