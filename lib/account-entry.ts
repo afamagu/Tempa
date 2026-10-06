@@ -12,6 +12,10 @@ export const LANGUAGE_ONBOARDING_PATH = '/language'
 
 export type AccountEntryState = {
   authenticated: boolean
+  /** false = Phase 16 controlled pilot is installed and this authenticated
+   * account is not grandfathered or invited. undefined deliberately fails
+   * open before the pilot migration is applied. */
+  pilotAccess?: boolean
   /** false = the new language-first gate is installed and this member has
    * not confirmed a Tempa language yet. undefined is deliberately fail-open
    * for deploy ordering before the language-onboarding migration is applied. */
@@ -53,6 +57,8 @@ export type AccountEntryState = {
  */
 export function resolveAccountEntryDestination(state: AccountEntryState, requestedDestination: string): string {
   if (!state.authenticated) return '/sign-in'
+
+  if (state.pilotAccess === false) return '/pilot-access'
 
   if (state.languageConfirmed === false) return LANGUAGE_ONBOARDING_PATH
 
