@@ -181,11 +181,11 @@ function toLetter(row: LetterRow): Letter {
   }
 }
 
-// Reads go through letters_for_participant, never the letters table
-// directly — that view is what actually keeps opened_at from ever
-// reaching a sender (see docs/sql/2026-08-30-letters.sql). There is no
-// opened_at column to select here at all, by design.
-const LETTERS_VIEW = 'letters_for_participant'
+// App mailbox reads use the mailbox-specific safe sibling of
+// letters_for_participant. It preserves the canonical delivery predicate and
+// opened_at masking while adding only viewer-specific mailbox_at chronology.
+// The canonical letters_for_participant view remains untouched for RPCs/RLS.
+const LETTERS_VIEW = 'mailbox_letters_for_participant'
 const LETTER_COLUMNS =
   'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, mailbox_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
 
@@ -1482,7 +1482,7 @@ export async function getLetterboxPeople(
   >()
   const unreadCountByCorrespondence = new Map<string, number>()
   for (const row of letterRows ?? []) {
-    // Rows arrive newest-first (order by created_at desc above), so the
+    // Rows arrive newest-first by viewer-specific mailbox_at, so the
     // first row seen per correspondence is already its latest.
     if (!latestLetterByCorrespondence.has(row.correspondence_id)) {
       latestLetterByCorrespondence.set(row.correspondence_id, {
