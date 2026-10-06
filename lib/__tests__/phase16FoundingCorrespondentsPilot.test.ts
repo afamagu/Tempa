@@ -12,6 +12,7 @@ const adminPilot = readFileSync(path.join(root, 'app/admin/pilot/page.tsx'), 'ut
 const adminNav = readFileSync(path.join(root, 'app/admin/admin-nav.tsx'), 'utf8')
 const accountEntryState = readFileSync(path.join(root, 'lib/account-entry-state.ts'), 'utf8')
 
+// Release-gate marker: keep Vercel preview tied to the final pilot contract.
 describe('Phase 16 — Founding Correspondents pilot', () => {
   it('grandfathers every existing auth account before closing the gate', () => {
     expect(migration).toContain("select u.id, 'grandfathered'")
