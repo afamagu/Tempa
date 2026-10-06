@@ -22,7 +22,6 @@ import {
   sectionLabelClass,
   metadataTextClass,
   helperTextClass,
-  primaryButtonClass,
   secondaryButtonClass,
   quietLinkClass,
 } from '@/app/profile/ui'
@@ -38,6 +37,9 @@ import EditorialByline from '@/app/editorial-byline'
 import OtherAnswersDisclosure from './other-answers-disclosure'
 import DispatchCard from '../../board/dispatch-card'
 import { introductionReturnPath } from '@/lib/introduction-navigation'
+import { getPublicProfileCorrespondenceState } from '@/lib/profile-correspondence-state'
+import { writingRhythmLabel } from '@/lib/writing-rhythm'
+import { getCorrespondenceLifecycleWithMember } from '@/lib/correspondence-lifecycle'
 import PeopleProfileBack from './people-profile-back'
 
 function genderDisplay(gender: string | null, genderCustom: string | null) {
@@ -79,7 +81,6 @@ export default async function PublicProfilePage({
   if (originReturn) profileContext.set('returnTo', originReturn)
   if (typeof selectedAnswerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedAnswerId)) profileContext.set('answer', selectedAnswerId)
   const profileReturn = profileContext.size ? `/room/${userId}?${profileContext}` : null
-  const writeReturnQuery = profileReturn ? `&returnTo=${encodeURIComponent(profileReturn)}` : ''
   const supabase = await createClient()
   const { data: { user: viewer } } = await supabase.auth.getUser()
   if (!viewer) redirect(`/sign-in?next=${encodeURIComponent(profileReturn ?? `/room/${userId}`)}`)
@@ -103,7 +104,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -114,11 +115,12 @@ export default async function PublicProfilePage({
     getEditorialBylines(supabase),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, viewer.id, userId),
     isSelf ? Promise.resolve(null) : getRelationshipCapacity(supabase),
+    getPublicProfileCorrespondenceState(supabase, userId),
+    isSelf ? Promise.resolve(null) : getCorrespondenceLifecycleWithMember(supabase, userId),
   ])
-  const [{ data: memberQuestions }, { data: legacyQuestions }, { data: eligibleAnswers }, incomingFirstContact] = await Promise.all([
+  const [{ data: memberQuestions }, { data: legacyQuestions }, incomingFirstContact] = await Promise.all([
     supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
     isSelf ? supabase.rpc('my_unpublished_question_suggestions') : Promise.resolve({ data: [] }),
-    supabase.from('question_answers').select('id, questions!inner(is_active)').eq('user_id', userId).eq('is_current', true).eq('moderation_status', 'visible').eq('questions.is_active', true).limit(12),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, userId, viewer.id),
   ])
   const writingStyleId = writingStyles.get(userId) ?? null
@@ -132,23 +134,65 @@ export default async function PublicProfilePage({
   const otherAnswers = rawAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  const primaryWriteAnchor = eligibleAnswers?.find(a => a.id === primaryAnswer?.id) ?? eligibleAnswers?.[0] ?? null
+  const { data: writableAnswerRows } = isSelf
+    ? { data: [] as { answer_id: string }[] }
+    : await supabase.rpc('get_profile_writable_answer_ids', {
+        p_user_id: userId,
+        p_limit: 50,
+      })
+  const writableAnswerIds = new Set(
+    ((writableAnswerRows ?? []) as { answer_id: string }[]).map((row) => row.answer_id)
+  )
+  const firstWriteAnchorId =
+    rawAnswers.find((answer) => writableAnswerIds.has(answer.id))?.id ?? null
+  const primaryWriteAnchor = primaryAnswer && writableAnswerIds.has(primaryAnswer.id) ? primaryAnswer : null
   const alreadyCorresponding = activePartnerIds.has(userId)
+  const pausedCorrespondence = lifecycle?.status === 'paused' && lifecycle.establishedAt !== null
   const primaryAnswerAlreadyContacted = primaryAnswer ? contactedAnswerIds.has(primaryWriteAnchor?.id ?? primaryAnswer.id) : false
-  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
-  const canBeginNewCorrespondence = newCorrespondenceMessage === null
+  const senderUnavailableMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
+  const recipientUnavailableMessage =
+    publicCorrespondenceState && !publicCorrespondenceState.canReceiveFirstContact
+      ? `${profile.pseudonym} isn’t taking another first letter right now.`
+      : null
+  const firstContactUnavailableMessage = senderUnavailableMessage ?? recipientUnavailableMessage
+  const canBeginNewCorrespondence = firstContactUnavailableMessage === null
   const structurallyCanWriteToMind = canWriteToMind({
     isSelf,
-    alreadyCorresponding,
-    hasCurrentAnswer: primaryWriteAnchor !== null,
+    alreadyCorresponding: alreadyCorresponding || pausedCorrespondence,
+    hasCurrentAnswer: firstWriteAnchorId !== null,
     currentAnswerAlreadyContacted: primaryAnswerAlreadyContacted || firstContact !== null,
   })
   const showWriteToMind = structurallyCanWriteToMind && canBeginNewCorrespondence
-  const hasPendingEpisode = !alreadyCorresponding && (firstContact !== null || incomingFirstContact?.status === 'sent')
+  const hasPendingEpisode = !alreadyCorresponding && !pausedCorrespondence && (firstContact !== null || incomingFirstContact?.status === 'sent')
+  const pendingLetterHref = hasPendingEpisode ? `/letters/${firstContact?.id ?? incomingFirstContact?.id}` : undefined
+  const publicRhythmLabel = writingRhythmLabel(publicCorrespondenceState?.writingRhythm ?? null)
   const demographics = [profile.country, genderDisplay(profile.gender, profile.gender_custom), profile.age_range]
     .filter(Boolean)
     .join(' · ')
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
+  const profileReturnHref = profileReturn ?? `/room/${userId}`
+  const primaryWriteHref =
+    !isSelf && showWriteToMind && primaryWriteAnchor
+      ? `/write/${profile.id}?a=${encodeURIComponent(primaryWriteAnchor.id)}&source=room_profile&returnTo=${encodeURIComponent(profileReturnHref)}`
+      : null
+  const questionWriteHref =
+    isSelf
+      ? null
+      : alreadyCorresponding
+        ? `/letters/with/${userId}/write`
+        : showWriteToMind && firstWriteAnchorId
+          ? `/write/${userId}?a=${encodeURIComponent(firstWriteAnchorId)}&source=room_profile`
+          : null
+  const exactWritableOtherAnswerIds =
+    !isSelf && showWriteToMind
+      ? otherAnswers.filter((answer) => writableAnswerIds.has(answer.id)).map((answer) => answer.id)
+      : []
+  const availabilityCopy = publicCorrespondenceState
+    ? publicCorrespondenceState.canReceiveFirstContact
+      ? 'Open to a first letter'
+      : 'Not taking another first letter right now'
+    : null
+  const hasAbout = Boolean(demographics || languages.length > 0 || intent.length > 0)
 
   return (
     <AppShell active={isSelf ? 'you' : returnTo === '/home' ? 'home' : returnTo?.startsWith('/letters/discover') ? 'letters' : 'room'} waitingLetterCount={waitingCount}>
@@ -156,30 +200,17 @@ export default async function PublicProfilePage({
         <div className="w-full max-w-2xl space-y-8 py-10">
           {!isSelf && <PeopleProfileBack returnTo={returnTo} />}
 
-          <div className="flex items-start gap-4">
+          <header className="flex items-start gap-4">
             <ProfileMarkViewer identifier={profile.id} markUrl={markUrl} pseudonym={profile.pseudonym} />
-            <div className="min-w-0">
+            <div className="min-w-0 pt-1">
               <h1 className={sectionTitleClass}>{profile.pseudonym}</h1>
-              <EditorialByline title={editorialTitle} rule className="mb-2" />
-              {demographics && <p className={metadataTextClass}>{demographics}</p>}
-              {languages.length > 0 && <p className={`mt-1 ${metadataTextClass}`}>Speaks {languages.join(', ')}</p>}
-              {intent.length > 0 && (
-                <div className="mt-2">
-                  <p className={sectionLabelClass}>Interests</p>
-                  <InterestsDisclosure items={intent} />
-                </div>
-              )}
+              <EditorialByline title={editorialTitle} rule className="mt-1" />
             </div>
-          </div>
-
-          <ProfileQuestions key={`${userId}:${JSON.stringify(memberQuestions ?? [])}`} ownerId={userId} name={profile.pseudonym} own={isSelf} initial={memberQuestions ?? []} legacy={legacyQuestions ?? []}
-            writeHref={isSelf ? null : alreadyCorresponding ? `/letters/with/${userId}/write` : hasPendingEpisode ? null : canBeginNewCorrespondence && eligibleAnswers?.[0] ? `/write/${userId}?a=${eligibleAnswers[0].id}` : null}
-            pendingLetterHref={hasPendingEpisode ? `/letters/${firstContact?.id ?? incomingFirstContact?.id}` : undefined}
-            writeUnavailableMessage={!isSelf && !alreadyCorresponding && !hasPendingEpisode ? newCorrespondenceMessage : null}
-            returnTo={profileReturn ?? `/room/${userId}`} />
+          </header>
 
           {primaryAnswer && (
-            <div className="space-y-6">
+            <section className="space-y-3" aria-labelledby="profile-featured-writing">
+              <p id="profile-featured-writing" className={sectionLabelClass}>From {isSelf ? 'you' : profile.pseudonym}</p>
               {primaryAnswer.moderationStatus === 'hidden' ? (
                 <div className="rounded-md border border-foreground/10 p-4">
                   <p className={metadataTextClass}>Hidden by TEMPA.</p>
@@ -192,28 +223,32 @@ export default async function PublicProfilePage({
                   isPrimary={primaryAnswer.isPrimary}
                   showReport={!isSelf}
                   writingStyleId={writingStyleId}
+                  writeHref={primaryWriteHref}
                 />
               )}
-            </div>
+            </section>
           )}
 
-          <OtherAnswersDisclosure
-            answers={otherAnswers}
-            showReport={!isSelf}
-            ownerPseudonym={profile.pseudonym}
-            isSelf={isSelf}
-            writingStyleId={writingStyleId}
+          <ProfileQuestions
+            key={`${userId}:${JSON.stringify(memberQuestions ?? [])}`}
+            ownerId={userId}
+            name={profile.pseudonym}
+            own={isSelf}
+            initial={memberQuestions ?? []}
+            legacy={legacyQuestions ?? []}
+            writeHref={questionWriteHref}
+            returnTo={profileReturnHref}
           />
 
           {pinnedDispatch && (
-            <div className="space-y-3 border-t border-foreground/10 pt-6">
-              <p className={sectionLabelClass}>Pinned</p>
+            <section className="space-y-3 border-t border-foreground/10 pt-6">
+              <p className={sectionLabelClass}>Pinned Dispatch</p>
               <DispatchCard dispatch={pinnedDispatch} />
-            </div>
+            </section>
           )}
 
           {allDispatches.length > 0 && (
-            <div className="space-y-3 border-t border-foreground/10 pt-6">
+            <section className="space-y-3 border-t border-foreground/10 pt-6">
               <div className="flex items-center justify-between gap-3">
                 <p className={sectionLabelClass}>Dispatches</p>
                 <Link href={`/room/${userId}/dispatches`} className={quietLinkClass}>See all Dispatches</Link>
@@ -223,38 +258,90 @@ export default async function PublicProfilePage({
                   {recentDispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}
                 </div>
               )}
-            </div>
+            </section>
+          )}
+
+          <OtherAnswersDisclosure
+            answers={otherAnswers}
+            showReport={!isSelf}
+            ownerPseudonym={profile.pseudonym}
+            isSelf={isSelf}
+            writingStyleId={writingStyleId}
+            ownerId={userId}
+            writeReturnTo={profileReturnHref}
+            writableAnswerIds={exactWritableOtherAnswerIds}
+          />
+
+          {(availabilityCopy || publicRhythmLabel || alreadyCorresponding || pausedCorrespondence || hasPendingEpisode || senderUnavailableMessage) && (
+            <section className="space-y-3 border-t border-foreground/10 pt-6" aria-labelledby="profile-correspondence">
+              <p id="profile-correspondence" className={sectionLabelClass}>Correspondence</p>
+
+              {alreadyCorresponding ? (
+                <div className="space-y-2">
+                  <p className={helperTextClass}>You and {profile.pseudonym} already correspond.</p>
+                  <Link href={`/letters/with/${userId}`} className={secondaryButtonClass}>
+                    Open your correspondence
+                  </Link>
+                </div>
+              ) : pausedCorrespondence ? (
+                <div className="space-y-2">
+                  <p className={helperTextClass}>Your correspondence with {profile.pseudonym} is paused for now.</p>
+                  <Link href={`/letters/with/${userId}`} className={secondaryButtonClass}>
+                    View paused correspondence
+                  </Link>
+                </div>
+              ) : hasPendingEpisode && pendingLetterHref ? (
+                <div className="space-y-2">
+                  <p className={helperTextClass}>
+                    {firstContact
+                      ? `Your first letter to ${profile.pseudonym} is already in progress.`
+                      : `${profile.pseudonym} has already written to you.`}
+                  </p>
+                  <Link href={pendingLetterHref} className={secondaryButtonClass}>
+                    View the letter
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  {availabilityCopy && <p className="text-[15px] text-foreground">{availabilityCopy}</p>}
+                  {!isSelf && senderUnavailableMessage && publicCorrespondenceState?.canReceiveFirstContact && (
+                    <p className={helperTextClass}>{senderUnavailableMessage}</p>
+                  )}
+                </>
+              )}
+
+              {publicRhythmLabel && (
+                <p className={helperTextClass}>
+                  Usual writing rhythm: <span className="text-foreground">{publicRhythmLabel}</span>
+                </p>
+              )}
+            </section>
+          )}
+
+          {hasAbout && (
+            <section className="space-y-4 border-t border-foreground/10 pt-6" aria-labelledby="profile-about">
+              <p id="profile-about" className={sectionLabelClass}>About</p>
+              {demographics && <p className={metadataTextClass}>{demographics}</p>}
+              {languages.length > 0 && <p className={metadataTextClass}>Speaks {languages.join(', ')}</p>}
+              {intent.length > 0 && (
+                <div className="space-y-2">
+                  <p className={metadataTextClass}>Here for</p>
+                  <InterestsDisclosure items={intent} />
+                </div>
+              )}
+            </section>
           )}
 
           {!isSelf && (
-            <div className="space-y-3">
-              {showWriteToMind && primaryWriteAnchor ? (
-                <Link href={`/write/${profile.id}?a=${primaryWriteAnchor.id}&source=room_profile${writeReturnQuery}`} className={primaryButtonClass}>
-                  Write to {profile.pseudonym}
-                </Link>
-              ) : alreadyCorresponding ? (
-                <Link href="/letters" className={secondaryButtonClass}>
-                  Open your correspondence with {profile.pseudonym}
-                </Link>
-              ) : firstContact ? (
-                <Link href={`/letters/${firstContact.id}`} className={secondaryButtonClass}>View your letter to {profile.pseudonym}</Link>
-              ) : structurallyCanWriteToMind && newCorrespondenceMessage ? (
-                <div className="space-y-1">
-                  <p className={sectionLabelClass}>Room for someone new</p>
-                  <p className={helperTextClass}>{newCorrespondenceMessage}</p>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap items-center gap-4">
-                <BlockButton
-                  blockedId={profile.id}
-                  blockedPseudonym={profile.pseudonym}
-                  triggerClassName={quietLinkClass}
-                  initialScope={blockScope}
-                  fullBlockRedirect="/room"
-                />
-                <ReportButton targetType="profile" targetId={profile.id} triggerClassName={quietLinkClass} />
-              </div>
+            <div className="flex flex-wrap items-center gap-4 border-t border-foreground/10 pt-6">
+              <BlockButton
+                blockedId={profile.id}
+                blockedPseudonym={profile.pseudonym}
+                triggerClassName={quietLinkClass}
+                initialScope={blockScope}
+                fullBlockRedirect="/room"
+              />
+              <ReportButton targetType="profile" targetId={profile.id} triggerClassName={quietLinkClass} />
             </div>
           )}
         </div>

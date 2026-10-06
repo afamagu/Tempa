@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { recordAnswerRead } from './answer-reading'
-import { metadataTextClass, iconButtonClass } from '@/app/profile/ui'
+import { metadataTextClass, iconButtonClass, secondaryButtonClass, helperTextClass } from '@/app/profile/ui'
 import AuthoredProse from '@/app/authored-prose'
 import QuestionInfoIcon from '@/app/question-info-icon'
 import ReportButton from '@/app/report-button'
+import Link from 'next/link'
 
 function FlagIcon() {
   return (
@@ -62,6 +63,9 @@ export default function ProfileAnswer({
   isPrimary = false,
   showReport,
   writingStyleId = null,
+  writeHref,
+  pendingLetterHref,
+  writeUnavailableMessage,
 }: {
   id: string
   prompt: string
@@ -77,6 +81,9 @@ export default function ProfileAnswer({
   showReport: boolean
   /** The writer's CURRENT Writing Style — a profile is who they are now. */
   writingStyleId?: string | null
+  writeHref?: string | null
+  pendingLetterHref?: string
+  writeUnavailableMessage?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = isLongAnswer(body)
@@ -131,7 +138,19 @@ export default function ProfileAnswer({
         )}
       </div>
 
-      {isPrimary && <p className={`mt-2 ${metadataTextClass}`}>Primary Minds answer</p>}
+      {isPrimary && <p className={`mt-2 ${metadataTextClass}`}>Introduction</p>}
+
+      {(writeHref || pendingLetterHref || writeUnavailableMessage) && (
+        <div className="mt-3 border-t border-foreground/10 pt-3">
+          {writeHref ? (
+            <Link href={writeHref} className={secondaryButtonClass}>Write from this</Link>
+          ) : pendingLetterHref ? (
+            <Link href={pendingLetterHref} className={secondaryButtonClass}>Continue through your existing letter</Link>
+          ) : writeUnavailableMessage ? (
+            <p className={helperTextClass}>{writeUnavailableMessage}</p>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }

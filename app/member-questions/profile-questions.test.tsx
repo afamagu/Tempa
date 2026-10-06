@@ -8,7 +8,7 @@ const common = { ownerId: 'member-id', name: 'Mia', initial: [question], legacy:
 describe('profile questions', () => {
   it('links a visitor to the correct private composer with distinct question and eligible answer context', () => {
     const html = renderToStaticMarkup(<ProfileQuestions {...common} own={false} writeHref="/write/member-id?a=real-answer" />)
-    expect(html).toContain('Write to Mia about this')
+    expect(html).toContain('Write from this')
     expect(html).toContain('a=real-answer&amp;mq=question-id&amp;returnTo=')
     expect(html).not.toContain('Hide from profile')
   })
