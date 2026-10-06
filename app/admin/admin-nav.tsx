@@ -9,6 +9,7 @@ const DESTINATIONS: Destination[] = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/moderation/reports', label: 'Moderation', matchPrefix: '/admin/moderation' },
   { href: '/admin/members', label: 'Members' },
+  { href: '/admin/pilot', label: 'Pilot', matchPrefix: '/admin/pilot' },
   { href: '/admin/content', label: 'Content', matchPrefix: '/admin/content' },
   // Commerce Checkpoint 4 — Admin → Commerce (admin-only inside).
   { href: '/admin/commerce', label: 'Commerce', matchPrefix: '/admin/commerce' },
@@ -61,9 +62,9 @@ export default function AdminNav() {
       {/* Mobile — a real bottom tab bar, not a shrunk horizontal row.
           Fixed, safe-area-aware (iPhone home-indicator inset), never
           obscuring page content (see the layout's own bottom padding on
-          mobile) or causing horizontal scroll (grid-cols-4, no wrapping). */}
+          mobile) or causing horizontal scroll (a fixed grid, no wrapping). */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-foreground/10 bg-background sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-8 border-t border-foreground/10 bg-background sm:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {DESTINATIONS.map((dest) => {
