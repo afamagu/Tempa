@@ -184,6 +184,7 @@ describe('checkout initialisation', () => {
       reason: 'provider_rejected',
       httpStatus: 400,
       providerMessage: 'This currency is not enabled for your account.',
+      checkoutHost: null,
     })
   })
 
