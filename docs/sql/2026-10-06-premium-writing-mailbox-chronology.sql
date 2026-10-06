@@ -11,13 +11,14 @@
 --   sender    -> created_at (their own sent mail is visible immediately)
 --   recipient -> deliver_at (incoming mail joins their mailbox on arrival)
 --
--- This never reveals a future delivery time to a sender. An incoming row
--- remains completely absent until deliver_at <= now(), exactly as before.
+-- This never changes or replaces the canonical letters_for_participant view.
+-- It creates a mailbox-only sibling with the exact same delivery predicate.
+-- A future incoming row remains completely absent until deliver_at <= now().
 -- ============================================================
 
 begin;
 
-create or replace view public.letters_for_participant
+create or replace view public.mailbox_letters_for_participant
 with (
   security_barrier = true
 )
@@ -58,9 +59,10 @@ where
     and l.deliver_at <= now()
   );
 
-grant select on public.letters_for_participant to authenticated;
+revoke all on public.mailbox_letters_for_participant from public, anon;
+grant select on public.mailbox_letters_for_participant to authenticated;
 
-comment on column public.letters_for_participant.mailbox_at is
+comment on column public.mailbox_letters_for_participant.mailbox_at is
   'Viewer-specific mailbox chronology: sender sees created_at; recipient sees actual arrival deliver_at. Never exposes future delivery timing.';
 
 commit;
@@ -75,29 +77,29 @@ select
     select 1
     from information_schema.columns
     where table_schema = 'public'
-      and table_name = 'letters_for_participant'
+      and table_name = 'mailbox_letters_for_participant'
       and column_name = 'mailbox_at'
   ) as mailbox_at_exposed,
 
   position(
     'CASE'
-    in upper(pg_get_viewdef('public.letters_for_participant'::regclass, true))
+    in upper(pg_get_viewdef('public.mailbox_letters_for_participant'::regclass, true))
   ) > 0
   and position(
     'deliver_at'
-    in pg_get_viewdef('public.letters_for_participant'::regclass, true)
+    in pg_get_viewdef('public.mailbox_letters_for_participant'::regclass, true)
   ) > 0
     as mailbox_at_uses_delivery_time,
 
   position(
     'deliver_at <= now()'
-    in pg_get_viewdef('public.letters_for_participant'::regclass, true)
+    in pg_get_viewdef('public.mailbox_letters_for_participant'::regclass, true)
   ) > 0
     as recipient_delivery_gate_preserved,
 
   position(
     'opened_at'
-    in pg_get_viewdef('public.letters_for_participant'::regclass, true)
+    in pg_get_viewdef('public.mailbox_letters_for_participant'::regclass, true)
   ) > 0
   and not exists (
     select 1
@@ -110,6 +112,9 @@ select
 
   has_table_privilege(
     'authenticated',
-    'public.letters_for_participant',
+    'public.mailbox_letters_for_participant',
     'SELECT'
-  ) as authenticated_can_read_safe_view;
+  ) as authenticated_can_read_safe_view,
+
+  to_regclass('public.letters_for_participant') is not null
+    as canonical_letter_view_untouched;
