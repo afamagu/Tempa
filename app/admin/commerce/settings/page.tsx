@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { callAdminCommerce, type Overview } from '@/lib/admin-commerce'
+import { callAdminCommerce, isCommerceAdmin, type Overview } from '@/lib/admin-commerce'
+import { flutterwaveApiConfig, flutterwaveWebhookConfig, testFlutterwaveConnection } from '@/lib/payments/flutterwave'
 import { sectionTitleClass } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableSecondaryClass, adminTableTextClass } from '@/app/admin/admin-ui'
 import { Card, Pill } from '../ui'
@@ -27,11 +28,33 @@ type CheckoutConfig = {
 
 export default async function CommerceSettingsPage() {
   const supabase = await createClient()
-  const [{ data, error }, checkout] = await Promise.all([
+  if (!(await isCommerceAdmin(supabase))) {
+    return <p className="text-[14px] text-red-700">Commerce diagnostics are limited to admins.</p>
+  }
+
+  const apiConfig = flutterwaveApiConfig()
+  const webhookConfig = flutterwaveWebhookConfig()
+  const [{ data, error }, checkout, flutterwaveConnection] = await Promise.all([
     callAdminCommerce<Overview>(supabase, 'admin_commerce_overview'),
     callAdminCommerce<CheckoutConfig>(supabase, 'admin_commerce_checkout_config'),
+    testFlutterwaveConnection(),
   ])
   if (error || !data) return <p className="text-[14px] text-red-700">{error?.message}</p>
+
+  const connectionLabel = {
+    connected: 'Connected',
+    missing_config: 'Secret missing',
+    wrong_key_type: 'Wrong key type',
+    unauthorized: 'Rejected by Flutterwave',
+    provider_error: 'Provider/network error',
+  }[flutterwaveConnection.status]
+
+  const connectionTone =
+    flutterwaveConnection.status === 'connected'
+      ? 'good'
+      : flutterwaveConnection.status === 'provider_error'
+        ? 'warn'
+        : 'bad'
   return (
     <div className="space-y-5">
       <div className="space-y-1">
@@ -60,6 +83,33 @@ export default async function CommerceSettingsPage() {
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card
+        title="Flutterwave v3 test connection"
+        note="Read-only diagnostic. It checks Tempa’s server configuration and authenticates one GET request to Flutterwave. It never creates a charge and never displays a key."
+      >
+        <ul className="divide-y divide-foreground/10">
+          <li className="flex items-center justify-between gap-3 py-2.5">
+            <p className={adminTableTextClass}>API mode</p>
+            <Pill tone="quiet">V3 test</Pill>
+          </li>
+          <li className="flex items-center justify-between gap-3 py-2.5">
+            <p className={adminTableTextClass}>Test secret key</p>
+            <Pill tone={apiConfig.ok ? 'good' : 'bad'}>{apiConfig.ok ? 'Configured' : apiConfig.reason === 'not_test_key' ? 'Wrong key type' : 'Missing'}</Pill>
+          </li>
+          <li className="flex items-center justify-between gap-3 py-2.5">
+            <p className={adminTableTextClass}>Webhook secret hash</p>
+            <Pill tone={webhookConfig.ok ? 'good' : 'warn'}>{webhookConfig.ok ? 'Configured' : 'Not configured'}</Pill>
+          </li>
+          <li className="flex items-center justify-between gap-3 py-2.5">
+            <p className={adminTableTextClass}>Flutterwave API</p>
+            <Pill tone={connectionTone}>{connectionLabel}</Pill>
+          </li>
+        </ul>
+        <p className={adminTableSecondaryClass}>
+          A missing webhook hash does not block checkout initialization anymore; it only blocks webhook verification.
+        </p>
       </Card>
       {checkout.data && (
         <Card
