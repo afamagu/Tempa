@@ -17,7 +17,7 @@ export default async function ReplayPeopleGuide() {
       guideKey="people"
       title="People worth writing to"
       ctaLabel="Start exploring"
-      destinationHref="/minds"
+      destinationHref="/room"
     >
       <p>
         Tempa isn&rsquo;t about collecting followers. Take your time. Open someone&rsquo;s
