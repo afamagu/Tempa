@@ -11,6 +11,7 @@ const root = process.cwd()
 const profileForm = readFileSync(path.join(root, 'app/profile/profile-form.tsx'), 'utf8')
 const questionPage = readFileSync(path.join(root, 'app/profile/question/page.tsx'), 'utf8')
 
+// Phase 15 release gate: this file also keeps the Vercel preview tied to the final onboarding contract.
 describe('Phase 15 — landing/onboarding final polish', () => {
   it('finishes the first-use journey at Home after Writing Style', () => {
     expect(WRITING_STYLE_ONBOARDING_HREF).toBe('/profile/writing-style?next=%2Fhome')
