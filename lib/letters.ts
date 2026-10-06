@@ -151,7 +151,7 @@ type LetterRow = {
   body: string
   status: LetterStatus
   created_at: string
-  mailbox_at: string
+  mailbox_at?: string
   expires_at: string
   is_unread: boolean
   replied_at: string | null
@@ -181,12 +181,14 @@ function toLetter(row: LetterRow): Letter {
   }
 }
 
-// App mailbox reads use the mailbox-specific safe sibling of
-// letters_for_participant. It preserves the canonical delivery predicate and
-// opened_at masking while adding only viewer-specific mailbox_at chronology.
-// The canonical letters_for_participant view remains untouched for RPCs/RLS.
-const LETTERS_VIEW = 'mailbox_letters_for_participant'
+// The canonical participant-safe view remains the default for ordinary
+// letter reads. Mailbox chronology is an additive presentation concern only:
+// Home/Letterbox/archive reads opt into the sibling view that adds mailbox_at.
+const LETTERS_VIEW = 'letters_for_participant'
+const MAILBOX_LETTERS_VIEW = 'mailbox_letters_for_participant'
 const LETTER_COLUMNS =
+  'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
+const MAILBOX_LETTER_COLUMNS =
   'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, mailbox_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
 
 /**
@@ -332,8 +334,8 @@ export async function getWaitingLetterCount(
  */
 export async function getMyLetters(supabase: SupabaseClient, userId: string): Promise<Letter[]> {
   const { data } = await supabase
-    .from(LETTERS_VIEW)
-    .select(LETTER_COLUMNS)
+    .from(MAILBOX_LETTERS_VIEW)
+    .select(MAILBOX_LETTER_COLUMNS)
     .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
     .order('mailbox_at', { ascending: false })
 
@@ -1471,7 +1473,7 @@ export async function getLetterboxPeople(
   if (visibleIds.length === 0) return []
 
   const { data: letterRows } = await supabase
-    .from(LETTERS_VIEW)
+    .from(MAILBOX_LETTERS_VIEW)
     .select('correspondence_id, created_at, mailbox_at, sender_id, recipient_id, is_unread, body')
     .in('correspondence_id', visibleIds)
     .order('mailbox_at', { ascending: false })
@@ -1654,8 +1656,8 @@ export async function getLetterArchiveWithUser(
   if (visibleIds.length === 0) return []
 
   const { data } = await supabase
-    .from(LETTERS_VIEW)
-    .select(LETTER_COLUMNS)
+    .from(MAILBOX_LETTERS_VIEW)
+    .select(MAILBOX_LETTER_COLUMNS)
     .in('correspondence_id', visibleIds)
     .order('mailbox_at', { ascending: false })
 
