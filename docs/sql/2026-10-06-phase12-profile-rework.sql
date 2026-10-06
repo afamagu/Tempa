@@ -186,6 +186,20 @@ select
   ) is not null
     as profile_answer_origin_rpc_ready,
 
+  has_function_privilege(
+    'authenticated',
+    'public.get_profile_writable_answer_ids(uuid,integer)',
+    'EXECUTE'
+  )
+    as authenticated_can_read_answer_origins,
+
+  not has_function_privilege(
+    'anon',
+    'public.get_profile_writable_answer_ids(uuid,integer)',
+    'EXECUTE'
+  )
+    as anon_cannot_read_answer_origins,
+
   position(
     'public.room_answer_can_start_letter'
     in pg_get_functiondef(
