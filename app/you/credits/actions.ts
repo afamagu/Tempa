@@ -69,11 +69,15 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
     })
     const providerDetail =
       order.mode === 'test' && init.providerMessage
-        ? ` Flutterwave says: ${init.providerMessage}`
+        ? ` Flutterwave says: ${init.providerMessage}.`
+        : ''
+    const diagnosticDetail =
+      order.mode === 'test'
+        ? ` Tempa classified this as ${init.reason}${init.checkoutHost ? ` (host: ${init.checkoutHost})` : ''}.`
         : ''
     return {
       status: 'error',
-      message: `We couldn’t open the payment page.${providerDetail || ' Please try again in a moment.'}`,
+      message: `We couldn’t open the payment page.${providerDetail}${diagnosticDetail || ' Please try again in a moment.'}`,
     }
   }
   return { status: 'redirect', url: init.link }
