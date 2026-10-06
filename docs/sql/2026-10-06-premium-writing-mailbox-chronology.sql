@@ -105,7 +105,7 @@ select
     select 1
     from information_schema.columns
     where table_schema = 'public'
-      and table_name = 'letters_for_participant'
+      and table_name = 'mailbox_letters_for_participant'
       and column_name = 'opened_at'
   )
     as raw_opened_at_still_hidden,
