@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useKeyboardDismiss } from '@/app/letters/use-keyboard-dismiss'
+import { useEditorVisualViewport } from '@/app/letters/use-editor-visual-viewport'
 import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -17,7 +18,7 @@ import {
   proseSubheadingClass,
   contextQuestionClass,
 } from '@/app/profile/ui'
-import { baseWritingExtensions } from '@/app/letters/writing-extensions'
+import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { docToPlainBody, canSendLetter, EMPTY_LETTER_DOC, type LetterDocJSON } from '@/lib/letter-editor-doc'
 import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'
@@ -75,6 +76,7 @@ export default function FirstLetterComposer({
   const [sending, setSending] = useState(false)
   const composerRootRef = useRef<HTMLElement | null>(null)
   useKeyboardDismiss(composerRootRef)
+  useEditorVisualViewport(composerRootRef)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
@@ -98,6 +100,7 @@ export default function FirstLetterComposer({
     content: EMPTY_LETTER_DOC,
     editorProps: {
       attributes: {
+        ...nativeWritingAttributes,
         class:
           'min-h-64 w-full rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
