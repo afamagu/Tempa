@@ -13,6 +13,8 @@
 -- This does NOT expose capacity counts, limits, overrides, enforcement
 -- state, private correspondence state, or any raw profile row.
 --
+-- Deployment gate: merge only after this exact branch tree has a green preview build.
+--
 -- Public reading remains independent of correspondence capacity. This RPC is
 -- presentation metadata only; all actual sends remain governed by the existing
 -- authoritative first-letter / Safety / capacity RPCs and triggers.
