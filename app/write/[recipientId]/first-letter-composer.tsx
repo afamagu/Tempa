@@ -216,7 +216,7 @@ export default function FirstLetterComposer({
 
   if (sent) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
+      <main className="min-h-screen flex items-start justify-center p-4 sm:items-center sm:p-6">
         <div className="w-full max-w-md space-y-6 py-10 text-center">
           <p className={sectionLabelClass}>Sent</p>
           <p className="text-lg leading-relaxed">
