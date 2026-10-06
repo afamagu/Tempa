@@ -595,7 +595,7 @@ export default function DispatchComposer({
       : '/board'
 
   return (
-    <main ref={composerRootRef} className="min-h-screen flex items-center justify-center p-6">
+    <main ref={composerRootRef} className="min-h-screen flex items-start justify-center p-4 sm:items-center sm:p-6">
       <PhotoSourceInputs libraryInputRef={libraryInputRef} cameraInputRef={cameraInputRef} onChange={handleFileChosen} />
 
       <div className="w-full max-w-2xl space-y-6 py-10">
