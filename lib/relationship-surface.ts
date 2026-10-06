@@ -35,6 +35,7 @@ type VisibleLetterRow = {
   recipient_id: string
   reply_to_id: string | null
   created_at: string
+  mailbox_at: string
   is_unread: boolean
   body: string
 }
@@ -122,7 +123,7 @@ function establishedStatus({
 
   if (viewerTurn && latestLetter && rhythm) {
     const timing = rhythmTimingState({
-      waitingSince: latestLetter.created_at,
+      waitingSince: latestLetter.mailbox_at,
       rhythm: rhythm.viewerRhythm,
     })
     return rhythmStatusCopy({
@@ -179,10 +180,10 @@ export async function getRelationshipSurfacePeople(
 
   const correspondenceIds = correspondences.map((row) => row.id)
   const { data: letterRows } = await supabase
-    .from('letters_for_participant')
-    .select('correspondence_id, sender_id, recipient_id, reply_to_id, created_at, is_unread, body')
+    .from('mailbox_letters_for_participant')
+    .select('correspondence_id, sender_id, recipient_id, reply_to_id, created_at, mailbox_at, is_unread, body')
     .in('correspondence_id', correspondenceIds)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   const letters = (letterRows ?? []) as VisibleLetterRow[]
   const lettersByCorrespondence = new Map<string, VisibleLetterRow[]>()
@@ -207,7 +208,7 @@ export async function getRelationshipSurfacePeople(
         : rootLetter.sender_id === viewerId
           ? 'outgoing'
           : 'incoming'
-    const activityAt = latestLetter ? new Date(latestLetter.created_at).getTime() : 0
+    const activityAt = latestLetter ? new Date(latestLetter.mailbox_at).getTime() : 0
     const unreadCount = episodeLetters.filter(
       (letter) => letter.recipient_id === viewerId && letter.is_unread
     ).length
