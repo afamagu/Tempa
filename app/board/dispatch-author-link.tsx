@@ -4,7 +4,7 @@ import EditorialByline from '@/app/editorial-byline'
 
 /**
  * Shared Dispatch-author identity link — pseudonym (and identity mark)
- * wrapped in a real link to `/minds/[authorId]`, everywhere a Dispatch
+ * wrapped in a real link to `/room/[authorId]`, everywhere a Dispatch
  * lists its author. Locked TEMPA rule: a member's pseudonym/name must
  * link to that member's profile anywhere it appears as an identity
  * label — live testing found this missing on The Board and Home's
@@ -50,7 +50,7 @@ export default function DispatchAuthorLink({
 
   return (
     <Link
-      href={`/minds/${authorId}`}
+      href={`/room/${authorId}`}
       className="flex min-w-0 items-center gap-1.5 hover:opacity-80"
     >
       <ProfileIdentityMark
