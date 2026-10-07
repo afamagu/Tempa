@@ -105,9 +105,9 @@ export default function LandingPage() {
           </h1>
           <p className={styles.tagline}>Meet them through what they write.</p>
           <p className={styles.intro}>If someone interests you, write privately. They write back, or they don’t — and a quiet week is a pace, not a disappearance.</p>
-          <p className={styles.reveal}>No audience to build. No followers to collect. No public persona to keep feeding.</p>
+          <p className={styles.reveal}>No audience to build. No followers to collect. No public persona to keep feeding.</p>\n          <p className={styles.pilotStatus}>Founding Correspondents · Tempa is currently invitation only.</p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryButton} href={JOIN_HREF}>Enter Tempa</Link>
+            <Link className={styles.primaryButton} href={JOIN_HREF}>I have an invitation</Link>
             <a className={styles.textLink} href="#read">See how Tempa works ↓</a>
           </div>
         </div>
@@ -217,7 +217,7 @@ export default function LandingPage() {
         <Image width={810} height={930} sizes="(max-width: 699px) 90vw, 530px" className={styles.postcardScene} src="/landing/postcard-scene.webp" alt="An illustrated mountain-lake postcard, with Lowtide’s handwritten note to Evening Quill on its back" loading="lazy" />
         <div className={styles.sectionCopy}>
           <h2>A small piece of your day.</h2>
-          <p>Illustrated Postcards you write on, front and back. Send one with a letter, or on its own.</p>
+          <p>Illustrated Postcards you write on, front and back. Send one with a letter or a Dispatch.</p>
         </div>
       </section>
 
@@ -225,7 +225,7 @@ export default function LandingPage() {
         <div className={styles.closingThread} aria-hidden="true" />
         <p className={styles.steps}>Read what someone thinks.<br />Write when someone interests you.<br />Let the correspondence find its own pace.</p>
         <h2>Find someone you want to keep writing to.</h2>
-        <Link className={styles.primaryButton} href={JOIN_HREF}>Enter Tempa</Link>
+        <Link className={styles.primaryButton} href={JOIN_HREF}>I have an invitation</Link>
       </section>
 
       <div id="landing-moment" popover="auto" role="dialog" aria-label="The Moment photograph" className={styles.momentDialog}>
