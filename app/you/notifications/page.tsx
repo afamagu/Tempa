@@ -22,11 +22,14 @@ export default async function NotificationsPage() {
     redirect('/sign-in?next=%2Fyou%2Fnotifications')
   }
 
-  const [waitingCount, preferenceResult, replyReminderResult] = await Promise.all([
+  const [waitingCount, preferenceResult, replyReminderResult, replyReminderEmailAvailability] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getArrivalEmailPreference(supabase, user.id),
     getReplyReminderPreference(supabase, user.id),
+    supabase.rpc('reply_reminder_email_delivery_available'),
   ])
+  const replyReminderEmailAvailable =
+    !replyReminderEmailAvailability.error && replyReminderEmailAvailability.data === true
 
   const { data: roomPreference, error: roomPreferenceError } = await supabase
     .from('room_invitation_preferences')
@@ -73,6 +76,7 @@ export default async function NotificationsPage() {
             <ReplyReminderPreference
               initialRemindersEnabled={replyReminderResult.value.remindersEnabled}
               initialEmailEnabled={replyReminderResult.value.emailEnabled}
+              emailDeliveryAvailable={replyReminderEmailAvailable}
             />
           ) : (
             <div className="space-y-3 border-t border-foreground/10 pt-6">
