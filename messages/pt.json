@@ -59,7 +59,7 @@
   "LanguageSettings": {
     "back": "Você",
     "heading": "Idioma",
-    "intro": "Escolha o idioma que você usa no Tempa. Os menus e controles do Tempa vão usar este idioma, que também será o padrão para traduzir o que outras pessoas escrevem.",
+    "intro": "Escolha o idioma que você usa no Tempa. Os menus e controles do Tempa vão usar este idioma.",
     "optionsLabel": "Idioma do Tempa",
     "current": "Atual",
     "saving": "Salvando…",
@@ -154,7 +154,7 @@
   },
   "LanguageOnboarding": {
     "heading": "Escolha o idioma do seu Tempa",
-    "intro": "Este será o idioma dos menus e controles do Tempa e também o padrão quando você traduzir o que outra pessoa escreveu.",
+    "intro": "Este será o idioma dos menus e controles do Tempa.",
     "continue": "Continuar",
     "saving": "Salvando…",
     "error": "Não foi possível salvar seu idioma. Tente de novo.",
