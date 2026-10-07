@@ -642,7 +642,11 @@ export default function DispatchComposer({
               A Dispatch is writing offered beyond a private correspondence — a story from your day,
               something you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something worth putting into words.
             </p>
-            <p>\n              {showWebChoice\n                ? 'New Dispatches are public on the web by default. You can keep any one on Tempa only before publishing.'\n                : 'This Dispatch will stay on Tempa only. Web-public publishing is not available from this composer right now.'}\n            </p>
+            <p>
+              {showWebChoice
+                ? 'New Dispatches are public on the web by default. You can keep any one on Tempa only before publishing.'
+                : 'This Dispatch will stay on Tempa only. Web-public publishing is not available from this composer right now.'}
+            </p>
           </FeatureIntroduction>
         )}
 
