@@ -106,7 +106,7 @@ export default function MomentDisplay(props: MomentDisplayProps) {
       {showHint && <p className={`mt-2 text-center ${helperTextClass}`}>{hint}</p>}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4">
+        <div className="safe-overlay-pad fixed inset-0 z-50 flex items-center justify-center bg-foreground/50">
           <button
             type="button"
             aria-label="Close"
@@ -125,7 +125,7 @@ export default function MomentDisplay(props: MomentDisplayProps) {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="absolute -top-3 -right-3 flex h-9 w-9 items-center justify-center rounded-full bg-background text-lg leading-none text-foreground ring-1 ring-foreground/15"
+                className="absolute -top-3 -right-3 flex h-11 w-11 items-center justify-center rounded-full bg-background text-lg leading-none text-foreground ring-1 ring-foreground/15 sm:h-9 sm:w-9"
               >
                 ×
               </button>
@@ -141,7 +141,7 @@ export default function MomentDisplay(props: MomentDisplayProps) {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="absolute -top-3 -right-3 flex h-9 w-9 items-center justify-center rounded-full bg-background text-lg leading-none text-foreground ring-1 ring-foreground/15"
+                className="absolute -top-3 -right-3 flex h-11 w-11 items-center justify-center rounded-full bg-background text-lg leading-none text-foreground ring-1 ring-foreground/15 sm:h-9 sm:w-9"
               >
                 ×
               </button>
