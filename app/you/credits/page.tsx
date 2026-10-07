@@ -69,8 +69,8 @@ export default async function CreditsPage() {
             </p>
           )}
 
-          <Link href="/you/postcards" className={quietLinkClass}>
-            Back to Postcards
+          <Link href="/you" className={quietLinkClass}>
+            Back to You
           </Link>
         </div>
       </main>
