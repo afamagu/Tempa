@@ -470,6 +470,10 @@ function SignInForm() {
           {joinIntent ? t('createAccountHeading') : t('signIn')}
         </h1>
 
+        {joinIntent && (
+          <p className="text-sm leading-relaxed text-muted">{t('pilotInviteNote')}</p>
+        )}
+
         {useGoogleIdentity && googleClientId ? (
           googleLoading ? (
             <p className="py-2.5 text-center text-sm text-muted">{t('signingYouIn')}</p>
