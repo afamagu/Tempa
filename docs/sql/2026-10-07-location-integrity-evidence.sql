@@ -50,6 +50,12 @@ begin
   if p_source in ('permission_denied','unavailable') and (p_latitude is not null or p_longitude is not null)
   then raise exception 'coordinates must be absent'; end if;
 
+  if p_purpose = 'signup' then
+    select id into v_id from public.user_location_evidence
+    where user_id=v_user and purpose='signup' order by observed_at asc limit 1;
+    if v_id is not null then return v_id; end if;
+  end if;
+
   select country into v_country from public.profiles where id = v_user;
 
   insert into public.user_location_evidence(user_id,purpose,source,latitude,longitude,accuracy_m,claimed_country)
