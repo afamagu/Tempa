@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import TempaEmblem from '@/app/tempa-emblem'
+import TempaEmblem from '@/app/tempa-emblem'\nimport SignupLocationIntegrityCapture from '@/app/signup-location-integrity-capture'
 
 type NavKey = 'home' | 'letters' | 'room' | 'board' | 'you'
 type ShellActiveKey = NavKey | 'minds'
@@ -101,7 +101,7 @@ export default function AppShell({
   const activeNav: NavKey = active === 'minds' ? 'room' : active
 
   return (
-    <div className="tempa-shell w-full min-w-0 max-w-full sm:flex sm:min-h-screen">
+    <div className="tempa-shell w-full min-w-0 max-w-full sm:flex sm:min-h-screen">\n      <SignupLocationIntegrityCapture />
       <nav className="hidden sm:flex sm:w-56 sm:shrink-0 sm:flex-col sm:border-r sm:border-foreground/10 sm:px-4 sm:py-8">
         <div className="flex items-center gap-2 px-2 pb-8">
           <TempaEmblem size={28} />
