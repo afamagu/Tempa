@@ -222,6 +222,9 @@ export default function FirstLetterComposer({
           <p className="text-lg leading-relaxed">
             Your letter to {recipientPseudonym} has been sent.
           </p>
+          <p className={helperTextClass}>
+            A reply is what begins the correspondence. Until then, there&rsquo;s nothing you need to do.
+          </p>
           <Link href={backHref} className={secondaryButtonClass}>
             Back to {backLabel}
           </Link>
