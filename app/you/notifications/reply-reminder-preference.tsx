@@ -9,9 +9,11 @@ import { helperTextClass } from '@/app/profile/ui'
 export default function ReplyReminderPreference({
   initialRemindersEnabled,
   initialEmailEnabled,
+  emailSendingEnabled,
 }: {
   initialRemindersEnabled: boolean
   initialEmailEnabled: boolean
+  emailSendingEnabled: boolean
 }) {
   const router = useRouter()
   const [remindersEnabled, setRemindersEnabled] = useState(initialRemindersEnabled)
@@ -80,17 +82,19 @@ export default function ReplyReminderPreference({
         />
       </label>
 
-      <label className={`flex items-start justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] ${remindersEnabled ? 'text-foreground' : 'text-muted'}`}>
+      <label className={`flex items-start justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] ${remindersEnabled && emailSendingEnabled ? 'text-foreground' : 'text-muted'}`}>
         <span className="space-y-1">
           <span className="block">Email the reminder too</span>
           <span className="block text-[13px] leading-5 text-muted">
-            The email only says that a letter is still waiting. It never includes the letter itself.
+            {emailSendingEnabled
+              ? 'The email only says that a letter is still waiting. It never includes the letter itself.'
+              : 'Reply-reminder email delivery is not currently active. Your saved preference will be kept for when Tempa enables this channel.'}
           </span>
         </span>
         <input
           type="checkbox"
           checked={emailEnabled}
-          disabled={!remindersEnabled}
+          disabled={!remindersEnabled || !emailSendingEnabled}
           onChange={(event) => setEmail(event.target.checked)}
           className="mt-0.5 h-5 w-5 shrink-0 accent-accent disabled:opacity-40"
           aria-label="Email my reply reminder too"
