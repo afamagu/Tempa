@@ -26,10 +26,10 @@ function genderDisplay(gender: string | null, genderCustom: string | null) {
   return gender
 }
 
-// The same icon used for the Minds destination in primary navigation —
-// one consistent mark for "this is the Minds/discovery concept,"
-// wherever it shows up.
-function MindsIcon() {
+// Quiet discovery icon for the finite post-closure reading suggestions.
+// Member-facing terminology stays People / The Room; the retired Minds
+// product name is not surfaced here.
+function PeopleIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -49,8 +49,8 @@ function MindsIcon() {
 
 /**
  * Shown after a sender sees a first-contact letter's closure (recipient
- * or system) — a small, finite nudge back to Minds rather than a dead
- * end. Reuses the exact answer-card component Minds/Explore uses; this
+ * or system) — a small, finite nudge toward other people worth reading
+ * rather than a dead end. Reuses the existing answer-card component; this
  * is not a second recommendation UI. The candidate query lives in
  * get_post_closure_recommendations (docs/sql/2026-08-30-letters.sql),
  * not here, since it needs account age (for a modest newer-member
@@ -115,8 +115,8 @@ export default async function ClosureRecommendations({
     <div className="mt-10 rounded-md border-t-2 border-foreground/15 bg-background p-5 sm:p-6">
       <p className={sectionLabelClass}>Discover</p>
       <div className="mt-1.5 flex items-center gap-2">
-        <MindsIcon />
-        <p className={sectionTitleClass}>Other minds you might like to meet</p>
+        <PeopleIcon />
+        <p className={sectionTitleClass}>Other people you might like to meet</p>
       </div>
       <p className={`mt-1 ${helperTextClass}`}>A few answers you may want to read next.</p>
       <div className="mt-5">

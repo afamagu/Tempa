@@ -157,6 +157,19 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
     expect(lettersAnchor).toMatch(/rounded-full/)
   })
 
+  it('reserves the iPhone home-indicator safe area in both the bar and page content', () => {
+    const html = renderToStaticMarkup(
+      <AppShell active="home" waitingLetterCount={0}>
+        <div>content</div>
+      </AppShell>
+    )
+    const mobileNav = mobileNavHtml(html)
+    expect(mobileNav).toContain('padding-bottom:env(safe-area-inset-bottom)')
+    expect(mobileNav).toContain('padding-left:env(safe-area-inset-left)')
+    expect(mobileNav).toContain('padding-right:env(safe-area-inset-right)')
+    expect(html).toContain('pb-[calc(4rem+env(safe-area-inset-bottom))]')
+  })
+
   it('preserves the touch target — the flex-1 py-2.5 tab container is unchanged by the lozenge treatment', () => {
     const html = renderToStaticMarkup(
       <AppShell active="home" waitingLetterCount={0}>

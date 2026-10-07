@@ -114,10 +114,10 @@ export default function PostcardEditor({
   }, [onDone])
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    <div className="safe-fixed-screen fixed inset-0 z-50 flex flex-col bg-background">
       <div className="flex items-center justify-between border-b border-foreground/10 px-4 py-3 sm:px-6">
         <p className={sectionLabelClass}>Postcard</p>
-        <button type="button" onClick={onDone} aria-label="Close postcard editor" className={helperTextClass}>
+        <button type="button" onClick={onDone} aria-label="Close postcard editor" className={`${helperTextClass} inline-flex min-h-11 items-center px-2 sm:min-h-0`}>
           Close
         </button>
       </div>

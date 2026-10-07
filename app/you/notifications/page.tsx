@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getArrivalEmailPreference } from '@/lib/email-preferences'
 import { getReplyReminderPreference } from '@/lib/reply-reminders'
@@ -22,11 +23,18 @@ export default async function NotificationsPage() {
     redirect('/sign-in?next=%2Fyou%2Fnotifications')
   }
 
-  const [waitingCount, preferenceResult, replyReminderResult] = await Promise.all([
+  const [waitingCount, preferenceResult, replyReminderResult, replyReminderSystemResult] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getArrivalEmailPreference(supabase, user.id),
     getReplyReminderPreference(supabase, user.id),
+    createServiceClient()
+      .from('reply_reminder_system_config')
+      .select('sending_enabled')
+      .eq('id', true)
+      .maybeSingle(),
   ])
+  const replyReminderEmailSendingEnabled =
+    !replyReminderSystemResult.error && replyReminderSystemResult.data?.sending_enabled === true
 
   const { data: roomPreference, error: roomPreferenceError } = await supabase
     .from('room_invitation_preferences')
@@ -73,6 +81,7 @@ export default async function NotificationsPage() {
             <ReplyReminderPreference
               initialRemindersEnabled={replyReminderResult.value.remindersEnabled}
               initialEmailEnabled={replyReminderResult.value.emailEnabled}
+              emailSendingEnabled={replyReminderEmailSendingEnabled}
             />
           ) : (
             <div className="space-y-3 border-t border-foreground/10 pt-6">

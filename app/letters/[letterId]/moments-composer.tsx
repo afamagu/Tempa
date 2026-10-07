@@ -1025,7 +1025,7 @@ export default function MomentsComposer({
       )}
 
       {postcardPickerOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background px-3 py-4 shadow-lg touch-pan-y sm:bg-foreground/30 sm:px-4 sm:py-8">
+        <div className="safe-overlay-pad fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background shadow-lg touch-pan-y sm:bg-foreground/30 sm:px-4 sm:py-8">
           <PostcardPicker postcards={activePostcards} onSelect={choosePostcard} onCancel={() => setPostcardPickerOpen(false)} />
         </div>
       )}

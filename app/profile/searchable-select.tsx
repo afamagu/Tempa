@@ -46,7 +46,7 @@ export default function SearchableSelect({ id, value, onChange, options, placeho
       placeholder={placeholder} autoComplete="off" className={inputClass} />
     {open && <ul id={`${id}-listbox`} role="listbox" className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-foreground/15 bg-background shadow-none">
       {filtered.length === 0 && <li className="px-3 py-2 text-sm text-muted">{common('noMatches')}</li>}
-      {filtered.map((option, index) => <li key={option.value} role="option" aria-selected={option.value === value}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectOption(option)} className={`w-full text-left px-3 py-2 text-sm transition-colors ${index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'}`}>{option.label}</button></li>)}
+      {filtered.map((option, index) => <li key={option.value} role="option" aria-selected={option.value === value}><button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectOption(option)} className={`min-h-11 w-full text-left px-3 py-2 text-sm transition-colors ${index === highlighted ? 'bg-accent/10' : 'hover:bg-foreground/[.04]'}`}>{option.label}</button></li>)}
     </ul>}
   </div>
 }

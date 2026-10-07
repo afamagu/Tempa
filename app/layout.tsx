@@ -49,6 +49,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: BRAND_BACKGROUND,
+  viewportFit: "cover",
 };
 
 // Pre-beta security F-02 — every page renders per request so Next.js can
