@@ -69,6 +69,7 @@ import PostcardPicker from './postcard-picker'
 import PostcardComposerSlot from './postcard-composer-slot'
 import PostcardEditor from './postcard-editor'
 import LetterPreview from './letter-preview'
+import DraftPersistenceWarning from '@/app/draft-persistence-warning'
 
 /**
  * The composer for an ESTABLISHED correspondence's ongoing letters —
@@ -353,6 +354,7 @@ export default function MomentsComposer({
   // to false for the ordinary composer-slot edit, so that path keeps
   // opening on the front exactly as before.
   const [postcardEditorStartOnBack, setPostcardEditorStartOnBack] = useState(false)
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -385,7 +387,9 @@ export default function MomentsComposer({
       },
     },
     onUpdate({ editor: current }) {
-      writeLetterEditorDraft(draftKey, current.getJSON() as LetterDocJSON)
+      if (!writeLetterEditorDraft(draftKey, current.getJSON() as LetterDocJSON)) {
+        setDraftStorageFailed(true)
+      }
     },
   })
 
@@ -423,7 +427,9 @@ export default function MomentsComposer({
               revealLine: '',
               backMessage: '',
             }
-            writeLetterPostcardDraft(draftKey, migrated)
+            if (!writeLetterPostcardDraft(draftKey, migrated)) {
+              setDraftStorageFailed(true)
+            }
             return migrated
           })
         })
@@ -490,7 +496,9 @@ export default function MomentsComposer({
   // writeLetterPostcardDraft's own doc comment).
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
     setPostcardDraft(next)
-    writeLetterPostcardDraft(draftKey, next)
+    if (!writeLetterPostcardDraft(draftKey, next)) {
+      setDraftStorageFailed(true)
+    }
   }
 
   // The SAME editor.getJSON() call feeds the button's enable state and
@@ -1090,6 +1098,7 @@ export default function MomentsComposer({
       {momentsQualified && !canSendPhoto && !photoDecisionOutstandingForMe && (
         <TempaNote>Photo sharing isn&apos;t available in this correspondence right now.</TempaNote>
       )}
+      {draftStorageFailed && <DraftPersistenceWarning />}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
