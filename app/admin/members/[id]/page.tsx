@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getMember, listMemberReports, listAuditForMember } from '@/lib/admin'
+import { getMember, listMemberReports, listAuditForMember, listLocationEvidence } from '@/lib/admin'
 import { REPORT_REASONS } from '@/lib/reports'
 import { formatDateTimeFull } from '@/lib/format-date'
 import { sectionTitleClass, sectionLabelClass, helperTextClass, metadataTextClass } from '@/app/profile/ui'
@@ -19,10 +19,11 @@ export default async function AdminMemberDetailPage({ params }: { params: Promis
   const supabase = await createClient()
   const { data: { user: staffUser } } = await supabase.auth.getUser()
 
-  const [{ data: member }, { data: reports }, { data: audit }, letters, activePartnerIds] = await Promise.all([
+  const [{ data: member }, { data: reports }, { data: audit }, { data: locationEvidence }, letters, activePartnerIds] = await Promise.all([
     getMember(supabase, id),
     listMemberReports(supabase, id),
     listAuditForMember(supabase, id),
+    listLocationEvidence(supabase, id),
     staffUser ? getLetterArchiveWithUser(supabase, staffUser.id, id) : Promise.resolve([]),
     staffUser ? getActiveCorrespondencePartnerIds(supabase, staffUser.id) : Promise.resolve(new Set<string>()),
   ])
@@ -64,6 +65,25 @@ export default async function AdminMemberDetailPage({ params }: { params: Promis
       </div>
 
       <AccountStatusActions userId={member.id} currentStatus={member.status} />
+
+      <div className="space-y-2">
+        <p className={sectionLabelClass}>Private location integrity evidence</p>
+        <p className={helperTextClass}>Restricted moderation evidence. A mismatch or refused permission is a signal for review, never automatic proof of deception.</p>
+        {locationEvidence.length === 0 ? <p className={helperTextClass}>No device-location evidence recorded.</p> : (
+          <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10">
+            {locationEvidence.map((e) => (
+              <div key={e.id} className="px-4 py-2.5">
+                <p className="text-[14px] font-medium text-foreground">{e.purpose.replaceAll('_', ' ')} · {e.source.replaceAll('_', ' ')}</p>
+                <p className={metadataTextClass}>
+                  {e.latitude !== null && e.longitude !== null ? `${e.latitude.toFixed(5)}, ${e.longitude.toFixed(5)}${e.accuracyM !== null ? ` · ±${Math.round(e.accuracyM)}m` : ''}` : 'Location not available'}
+                  {e.claimedCountry ? ` · profile: ${e.claimedCountry}` : ''}
+                </p>
+                <p className={metadataTextClass}>{formatDateTimeFull(e.observedAt)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="space-y-3">
         <p className={sectionLabelClass}>Correspondence with this member</p>
