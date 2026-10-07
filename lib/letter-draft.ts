@@ -17,15 +17,16 @@ export function readLetterDraft(correspondenceId: string): string | null {
   }
 }
 
-export function writeLetterDraft(correspondenceId: string, body: string): void {
+export function writeLetterDraft(correspondenceId: string, body: string): boolean {
   try {
     if (body.trim().length === 0) {
       window.localStorage.removeItem(draftKey(correspondenceId))
     } else {
       window.localStorage.setItem(draftKey(correspondenceId), body)
     }
+    return true
   } catch {
-    // ignore storage failures (e.g. private browsing quota)
+    return false
   }
 }
 
