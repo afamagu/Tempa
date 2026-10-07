@@ -59,6 +59,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* The Moments walkthrough's one-time "tap the photo" teaching cue — a
@@ -292,4 +295,24 @@ body {
 .tempa-shell pre {
   max-width: 100%;
   overflow-x: auto;
+}
+
+/* Full-screen writing workspaces are fixed to the viewport, so they do
+   not inherit the body's safe-area padding. Keep edge-anchored headers
+   and action bars inside device cutouts/home indicators while allowing
+   the background itself to remain edge-to-edge. */
+.safe-fixed-screen {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+/* Centered/full-viewport media pickers already want 1rem of breathing
+   room; add the device inset rather than replacing that visual margin. */
+.safe-overlay-pad {
+  padding-top: calc(1rem + env(safe-area-inset-top));
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  padding-left: calc(1rem + env(safe-area-inset-left));
 }
