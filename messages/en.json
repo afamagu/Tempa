@@ -59,7 +59,7 @@
   "LanguageSettings": {
     "back": "You",
     "heading": "Language",
-    "intro": "Choose the language you use on Tempa. Tempa’s menus and controls will use this language, and it will also be your default when translating other people’s writing.",
+    "intro": "Choose the language you use on Tempa. Tempa’s menus and controls will use this language.",
     "optionsLabel": "Tempa language",
     "current": "Current",
     "saving": "Saving…",
@@ -154,7 +154,7 @@
   },
   "LanguageOnboarding": {
     "heading": "Choose your Tempa language",
-    "intro": "This will be the language of Tempa’s menus and controls, and your default when you translate someone else’s writing.",
+    "intro": "This will be the language of Tempa’s menus and controls.",
     "continue": "Continue",
     "saving": "Saving…",
     "error": "Could not save your language. Please try again.",
