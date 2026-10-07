@@ -56,7 +56,7 @@ describe('/you/language', () => {
     const pressed = html.slice(html.indexOf('aria-pressed="true"'))
     expect(pressed.slice(0, pressed.indexOf('</button>'))).toContain('Français')
     expect(html).toContain('Langue de Tempa')
-    expect(html).toContain('Identique à la langue de Tempa')
+    expect(html).not.toContain('Identique à la langue de Tempa')
   })
 
   it('primary choice → chooseTempaLanguage (cookie + same reading language)', () => {
