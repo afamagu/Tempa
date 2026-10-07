@@ -91,9 +91,13 @@ describe('QuestionAnswer — post-first-save onboarding contract', () => {
     expect(source).toContain("mode === 'view' && publishedBody && onboarding && confirmation ?")
   })
 
-  it('uses localized completion copy and continues to Writing Style', () => {
+  it('uses truthful completion copy and continues to Writing Style before Home', () => {
     expect(source).toContain("t('roomHeading')")
     expect(source).toContain("t('roomIntro')")
+    expect(en.Question.roomHeading).toBe('Your First Question is published.')
+    expect(en.Question.roomIntro).toContain('One final choice remains')
+    expect(en.Question.roomIntro).toContain('writing feels on the page')
+    expect(en.Question.oneLastThing).not.toContain('enter The Room')
     expect(source).toContain('<Link href={WRITING_STYLE_ONBOARDING_HREF}')
     expect(source).toContain("{t('continue')}")
   })
