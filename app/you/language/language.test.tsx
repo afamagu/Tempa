@@ -7,7 +7,6 @@ import en from '@/messages/en.json'
 import fr from '@/messages/fr.json'
 
 vi.mock('@/app/locale-actions', () => ({ chooseTempaLanguage: async () => ({ ok: true }) }))
-vi.mock('@/app/reading-language-actions', () => ({ saveReadingLanguage: async () => ({ ok: true }) }))
 
 const { default: LanguageSettingsEditor } = await import('./language-settings-editor')
 
@@ -17,10 +16,10 @@ const editor = readFileSync(path.join(dir, 'language-settings-editor.tsx'), 'utf
 const you = readFileSync(path.join(dir, '..', 'page.tsx'), 'utf8')
 const oldRoute = readFileSync(path.join(dir, '..', 'reading-language', 'page.tsx'), 'utf8')
 
-function render(locale: 'en' | 'fr', readingLanguage: string | null) {
+function render(locale: 'en' | 'fr') {
   return renderToStaticMarkup(
     <NextIntlClientProvider locale={locale} messages={locale === 'en' ? en : fr}>
-      <LanguageSettingsEditor currentLocale={locale} readingLanguage={readingLanguage} readingLanguageLoadFailed={false} />
+      <LanguageSettingsEditor currentLocale={locale} />
     </NextIntlClientProvider>
   )
 }
@@ -46,13 +45,13 @@ describe('/you/language', () => {
     expect(page).toContain("getTranslations('LanguageSettings')")
     expect(en.LanguageSettings.heading).toBe('Language')
     expect(en.LanguageSettings.intro).toBe(
-      'Choose the language you use on Tempa. Tempa’s menus and controls will use this language, and it will also be your default when translating other people’s writing.'
+      'Choose the language you use on Tempa. Tempa’s menus and controls will use this language.'
     )
     for (const source of [page, editor]) expect(source).not.toMatch(/interface locale|azure/i)
   })
 
   it('shows the current Tempa language among the four native names', () => {
-    const html = render('fr', 'fr')
+    const html = render('fr')
     for (const name of ['English', 'Français', 'Español', 'Português']) expect(html).toContain(name)
     const pressed = html.slice(html.indexOf('aria-pressed="true"'))
     expect(pressed.slice(0, pressed.indexOf('</button>'))).toContain('Français')
@@ -64,20 +63,12 @@ describe('/you/language', () => {
     expect(editor).toContain('await chooseTempaLanguage(code)')
   })
 
-  it('Translation language: a separate override using the existing 108-language registry and save path', () => {
-    expect(editor).toContain('<ReadingLanguagePicker')
-    expect(editor).toContain('await saveReadingLanguage(code)')
-    const html = render('en', 'ja')
-    expect(html).toContain('Translation language')
-    expect(html).toContain('Translating into <span lang="ja" dir="ltr">日本語</span>')
-    expect(html).toContain('Use my Tempa language')
-    expect(render('en', null)).toContain('Not chosen yet')
-  })
-
-  it('marks only a different translation-language name with that language, not the surrounding interface sentence', () => {
-    const html = render('fr', 'ja')
-    expect(html).toContain('Traduction : <span lang="ja" dir="ltr">日本語</span>')
-    expect(html).not.toContain('<span lang="ja">Traduction')
-    expect(html).not.toContain('<span lang="ja" dir="ltr">Traduction')
+  it('does not advertise a separate Translation language before member-facing translation ships', () => {
+    const html = render('en')
+    expect(html).not.toContain('Translation language')
+    expect(html).not.toContain('Choose a different language')
+    expect(editor).not.toContain('ReadingLanguagePicker')
+    expect(editor).not.toContain('saveReadingLanguage')
+    expect(page).not.toContain('getMyReadingLanguage')
   })
 })
