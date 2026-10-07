@@ -319,6 +319,21 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     expect(html).not.toContain('Postcards')
   })
 
+  it('describes web-public default only when that visibility choice is genuinely available', () => {
+    const available = renderToStaticMarkup(
+      <DispatchComposer authorId="author-1" showComposerIntro webChoiceAvailable />
+    )
+    expect(available).toContain('New Dispatches are public on the web by default.')
+    expect(available).not.toContain('Web-public publishing is not available from this composer right now.')
+
+    const unavailable = renderToStaticMarkup(
+      <DispatchComposer authorId="author-1" showComposerIntro />
+    )
+    expect(unavailable).toContain('This Dispatch will stay on Tempa only.')
+    expect(unavailable).toContain('Web-public publishing is not available from this composer right now.')
+    expect(unavailable).not.toContain('New Dispatches are public on the web by default.')
+  })
+
   it('the composer introduction uses the shared FeatureIntroduction card (clay-free, accent-bordered), never inline TempaNote treatment', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" showComposerIntro />)
     expect(html).toMatch(/rounded-lg border border-accent\/20/)
