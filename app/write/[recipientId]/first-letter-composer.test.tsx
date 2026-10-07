@@ -23,10 +23,13 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
     expect((source.match(/Back to \{backLabel\}/g) ?? []).length).toBe(2)
   })
 
-  it('the Sent screen (rendered when sent === true) is the one with "Back to People", not just the pre-send toolbar', () => {
+  it('the Sent screen explains that a reply — not the first letter — begins the correspondence', () => {
     const sentBlockStart = source.indexOf('if (sent) {')
     const sentBlockEnd = source.indexOf('\n  }\n', sentBlockStart)
-    expect(source.slice(sentBlockStart, sentBlockEnd)).toContain('Back to {backLabel}')
+    const sentBlock = source.slice(sentBlockStart, sentBlockEnd)
+    expect(sentBlock).toContain('Back to {backLabel}')
+    expect(sentBlock).toContain('A reply is what begins the correspondence.')
+    expect(sentBlock).toContain('there&rsquo;s nothing you need to do')
   })
 })
 
