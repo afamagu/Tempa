@@ -18,10 +18,10 @@ function read(...parts: string[]) {
 }
 
 describe('Guide replay CTA destinations agree with their labels (Section F)', () => {
-  it('People — "Start exploring" goes to /minds, the People directory itself', () => {
+  it('People — "Start exploring" goes to /room, the current people-reading surface', () => {
     const source = read('people', 'page.tsx')
     expect(source).toContain('ctaLabel="Start exploring"')
-    expect(source).toContain('destinationHref="/minds"')
+    expect(source).toContain('destinationHref="/room"')
   })
 
   it('Board — "See what\'s on the Board" goes to /board (the confirmed smoke-test bug)', () => {

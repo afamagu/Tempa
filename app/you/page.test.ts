@@ -57,3 +57,11 @@ describe('/you — Credits visibility', () => {
     expect(source).toContain('{creditBalance.toLocaleString()} available')
   })
 })
+
+
+describe('/you — current public profile route', () => {
+  it('opens the member profile through /room, never the retired /minds namespace', () => {
+    expect(source).toContain('href={`/room/${user.id}`}')
+    expect(visibleSource).not.toContain('/minds/')
+  })
+})

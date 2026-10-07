@@ -3,7 +3,7 @@ import ProfileIdentityMark from '@/app/profile-identity-mark'
 
 /**
  * The single-sender Arrivals identity — Mindform + pseudonym as ONE
- * link to that person's public profile, deliberately separate from the
+ * link to that person's current public profile, deliberately separate from the
  * "N letter(s) waiting" card next to it: clicking the person and
  * clicking "read this letter" are different intents, and only the
  * former should land on a profile. Only ever rendered when exactly one
@@ -21,7 +21,7 @@ export default function ArrivalSenderLink({
 }) {
   return (
     <Link
-      href={`/minds/${senderId}`}
+      href={`/room/${senderId}`}
       className="flex w-fit items-center gap-2 rounded-md py-1 transition-opacity hover:opacity-80"
     >
       <ProfileIdentityMark

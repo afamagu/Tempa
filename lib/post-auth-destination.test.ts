@@ -18,6 +18,8 @@ function fakeSupabase(options: {
   languageConfirmed?: boolean
   languageError?: boolean
   legalRows?: { document_type: string; document_version: string }[]
+  pilotAccess?: boolean
+  pilotError?: boolean
 }) {
   const from = vi.fn((table: string) => {
     if (table === 'member_language_preferences') {
@@ -37,7 +39,14 @@ function fakeSupabase(options: {
     }
     throw new Error(`unexpected table: ${table}`)
   })
-  return { from } as unknown as SupabaseClient
+  const rpc = vi.fn(async (name: string) => {
+    if (name !== 'current_pilot_access') throw new Error(`unexpected rpc: ${name}`)
+    return {
+      data: options.pilotAccess ?? true,
+      error: options.pilotError ? { message: 'migration missing' } : null,
+    }
+  })
+  return { from, rpc } as unknown as SupabaseClient
 }
 
 const CURRENT_LEGAL_ROWS = [
@@ -46,6 +55,28 @@ const CURRENT_LEGAL_ROWS = [
 ]
 
 describe('resolvePostAuthDestination', () => {
+  it('sends an authenticated account outside the controlled pilot directly to /pilot-access', async () => {
+    const supabase = fakeSupabase({
+      pilotAccess: false,
+      profile: null,
+      eligibility: null,
+      legalRows: [],
+    })
+
+    expect(await resolvePostAuthDestination(supabase, 'uninvited', '/home')).toBe('/pilot-access')
+  })
+
+  it('fails open only when the pilot RPC itself is unavailable during deploy ordering', async () => {
+    const supabase = fakeSupabase({
+      pilotError: true,
+      profile: null,
+      eligibility: null,
+      legalRows: [],
+    })
+
+    expect(await resolvePostAuthDestination(supabase, 'deploy-race', '/home')).toBe('/begin?next=%2Fhome')
+  })
+
   it('an existing, eligible, legally-current member is sent to the requested destination', async () => {
     const supabase = fakeSupabase({
       profile: { id: 'u1', onboarding_stage: 'complete' },
