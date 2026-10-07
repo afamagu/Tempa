@@ -54,7 +54,7 @@ import {
 } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
-import { baseWritingExtensions } from '@/app/letters/writing-extensions'
+import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { PhotoMoment } from './photo-moment-node'
 import { PostcardMoment } from './postcard-moment-node'
@@ -64,6 +64,7 @@ import MomentSourceMenu from './moment-source-menu'
 import { processImageForUpload } from '@/lib/image-processing'
 import { reportLetterSendTiming, resourceNet, startLetterSendTiming, type LetterSendTiming } from '@/lib/letter-send-timing'
 import { useKeyboardDismiss } from '@/app/letters/use-keyboard-dismiss'
+import { useEditorVisualViewport } from '@/app/letters/use-editor-visual-viewport'
 import PostcardPicker from './postcard-picker'
 import PostcardComposerSlot from './postcard-composer-slot'
 import PostcardEditor from './postcard-editor'
@@ -246,6 +247,7 @@ export default function MomentsComposer({
   const timingRef = useRef<{ start: number; ackAt?: number; report: LetterSendTiming } | null>(null)
   const composerRootRef = useRef<HTMLDivElement | null>(null)
   useKeyboardDismiss(composerRootRef)
+  useEditorVisualViewport(composerRootRef)
   // The acknowledged send's timing is reported when this composer
   // unmounts, i.e. when the next page has actually rendered.
   useEffect(() => {
@@ -377,6 +379,7 @@ export default function MomentsComposer({
     content: EMPTY_LETTER_DOC,
     editorProps: {
       attributes: {
+        ...nativeWritingAttributes,
         class:
           'min-h-32 w-full rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
@@ -989,6 +992,18 @@ export default function MomentsComposer({
       />
 
       <div className="space-y-2">
+        {sourceLetter && (
+          <div className="sticky top-2 z-20 flex justify-end pointer-events-none">
+            <button
+              type="button"
+              data-keep-keyboard
+              onClick={() => setShowSourceLetter(true)}
+              className="pointer-events-auto rounded-full border border-foreground/15 bg-background/95 px-3 py-2 text-[13px] font-medium text-foreground/75 shadow-sm backdrop-blur transition-colors hover:text-foreground"
+            >
+              Read {recipientPseudonym}&rsquo;s letter
+            </button>
+          </div>
+        )}
         <WritingToolbar editor={editor} />
         <EditorContent editor={editor} />
       </div>
@@ -1087,11 +1102,7 @@ export default function MomentsComposer({
             SourceLetterPanel as a sibling overlay above this same JSX
             tree; the Tiptap editor below is never unmounted or touched
             by opening/closing it, so nothing typed is ever lost. */}
-        {sourceLetter && (
-          <button type="button" onClick={() => setShowSourceLetter(true)} className={secondaryButtonClass}>
-            View {recipientPseudonym}&rsquo;s letter
-          </button>
-        )}
+
         {/* WRITE → PREVIEW → SEND: the composer's own primary/final
             action is now Preview, never a direct send — Send itself
             only ever happens from inside LetterPreview below, which
@@ -1138,7 +1149,10 @@ export default function MomentsComposer({
       {sourceLetter && (
         <SourceLetterPanel
           open={showSourceLetter}
-          onClose={() => setShowSourceLetter(false)}
+          onClose={() => {
+            setShowSourceLetter(false)
+            requestAnimationFrame(() => editor?.commands.focus())
+          }}
           pseudonym={recipientPseudonym}
           viewerId={viewerId}
           letterId={sourceLetter.id}

@@ -5,8 +5,12 @@ import { useEffect, type RefObject } from 'react'
 // Mobile keyboard dismissal for the letter composers. On a touch device:
 //   - a TAP outside the active writing field (on the page, not on a
 //     control) blurs it, so the native keyboard closes;
-//   - starting an intentional VERTICAL drag/scroll of the letter blurs
-//     it too, so the member can read and move around the draft.
+//   - a vertical drag that starts OUTSIDE a text-entry surface may blur
+//     it, so the member can move around the surrounding page;
+//   - a drag that starts INSIDE the editor never blurs it. Mobile browsers
+//     use the same gestures for scrolling a long draft, moving selection
+//     handles and cursor manipulation; stealing those gestures was especially
+//     disruptive on Android/Gboard.
 // Only focus changes: the draft, its selection (kept in the editor's own
 // state), autosave and scroll position are untouched, and nothing calls
 // preventDefault, so native scrolling and taps behave exactly as before.
@@ -57,11 +61,16 @@ export function isIntentionalVerticalDrag(dx: number, dy: number, msSinceTouchSt
   return Math.abs(dy) >= DRAG_MIN_PX && Math.abs(dy) > Math.abs(dx) * 1.5 && msSinceTouchStart <= DRAG_MAX_START_MS
 }
 
-/** A drag starting on a plain field (textarea/input) scrolls that field
- * itself; only drags starting on the letter / page may dismiss. */
+/** A drag that begins in ANY text-entry surface belongs to that editor.
+ * This is deliberately broader than the old textarea/input-only rule:
+ * Tiptap is contenteditable, and Android uses quick drags inside that
+ * surface both for ordinary document scrolling and selection/cursor work.
+ * Blurring on those gestures made the keyboard appear to "randomly" drop. */
 export function dragMayDismiss(startTarget: Element | null): boolean {
   if (!startTarget) return true
-  return startTarget.closest('input, textarea, select, [data-keep-keyboard]') === null
+  return startTarget.closest(
+    'input, textarea, select, [contenteditable="true"], [data-keep-keyboard]'
+  ) === null
 }
 
 const TAP_SLOP_PX = 10

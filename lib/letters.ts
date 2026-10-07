@@ -22,6 +22,9 @@ export type Letter = {
   body: string
   status: LetterStatus
   createdAt: string
+  /** Viewer-specific mailbox chronology. Incoming = actual arrival;
+   * outgoing = send time. Falls back to createdAt for pre-migration tests. */
+  mailboxAt?: string
   expiresAt: string
   /**
    * True only when the current viewer is this letter's recipient and it
@@ -148,6 +151,7 @@ type LetterRow = {
   body: string
   status: LetterStatus
   created_at: string
+  mailbox_at?: string
   expires_at: string
   is_unread: boolean
   replied_at: string | null
@@ -167,6 +171,7 @@ function toLetter(row: LetterRow): Letter {
     body: row.body,
     status: row.status,
     createdAt: row.created_at,
+    mailboxAt: row.mailbox_at,
     expiresAt: row.expires_at,
     isUnread: row.is_unread,
     repliedAt: row.replied_at,
@@ -176,13 +181,15 @@ function toLetter(row: LetterRow): Letter {
   }
 }
 
-// Reads go through letters_for_participant, never the letters table
-// directly — that view is what actually keeps opened_at from ever
-// reaching a sender (see docs/sql/2026-08-30-letters.sql). There is no
-// opened_at column to select here at all, by design.
+// The canonical participant-safe view remains the default for ordinary
+// letter reads. Mailbox chronology is an additive presentation concern only:
+// Home/Letterbox/archive reads opt into the sibling view that adds mailbox_at.
 const LETTERS_VIEW = 'letters_for_participant'
+const MAILBOX_LETTERS_VIEW = 'mailbox_letters_for_participant'
 const LETTER_COLUMNS =
   'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
+const MAILBOX_LETTER_COLUMNS =
+  'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, mailbox_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
 
 /**
  * True once a GENUINELY UNESTABLISHED first-contact letter's 72-hour
@@ -327,10 +334,10 @@ export async function getWaitingLetterCount(
  */
 export async function getMyLetters(supabase: SupabaseClient, userId: string): Promise<Letter[]> {
   const { data } = await supabase
-    .from(LETTERS_VIEW)
-    .select(LETTER_COLUMNS)
+    .from(MAILBOX_LETTERS_VIEW)
+    .select(MAILBOX_LETTER_COLUMNS)
     .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   return (data ?? []).map((row) => toLetter(row as LetterRow))
 }
@@ -1466,10 +1473,10 @@ export async function getLetterboxPeople(
   if (visibleIds.length === 0) return []
 
   const { data: letterRows } = await supabase
-    .from(LETTERS_VIEW)
-    .select('correspondence_id, created_at, sender_id, recipient_id, is_unread, body')
+    .from(MAILBOX_LETTERS_VIEW)
+    .select('correspondence_id, created_at, mailbox_at, sender_id, recipient_id, is_unread, body')
     .in('correspondence_id', visibleIds)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   const latestLetterByCorrespondence = new Map<
     string,
@@ -1477,11 +1484,11 @@ export async function getLetterboxPeople(
   >()
   const unreadCountByCorrespondence = new Map<string, number>()
   for (const row of letterRows ?? []) {
-    // Rows arrive newest-first (order by created_at desc above), so the
+    // Rows arrive newest-first by viewer-specific mailbox_at, so the
     // first row seen per correspondence is already its latest.
     if (!latestLetterByCorrespondence.has(row.correspondence_id)) {
       latestLetterByCorrespondence.set(row.correspondence_id, {
-        createdAt: row.created_at,
+        createdAt: row.mailbox_at ?? row.created_at,
         body: row.body,
         senderId: row.sender_id,
       })
@@ -1649,10 +1656,10 @@ export async function getLetterArchiveWithUser(
   if (visibleIds.length === 0) return []
 
   const { data } = await supabase
-    .from(LETTERS_VIEW)
-    .select(LETTER_COLUMNS)
+    .from(MAILBOX_LETTERS_VIEW)
+    .select(MAILBOX_LETTER_COLUMNS)
     .in('correspondence_id', visibleIds)
-    .order('created_at', { ascending: false })
+    .order('mailbox_at', { ascending: false })
 
   const removedLetterIds = new Set((removedLetters ?? []).map((row) => row.letter_id))
   const letters = (data ?? [])

@@ -17,7 +17,8 @@ import {
   primaryButtonClass,
   secondaryButtonClass,
 } from '@/app/profile/ui'
-import { baseWritingExtensions } from '@/app/letters/writing-extensions'
+import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
+import { useEditorVisualViewport } from '@/app/letters/use-editor-visual-viewport'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import {
   docToPlainBody,
@@ -144,6 +145,8 @@ export default function DispatchComposer({
   const libraryInputRef = useRef<HTMLInputElement | null>(null)
   const cameraInputRef = useRef<HTMLInputElement | null>(null)
   const pendingTargetRef = useRef<number | null>(null)
+  const composerRootRef = useRef<HTMLElement | null>(null)
+  useEditorVisualViewport(composerRootRef)
 
   const [title, setTitle] = useState(existingDispatch?.title ?? '')
   const [topics, setTopics] = useState<string[]>(existingDispatch?.topics ?? [])
@@ -245,6 +248,7 @@ export default function DispatchComposer({
     content: isEdit && existingDispatch ? dispatchBodyToDoc(existingDispatch.body, existingDispatch.moments) : EMPTY_LETTER_DOC,
     editorProps: {
       attributes: {
+        ...nativeWritingAttributes,
         class:
           'min-h-64 w-full rounded-md border border-foreground/15 bg-surface-shell px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
@@ -591,7 +595,7 @@ export default function DispatchComposer({
       : '/board'
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
+    <main ref={composerRootRef} className="min-h-screen flex items-start justify-center p-4 sm:items-center sm:p-6">
       <PhotoSourceInputs libraryInputRef={libraryInputRef} cameraInputRef={cameraInputRef} onChange={handleFileChosen} />
 
       <div className="w-full max-w-2xl space-y-6 py-10">

@@ -157,7 +157,7 @@ export default function ArchiveList({
                       <PostcardIcon />
                     </span>
                   )}
-                  {formatDateTimeCompact(letter.createdAt)}
+                  {formatDateTimeCompact(letter.mailboxAt ?? letter.createdAt)}
                 </span>
               </Link>
             </li>

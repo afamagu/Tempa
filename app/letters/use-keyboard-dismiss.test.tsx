@@ -90,11 +90,19 @@ describe('tap outside the writing field', () => {
 })
 
 describe('intentional vertical drag', () => {
-  it('a quick vertical drag of the letter dismisses the keyboard', () => {
+  it('a quick vertical drag inside the editor keeps the keyboard and selection context', () => {
     focusEditor()
     touch($('para'), 'touchstart', 100, 300)
     now += 60
     touch($('para'), 'touchmove', 102, 260)
+    expect(document.activeElement).toBe($('editor'))
+  })
+
+  it('a quick vertical drag on surrounding page text may dismiss the keyboard', () => {
+    focusEditor()
+    touch($('page-text'), 'touchstart', 100, 300)
+    now += 60
+    touch($('page-text'), 'touchmove', 102, 260)
     expect(document.activeElement).not.toBe($('editor'))
   })
 
@@ -161,8 +169,13 @@ describe('pure decisions', () => {
     expect(isIntentionalVerticalDrag(0, 40, 800)).toBe(false)
   })
 
-  it('a drag starting in a plain field scrolls that field instead', () => {
+  it('a drag starting in any text-entry surface belongs to that surface', () => {
     expect(dragMayDismiss(document.createElement('textarea'))).toBe(false)
+    const editable = document.createElement('div')
+    editable.setAttribute('contenteditable', 'true')
+    const paragraph = document.createElement('p')
+    editable.appendChild(paragraph)
+    expect(dragMayDismiss(paragraph)).toBe(false)
     expect(dragMayDismiss(document.createElement('p'))).toBe(true)
   })
 })

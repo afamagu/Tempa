@@ -1,7 +1,7 @@
 'use client'
 
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useEditor, EditorContent } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -10,7 +10,8 @@ import ChoiceGroup from '@/app/profile/choice-group'
 import { helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import { CLOSE_REASONS, CLOSE_REASON_SOMETHING_ELSE, CLOSE_REASON_DETAIL_MAX } from '@/lib/letters'
 import { readLetterDraft, writeLetterDraft, clearLetterDraft } from '@/lib/letter-draft'
-import { baseWritingExtensions } from '@/app/letters/writing-extensions'
+import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
+import { useEditorVisualViewport } from '@/app/letters/use-editor-visual-viewport'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import {
   docToPlainBody,
@@ -90,6 +91,8 @@ export default function FirstContactResponse({
   sourceLetterWritingStyleId?: string | null
 }) {
   const router = useRouter()
+  const composerRootRef = useRef<HTMLDivElement | null>(null)
+  useEditorVisualViewport(composerRootRef)
   const [mode, setMode] = useState<Mode>('choose')
   const [sendingReply, setSendingReply] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
@@ -147,6 +150,7 @@ export default function FirstContactResponse({
     content: EMPTY_LETTER_DOC,
     editorProps: {
       attributes: {
+        ...nativeWritingAttributes,
         class:
           'min-h-64 w-full rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
@@ -327,10 +331,11 @@ export default function FirstContactResponse({
               this open/close, so nothing already typed is ever lost. */}
           <button
             type="button"
+            data-keep-keyboard
             onClick={() => setShowSourceLetter(true)}
-            className="text-[13px] text-foreground/60 underline decoration-foreground/20 underline-offset-4 transition-colors hover:text-foreground/90 hover:decoration-foreground/50"
+            className="sticky top-2 z-20 rounded-full border border-foreground/15 bg-background/95 px-3 py-2 text-[13px] font-medium text-foreground/75 shadow-sm backdrop-blur transition-colors hover:text-foreground"
           >
-            View {recipientPseudonym}&rsquo;s letter
+            Read {recipientPseudonym}&rsquo;s letter
           </button>
         </div>
         <div className="space-y-2">
@@ -389,11 +394,14 @@ export default function FirstContactResponse({
   }
 
   return (
-    <>
+    <div ref={composerRootRef}>
       {content}
       <SourceLetterPanel
         open={showSourceLetter}
-        onClose={() => setShowSourceLetter(false)}
+        onClose={() => {
+          setShowSourceLetter(false)
+          requestAnimationFrame(() => editor?.commands.focus())
+        }}
         pseudonym={recipientPseudonym}
         viewerId={viewerId}
         letterId={letterId}
@@ -410,6 +418,6 @@ export default function FirstContactResponse({
         sending={sendingReply}
       />
       <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
-    </>
+    </div>
   )
 }

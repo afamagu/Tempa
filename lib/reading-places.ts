@@ -13,6 +13,12 @@ export type ReadingPlaceState = {
   resumeUpdatedAt: string | null
 }
 
+export type CachedReadingPlace = {
+  paragraphIndex: number
+  charOffset: number | null
+  updatedAt: number
+}
+
 const EMPTY_STATE: ReadingPlaceState = {
   resumeParagraphIndex: null,
   resumeCharOffset: null,
@@ -53,7 +59,13 @@ export function pickCurrentParagraph(
       current = paragraph
     }
   }
-  if (!current) return null
+  if (!current) {
+    const firstVisible = paragraphs
+      .filter((paragraph) => paragraph.top + paragraph.height > 0)
+      .sort((a, b) => a.top - b.top)[0]
+    if (!firstVisible) return null
+    return { paragraphIndex: firstVisible.index, charOffset: 0 }
+  }
 
   const charOffset =
     current.textLength > 0 && current.height > 0
@@ -122,4 +134,69 @@ export async function recordReadingProgress(
       contentId,
     })
   }
+}
+
+
+function readingCacheKey(userId: string, contentType: ContentType, contentId: string): string {
+  return `tempa-reading-place:${userId}:${contentType}:${contentId}`
+}
+
+/**
+ * Fast same-device resume. The server row remains canonical cross-device
+ * storage; this cache exists only so reopening a long letter never waits on
+ * network latency before returning to the place the reader just left.
+ */
+export function readCachedReadingPlace(
+  userId: string,
+  contentType: ContentType,
+  contentId: string
+): CachedReadingPlace | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(readingCacheKey(userId, contentType, contentId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CachedReadingPlace>
+    if (
+      !Number.isInteger(parsed.paragraphIndex) ||
+      (parsed.charOffset !== null && parsed.charOffset !== undefined && !Number.isInteger(parsed.charOffset)) ||
+      typeof parsed.updatedAt !== 'number'
+    ) {
+      return null
+    }
+    return {
+      paragraphIndex: Math.max(0, parsed.paragraphIndex as number),
+      charOffset: parsed.charOffset == null ? null : Math.max(0, parsed.charOffset),
+      updatedAt: parsed.updatedAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function writeCachedReadingPlace(
+  userId: string,
+  contentType: ContentType,
+  contentId: string,
+  paragraphIndex: number,
+  charOffset: number | null
+): CachedReadingPlace {
+  const value: CachedReadingPlace = {
+    paragraphIndex: Math.max(0, paragraphIndex),
+    charOffset: charOffset === null ? null : Math.max(0, charOffset),
+    updatedAt: Date.now(),
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(readingCacheKey(userId, contentType, contentId), JSON.stringify(value))
+    } catch {
+      // Same fail-soft policy as draft persistence: server sync still works.
+    }
+  }
+  return value
+}
+
+export function serverReadingPlaceTimestamp(state: ReadingPlaceState): number {
+  if (!state.resumeUpdatedAt) return 0
+  const parsed = Date.parse(state.resumeUpdatedAt)
+  return Number.isFinite(parsed) ? parsed : 0
 }

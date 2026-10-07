@@ -68,6 +68,14 @@ describe('automatic reading-position math', () => {
     expect(pickCurrentParagraph([p(0, -300), p(1, -50), p(2, 30)])?.paragraphIndex).toBe(1)
     expect(pickCurrentParagraph([p(0, -100), p(1, 50), p(2, 400)])?.paragraphIndex).toBe(0)
   })
+
+  it('treats the first visible paragraph as the current place when the reader is at the top', () => {
+    const paragraphs: MeasuredParagraph[] = [
+      { index: 0, top: 24, height: 120, textLength: 180 },
+      { index: 1, top: 170, height: 120, textLength: 200 },
+    ]
+    expect(pickCurrentParagraph(paragraphs)).toEqual({ paragraphIndex: 0, charOffset: 0 })
+  })
 })
 
 describe('automatic Reading Places persistence', () => {
