@@ -137,7 +137,11 @@ export default function AppShell({
 
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)',
+        }}
       >
         {NAV_ITEMS.map((item) => {
           const isActive = item.key === activeNav
