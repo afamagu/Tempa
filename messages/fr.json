@@ -60,7 +60,7 @@
   "LanguageSettings": {
     "back": "Vous",
     "heading": "Langue",
-    "intro": "Choisissez la langue que vous utilisez sur Tempa. Les menus et commandes de Tempa s’afficheront dans cette langue, qui sera aussi votre langue par défaut pour traduire les écrits des autres.",
+    "intro": "Choisissez la langue que vous utilisez sur Tempa. Les menus et commandes de Tempa s’afficheront dans cette langue.",
     "optionsLabel": "Langue de Tempa",
     "current": "Actuelle",
     "saving": "Enregistrement…",
@@ -155,7 +155,7 @@
   },
   "LanguageOnboarding": {
     "heading": "Choisissez votre langue Tempa",
-    "intro": "Ce sera la langue des menus et commandes de Tempa, ainsi que votre langue par défaut lorsque vous traduirez les écrits de quelqu’un d’autre.",
+    "intro": "Ce sera la langue des menus et commandes de Tempa.",
     "continue": "Continuer",
     "saving": "Enregistrement…",
     "error": "Impossible d’enregistrer votre langue. Veuillez réessayer.",
