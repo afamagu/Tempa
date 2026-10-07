@@ -22,12 +22,10 @@ const itemClass =
   'block w-full rounded-md px-3 py-2 text-left text-[14px] transition-colors hover:bg-foreground/[.06] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent'
 
 /**
- * A restrained per-letter overflow menu, comparable in interaction
- * discipline to Gmail — every entry here either does something real
- * (Remove from my Letterbox, Block, Report — pre-beta minimum safety
- * build) or is visibly, honestly disabled rather than half-built (Send a
- * physical copy, Translate). Reply lives as its own prominent action on
- * the page, not buried in this menu — see app/letters/[letterId]/page.tsx.
+ * A restrained per-letter overflow menu. Every visible entry does
+ * something real today: Report, Remove from my Letterbox, or Block.
+ * Future actions do not occupy live interface space until they work.
+ * Reply lives as its own prominent action on the page, not buried here.
  */
 export default function LetterActionMenu({
   letterId,
@@ -72,12 +70,6 @@ export default function LetterActionMenu({
 
       {open && (
         <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-foreground/10 bg-background p-1.5 shadow-md">
-          <button type="button" disabled className={itemClass} title="Send a physical copy — not available yet">
-            Send a physical copy
-          </button>
-          <button type="button" disabled className={itemClass} title="Translate — coming later">
-            Translate
-          </button>
           <ReportButton targetType="letter" targetId={letterId} triggerClassName={itemClass} />
           <RemoveFromLetterbox correspondenceIds={[correspondenceId]} triggerClassName={itemClass} />
           <div className="my-1 border-t border-foreground/10" />
