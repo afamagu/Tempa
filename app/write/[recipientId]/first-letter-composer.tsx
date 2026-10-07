@@ -37,6 +37,7 @@ import {
 } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
+import DraftPersistenceWarning from '@/app/draft-persistence-warning'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
@@ -79,6 +80,7 @@ export default function FirstLetterComposer({
   useEditorVisualViewport(composerRootRef)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false)
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
   const [financialBlocked, setFinancialBlocked] = useState(false)
   const [myStatus, setMyStatus] = useState<AccountStatus>('active')
@@ -106,7 +108,9 @@ export default function FirstLetterComposer({
       },
     },
     onUpdate({ editor: current }) {
-      writeFirstContactDraft(draftKey, current.getJSON() as LetterDocJSON)
+      if (!writeFirstContactDraft(draftKey, current.getJSON() as LetterDocJSON)) {
+        setDraftStorageFailed(true)
+      }
     },
   })
 
@@ -263,6 +267,7 @@ export default function FirstLetterComposer({
               {charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}
             </p>
           )}
+          {draftStorageFailed && <DraftPersistenceWarning />}
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex flex-wrap gap-3">
