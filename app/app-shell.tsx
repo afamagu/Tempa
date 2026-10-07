@@ -133,9 +133,16 @@ export default function AppShell({
         </div>
       </nav>
 
-      <div className="min-w-0 max-w-full flex-1 pb-16 sm:pb-0">{children}</div>
+      <div className="min-w-0 max-w-full flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">{children}</div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden">
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-foreground/10 bg-background sm:hidden"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)',
+        }}
+      >
         {NAV_ITEMS.map((item) => {
           const isActive = item.key === activeNav
           return (
