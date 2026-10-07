@@ -20,7 +20,7 @@ describe('/you/notifications — arrival-email preference', () => {
   })
 
   it('renders a recoverable error instead of the editor when the read fails — never a guessed on/off state', () => {
-    expect(source).toContain('Could not load your notification setting right now')
+    expect(source).toContain('Could not load your letter-arrival setting right now')
     expect(source).toContain('href="/you/notifications"')
     expect(source).not.toMatch(/preferenceResult\.ok\s*\?\s*<NotificationsEditor[\s\S]*:\s*<NotificationsEditor/)
   })
@@ -34,5 +34,24 @@ describe('/you — links to the new Notifications route', () => {
   it('links to /you/notifications, labeled "Notifications"', () => {
     expect(youPageSource).toContain('href="/you/notifications"')
     expect(youPageSource).toContain('Notifications')
+  })
+})
+
+
+describe('/you/notifications — reply-reminder email operational truth', () => {
+  const preferenceSource = readFileSync(path.join(__dirname, 'reply-reminder-preference.tsx'), 'utf8')
+
+  it('reads the service-only reply-reminder email kill switch on the server', () => {
+    expect(source).toContain("createServiceClient()")
+    expect(source).toContain("from('reply_reminder_system_config')")
+    expect(source).toContain("select('sending_enabled')")
+    expect(source).toContain('emailSendingEnabled={replyReminderEmailSendingEnabled}')
+  })
+
+  it('does not present reply-reminder email delivery as live while operations has it disabled', () => {
+    expect(preferenceSource).toContain('emailSendingEnabled')
+    expect(preferenceSource).toContain('disabled={!remindersEnabled || !emailSendingEnabled}')
+    expect(preferenceSource).toContain('Reply-reminder email delivery is not currently active.')
+    expect(preferenceSource).toContain('Your saved preference will be kept')
   })
 })
