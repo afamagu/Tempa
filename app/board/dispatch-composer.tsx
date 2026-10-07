@@ -642,7 +642,7 @@ export default function DispatchComposer({
               A Dispatch is writing offered beyond a private correspondence — a story from your day,
               something you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something worth putting into words.
             </p>
-            <p>New Dispatches are public on the web by default. You can keep any one on Tempa only before publishing.</p>
+            <p>\n              {showWebChoice\n                ? 'New Dispatches are public on the web by default. You can keep any one on Tempa only before publishing.'\n                : 'This Dispatch will stay on Tempa only. Web-public publishing is not available from this composer right now.'}\n            </p>
           </FeatureIntroduction>
         )}
 
@@ -694,7 +694,7 @@ export default function DispatchComposer({
         )}
 
         {postcardPickerOpen && (
-          <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background px-3 py-4 shadow-lg touch-pan-y sm:bg-foreground/30 sm:px-4 sm:py-8">
+          <div className="safe-overlay-pad fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background shadow-lg touch-pan-y sm:bg-foreground/30 sm:px-4 sm:py-8">
             <PostcardPicker postcards={activePostcards} onSelect={choosePostcard} onCancel={() => setPostcardPickerOpen(false)} />
           </div>
         )}
