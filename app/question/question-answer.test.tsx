@@ -110,8 +110,11 @@ describe('QuestionAnswer — draft persistence truth', () => {
   const source = readFileSync(new URL('./question-answer.tsx', import.meta.url), 'utf8')
 
   it('surfaces a quiet warning when localStorage rejects a draft write', () => {
-    expect(source).toContain('setDraftStorageFailed(true)')
+    const updateStart = source.indexOf('function updateBody')
+    const updateEnd = source.indexOf('function insertEmoji', updateStart)
+    const updateBody = source.slice(updateStart, updateEnd)
+    expect(updateBody).toContain('setDraftStorageFailed(true)')
+    expect(updateBody).not.toContain('/* ignore */')
     expect(source).toContain('<DraftPersistenceWarning />')
-    expect(source).not.toContain('catch { /* ignore */ }')
   })
 })
