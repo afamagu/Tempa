@@ -7,7 +7,7 @@ describe('DispatchAuthorLink — the shared identity link every Dispatch card re
     const html = renderToStaticMarkup(
       <DispatchAuthorLink authorId="author-1" authorPseudonym="Evening Quill" authorCountry={null} />
     )
-    expect(html).toMatch(/<a[^>]*href="\/minds\/author-1"/)
+    expect(html).toMatch(/<a[^>]*href="\/room\/author-1"/)
   })
 
   it('renders the pseudonym as visible text inside the link', () => {
