@@ -165,6 +165,8 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
     )
     const mobileNav = mobileNavHtml(html)
     expect(mobileNav).toContain('padding-bottom:env(safe-area-inset-bottom)')
+    expect(mobileNav).toContain('padding-left:env(safe-area-inset-left)')
+    expect(mobileNav).toContain('padding-right:env(safe-area-inset-right)')
     expect(html).toContain('pb-[calc(4rem+env(safe-area-inset-bottom))]')
   })
 
