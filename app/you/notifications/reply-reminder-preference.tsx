@@ -9,9 +9,11 @@ import { helperTextClass } from '@/app/profile/ui'
 export default function ReplyReminderPreference({
   initialRemindersEnabled,
   initialEmailEnabled,
+  emailDeliveryAvailable,
 }: {
   initialRemindersEnabled: boolean
   initialEmailEnabled: boolean
+  emailDeliveryAvailable: boolean
 }) {
   const router = useRouter()
   const [remindersEnabled, setRemindersEnabled] = useState(initialRemindersEnabled)
@@ -27,6 +29,7 @@ export default function ReplyReminderPreference({
   }
 
   function setEmail(enabled: boolean) {
+    if (!emailDeliveryAvailable) return
     setSaved(false)
     setEmailEnabled(enabled)
   }
@@ -80,20 +83,22 @@ export default function ReplyReminderPreference({
         />
       </label>
 
-      <label className={`flex items-start justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] ${remindersEnabled ? 'text-foreground' : 'text-muted'}`}>
+      <label className={`flex items-start justify-between gap-4 rounded-md border border-foreground/10 px-4 py-3 text-[15px] ${remindersEnabled && emailDeliveryAvailable ? 'text-foreground' : 'text-muted'}`}>
         <span className="space-y-1">
-          <span className="block">Email the reminder too</span>
+          <span className="block">{emailDeliveryAvailable ? 'Email the reminder too' : 'Email reminders are paused during the pilot'}</span>
           <span className="block text-[13px] leading-5 text-muted">
-            The email only says that a letter is still waiting. It never includes the letter itself.
+            {emailDeliveryAvailable
+              ? 'The email only says that a letter is still waiting. It never includes the letter itself.'
+              : 'Your email preference is kept for later, but Tempa is not sending reply-reminder emails right now.'}
           </span>
         </span>
         <input
           type="checkbox"
           checked={emailEnabled}
-          disabled={!remindersEnabled}
+          disabled={!remindersEnabled || !emailDeliveryAvailable}
           onChange={(event) => setEmail(event.target.checked)}
           className="mt-0.5 h-5 w-5 shrink-0 accent-accent disabled:opacity-40"
-          aria-label="Email my reply reminder too"
+          aria-label={emailDeliveryAvailable ? 'Email my reply reminder too' : 'Reply-reminder email delivery is paused'}
         />
       </label>
 
