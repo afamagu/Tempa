@@ -20,6 +20,7 @@ export async function resolvePostAuthDestination(
     { data: eligibility },
     { data: legalRows },
     languageResult,
+    pilotResult,
   ] = await Promise.all([
     supabase.from('profiles').select('id, onboarding_stage').eq('id', userId).maybeSingle(),
     supabase.from('account_eligibility').select('status').eq('user_id', userId).maybeSingle(),
@@ -29,15 +30,18 @@ export async function resolvePostAuthDestination(
       .select('language_confirmed_at')
       .eq('user_id', userId)
       .maybeSingle(),
+    supabase.rpc('current_pilot_access'),
   ])
 
   const languageConfirmed = languageResult.error
     ? undefined
     : Boolean((languageResult.data as { language_confirmed_at?: string | null } | null)?.language_confirmed_at)
+  const pilotAccess = pilotResult.error ? undefined : pilotResult.data === true
 
   const destination = resolveAccountEntryDestination(
     {
       authenticated: true,
+      pilotAccess,
       languageConfirmed,
       eligibilityStatus: (eligibility?.status as EligibilityStatus | undefined) ?? null,
       eligibleOn: null,
