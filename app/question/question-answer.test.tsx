@@ -104,3 +104,14 @@ describe('QuestionAnswer — post-first-save onboarding contract', () => {
     expect(source).not.toContain('/you/responses?tab=new')
   })
 })
+
+
+describe('QuestionAnswer — draft persistence truth', () => {
+  const source = readFileSync(new URL('./question-answer.tsx', import.meta.url), 'utf8')
+
+  it('surfaces a quiet warning when localStorage rejects a draft write', () => {
+    expect(source).toContain('setDraftStorageFailed(true)')
+    expect(source).toContain('<DraftPersistenceWarning />')
+    expect(source).not.toContain('catch { /* ignore */ }')
+  })
+})
