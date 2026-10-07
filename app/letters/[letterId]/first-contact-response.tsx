@@ -38,6 +38,7 @@ import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
 import SourceLetterPanel from './source-letter-panel'
+import DraftPersistenceWarning from '@/app/draft-persistence-warning'
 
 type Mode = 'choose' | 'reply' | 'close'
 
@@ -93,6 +94,7 @@ export default function FirstContactResponse({
   const [mode, setMode] = useState<Mode>('choose')
   const [sendingReply, setSendingReply] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false)
   const [showSourceLetter, setShowSourceLetter] = useState(false)
   // Safety 2, Checkpoint 3 — see first-letter-composer.tsx's own
   // identical field for the full explanation.
@@ -152,7 +154,9 @@ export default function FirstContactResponse({
       },
     },
     onUpdate({ editor: current }) {
-      writeLetterDraft(correspondenceId, docToPlainBody(current.getJSON() as LetterDocJSON))
+      if (!writeLetterDraft(correspondenceId, docToPlainBody(current.getJSON() as LetterDocJSON))) {
+        setDraftStorageFailed(true)
+      }
     },
   })
 
@@ -337,6 +341,7 @@ export default function FirstContactResponse({
           <WritingToolbar editor={editor} />
           <EditorContent editor={editor} />
         </div>
+        {draftStorageFailed && <DraftPersistenceWarning />}
         {replyError && <p className="text-sm text-red-600">{replyError}</p>}
         <div className="flex flex-wrap gap-3">
           <button type="button" onClick={() => setMode('choose')} className={secondaryButtonClass}>
