@@ -62,15 +62,16 @@ function readDraft(key: string): LetterDocJSON | null {
   }
 }
 
-function writeDraft(key: string, doc: LetterDocJSON): void {
+function writeDraft(key: string, doc: LetterDocJSON): boolean {
   try {
     if (letterDocHasContent(doc)) {
       window.localStorage.setItem(key, JSON.stringify(stripTransientPhotoPreviews(doc)))
     } else {
       window.localStorage.removeItem(key)
     }
+    return true
   } catch {
-    // ignore storage failures (e.g. private browsing quota)
+    return false
   }
 }
 
@@ -90,8 +91,8 @@ export function readLetterEditorDraft(correspondenceId: string): LetterDocJSON |
   return readDraft(correspondenceDraftKey(correspondenceId))
 }
 
-export function writeLetterEditorDraft(correspondenceId: string, doc: LetterDocJSON): void {
-  writeDraft(correspondenceDraftKey(correspondenceId), doc)
+export function writeLetterEditorDraft(correspondenceId: string, doc: LetterDocJSON): boolean {
+  return writeDraft(correspondenceDraftKey(correspondenceId), doc)
 }
 
 export function clearLetterEditorDraft(correspondenceId: string): void {
@@ -133,7 +134,7 @@ export function readLetterPostcardDraft(correspondenceId: string): LetterPostcar
  * convention above, so removing the Postcard and letting its draft
  * expire naturally go through the exact same call, never two different
  * code paths that could drift apart. */
-export function writeLetterPostcardDraft(correspondenceId: string, draft: LetterPostcardDraft | null): void {
+export function writeLetterPostcardDraft(correspondenceId: string, draft: LetterPostcardDraft | null): boolean {
   try {
     const key = correspondencePostcardDraftKey(correspondenceId)
     if (draft === null) {
@@ -141,8 +142,9 @@ export function writeLetterPostcardDraft(correspondenceId: string, draft: Letter
     } else {
       window.localStorage.setItem(key, JSON.stringify(draft))
     }
+    return true
   } catch {
-    // ignore storage failures (e.g. private browsing quota)
+    return false
   }
 }
 
@@ -166,8 +168,8 @@ export function readFirstContactDraft(recipientId: string): LetterDocJSON | null
   return readDraft(firstContactDraftKey(recipientId))
 }
 
-export function writeFirstContactDraft(recipientId: string, doc: LetterDocJSON): void {
-  writeDraft(firstContactDraftKey(recipientId), doc)
+export function writeFirstContactDraft(recipientId: string, doc: LetterDocJSON): boolean {
+  return writeDraft(firstContactDraftKey(recipientId), doc)
 }
 
 export function clearFirstContactDraft(recipientId: string): void {
@@ -208,7 +210,7 @@ export function readDispatchDraft(authorId: string): DispatchDraft | null {
  * "nothing to save," same as every other scope's LetterDocJSON-only
  * emptiness rule — never persists an all-blank draft that would only
  * ever restore to nothing. */
-export function writeDispatchDraft(authorId: string, draft: DispatchDraft): void {
+export function writeDispatchDraft(authorId: string, draft: DispatchDraft): boolean {
   try {
     const isEmpty =
       draft.title.trim().length === 0 && !letterDocHasContent(draft.doc) && draft.topics.length === 0
@@ -217,8 +219,9 @@ export function writeDispatchDraft(authorId: string, draft: DispatchDraft): void
     } else {
       window.localStorage.setItem(dispatchDraftKey(authorId), JSON.stringify(draft))
     }
+    return true
   } catch {
-    // ignore storage failures (e.g. private browsing quota)
+    return false
   }
 }
 
@@ -257,7 +260,7 @@ export function readDispatchPostcardDraft(authorId: string): LetterPostcardDraft
 
 /** Pass null to clear — mirrors writeLetterPostcardDraft's own "nothing
  * to persist" convention above. */
-export function writeDispatchPostcardDraft(authorId: string, draft: LetterPostcardDraft | null): void {
+export function writeDispatchPostcardDraft(authorId: string, draft: LetterPostcardDraft | null): boolean {
   try {
     const key = dispatchPostcardDraftKey(authorId)
     if (draft === null) {
@@ -265,8 +268,9 @@ export function writeDispatchPostcardDraft(authorId: string, draft: LetterPostca
     } else {
       window.localStorage.setItem(key, JSON.stringify(draft))
     }
+    return true
   } catch {
-    // ignore storage failures (e.g. private browsing quota)
+    return false
   }
 }
 
