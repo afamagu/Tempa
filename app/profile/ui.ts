@@ -17,7 +17,7 @@
 // (muted color) than proseBodyClass, never the reverse.
 
 export const inputClass =
-  'w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-[15px] outline-none transition-colors placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25'
+  'w-full rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-base sm:text-[15px] outline-none transition-colors placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25'
 
 // A small uppercase kicker/eyebrow — metadata tier, sits above a heading
 // or names a compact list ("THE QUESTION", "From Utopia").
@@ -33,10 +33,10 @@ export const helperTextClass = 'text-[13px] text-muted'
 export const fieldLabelClass = 'block text-[15px] font-medium text-foreground'
 
 export const primaryButtonClass =
-  'inline-flex items-center justify-center rounded-md bg-accent text-accent-foreground px-4 py-3 text-[15px] font-medium transition-colors hover:bg-accent/90 disabled:opacity-50'
+  'inline-flex min-h-11 items-center justify-center rounded-md bg-accent text-accent-foreground px-4 py-3 text-[15px] font-medium transition-colors hover:bg-accent/90 disabled:opacity-50 sm:min-h-0'
 
 export const secondaryButtonClass =
-  'inline-flex items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]'
+  'inline-flex min-h-11 items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03] sm:min-h-0'
 
 // Release Polish Pass — the fourth rung of the button hierarchy
 // (primary / secondary / tertiary / destructive): no border, no fill,
@@ -45,7 +45,7 @@ export const secondaryButtonClass =
 // a genuinely destructive one (e.g. removing an unsent Postcard draft,
 // which the sender can simply re-attach).
 export const tertiaryButtonClass =
-  'inline-flex items-center justify-center rounded-md px-4 py-2.5 text-[15px] font-medium text-foreground/60 transition-colors hover:bg-foreground/[.05] hover:text-foreground'
+  'inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2.5 text-[15px] font-medium text-foreground/60 transition-colors hover:bg-foreground/[.05] hover:text-foreground sm:min-h-0'
 
 // A quiet text action — for a link-weight action that shouldn't compete
 // visually with a bordered or filled button (e.g. "Read the complete
@@ -55,7 +55,7 @@ export const quietLinkClass =
 
 export function pillClass(selected: boolean) {
   return [
-    'rounded-full border px-3.5 py-2 text-[15px] transition-colors',
+    'min-h-11 rounded-full border px-3.5 py-2 text-[15px] transition-colors sm:min-h-0',
     'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/25',
     selected
       ? 'border-accent bg-accent/10 font-medium text-foreground'
@@ -162,13 +162,13 @@ export const focusRingClass =
 // only styles hit area and hover/focus feedback, never labels the
 // control.
 export const iconButtonClass =
-  `inline-flex h-9 w-9 items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/[.06] hover:text-foreground ${focusRingClass}`
+  `inline-flex h-11 w-11 items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/[.06] hover:text-foreground sm:h-9 sm:w-9 ${focusRingClass}`
 
 export const compactSecondaryButtonClass =
-  'inline-flex items-center justify-center rounded-md border border-foreground/15 px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]'
+  'inline-flex min-h-11 items-center justify-center rounded-md border border-foreground/15 px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03] sm:min-h-0'
 
 export const destructiveButtonClass =
-  'inline-flex items-center justify-center rounded-md border border-red-600/30 px-4 py-2.5 text-[15px] font-medium text-red-700 transition-colors hover:bg-red-600/[.06]'
+  'inline-flex min-h-11 items-center justify-center rounded-md border border-red-600/30 px-4 py-2.5 text-[15px] font-medium text-red-700 transition-colors hover:bg-red-600/[.06] sm:min-h-0'
 
 // Correspondence-row states (Letters). Every state pairs a background
 // cue with a weight/typography cue elsewhere in the row — never color
