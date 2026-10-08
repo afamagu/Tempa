@@ -2,12 +2,15 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { helperTextClass } from '@/app/profile/ui'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
 import { formatDateTimeCompact } from '@/lib/format-date'
 import {
   letterPreviewText,
   isRichBody,
   resolveLetterDirection,
+  removeLettersFromMyArchive,
   type ArchiveLetter,
 } from '@/lib/letters'
 import FormattedText from '@/app/letters/formatted-text'
@@ -60,7 +63,11 @@ export default function ArchiveList({
   otherPseudonym: string
   viewerPseudonym: string
 }) {
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
   const pseudonymById = useMemo(
     () =>
       new Map([
@@ -75,6 +82,8 @@ export default function ArchiveList({
     return <p className={helperTextClass}>No visible letters with {otherPseudonym} yet.</p>
 
   function toggle(id: string) {
+    setConfirmingRemoval(false)
+    setRemoveError(null)
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
@@ -83,12 +92,32 @@ export default function ArchiveList({
     })
   }
 
+  async function removeSelected() {
+    if (selected.size === 0) return
+
+    setRemoving(true)
+    setRemoveError(null)
+
+    const result = await removeLettersFromMyArchive(createClient(), [...selected])
+
+    if (result.error) {
+      setRemoving(false)
+      setRemoveError('Could not remove the selected letters. Please try again.')
+      return
+    }
+
+    setSelected(new Set())
+    setConfirmingRemoval(false)
+    setRemoving(false)
+    router.refresh()
+  }
+
   return (
     <section
       aria-label={`Letters with ${otherPseudonym}`}
       className="overflow-hidden rounded-lg border border-foreground/10 bg-background"
     >
-      <div className="relative flex min-h-12 items-center gap-3 border-b border-foreground/10 px-3 sm:px-4">
+      <div className="flex min-h-12 items-center gap-3 border-b border-foreground/10 px-3 sm:px-4">
         <input
           type="checkbox"
           aria-label="Select all letters"
@@ -96,9 +125,11 @@ export default function ArchiveList({
           ref={(node) => {
             if (node) node.indeterminate = selected.size > 0 && !allSelected
           }}
-          onChange={() =>
+          onChange={() => {
+            setConfirmingRemoval(false)
+            setRemoveError(null)
             setSelected(allSelected ? new Set() : new Set(letters.map((letter) => letter.id)))
-          }
+          }}
           className="h-4 w-4 accent-[var(--accent)]"
         />
         <span className="flex-1 text-[12px] text-muted">
@@ -106,8 +137,53 @@ export default function ArchiveList({
             ? `${selected.size} selected`
             : `${letters.length} ${letters.length === 1 ? 'letter' : 'letters'} · newest first`}
         </span>
-        <ArchiveActions letterIds={[...selected]} onRemoved={() => setSelected(new Set())} />
+        <ArchiveActions
+          selectionCount={selected.size}
+          onRequestRemove={() => {
+            setRemoveError(null)
+            setConfirmingRemoval(true)
+          }}
+        />
       </div>
+
+      {confirmingRemoval && selected.size > 0 && (
+        <div className="space-y-3 border-b border-foreground/10 bg-foreground/[.018] px-4 py-4">
+          <div className="space-y-1">
+            <p className="text-[15px] font-medium text-foreground">
+              {selected.size === 1
+                ? 'Remove this letter from your Letterbox?'
+                : `Remove these ${selected.size} letters from your Letterbox?`}
+            </p>
+            <p className={helperTextClass}>
+              This changes only your Letterbox. Nothing is deleted for {otherPseudonym}.
+            </p>
+          </div>
+
+          {removeError && <p className="text-sm text-red-600">{removeError}</p>}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              disabled={removing}
+              onClick={() => {
+                setConfirmingRemoval(false)
+                setRemoveError(null)
+              }}
+            >
+              Keep
+            </button>
+            <button
+              type="button"
+              className={primaryButtonClass}
+              disabled={removing}
+              onClick={removeSelected}
+            >
+              {removing ? 'Removing…' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <ol className="divide-y divide-foreground/10">
         {letters.map((letter) => {

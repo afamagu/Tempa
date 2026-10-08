@@ -18,12 +18,11 @@ import {
   getMyWritingRhythm,
 } from '@/lib/writing-rhythm'
 import { getReturnCardsForCorrespondences } from '@/lib/return-cards'
-import { sectionTitleClass, metadataTextClass, secondaryButtonClass, quietLinkClass } from '@/app/profile/ui'
+import { sectionTitleClass, metadataTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import MailOnTheWay from '@/app/mail-on-the-way'
-import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
 import ArchiveList from './archive-list'
 import ReturnCardHistory from './return-card-history'
 import WriteQuillButton from './write-quill-button'
@@ -243,16 +242,6 @@ export default async function LetterArchiveWithUserPage({
             viewerPseudonym={viewerPseudonym}
           />
 
-          {visibleCorrespondenceIds.length > 0 && (
-            <div className="mt-4 border-t border-foreground/10 pt-4">
-              <RemoveFromLetterbox
-                correspondenceIds={visibleCorrespondenceIds}
-                triggerClassName={quietLinkClass}
-                triggerLabel="Remove from my Letterbox"
-                confirmDescription={`your correspondence with ${otherPseudonym}`}
-              />
-            </div>
-          )}
         </div>
       </main>
       {otherProfile && activeCorrespondence && establishedForViewer && (

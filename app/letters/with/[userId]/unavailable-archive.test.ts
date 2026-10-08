@@ -33,9 +33,9 @@ describe('Letter archive when a correspondent profile is unavailable', () => {
 
 
 describe('Letter archive management polish', () => {
-  it('uses a named Letterbox removal action instead of the ambiguous header tray/bin glyph', () => {
-    expect(source).toContain('triggerLabel="Remove from my Letterbox"')
-    expect(source).not.toContain('RemoveFromLetterboxIcon')
+  it('has no second whole-correspondence removal control in the person header or footer', () => {
+    expect(source).not.toContain('RemoveFromLetterbox')
+    expect(source).not.toContain('Remove from my Letterbox')
   })
 
   it('surfaces the one-follow-up action for an unanswered first contact', () => {

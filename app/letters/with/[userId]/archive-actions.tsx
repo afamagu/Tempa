@@ -1,10 +1,27 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { removeLettersFromMyArchive } from '@/lib/letters'
-import { helperTextClass, iconButtonClass, primaryButtonClass, secondaryButtonClass, quietLinkClass } from '@/app/profile/ui'
+import { iconButtonClass } from '@/app/profile/ui'
 import Tooltip from '@/app/profile/tooltip'
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="M7 7l1 13h8l1-13" />
+      <path d="M10 11v5M14 11v5" />
+    </svg>
+  )
+}
 
 function PrintedCopyIcon() {
   return (
@@ -15,70 +32,38 @@ function PrintedCopyIcon() {
   )
 }
 
-export default function ArchiveActions({ letterIds, onRemoved }: { letterIds: string[]; onRemoved: () => void }) {
-  const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function remove() {
-    setBusy(true)
-    setError(null)
-    const result = await removeLettersFromMyArchive(createClient(), letterIds)
-    setBusy(false)
-    if (result.error) {
-      setError('Could not remove the selected letters. Please try again.')
-      return
-    }
-    setConfirming(false)
-    onRemoved()
-    window.location.reload()
-  }
-
-  if (confirming)
-    return (
-      <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/25 p-3 sm:items-center sm:p-6">
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="remove-selected-title"
-          className="w-full max-w-md space-y-4 rounded-xl border border-foreground/10 bg-background p-5 shadow-xl"
-        >
-          <div className="space-y-2">
-            <h2 id="remove-selected-title" className="text-[17px] font-medium text-foreground">
-              Remove {letterIds.length === 1 ? 'this letter' : `these ${letterIds.length} letters`}?
-            </h2>
-            <p className={helperTextClass}>
-              This changes your Letterbox only. Nothing is deleted for the other person.
-            </p>
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => setConfirming(false)}>
-              Cancel
-            </button>
-            <button type="button" className={primaryButtonClass} disabled={busy} onClick={remove}>
-              {busy ? 'Removing…' : 'Remove'}
-            </button>
-          </div>
-        </section>
-      </div>
-    )
+export default function ArchiveActions({
+  selectionCount,
+  onRequestRemove,
+}: {
+  selectionCount: number
+  onRequestRemove: () => void
+}) {
+  const hasSelection = selectionCount > 0
 
   return (
-    <div className="flex items-center gap-2">
-      {letterIds.length > 0 && (
-        <button
-          type="button"
-          className={quietLinkClass}
-          aria-label="Remove selected letters"
-          onClick={() => setConfirming(true)}
-        >
-          Remove selected
-        </button>
-      )}
+    <div className="flex items-center gap-1">
       <Tooltip
         label={
-          letterIds.length === 1
+          hasSelection
+            ? `Remove ${selectionCount === 1 ? 'this letter' : 'these letters'} from your Letterbox.`
+            : 'Select one or more letters to remove from your Letterbox.'
+        }
+      >
+        <button
+          type="button"
+          className={iconButtonClass}
+          disabled={!hasSelection}
+          aria-label="Remove selected letters"
+          onClick={onRequestRemove}
+        >
+          <TrashIcon />
+        </button>
+      </Tooltip>
+
+      <Tooltip
+        label={
+          selectionCount === 1
             ? 'Order a beautifully printed copy, delivered to you. Coming soon.'
             : 'Select one letter to order a printed copy. Coming soon.'
         }

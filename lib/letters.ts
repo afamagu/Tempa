@@ -1528,12 +1528,17 @@ export async function getLetterboxPeople(
   supabase: SupabaseClient,
   userId: string
 ): Promise<LetterboxPerson[]> {
-  const [{ data: correspondences }, hiddenCorrespondenceIds] = await Promise.all([
+  const [
+    { data: correspondences },
+    hiddenCorrespondenceIds,
+    { data: archiveRemovals },
+  ] = await Promise.all([
     supabase
       .from('correspondences')
       .select('id, participant_low, participant_high')
       .or(`participant_low.eq.${userId},participant_high.eq.${userId}`),
     getHiddenCorrespondenceIds(supabase, userId),
+    supabase.from('letter_archive_removals').select('letter_id').eq('user_id', userId),
   ])
 
   const rows = correspondences ?? []
@@ -1542,16 +1547,18 @@ export async function getLetterboxPeople(
 
   const { data: letterRows } = await supabase
     .from(MAILBOX_LETTERS_VIEW)
-    .select('correspondence_id, created_at, mailbox_at, sender_id, recipient_id, is_unread, body')
+    .select('id, correspondence_id, created_at, mailbox_at, sender_id, recipient_id, is_unread, body')
     .in('correspondence_id', visibleIds)
     .order('mailbox_at', { ascending: false })
 
+  const removedLetterIds = new Set((archiveRemovals ?? []).map((row) => row.letter_id as string))
   const latestLetterByCorrespondence = new Map<
     string,
     { createdAt: string; body: string; senderId?: string }
   >()
   const unreadCountByCorrespondence = new Map<string, number>()
   for (const row of letterRows ?? []) {
+    if (removedLetterIds.has(row.id)) continue
     // Rows arrive newest-first by viewer-specific mailbox_at, so the
     // first row seen per correspondence is already its latest.
     if (!latestLetterByCorrespondence.has(row.correspondence_id)) {
