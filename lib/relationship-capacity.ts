@@ -154,7 +154,17 @@ export function establishmentCapacityMessage(
   error: RelationshipCapacityErrorLike
 ): string | null {
   if (relationshipCapacityFailure(error) !== 'RELATIONSHIP_CAPACITY_REACHED') return null
-  return 'Your correspondence circle is full right now. You can keep this letter and reply when a place opens.'
+  return "There isn't room to establish this correspondence right now. You can keep this letter and reply when a place opens."
+}
+
+export function establishmentErrorMessage(
+  error: RelationshipCapacityErrorLike
+): string | null {
+  const haystack = [error.details, error.message, error.hint].filter(Boolean).join(' ')
+  if (haystack.includes('CORRESPONDENCE_ALREADY_OPEN')) {
+    return 'You already have an open correspondence with this person. Return to your Letterbox to continue it.'
+  }
+  return establishmentCapacityMessage(error)
 }
 
 /**

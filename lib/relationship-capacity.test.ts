@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   establishmentCapacityMessage,
+  establishmentErrorMessage,
   firstContactCapacityMessage,
   getRelationshipCapacity,
   relationshipCapacityFailure,
@@ -50,6 +51,19 @@ describe('relationship capacity error mapping', () => {
     )
     expect(establishmentCapacityMessage({ details: 'OUTGOING_FIRST_CONTACT_LIMIT_REACHED' })).toBeNull()
     expect(establishmentCapacityMessage({ message: 'network issue' })).toBeNull()
+    expect(establishmentCapacityMessage({ details: 'RELATIONSHIP_CAPACITY_REACHED' })).toContain(
+      "There isn't room to establish this correspondence"
+    )
+  })
+
+  it('maps a newer-open-correspondence conflict to a calm route back to the Letterbox', () => {
+    expect(establishmentErrorMessage({ details: 'CORRESPONDENCE_ALREADY_OPEN' })).toBe(
+      'You already have an open correspondence with this person. Return to your Letterbox to continue it.'
+    )
+    expect(establishmentErrorMessage({ details: 'RELATIONSHIP_CAPACITY_REACHED' })).toContain(
+      'keep this letter and reply when a place opens'
+    )
+    expect(establishmentErrorMessage({ message: 'network issue' })).toBeNull()
   })
 })
 

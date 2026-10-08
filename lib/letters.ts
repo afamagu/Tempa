@@ -192,32 +192,33 @@ const MAILBOX_LETTER_COLUMNS =
   'id, sender_id, recipient_id, question_answer_id, reply_to_id, correspondence_id, body, status, created_at, mailbox_at, expires_at, is_unread, replied_at, closed_at, closed_by, close_reason'
 
 /**
- * True once a GENUINELY UNESTABLISHED first-contact letter's 72-hour
- * response window has passed while it's still nominally "sent" — i.e.
- * the scheduled expiry job (see docs/sql/2026-08-30-letters.sql) hasn't
- * processed it yet. Display code treats this the same as an
- * already-system-closed letter, so the product stays honest even
- * before that job exists or has run recently.
+ * A first-contact letter remains answerable after its original 72-hour
+ * capacity-reservation window. The deadline now releases scarce pending
+ * capacity; it does NOT turn a delivered human letter into something the
+ * recipient can no longer answer.
  *
- * `reply_to_id === null` alone is NOT sufficient to identify a genuine
- * first-contact letter: Write Anytime's quill sends ordinary letters
- * with reply_to_id = null too (see write_letter's p_reply_to_id
- * default). Without the `established` guard, any old quill-sent letter
- * would be wrongly treated as an expired, unaccepted first contact —
- * suppressing MarkLetterOpened (read state must never depend on
- * action/expiry status) and showing a false "closed... reply window"
- * message. `established` must come from the letter's own
- * correspondence (correspondence.establishedAt !== null) — an
- * established correspondence can never have ANY of its ordinary
- * letters treated as an expired first contact, regardless of age.
+ * Legacy rows may already have been system-closed by the old expiry job.
+ * Those are intentionally treated as replyable too. A recipient-closed
+ * ("passed on") letter is still terminal, and established correspondence
+ * never comes through this path.
  */
-export function isEffectivelyExpired(letter: Letter, established: boolean): boolean {
+export function isReplyableFirstContact(letter: Letter, established: boolean): boolean {
   return (
     !established &&
     letter.replyToId === null &&
-    letter.status === 'sent' &&
-    new Date(letter.expiresAt).getTime() <= Date.now()
+    (
+      letter.status === 'sent' ||
+      (letter.status === 'closed' && letter.closedBy === 'system')
+    )
   )
+}
+
+/**
+ * Compatibility for older status surfaces: expiresAt now releases capacity
+ * only. It no longer makes a delivered first letter closed in the UI.
+ */
+export function isEffectivelyExpired(_letter: Letter, _established: boolean): boolean {
+  return false
 }
 
 /**
@@ -325,12 +326,10 @@ export async function getWaitingLetterCount(
 }
 
 /**
- * Every letter this member sent or received, newest first. Callers
- * partition this into "awaiting reply" vs "resolved" themselves using
- * isEffectivelyExpired — a single query this way stays correct even for
- * a first-contact letter whose 72-hour window has passed but the
- * scheduled expiry job hasn't processed yet, rather than that letter
- * disappearing from both lists until the job runs.
+ * Every letter this member sent or received, newest first. First-contact
+ * replyability is intentionally resolved by isReplyableFirstContact rather
+ * than by comparing expiresAt in UI code: 72 hours limits capacity
+ * reservation, not whether the recipient may answer a delivered letter.
  */
 export async function getMyLetters(supabase: SupabaseClient, userId: string): Promise<Letter[]> {
   const { data } = await supabase
@@ -791,7 +790,7 @@ export type LetterActionState = {
  * "established" and "pending first contact" can never again be
  * computed as two separate, driftable booleans on the page itself.
  *
- * `established` and `targetEffectiveStatus` come from two separate
+ * `established`, `targetEffectiveStatus`, and `targetEffectiveClosedBy` describe two separate
  * queries (getCorrespondence / getLetterById), not one atomic read —
  * under concurrent load, the OTHER participant's reply can commit
  * between those two round trips, so a caller could in principle
@@ -806,14 +805,19 @@ export function resolveLetterActionState(
   established: boolean,
   isFirstContactLetter: boolean,
   isRecipientOfTarget: boolean,
-  targetEffectiveStatus: LetterStatus
+  targetEffectiveStatus: LetterStatus,
+  targetEffectiveClosedBy: ClosedBy | null = null
 ): LetterActionState {
+  const replyableFirstContact =
+    targetEffectiveStatus === 'sent' ||
+    (targetEffectiveStatus === 'closed' && targetEffectiveClosedBy === 'system')
+
   return {
     showFirstContactResponse:
       !established &&
       isFirstContactLetter &&
       isRecipientOfTarget &&
-      targetEffectiveStatus === 'sent',
+      replyableFirstContact,
     showWriteQuill: established,
   }
 }

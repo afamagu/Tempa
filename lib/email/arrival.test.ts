@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync } from 'node:fs'
-import path from 'node:path'
-import { ORIGIN_ARRIVAL_ART, renderArrivalEmail } from './arrival'
-
-const ARRIVAL_ART_DIR = path.join(__dirname, '..', '..', 'public', 'email', 'arrival-art')
+import { renderArrivalEmail } from './arrival'
 
 const base = {
   letterId: '75e131d5-f045-4d7f-b082-2db208d2e990',
@@ -11,124 +7,88 @@ const base = {
 }
 
 describe('letter-arrival email', () => {
-  it('keeps first contact anonymous in the subject and body, with a working action when artwork is blocked', () => {
-    const message = renderArrivalEmail({ ...base, firstContact: true, senderPseudonym: 'Evening Quill', senderCountryCode: 'ZA' })
-    expect(message.subject).toBe('A letter has arrived for you')
+  it('keeps first contact anonymous while staying plainly transactional', () => {
+    const message = renderArrivalEmail({
+      ...base,
+      firstContact: true,
+      senderPseudonym: 'Evening Quill',
+      senderCountryCode: 'ZA',
+      artOrigin: 'https://jointempa.com/email/arrival-art',
+    })
+
+    expect(message.subject).toBe('A letter has arrived on Tempa')
+    expect(message.html).toContain('Someone sent you a letter on Tempa.')
+    expect(message.text).toContain('Someone sent you a letter on Tempa.')
     expect(message.html).not.toContain('Evening Quill')
     expect(message.text).not.toContain('Evening Quill')
+    expect(message.html).toContain('Read your letter on Tempa')
     expect(message.html).not.toContain('<img')
-    expect(message.html).toContain('https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
-    expect(message.text).toContain('Open your letter:')
+    expect(message.html).not.toContain('arrival-art')
+    expect(message.html).not.toContain('Cape Town')
+    expect(message.html).not.toContain('Good letters take time')
   })
 
-  it('escapes established sender names and treats country artwork as optional decoration', () => {
-    const message = renderArrivalEmail({ ...base, firstContact: false, senderPseudonym: 'A <script>&', senderCountryCode: 'th', artOrigin: 'https://static.jointempa.com' })
-    expect(message.html).toContain('A &lt;script&gt;&amp;')
-    expect(message.html).toContain('02-bangkok-thailand.jpg')
-    expect(message.html).toContain('alt=""')
-    expect(message.text).not.toContain('Bangkok')
+  it('uses a truthful generic fallback when the sender pseudonym is unavailable', () => {
+    const message = renderArrivalEmail({ ...base, firstContact: true, senderPseudonym: null })
+    expect(message.subject).toBe('A letter has arrived on Tempa')
+    expect(message.html).toContain('Someone sent you a letter on Tempa.')
   })
 
-  it('a bare root artOrigin (no pathname) still works exactly as before', () => {
-    const message = renderArrivalEmail({ ...base, firstContact: false, senderCountryCode: 'ZA', artOrigin: 'https://static.jointempa.com' })
-    expect(message.html).toContain('src="https://static.jointempa.com/32-cape-town-south-africa.jpg"')
-  })
-
-  it('accepts a pathname-bearing art base URL and produces the exact expected image URL — ZA', () => {
+  it('names an established correspondent without promotional artwork', () => {
     const message = renderArrivalEmail({
       ...base,
       firstContact: false,
-      senderCountryCode: 'ZA',
-      artOrigin: 'https://jointempa.com/email/arrival-art',
+      senderPseudonym: 'Quiet Harbor',
+      senderCountryCode: 'JP',
+      artOrigin: 'https://static.jointempa.com',
     })
-    expect(message.html).toContain('src="https://jointempa.com/email/arrival-art/32-cape-town-south-africa.jpg"')
+    expect(message.subject).toBe('Quiet Harbor sent you a letter on Tempa')
+    expect(message.html).toContain('Quiet Harbor sent you a letter on Tempa.')
+    expect(message.html).not.toContain('<img')
   })
 
-  it('accepts a pathname-bearing art base URL and produces the exact expected image URL — NG', () => {
+  it('escapes sender names in HTML while stripping control characters from the subject', () => {
     const message = renderArrivalEmail({
       ...base,
       firstContact: false,
-      senderCountryCode: 'NG',
-      artOrigin: 'https://jointempa.com/email/arrival-art',
+      senderPseudonym: 'A <script>&\r\nBcc: outsider@example.com',
     })
-    expect(message.html).toContain('src="https://jointempa.com/email/arrival-art/35-lagos-nigeria.jpg"')
-  })
-
-  it('a trailing slash on the art base URL produces the identical image URL as no trailing slash', () => {
-    const withSlash = renderArrivalEmail({
-      ...base,
-      firstContact: false,
-      senderCountryCode: 'ZA',
-      artOrigin: 'https://jointempa.com/email/arrival-art/',
-    })
-    const withoutSlash = renderArrivalEmail({
-      ...base,
-      firstContact: false,
-      senderCountryCode: 'ZA',
-      artOrigin: 'https://jointempa.com/email/arrival-art',
-    })
-    const extractSrc = (html: string) => html.match(/src="([^"]+)"/)?.[1]
-    expect(extractSrc(withSlash.html)).toBe('https://jointempa.com/email/arrival-art/32-cape-town-south-africa.jpg')
-    expect(extractSrc(withSlash.html)).toBe(extractSrc(withoutSlash.html))
-  })
-
-  it('missing artOrigin omits the image entirely without breaking the rest of the email', () => {
-    const message = renderArrivalEmail({ ...base, firstContact: false, senderPseudonym: 'Evening Quill', senderCountryCode: 'ZA' })
-    expect(message.html).not.toContain('<img')
-    expect(message.html).toContain('Evening Quill')
-    expect(message.html).toContain('https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
-  })
-
-  it('rejects unsafe URLs and IDs', () => {
-    expect(() => renderArrivalEmail({ ...base, firstContact: true, siteOrigin: 'http://jointempa.com' })).toThrow()
-    expect(() => renderArrivalEmail({ ...base, firstContact: true, letterId: '../account' })).toThrow()
-    expect(() => renderArrivalEmail({ ...base, firstContact: true, senderCountryCode: 'ZA', artOrigin: 'https://evil.test/?tracking=1' })).toThrow()
-  })
-
-  it('the art base URL still rejects insecure HTTP', () => {
-    expect(() =>
-      renderArrivalEmail({ ...base, firstContact: true, senderCountryCode: 'ZA', artOrigin: 'http://jointempa.com/email/arrival-art' })
-    ).toThrow()
-  })
-
-  it('the art base URL still rejects a query string, including on a pathname-bearing base', () => {
-    expect(() =>
-      renderArrivalEmail({ ...base, firstContact: true, senderCountryCode: 'ZA', artOrigin: 'https://jointempa.com/email/arrival-art?tracking=1' })
-    ).toThrow()
-  })
-
-  it('the art base URL still rejects a fragment', () => {
-    expect(() =>
-      renderArrivalEmail({ ...base, firstContact: true, senderCountryCode: 'ZA', artOrigin: 'https://jointempa.com/email/arrival-art#section' })
-    ).toThrow()
-  })
-
-  it('the art base URL still rejects embedded credentials', () => {
-    expect(() =>
-      renderArrivalEmail({ ...base, firstContact: true, senderCountryCode: 'ZA', artOrigin: 'https://user:pass@jointempa.com/email/arrival-art' })
-    ).toThrow()
-  })
-
-  it('the deep-link siteOrigin remains strict/root-only — a pathname is still rejected there, unlike artOrigin', () => {
-    expect(() => renderArrivalEmail({ ...base, firstContact: true, siteOrigin: 'https://jointempa.com/some/path' })).toThrow()
-  })
-
-  it('does not permit a pseudonym to add mail headers', () => {
-    const message = renderArrivalEmail({ ...base, firstContact: false, senderPseudonym: 'Maya\r\nBcc: outsider@example.com' })
-    expect(message.subject).toBe('A letter from Maya Bcc: outsider@example.com has arrived')
+    expect(message.subject).toBe('A <script>& Bcc: outsider@example.com sent you a letter on Tempa')
     expect(message.subject).not.toContain('\r')
     expect(message.subject).not.toContain('\n')
+    expect(message.html).toContain('A &lt;script&gt;&amp; Bcc: outsider@example.com sent you a letter on Tempa.')
+    expect(message.html).not.toContain('A <script>')
   })
 
-  it('maps each of the 35 country codes to one unique named asset', () => {
-    expect(Object.keys(ORIGIN_ARRIVAL_ART)).toHaveLength(35)
-    expect(new Set(Object.values(ORIGIN_ARRIVAL_ART)).size).toBe(35)
+  it('links directly to the delivered letter and notification settings', () => {
+    const message = renderArrivalEmail({ ...base, firstContact: false, senderPseudonym: 'Maya' })
+    expect(message.html).toContain('https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
+    expect(message.text).toContain('Read your letter on Tempa: https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
+    expect(message.html).toContain('/you/notifications#letter-arrivals')
   })
 
-  it('every mapped asset filename actually exists under public/email/arrival-art/', () => {
-    const missing = Object.entries(ORIGIN_ARRIVAL_ART).filter(
-      ([, filename]) => !existsSync(path.join(ARRIVAL_ART_DIR, filename))
-    )
-    expect(missing).toEqual([])
+  it('does not include the letter body or imply that it does', () => {
+    const message = renderArrivalEmail({ ...base, firstContact: true, senderPseudonym: 'Evening Quill' })
+    expect(message.html).not.toContain('does not include the letter itself')
+    expect(message.text).not.toContain('does not include the letter itself')
+  })
+
+  it('rejects unsafe site origins and invalid letter IDs', () => {
+    expect(() => renderArrivalEmail({ ...base, firstContact: true, siteOrigin: 'http://jointempa.com' })).toThrow()
+    expect(() => renderArrivalEmail({ ...base, firstContact: true, siteOrigin: 'https://jointempa.com/path' })).toThrow()
+    expect(() => renderArrivalEmail({ ...base, firstContact: true, letterId: '../account' })).toThrow()
+  })
+
+  it('ignores legacy artwork inputs rather than turning an arrival notification into campaign mail', () => {
+    const message = renderArrivalEmail({
+      ...base,
+      firstContact: true,
+      senderPseudonym: 'Evening Quill',
+      senderCountryCode: 'NG',
+      artOrigin: 'http://legacy-art.example.test/path?tracking=1',
+    })
+    expect(message.html).not.toContain('legacy-art')
+    expect(message.html).not.toContain('Nigeria')
+    expect(message.html).not.toContain('<img')
   })
 })
