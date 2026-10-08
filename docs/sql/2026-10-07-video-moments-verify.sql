@@ -7,4 +7,5 @@ from pg_constraint where conname='moments_type_check';
 
 select
   pg_get_functiondef('public.write_letter(uuid,text,uuid,uuid,jsonb,jsonb,boolean)'::regprocedure) ilike '%Invalid video Moment window%' as write_letter_validates_video,
-  pg_get_functiondef('public.reply_to_letter(uuid,text,uuid,jsonb,jsonb,boolean)'::regprocedure) ilike '%Invalid video Moment window%' as reply_validates_video;
+  pg_get_functiondef('public.reply_to_letter(uuid,text,uuid,jsonb,jsonb,boolean)'::regprocedure) ilike '%Invalid video Moment window%' as reply_validates_video,
+  pg_get_functiondef('public.reply_to_letter(uuid,text,uuid,jsonb,jsonb,boolean)'::regprocedure) like '%COUNTERPART_RELATIONSHIP_CAPACITY_REACHED%' as reply_preserves_late_first_contact_capacity;
