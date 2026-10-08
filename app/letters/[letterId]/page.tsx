@@ -184,11 +184,18 @@ export default async function LetterPage({
   const isFirstContactLetter = target.replyToId === null
 
   const writingAvailable = establishedForViewer && correspondence?.status === 'active'
+  const lateFirstContactReply =
+    !writingAvailable &&
+    isFirstContactLetter &&
+    isRecipientOfTarget &&
+    targetEffectiveStatus === 'closed' &&
+    targetEffectiveClosedBy === 'system'
   const { showFirstContactResponse, showWriteQuill } = resolveLetterActionState(
     writingAvailable,
     isFirstContactLetter,
     isRecipientOfTarget,
-    targetEffectiveStatus
+    targetEffectiveStatus,
+    targetEffectiveClosedBy
   )
   const writeHref = writingAvailable ? `/letters/with/${otherPartyId}/write` : null
 
@@ -275,12 +282,17 @@ export default async function LetterPage({
                   title={isRecipientOfTarget ? 'You passed on this letter.' : `${otherPseudonym} passed on this letter.`}
                   detail={closeReasonForSender(target.closeReason)}
                 />
+              ) : lateFirstContactReply ? (
+                <ClosureStatusNotice
+                  title="The original reply window has passed."
+                  detail="You can still write back. If both of you have room for another correspondence, your reply will begin it."
+                />
               ) : (
                 <ClosureStatusNotice
                   title="This letter went unanswered"
                   detail={
                     isRecipientOfTarget
-                      ? "You weren't able to reply within the reply window."
+                      ? "The original reply window passed without a reply."
                       : `${otherPseudonym} wasn't able to reply within the reply window.`
                   }
                 />
@@ -370,6 +382,7 @@ export default async function LetterPage({
                 sourceLetterMoments={momentsByLetterId.get(target.id) ?? []}
                 sourceLetterPhotoConsent={targetPhotoConsent}
                 sourceLetterWritingStyleId={letterWritingStyleId}
+                lateReply={lateFirstContactReply}
               />
             )}
 
