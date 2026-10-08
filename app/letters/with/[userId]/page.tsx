@@ -16,7 +16,7 @@ import {
   getMyWritingRhythm,
 } from '@/lib/writing-rhythm'
 import { getReturnCardsForCorrespondences } from '@/lib/return-cards'
-import { sectionTitleClass, iconButtonClass, metadataTextClass } from '@/app/profile/ui'
+import { sectionTitleClass, iconButtonClass, metadataTextClass, secondaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
@@ -106,6 +106,19 @@ export default async function LetterArchiveWithUserPage({
     lifecycle?.establishedAt
       ? await getCorrespondencePrivateMemory(supabase, lifecycle.correspondenceId)
       : null
+  const replyableFirstLetter =
+    lifecycle &&
+    lifecycle.establishedAt === null &&
+    (lifecycle.status === 'pending' || lifecycle.status === 'closed')
+      ? letters.find(
+          (letter) =>
+            letter.correspondenceId === lifecycle.correspondenceId &&
+            letter.recipientId === user.id &&
+            letter.replyToId === null &&
+            (letter.status === 'sent' ||
+              (letter.status === 'closed' && letter.closedBy === 'system'))
+        ) ?? null
+      : null
 
   const latestLetter = letters[0] ?? null
   const latestLetterContext = latestLetter
@@ -162,6 +175,14 @@ export default async function LetterArchiveWithUserPage({
             </div>
 
             {mailOnTheWayFromThisPerson && <MailOnTheWay />}
+
+            {replyableFirstLetter && (
+              <div>
+                <Link href={`/letters/${replyableFirstLetter.id}`} className={secondaryButtonClass}>
+                  Reply to this first letter
+                </Link>
+              </div>
+            )}
 
             {lifecycle && otherProfile && (
               <CorrespondenceLifecycleControl
