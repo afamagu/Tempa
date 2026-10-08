@@ -791,7 +791,7 @@ export type LetterActionState = {
  * "established" and "pending first contact" can never again be
  * computed as two separate, driftable booleans on the page itself.
  *
- * `established` and `targetEffectiveStatus` come from two separate
+ * `established`, `targetEffectiveStatus`, and `targetEffectiveClosedBy` describe two separate
  * queries (getCorrespondence / getLetterById), not one atomic read —
  * under concurrent load, the OTHER participant's reply can commit
  * between those two round trips, so a caller could in principle
@@ -806,14 +806,19 @@ export function resolveLetterActionState(
   established: boolean,
   isFirstContactLetter: boolean,
   isRecipientOfTarget: boolean,
-  targetEffectiveStatus: LetterStatus
+  targetEffectiveStatus: LetterStatus,
+  targetEffectiveClosedBy: ClosedBy | null = null
 ): LetterActionState {
+  const replyableFirstContact =
+    targetEffectiveStatus === 'sent' ||
+    (targetEffectiveStatus === 'closed' && targetEffectiveClosedBy === 'system')
+
   return {
     showFirstContactResponse:
       !established &&
       isFirstContactLetter &&
       isRecipientOfTarget &&
-      targetEffectiveStatus === 'sent',
+      replyableFirstContact,
     showWriteQuill: established,
   }
 }
