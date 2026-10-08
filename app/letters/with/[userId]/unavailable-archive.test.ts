@@ -19,6 +19,13 @@ describe('Letter archive when a correspondent profile is unavailable', () => {
     expect(source).not.toContain('if (!otherProfile) {\n    notFound()\n  }')
   })
 
+  it('gives an unestablished incoming first letter a direct reply route instead of the established quill', () => {
+    expect(source).toContain('const replyableFirstLetter =')
+    expect(source).toContain("letter.status === 'closed' && letter.closedBy === 'system'")
+    expect(source).toContain('Reply to this first letter')
+    expect(source).toContain('href={`/letters/${replyableFirstLetter.id}`}')
+  })
+
   it('still sends an invalid archive URL to the correspondence unavailable state', () => {
     expect(source).toMatch(/if \(!otherProfile && !hasHistoricalAccess\) \{\s*notFound\(\)\s*\}/)
   })
