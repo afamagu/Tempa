@@ -60,14 +60,17 @@ export function renderArrivalEmail(input: ArrivalEmailInput): RenderedArrivalEma
   const settingsHref = `${origin}/you/notifications#letter-arrivals`
   const name = cleanPseudonym(input.senderPseudonym)
 
-  const subject = name ? `${name} wrote to you on Tempa` : 'You have a new letter on Tempa'
+  // Preserve the existing first-contact privacy rule: the arrival email
+  // does not identify a new sender before the recipient opens the letter.
+  const establishedName = !input.firstContact ? name : null
+  const subject = establishedName
+    ? `${establishedName} wrote to you on Tempa`
+    : 'You have a new letter on Tempa'
   const headline = 'You have a new letter.'
-  const detail = name
-    ? input.firstContact
-      ? `${name} sent you a first letter on Tempa.`
-      : `${name} wrote to you on Tempa.`
-    : input.firstContact
-      ? 'Someone sent you a first letter on Tempa.'
+  const detail = input.firstContact
+    ? 'Someone sent you a first letter on Tempa.'
+    : establishedName
+      ? `${establishedName} wrote to you on Tempa.`
       : 'A new letter is waiting in your Letterbox.'
 
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:#f7f3eb;color:#192e40"><table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center" style="padding:24px 12px"><table role="presentation" cellpadding="0" cellspacing="0" width="560" style="width:100%;max-width:560px;background:#fffcf6;border:1px solid #e3ddd1"><tr><td style="padding:26px 30px 12px;font:600 17px Georgia,serif;letter-spacing:0.10em">TEMPA</td></tr><tr><td style="padding:12px 30px 8px"><h1 style="font:normal 28px/1.25 Georgia,serif;color:#192e40;margin:0">${escapeHtml(headline)}</h1></td></tr><tr><td style="padding:8px 30px 22px;font:16px/1.55 Arial,sans-serif;color:#333b40">${escapeHtml(detail)}</td></tr><tr><td style="padding:0 30px 30px"><a href="${escapeHtml(href)}" style="display:inline-block;background:#192e40;color:#fff;text-decoration:none;border-radius:4px;padding:13px 18px;font:600 14px Arial,sans-serif">Open your letter</a></td></tr><tr><td style="border-top:1px solid #e3ddd1;padding:16px 30px 22px;font:12px/1.55 Arial,sans-serif;color:#686e72">This email only tells you that a letter arrived; it does not include the letter itself.<br><a href="${escapeHtml(settingsHref)}" style="color:#58646d">Letter-arrival notification settings</a></td></tr></table></td></tr></table></body></html>`
