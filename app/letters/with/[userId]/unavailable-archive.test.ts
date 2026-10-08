@@ -12,9 +12,10 @@ describe('Letter archive when a correspondent profile is unavailable', () => {
     expect(source).toContain('This profile is no longer available. Your letters remain here.')
   })
 
-  it('does not leave dead profile/write actions for an unavailable member', () => {
+  it('does not leave dead profile/write actions for an unavailable or unestablished member', () => {
     expect(source).toContain('{otherProfile ? (')
-    expect(source).toContain('{otherProfile && <WriteQuillButton')
+    expect(source).toContain('{otherProfile && activeCorrespondence && establishedForViewer && (')
+    expect(source).toContain('<WriteQuillButton otherUserId={otherProfile.id}')
     expect(source).not.toContain('if (!otherProfile) {\n    notFound()\n  }')
   })
 
