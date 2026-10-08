@@ -27,7 +27,7 @@ import {
   ACCOUNT_RESTRICTED_MESSAGE,
   type AccountStatus,
 } from '@/lib/account-status'
-import { establishmentCapacityMessage } from '@/lib/relationship-capacity'
+import { establishmentErrorMessage } from '@/lib/relationship-capacity'
 import {
   evaluateSafety,
   SAFETY_CANNOT_SEND_MESSAGE,
@@ -63,6 +63,7 @@ export default function FirstContactResponse({
   sourceLetterMoments,
   sourceLetterPhotoConsent,
   sourceLetterWritingStyleId = null,
+  lateReply = false,
 }: {
   letterId: string
   correspondenceId: string
@@ -90,6 +91,10 @@ export default function FirstContactResponse({
   }
   /** The source letter's send-time Writing Style snapshot. */
   sourceLetterWritingStyleId?: string | null
+  /** The 72-hour capacity reservation has ended, but the recipient may
+   * still answer this already-delivered first letter. Explicit recipient
+   * rejection remains terminal; this mode is only for system expiry. */
+  lateReply?: boolean
 }) {
   const router = useRouter()
   const composerRootRef = useRef<HTMLDivElement | null>(null)
@@ -265,9 +270,9 @@ export default function FirstContactResponse({
         // establishment therefore rolls the reply back and leaves this
         // draft intact. Translate only the fixed server detail code; all
         // unrelated failures keep the established account/generic copy.
-        const capacityMessage = establishmentCapacityMessage(error)
+        const establishmentMessage = establishmentErrorMessage(error)
         setReplyError(
-          capacityMessage ??
+          establishmentMessage ??
             accountBlockedMessage(myStatus) ??
             (error.code === ACCOUNT_ACTION_UNAVAILABLE_CODE ? ACCOUNT_RESTRICTED_MESSAGE : 'Could not send your reply. Please try again.')
         )
@@ -315,13 +320,22 @@ export default function FirstContactResponse({
 
   if (mode === 'choose') {
     content = (
-      <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={() => setMode('reply')} className={primaryButtonClass}>
-          Reply
-        </button>
-        <button type="button" onClick={() => setMode('close')} className={secondaryButtonClass}>
-          Pass on this letter
-        </button>
+      <div className="space-y-3">
+        {lateReply && (
+          <p className={helperTextClass}>
+            The original reply window has passed, but you can still write back. If both of you have room for another correspondence, your reply will begin it.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={() => setMode('reply')} className={primaryButtonClass}>
+            Reply
+          </button>
+          {!lateReply && (
+            <button type="button" onClick={() => setMode('close')} className={secondaryButtonClass}>
+              Pass on this letter
+            </button>
+          )}
+        </div>
       </div>
     )
   } else if (mode === 'reply') {
