@@ -402,6 +402,9 @@ declare
   paragraph_count integer;
   has_photo boolean;
   is_first_reply boolean;
+  v_late_first_reply boolean;
+  v_sender_capacity record;
+  v_recipient_capacity record;
   m jsonb;
   v_previous_deliver_at timestamptz;
   v_natural_deliver_at timestamptz;
@@ -429,11 +432,20 @@ begin
   where
     id = p_letter_id
     and recipient_id = auth.uid()
-    and status = 'sent'
     and deliver_at <= now()
     and (
-      reply_to_id is not null
-      or expires_at > now()
+      (reply_to_id is not null and status = 'sent')
+      or (
+        reply_to_id is null
+        and (
+          status = 'sent'
+          or (
+            status = 'closed'
+            and closed_by = 'system'
+            and close_reason is null
+          )
+        )
+      )
     )
 
   for update;
@@ -468,6 +480,52 @@ begin
   where id = original.correspondence_id
 
   for update;
+
+
+  v_late_first_reply :=
+    is_first_reply
+    and original.expires_at <= now();
+
+  if v_late_first_reply then
+    if corr.established_at is not null or corr.status not in ('pending', 'closed') then
+      raise exception
+        'This first letter can no longer begin a correspondence.'
+        using errcode = 'P0001', detail = 'FIRST_CONTACT_EPISODE_NO_LONGER_AVAILABLE';
+    end if;
+
+    perform tempa_private.lock_relationship_capacity_pair(original.sender_id, auth.uid());
+
+    if exists (
+      select 1
+      from public.correspondences c
+      where c.id <> corr.id
+        and c.participant_low = least(original.sender_id, auth.uid())
+        and c.participant_high = greatest(original.sender_id, auth.uid())
+        and c.status in ('pending', 'active', 'paused')
+    ) then
+      raise exception
+        'A newer correspondence already exists between these members.'
+        using errcode = 'P0001', detail = 'PAIR_ALREADY_HAS_OPEN_CORRESPONDENCE';
+    end if;
+
+    select * into v_sender_capacity
+    from tempa_private.relationship_capacity_state(original.sender_id);
+
+    if v_sender_capacity.committed_count >= v_sender_capacity.active_limit then
+      raise exception
+        'The original sender does not currently have room for a new correspondence.'
+        using errcode = 'P0001', detail = 'COUNTERPART_RELATIONSHIP_CAPACITY_REACHED';
+    end if;
+
+    select * into v_recipient_capacity
+    from tempa_private.relationship_capacity_state(auth.uid());
+
+    if v_recipient_capacity.committed_count >= v_recipient_capacity.active_limit then
+      raise exception
+        'You need an open correspondence slot before accepting another correspondence.'
+        using errcode = 'P0001', detail = 'RELATIONSHIP_CAPACITY_REACHED';
+    end if;
+  end if;
 
 
   moment_count := coalesce(jsonb_array_length(p_moments), 0);
@@ -707,13 +765,15 @@ begin
   end if;
 
 
-  update public.letters
+  if original.status = 'sent' then
+    update public.letters
 
-  set
-    status = 'replied',
-    replied_at = now()
+    set
+      status = 'replied',
+      replied_at = now()
 
-  where id = original.id;
+    where id = original.id;
+  end if;
 
 
   if is_first_reply then
@@ -722,7 +782,13 @@ begin
 
     set
       status = 'active',
-      established_at = coalesce(established_at, now())
+      established_at = coalesce(established_at, now()),
+      closed_at = null,
+      paused_at = null,
+      paused_by = null,
+      resume_requested_at = null,
+      resume_requested_by = null,
+      ended_by = null
 
     where id = original.correspondence_id;
 
