@@ -16,12 +16,12 @@ describe('letter-arrival email', () => {
       artOrigin: 'https://jointempa.com/email/arrival-art',
     })
 
-    expect(message.subject).toBe('You have a new letter on Tempa')
-    expect(message.html).toContain('Someone sent you a first letter on Tempa.')
-    expect(message.text).toContain('Someone sent you a first letter on Tempa.')
+    expect(message.subject).toBe('A letter has arrived on Tempa')
+    expect(message.html).toContain('Someone sent you a letter on Tempa.')
+    expect(message.text).toContain('Someone sent you a letter on Tempa.')
     expect(message.html).not.toContain('Evening Quill')
     expect(message.text).not.toContain('Evening Quill')
-    expect(message.html).toContain('Open your letter')
+    expect(message.html).toContain('Read your letter on Tempa')
     expect(message.html).not.toContain('<img')
     expect(message.html).not.toContain('arrival-art')
     expect(message.html).not.toContain('Cape Town')
@@ -30,8 +30,8 @@ describe('letter-arrival email', () => {
 
   it('uses a truthful generic fallback when the sender pseudonym is unavailable', () => {
     const message = renderArrivalEmail({ ...base, firstContact: true, senderPseudonym: null })
-    expect(message.subject).toBe('You have a new letter on Tempa')
-    expect(message.html).toContain('Someone sent you a first letter on Tempa.')
+    expect(message.subject).toBe('A letter has arrived on Tempa')
+    expect(message.html).toContain('Someone sent you a letter on Tempa.')
   })
 
   it('names an established correspondent without promotional artwork', () => {
@@ -42,8 +42,8 @@ describe('letter-arrival email', () => {
       senderCountryCode: 'JP',
       artOrigin: 'https://static.jointempa.com',
     })
-    expect(message.subject).toBe('Quiet Harbor wrote to you on Tempa')
-    expect(message.html).toContain('Quiet Harbor wrote to you on Tempa.')
+    expect(message.subject).toBe('Quiet Harbor sent you a letter on Tempa')
+    expect(message.html).toContain('Quiet Harbor sent you a letter on Tempa.')
     expect(message.html).not.toContain('<img')
   })
 
@@ -53,24 +53,24 @@ describe('letter-arrival email', () => {
       firstContact: false,
       senderPseudonym: 'A <script>&\r\nBcc: outsider@example.com',
     })
-    expect(message.subject).toBe('A <script>& Bcc: outsider@example.com wrote to you on Tempa')
+    expect(message.subject).toBe('A <script>& Bcc: outsider@example.com sent you a letter on Tempa')
     expect(message.subject).not.toContain('\r')
     expect(message.subject).not.toContain('\n')
-    expect(message.html).toContain('A &lt;script&gt;&amp; Bcc: outsider@example.com wrote to you on Tempa.')
+    expect(message.html).toContain('A &lt;script&gt;&amp; Bcc: outsider@example.com sent you a letter on Tempa.')
     expect(message.html).not.toContain('A <script>')
   })
 
   it('links directly to the delivered letter and notification settings', () => {
     const message = renderArrivalEmail({ ...base, firstContact: false, senderPseudonym: 'Maya' })
     expect(message.html).toContain('https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
-    expect(message.text).toContain('Open your letter: https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
+    expect(message.text).toContain('Read your letter on Tempa: https://jointempa.com/letters/75e131d5-f045-4d7f-b082-2db208d2e990')
     expect(message.html).toContain('/you/notifications#letter-arrivals')
   })
 
   it('does not include the letter body or imply that it does', () => {
     const message = renderArrivalEmail({ ...base, firstContact: true, senderPseudonym: 'Evening Quill' })
-    expect(message.html).toContain('does not include the letter itself')
-    expect(message.text).toContain('does not include the letter itself')
+    expect(message.html).not.toContain('does not include the letter itself')
+    expect(message.text).not.toContain('does not include the letter itself')
   })
 
   it('rejects unsafe site origins and invalid letter IDs', () => {
