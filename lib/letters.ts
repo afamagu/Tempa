@@ -249,26 +249,86 @@ export function shouldMarkLetterOpened(
   return letter.recipientId === viewerId && letter.isUnread
 }
 
+export const FIRST_CONTACT_FOLLOW_UP_DAYS = 7
+export const FIRST_CONTACT_MAX_ATTEMPTS = 2
+
+export type FirstContactAttemptState = {
+  attemptCount: number
+  latest: Letter | null
+  canFollowUp: boolean
+  followUpUsed: boolean
+  recipientPassed: boolean
+  followUpAvailableAt: string | null
+}
+
 /**
- * The original first-contact letter (reply_to_id is null) from sender to
- * recipient, if one has ever been sent — regardless of its resolution.
- * A sender can have at most one of these per recipient, enforced by a
- * partial unique index in the database, so this never needs disambiguation.
+ * First-contact attempts are root letters anchored to something the recipient
+ * wrote publicly. Ordinary Write Anytime letters also have replyToId=null, so
+ * questionAnswerId must be present before a root counts as first contact.
  */
-export async function getFirstContact(
+export async function getFirstContactAttempts(
   supabase: SupabaseClient,
   senderId: string,
   recipientId: string
-): Promise<Letter | null> {
+): Promise<Letter[]> {
   const { data } = await supabase
     .from(LETTERS_VIEW)
     .select(LETTER_COLUMNS)
     .eq('sender_id', senderId)
     .eq('recipient_id', recipientId)
     .is('reply_to_id', null)
-    .maybeSingle()
+    .not('question_answer_id', 'is', null)
+    .order('created_at', { ascending: false })
 
-  return data ? toLetter(data as LetterRow) : null
+  return (data ?? []).map((row) => toLetter(row as LetterRow))
+}
+
+/** The latest first-contact attempt from sender to recipient. */
+export async function getFirstContact(
+  supabase: SupabaseClient,
+  senderId: string,
+  recipientId: string
+): Promise<Letter | null> {
+  return (await getFirstContactAttempts(supabase, senderId, recipientId))[0] ?? null
+}
+
+export function deriveFirstContactAttemptState(
+  attempts: Letter[],
+  nowMs: number = Date.now()
+): FirstContactAttemptState {
+  const ordered = [...attempts].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+  const latest = ordered[0] ?? null
+  const attemptCount = ordered.length
+  const followUpUsed = attemptCount >= FIRST_CONTACT_MAX_ATTEMPTS
+  const recipientPassed = latest?.status === 'closed' && latest.closedBy === 'recipient'
+  const followUpAvailableAt =
+    attemptCount === 1 && latest
+      ? new Date(
+          new Date(latest.createdAt).getTime() +
+            FIRST_CONTACT_FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000
+        ).toISOString()
+      : null
+
+  const unanswered =
+    latest?.status === 'sent' ||
+    (latest?.status === 'closed' && latest.closedBy === 'system')
+
+  const canFollowUp =
+    attemptCount === 1 &&
+    unanswered &&
+    followUpAvailableAt !== null &&
+    nowMs >= new Date(followUpAvailableAt).getTime()
+
+  return {
+    attemptCount,
+    latest,
+    canFollowUp,
+    followUpUsed,
+    recipientPassed,
+    followUpAvailableAt,
+  }
 }
 
 /** A single letter by id. The view already restricts this to its two participants. */
@@ -1304,11 +1364,11 @@ export async function hideCorrespondenceForViewer(
 
   const { error } = await supabase
     .from('correspondence_hidden_for_user')
-    .upsert(
-      { user_id: user.id, correspondence_id: correspondenceId },
-      { onConflict: 'user_id,correspondence_id' }
-    )
+    .insert({ user_id: user.id, correspondence_id: correspondenceId })
 
+  // The hidden row is immutable viewer-local state. Repeating the action
+  // is already the desired end state, so a duplicate-key response is success.
+  if (error?.code === '23505') return true
   return !error
 }
 

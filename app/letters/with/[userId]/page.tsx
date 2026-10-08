@@ -10,19 +10,20 @@ import {
   getActiveEstablishedCorrespondenceWithUser,
   isEstablishedForViewer,
   letterPreviewText,
+  getFirstContactAttempts,
+  deriveFirstContactAttemptState,
 } from '@/lib/letters'
 import {
   getCorrespondenceRhythm,
   getMyWritingRhythm,
 } from '@/lib/writing-rhythm'
 import { getReturnCardsForCorrespondences } from '@/lib/return-cards'
-import { sectionTitleClass, iconButtonClass, metadataTextClass, secondaryButtonClass } from '@/app/profile/ui'
+import { sectionTitleClass, metadataTextClass, secondaryButtonClass, quietLinkClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import RemoveFromLetterbox from '@/app/letters/remove-from-letterbox'
-import RemoveFromLetterboxIcon from '@/app/letters/remove-from-letterbox-icon'
 import ArchiveList from './archive-list'
 import ReturnCardHistory from './return-card-history'
 import WriteQuillButton from './write-quill-button'
@@ -70,6 +71,7 @@ export default async function LetterArchiveWithUserPage({
     activeCorrespondence,
     myRhythm,
     lifecycle,
+    outgoingFirstContactAttempts,
   ] = await Promise.all([
     supabase
       .from('public_profiles')
@@ -82,6 +84,7 @@ export default async function LetterArchiveWithUserPage({
     getActiveEstablishedCorrespondenceWithUser(supabase, user.id, otherUserId),
     getMyWritingRhythm(supabase),
     getCorrespondenceLifecycleWithMember(supabase, otherUserId),
+    getFirstContactAttempts(supabase, user.id, otherUserId),
   ])
 
   const otherProfile = (profiles ?? []).find((p) => p.id === otherUserId) ?? null
@@ -93,6 +96,7 @@ export default async function LetterArchiveWithUserPage({
   const otherMarkUrl = otherProfile?.mark_id
     ? publicProfileMarkUrl(supabase, `${otherProfile.mark_id}.png`)
     : null
+  const outgoingFirstContactState = deriveFirstContactAttemptState(outgoingFirstContactAttempts)
   const mailOnTheWayFromThisPerson = incomingMailInTransitPersonIds(incomingInTransit).has(otherUserId)
 
   const establishedForViewer = activeCorrespondence
@@ -164,17 +168,27 @@ export default async function LetterArchiveWithUserPage({
                 </div>
               )}
 
-              {visibleCorrespondenceIds.length > 0 && (
-                <RemoveFromLetterbox
-                  correspondenceIds={visibleCorrespondenceIds}
-                  triggerClassName={`shrink-0 ${iconButtonClass}`}
-                  triggerIcon={<RemoveFromLetterboxIcon />}
-                  confirmDescription={`your correspondence with ${otherPseudonym}`}
-                />
-              )}
             </div>
 
             {mailOnTheWayFromThisPerson && <MailOnTheWay />}
+
+            {otherProfile && outgoingFirstContactState.canFollowUp && !activeCorrespondence && (
+              <section className="space-y-3 rounded-lg border border-foreground/10 px-4 py-3">
+                <div className="space-y-1">
+                  <p className="text-[15px] text-foreground">One follow-up is available.</p>
+                  <p className={metadataTextClass}>
+                    Your first letter wasn’t answered. Tempa allows one follow-up after seven days.
+                    If there’s still no reply, the next move belongs to {otherPseudonym}.
+                  </p>
+                </div>
+                <Link
+                  href={`/write/${otherUserId}?followUp=1`}
+                  className={secondaryButtonClass}
+                >
+                  Write one follow-up
+                </Link>
+              </section>
+            )}
 
             {replyableFirstLetter && (
               <div>
@@ -228,6 +242,17 @@ export default async function LetterArchiveWithUserPage({
             otherPseudonym={otherPseudonym}
             viewerPseudonym={viewerPseudonym}
           />
+
+          {visibleCorrespondenceIds.length > 0 && (
+            <div className="mt-4 border-t border-foreground/10 pt-4">
+              <RemoveFromLetterbox
+                correspondenceIds={visibleCorrespondenceIds}
+                triggerClassName={quietLinkClass}
+                triggerLabel="Remove from my Letterbox"
+                confirmDescription={`your correspondence with ${otherPseudonym}`}
+              />
+            </div>
+          )}
         </div>
       </main>
       {otherProfile && activeCorrespondence && establishedForViewer && (
