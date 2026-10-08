@@ -47,6 +47,14 @@ describe('FirstContactResponse — default (choose) mode', () => {
     expect(html).not.toContain('Send reply')
   })
 
+  it('system-expired first contact still offers Reply but no invalid Pass action', () => {
+    const html = renderToStaticMarkup(<FirstContactResponse {...baseProps} lateReply />)
+    expect(html).toContain('The original reply window has passed')
+    expect(html).toContain('you can still write back')
+    expect(html).toContain('Reply')
+    expect(html).not.toContain('Pass on this letter')
+  })
+
   it('does not render the "View [pseudonym]\'s letter" reference action before Reply is chosen', () => {
     const html = renderToStaticMarkup(<FirstContactResponse {...baseProps} />)
     expect(html).not.toContain(`View ${baseProps.recipientPseudonym}`)
