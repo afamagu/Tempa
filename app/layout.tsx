@@ -50,6 +50,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: BRAND_BACKGROUND,
   viewportFit: "cover",
+  // Standards-based keyboard behavior for browsers that support it
+  // (notably modern Chromium/Android). Safari may continue to use the
+  // visual viewport, so the shared writing hook remains the fallback there.
+  interactiveWidget: "resizes-content",
 };
 
 // Pre-beta security F-02 — every page renders per request so Next.js can
