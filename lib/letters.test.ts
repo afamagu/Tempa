@@ -16,6 +16,7 @@ import {
   mapLetterPostcardRows,
   letterPostcardToBaseContent,
   deriveLetterboxCardStatus,
+  deriveFirstContactAttemptState,
   type Letter,
   type LetterboxPerson,
   type IncomingMailInTransit,
@@ -1016,5 +1017,77 @@ describe('mapLetterPostcardRows', () => {
       expect(base.living).toBeUndefined()
       expect(base.revealLineAlignment).toBe('top-center')
     })
+  })
+})
+
+
+describe('first-contact follow-up policy', () => {
+  function attempt(overrides: Partial<Letter> = {}): Letter {
+    return {
+      id: 'first-1',
+      senderId: 'sender',
+      recipientId: 'recipient',
+      questionAnswerId: 'qa-1',
+      replyToId: null,
+      correspondenceId: 'corr-1',
+      body: 'hello',
+      status: 'sent',
+      createdAt: '2026-10-01T08:00:00.000Z',
+      expiresAt: '2026-10-04T08:00:00.000Z',
+      isUnread: false,
+      repliedAt: null,
+      closedAt: null,
+      closedBy: null,
+      closeReason: null,
+      ...overrides,
+    }
+  }
+
+  it('offers one follow-up seven days after an unanswered first letter even when the letter remains sent', () => {
+    const state = deriveFirstContactAttemptState(
+      [attempt()],
+      new Date('2026-10-08T08:00:00.000Z').getTime()
+    )
+    expect(state.canFollowUp).toBe(true)
+    expect(state.followUpUsed).toBe(false)
+  })
+
+  it('also supports legacy first letters closed by the old system timeout', () => {
+    const state = deriveFirstContactAttemptState(
+      [attempt({ status: 'closed', closedBy: 'system', closedAt: '2026-10-04T08:00:00.000Z' })],
+      new Date('2026-10-08T08:00:00.000Z').getTime()
+    )
+    expect(state.canFollowUp).toBe(true)
+  })
+
+  it('does not offer a follow-up before seven days', () => {
+    const state = deriveFirstContactAttemptState(
+      [attempt()],
+      new Date('2026-10-08T07:59:59.000Z').getTime()
+    )
+    expect(state.canFollowUp).toBe(false)
+  })
+
+  it('treats an explicit recipient pass as final', () => {
+    const state = deriveFirstContactAttemptState(
+      [attempt({ status: 'closed', closedBy: 'recipient', closedAt: '2026-10-02T08:00:00.000Z' })],
+      new Date('2026-10-20T08:00:00.000Z').getTime()
+    )
+    expect(state.recipientPassed).toBe(true)
+    expect(state.canFollowUp).toBe(false)
+  })
+
+  it('never offers a third first-contact attempt', () => {
+    const second = attempt({
+      id: 'first-2',
+      createdAt: '2026-10-08T08:00:00.000Z',
+      expiresAt: '2026-10-11T08:00:00.000Z',
+    })
+    const state = deriveFirstContactAttemptState(
+      [second, attempt()],
+      new Date('2026-10-30T08:00:00.000Z').getTime()
+    )
+    expect(state.followUpUsed).toBe(true)
+    expect(state.canFollowUp).toBe(false)
   })
 })
