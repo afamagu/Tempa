@@ -7,7 +7,7 @@ const base = {
 }
 
 describe('letter-arrival email', () => {
-  it('names the sender for a first-contact arrival and stays transactional', () => {
+  it('keeps first contact anonymous while staying plainly transactional', () => {
     const message = renderArrivalEmail({
       ...base,
       firstContact: true,
@@ -16,9 +16,11 @@ describe('letter-arrival email', () => {
       artOrigin: 'https://jointempa.com/email/arrival-art',
     })
 
-    expect(message.subject).toBe('Evening Quill wrote to you on Tempa')
-    expect(message.html).toContain('Evening Quill sent you a first letter on Tempa.')
-    expect(message.text).toContain('Evening Quill sent you a first letter on Tempa.')
+    expect(message.subject).toBe('You have a new letter on Tempa')
+    expect(message.html).toContain('Someone sent you a first letter on Tempa.')
+    expect(message.text).toContain('Someone sent you a first letter on Tempa.')
+    expect(message.html).not.toContain('Evening Quill')
+    expect(message.text).not.toContain('Evening Quill')
     expect(message.html).toContain('Open your letter')
     expect(message.html).not.toContain('<img')
     expect(message.html).not.toContain('arrival-art')
