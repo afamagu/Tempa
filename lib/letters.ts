@@ -214,6 +214,14 @@ export function isReplyableFirstContact(letter: Letter, established: boolean): b
 }
 
 /**
+ * Compatibility for older status surfaces: expiresAt now releases capacity
+ * only. It no longer makes a delivered first letter closed in the UI.
+ */
+export function isEffectivelyExpired(_letter: Letter, _established: boolean): boolean {
+  return false
+}
+
+/**
  * Pure: Home's unread-arrival list — every delivered, visible letter
  * this viewer received and has not opened yet. `letters` is always
  * sourced from getMyLetters (letters_for_participant), so isUnread is
