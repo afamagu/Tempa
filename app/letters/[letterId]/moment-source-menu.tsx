@@ -47,11 +47,13 @@ export default function MomentSourceMenu({
   anchorRect,
   onChooseLibrary,
   onChooseCamera,
+  onChooseVideo,
   onCancel,
 }: {
   anchorRect: DOMRect
   onChooseLibrary: () => void
   onChooseCamera: () => void
+  onChooseVideo?: () => void
   onCancel: () => void
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -122,6 +124,11 @@ export default function MomentSourceMenu({
       >
         Take a photo
       </button>
+      {onChooseVideo && (
+        <button type="button" role="menuitem" onClick={onChooseVideo} className={`w-full justify-start ${secondaryButtonClass}`}>
+          Add a video
+        </button>
+      )}
       <button
         type="button"
         role="menuitem"

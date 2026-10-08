@@ -1,4 +1,4 @@
-export type MomentType = 'photo' | 'postcard'
+export type MomentType = 'photo' | 'video' | 'postcard'
 
 export type Moment = {
   id: string
@@ -6,6 +6,9 @@ export type Moment = {
   type: MomentType
   /** Photo only — a short-lived signed URL, resolved server-side per request. Never a public URL. */
   imageUrl: string | null
+  /** Video only — playback window selected by the sender. */
+  trimStartSeconds?: number | null
+  durationSeconds?: number | null
   /** Postcard only. */
   postcardKey: string | null
 }
@@ -15,6 +18,7 @@ export type Moment = {
 // already uploaded to — image bytes are never held across the RPC call.
 export type MomentDraft =
   | { position: number; type: 'photo'; imagePath: string }
+  | { position: number; type: 'video'; imagePath: string; trimStartSeconds: number; durationSeconds: number }
   | { position: number; type: 'postcard'; postcardKey: string }
 
 /**
@@ -30,6 +34,8 @@ export type MomentRpcPayload = {
   type: MomentType
   image_path: string | null
   postcard_key: string | null
+  trim_start_seconds?: number | null
+  duration_seconds?: number | null
 }
 
 /**
@@ -45,9 +51,20 @@ export type MomentRpcPayload = {
  * exactly one of image_path/postcard_key set, never "key absent."
  */
 export function toMomentRpcPayload(draft: MomentDraft): MomentRpcPayload {
-  return draft.type === 'photo'
-    ? { position: draft.position, type: 'photo', image_path: draft.imagePath, postcard_key: null }
-    : { position: draft.position, type: 'postcard', image_path: null, postcard_key: draft.postcardKey }
+  if (draft.type === 'photo') {
+    return { position: draft.position, type: 'photo', image_path: draft.imagePath, postcard_key: null, trim_start_seconds: null, duration_seconds: null }
+  }
+  if (draft.type === 'video') {
+    return {
+      position: draft.position,
+      type: 'video',
+      image_path: draft.imagePath,
+      postcard_key: null,
+      trim_start_seconds: draft.trimStartSeconds,
+      duration_seconds: draft.durationSeconds,
+    }
+  }
+  return { position: draft.position, type: 'postcard', image_path: null, postcard_key: draft.postcardKey, trim_start_seconds: null, duration_seconds: null }
 }
 
 // TEMPA Living Postcards V1, Checkpoint 1 (2026-09-08) — where a future

@@ -973,6 +973,8 @@ type MomentRow = {
   type: MomentType
   image_path: string | null
   postcard_key: string | null
+  trim_start_seconds: number | null
+  duration_seconds: number | null
 }
 
 // Private storage — every photo URL is short-lived and resolved
@@ -996,7 +998,7 @@ export async function getMomentsForLetters(
 
   const { data, error } = await supabase
     .from('moments')
-    .select('id, letter_id, position, type, image_path, postcard_key')
+    .select('id, letter_id, position, type, image_path, postcard_key, trim_start_seconds, duration_seconds')
     .in('letter_id', letterIds)
     .order('position', { ascending: true })
 
@@ -1011,7 +1013,7 @@ export async function getMomentsForLetters(
 
   const photoPaths = [
     ...new Set(
-      rows.filter((r) => r.type === 'photo' && r.image_path).map((r) => r.image_path as string)
+      rows.filter((r) => (r.type === 'photo' || r.type === 'video') && r.image_path).map((r) => r.image_path as string)
     ),
   ]
 
@@ -1049,10 +1051,12 @@ export async function getMomentsForLetters(
       position: row.position,
       type: row.type,
       imageUrl:
-        row.type === 'photo' && row.image_path
+        (row.type === 'photo' || row.type === 'video') && row.image_path
           ? (signedUrlByPath.get(row.image_path) ?? null)
           : null,
       postcardKey: row.postcard_key,
+      trimStartSeconds: row.type === 'video' ? row.trim_start_seconds : null,
+      durationSeconds: row.type === 'video' ? row.duration_seconds : null,
     }
     const arr = byLetterId.get(row.letter_id)
     if (arr) arr.push(moment)
