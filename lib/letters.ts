@@ -311,10 +311,13 @@ export function deriveFirstContactAttemptState(
         ).toISOString()
       : null
 
+  const unanswered =
+    latest?.status === 'sent' ||
+    (latest?.status === 'closed' && latest.closedBy === 'system')
+
   const canFollowUp =
     attemptCount === 1 &&
-    latest?.status === 'closed' &&
-    latest.closedBy === 'system' &&
+    unanswered &&
     followUpAvailableAt !== null &&
     nowMs >= new Date(followUpAvailableAt).getTime()
 
