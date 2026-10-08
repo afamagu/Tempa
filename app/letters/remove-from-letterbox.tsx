@@ -8,19 +8,12 @@ import { helperTextClass, secondaryButtonClass, primaryButtonClass } from '@/app
 import Tooltip from '@/app/profile/tooltip'
 
 /**
- * "Remove from my Letterbox" — viewer-local hiding only, through the
- * already-live correspondence_hidden_for_user backend
- * (hideCorrespondenceForViewer, lib/letters.ts). Never destructive:
- * letters, safety/report records, and the other participant's own
- * Letterbox are all untouched — this only stops the correspondence
- * from appearing in the CURRENT viewer's own Letterbox and search.
- * Shared between the letter reader's action menu
- * (app/letters/[letterId]/letter-action-menu.tsx) and the archive
- * header (app/letters/with/[userId]/page.tsx) so both use identical
- * copy and confirm-before-hiding behavior rather than two competing
- * implementations. Renders its own inline confirmation step — never a
- * native window.confirm(), which isn't consistently keyboard/screen-
- * reader friendly and can't carry Tempa's own copy.
+ * Viewer-local Letterbox housekeeping only. This never deletes shared history,
+ * never ends a correspondence, and never changes first-contact eligibility.
+ *
+ * Confirmation is rendered as a real modal layer so activating this action
+ * cannot crush the correspondent header or collide visually with archive
+ * selection controls on small screens.
  */
 export default function RemoveFromLetterbox({
   correspondenceIds,
@@ -29,24 +22,10 @@ export default function RemoveFromLetterbox({
   triggerIcon,
   confirmDescription = 'this correspondence',
 }: {
-  /** One episode from the letter reader (its own single
-   * correspondenceId); every VISIBLE episode with this person from the
-   * archive header (a pair can have more than one over time — removing
-   * "this person" from Letterbox means removing all of them, not just
-   * whichever episode happened to be shown). Always at least one. */
   correspondenceIds: string[]
   triggerClassName: string
   triggerLabel?: string
-  /** Renders an icon-only trigger instead of triggerLabel as visible
-   * text (e.g. the archive header's compact control) — triggerLabel is
-   * still the button's accessible name (aria-label) and its Tooltip
-   * text, so the action never loses its name just because the visible
-   * text did. Omit for a plain text trigger (e.g. the per-letter menu
-   * item), which needs neither. */
   triggerIcon?: ReactNode
-  /** How the confirmation describes what's being removed — e.g. "your
-   * correspondence with Evening Quill" from the archive header, left as
-   * the generic default from the single-letter reader menu. */
   confirmDescription?: string
 }) {
   const router = useRouter()
@@ -71,38 +50,16 @@ export default function RemoveFromLetterbox({
     }
 
     router.push('/letters')
-  }
-
-  if (confirming) {
-    return (
-      <div className="space-y-2 p-1.5">
-        <p className={helperTextClass}>Remove {confirmDescription} from your Letterbox?</p>
-        <p className={helperTextClass}>
-          This removes it from your Letterbox only. It stays visible to the other
-          participant, and nothing is deleted.
-        </p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => setConfirming(false)}
-            disabled={removing}
-            className={secondaryButtonClass}
-          >
-            Cancel
-          </button>
-          <button type="button" onClick={handleConfirm} disabled={removing} className={primaryButtonClass}>
-            {removing ? 'Removing…' : 'Remove'}
-          </button>
-        </div>
-      </div>
-    )
+    router.refresh()
   }
 
   const trigger = (
     <button
       type="button"
-      onClick={() => setConfirming(true)}
+      onClick={() => {
+        setError(null)
+        setConfirming(true)
+      }}
       className={triggerClassName}
       aria-label={triggerIcon ? triggerLabel : undefined}
     >
@@ -110,5 +67,58 @@ export default function RemoveFromLetterbox({
     </button>
   )
 
-  return triggerIcon ? <Tooltip label={triggerLabel}>{trigger}</Tooltip> : trigger
+  return (
+    <>
+      {triggerIcon ? <Tooltip label={triggerLabel}>{trigger}</Tooltip> : trigger}
+
+      {confirming && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/25 p-3 sm:items-center sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !removing) setConfirming(false)
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-letterbox-title"
+            className="w-full max-w-md space-y-4 rounded-xl border border-foreground/10 bg-background p-5 shadow-xl"
+          >
+            <div className="space-y-2">
+              <h2 id="remove-letterbox-title" className="text-[17px] font-medium text-foreground">
+                Remove from your Letterbox?
+              </h2>
+              <p className={helperTextClass}>Remove {confirmDescription} from your Letterbox?</p>
+              <p className={helperTextClass}>
+                This hides it from your Letterbox only. Nothing is deleted for the other person,
+                and it does not end the relationship or reset who can write to whom.
+              </p>
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={removing}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={removing}
+                className={primaryButtonClass}
+              >
+                {removing ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  )
 }
