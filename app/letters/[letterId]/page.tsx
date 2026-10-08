@@ -7,7 +7,7 @@ import {
   getLetterPostcardsForLetters,
   letterPostcardToBaseContent,
   getFirstLockedPhotoLetterMoment,
-  isEffectivelyExpired,
+  isReplyableFirstContact,
   isEstablishedForViewer,
   isMomentsQualifiedForViewer,
   getWaitingLetterCount,
@@ -178,9 +178,12 @@ export default async function LetterPage({
   const senderProfileHref = target.senderId === user.id ? null : `/minds/${target.senderId}`
 
   const established = correspondence?.establishedAt != null
-  const targetExpired = isEffectivelyExpired(target, established)
-  const targetEffectiveStatus = targetExpired ? 'closed' : target.status
-  const targetEffectiveClosedBy = targetExpired ? 'system' : target.closedBy
+  const targetReplyableFirstContact = isReplyableFirstContact(target, established)
+  const targetEffectiveStatus =
+    targetReplyableFirstContact && target.status === 'closed' && target.closedBy === 'system'
+      ? 'sent'
+      : target.status
+  const targetEffectiveClosedBy = targetEffectiveStatus === 'closed' ? target.closedBy : null
   const isFirstContactLetter = target.replyToId === null
 
   const writingAvailable = establishedForViewer && correspondence?.status === 'active'
