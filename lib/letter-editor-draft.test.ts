@@ -74,7 +74,7 @@ describe('letter-editor-draft — correspondence-scoped (Write Anytime)', () => 
 
   it('round-trips a draft for one correspondence', () => {
     installFakeLocalStorage()
-    writeLetterEditorDraft('corr-1', doc('Hello'))
+    expect(writeLetterEditorDraft('corr-1', doc('Hello'))).toBe(true)
     expect(readLetterEditorDraft('corr-1')).toEqual(doc('Hello'))
   })
 
@@ -331,8 +331,9 @@ describe('letter-editor-draft — letter-level Postcard draft, no window/localSt
     expect(readLetterPostcardDraft('corr-1')).toBeNull()
   })
 
-  it('write fails safely without throwing', () => {
+  it('write reports false when local storage is unavailable, without throwing', () => {
     expect(() => writeLetterPostcardDraft('corr-1', postcardDraft())).not.toThrow()
+    expect(writeLetterPostcardDraft('corr-1', postcardDraft())).toBe(false)
   })
 
   it('clear fails safely without throwing', () => {
@@ -459,14 +460,34 @@ describe('letter-editor-draft — Dispatch-scoped (before publish)', () => {
   })
 })
 
+describe('letter-editor-draft — explicit persistence result', () => {
+  afterEach(uninstallFakeLocalStorage)
+
+  it('reports false when localStorage rejects a real write (for example quota/private mode)', () => {
+    const brokenStorage = {
+      getItem: () => null,
+      setItem: () => { throw new Error('quota') },
+      removeItem: () => { throw new Error('denied') },
+    }
+    ;(globalThis as unknown as { window: { localStorage: typeof brokenStorage } }).window = {
+      localStorage: brokenStorage,
+    }
+
+    expect(writeLetterEditorDraft('corr-1', doc('Hello'))).toBe(false)
+    expect(writeFirstContactDraft('recipient-a', doc('Hello'))).toBe(false)
+    expect(writeDispatchDraft('author-a', dispatchDraft('Title', 'Body'))).toBe(false)
+  })
+})
+
 describe('letter-editor-draft — no window/localStorage available (SSR or storage failure)', () => {
   it('read fails safely to null rather than throwing', () => {
     expect(() => readFirstContactDraft('recipient-a')).not.toThrow()
     expect(readFirstContactDraft('recipient-a')).toBeNull()
   })
 
-  it('write fails safely without throwing', () => {
+  it('write reports false when local storage is unavailable, without throwing', () => {
     expect(() => writeFirstContactDraft('recipient-a', doc('Hello'))).not.toThrow()
+    expect(writeFirstContactDraft('recipient-a', doc('Hello'))).toBe(false)
   })
 
   it('clear fails safely without throwing', () => {

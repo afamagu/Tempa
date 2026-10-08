@@ -25,6 +25,7 @@ import EmojiPicker from '@/app/letters/emoji-picker'
 import { evaluateSafety, SAFETY_FINANCIAL_REQUEST_COPY_KEY } from '@/lib/safety/send-with-safety'
 import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
+import DraftPersistenceWarning from '@/app/draft-persistence-warning'
 
 const MAX_CHARS = QUESTION_ANSWER_MAX_CHARS
 const CHAR_WARNING_THRESHOLD = 1750
@@ -75,6 +76,7 @@ export default function QuestionAnswer({
   const [body, setBody] = useState(() => readDraft(questionId, userId) ?? initialAnswer ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [pendingWarning, setPendingWarning] = useState<{ evaluationId: string; copyKey?: string } | null>(null)
   const [financialBlocked, setFinancialBlocked] = useState(false)
@@ -91,7 +93,11 @@ export default function QuestionAnswer({
 
   function updateBody(next: string) {
     setBody(next)
-    try { window.localStorage.setItem(draftKey(questionId, userId), next) } catch { /* ignore */ }
+    try {
+      window.localStorage.setItem(draftKey(questionId, userId), next)
+    } catch {
+      setDraftStorageFailed(true)
+    }
   }
   function insertEmoji(emoji: string) {
     const el = textareaRef.current
@@ -203,6 +209,7 @@ export default function QuestionAnswer({
             <div className="flex items-center gap-1 border-b border-foreground/10 pb-2"><EmojiPicker onSelect={insertEmoji} /></div>
             <CorrespondentPicker onChange={updateBody} maxLength={MAX_CHARS} onSelect={mentions.select}><textarea ref={textareaRef} value={body} onChange={(e) => updateBody(e.target.value)} rows={16} placeholder={t('beginWriting')} className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-accent" /></CorrespondentPicker>
             {showCharCount && <p className={helperTextClass}>{charCount.toLocaleString()} / {MAX_CHARS.toLocaleString()}</p>}
+            {draftStorageFailed && <DraftPersistenceWarning />}
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex flex-wrap gap-3">
               {!(onboarding && !hadExistingAnswer) && (

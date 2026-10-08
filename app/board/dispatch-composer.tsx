@@ -81,6 +81,7 @@ import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import TopicInput from './topic-input'
 import DispatchPreview from './dispatch-preview'
 import { WEB_PUBLIC_COPY, webVisibilityRefusal } from '@/lib/public-dispatches'
+import DraftPersistenceWarning from '@/app/draft-persistence-warning'
 
 const TITLE_MAX_CHARS = 140
 
@@ -152,6 +153,7 @@ export default function DispatchComposer({
   const [topics, setTopics] = useState<string[]>(existingDispatch?.topics ?? [])
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false)
 
   // New Dispatches are public on the web by default. Editing always
   // preserves the existing Dispatch's actual state. The choice remains
@@ -209,7 +211,9 @@ export default function DispatchComposer({
 
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
     setPostcardDraft(next)
-    writeDispatchPostcardDraft(draftKey, next)
+    if (!writeDispatchPostcardDraft(draftKey, next)) {
+      setDraftStorageFailed(true)
+    }
   }
 
   function choosePostcard(postcardKey: string) {
@@ -255,7 +259,9 @@ export default function DispatchComposer({
     },
     onUpdate({ editor: current }) {
       if (isEdit) return
-      writeDispatchDraft(draftKey, { title, doc: current.getJSON() as LetterDocJSON, topics })
+      if (!writeDispatchDraft(draftKey, { title, doc: current.getJSON() as LetterDocJSON, topics })) {
+        setDraftStorageFailed(true)
+      }
     },
   })
 
@@ -273,7 +279,9 @@ export default function DispatchComposer({
 
   function persistDraft(nextTitle: string, nextTopics: string[]) {
     if (!editor || isEdit) return
-    writeDispatchDraft(draftKey, { title: nextTitle, doc: editor.getJSON() as LetterDocJSON, topics: nextTopics })
+    if (!writeDispatchDraft(draftKey, { title: nextTitle, doc: editor.getJSON() as LetterDocJSON, topics: nextTopics })) {
+      setDraftStorageFailed(true)
+    }
   }
 
   function handleTitleChange(value: string) {
@@ -735,6 +743,7 @@ export default function DispatchComposer({
           </label>
         )}
 
+        {!isEdit && draftStorageFailed && <DraftPersistenceWarning />}
         {error && <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p>}
 
         <div className="flex flex-wrap gap-3">
