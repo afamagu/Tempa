@@ -73,6 +73,7 @@ export default function LetterBody({
   writingStyleId?: string | null
 }) {
   const [openPhoto, setOpenPhoto] = useState<{ src: string; alt: string; momentId: string } | null>(null)
+  const [openVideo, setOpenVideo] = useState<Moment | null>(null)
   const [readingMode, setReadingMode] = useReadingMode()
   // Stripped ONCE against the whole raw body, before paragraph
   // splitting — the rich-body marker only ever sits at position 0 of
@@ -105,12 +106,18 @@ export default function LetterBody({
         {paragraphs.map((paragraph, index) => {
           const moment = momentByPosition.get(index)
           const photoUrl = moment?.type === 'photo' ? moment.imageUrl : null
+          const videoUrl = moment?.type === 'video' ? moment.imageUrl : null
 
           return (
             <div key={index} className="wp-block" data-wp-role={roles[index]} {...(paragraphAttrs?.(index) ?? {})}>
               <p className={`whitespace-pre-wrap${roles[index] === 'opening' ? ' wp-opening' : ''}`}>
                 <FormattedText text={paragraph} isRich={isRich} />
-                {moment?.type === 'photo' && photoUrl && (
+                {moment?.type === 'video' && videoUrl && (
+                <div className="wp-interface mt-2">
+                  <button type="button" onClick={() => setOpenVideo(moment)} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-foreground/15 px-3 text-xs font-medium">▶ Video · {Math.round(moment.durationSeconds ?? 10)}s</button>
+                </div>
+              )}
+              {moment?.type === 'photo' && photoUrl && (
                   <span className="wp-interface">
                     <PhotoMomentToken
                       src={photoUrl}
@@ -147,6 +154,31 @@ export default function LetterBody({
           )
         })}
       </AuthoredProse>
+
+      {openVideo?.imageUrl && (
+        <div className="safe-overlay-pad fixed inset-0 z-50 flex items-center justify-center bg-foreground/60">
+          <button type="button" aria-label="Close video" className="absolute inset-0" onClick={() => setOpenVideo(null)} />
+          <div className="relative z-10 max-h-[90vh] w-full max-w-lg">
+            <video
+              src={openVideo.imageUrl}
+              controls
+              autoPlay
+              playsInline
+              onLoadedMetadata={(e) => { e.currentTarget.currentTime = openVideo.trimStartSeconds ?? 0 }}
+              onTimeUpdate={(e) => {
+                const start = openVideo.trimStartSeconds ?? 0
+                const duration = openVideo.durationSeconds ?? 10
+                if (e.currentTarget.currentTime >= start + duration) {
+                  e.currentTarget.pause()
+                  e.currentTarget.currentTime = start
+                }
+              }}
+              className="max-h-[85vh] w-full rounded-lg bg-black object-contain"
+            />
+            <button type="button" onClick={() => setOpenVideo(null)} aria-label="Close" className="absolute -right-3 -top-3 flex h-11 w-11 items-center justify-center rounded-full bg-background text-lg text-foreground">×</button>
+          </div>
+        </div>
+      )}
 
       {openPhoto && (
         <PhotoMomentViewer

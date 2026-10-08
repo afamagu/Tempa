@@ -57,10 +57,13 @@ import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
 import { PhotoMoment } from './photo-moment-node'
+import { VideoMoment } from './video-moment-node'
 import { PostcardMoment } from './postcard-moment-node'
 import { MomentAffordance } from './moment-affordance-extension'
 import PhotoSourceInputs, { selectPhotoSourceRef } from './photo-source-inputs'
 import MomentSourceMenu from './moment-source-menu'
+import VideoSourceInput from './video-source-input'
+import VideoMomentTrimDialog from './video-moment-trim-dialog'
 import { processImageForUpload } from '@/lib/image-processing'
 import { reportLetterSendTiming, resourceNet, startLetterSendTiming, type LetterSendTiming } from '@/lib/letter-send-timing'
 import { useKeyboardDismiss } from '@/app/letters/use-keyboard-dismiss'
@@ -303,6 +306,8 @@ export default function MomentsComposer({
   const [pendingFirstPhoto, setPendingFirstPhoto] = useState<
     { index: number; imagePath: string; previewUrl: string } | null
   >(null)
+  const videoInputRef = useRef<HTMLInputElement | null>(null)
+  const [pendingVideo, setPendingVideo] = useState<{ index: number; file: File; previewUrl: string; duration: number } | null>(null)
   // Repeated-first-photo-explanation fix — flips true the moment THIS
   // member continues past the explanation for the FIRST photo (see
   // confirmFirstPhoto), so a second/third/... photo added later in this
@@ -372,6 +377,7 @@ export default function MomentsComposer({
       ...baseWritingExtensions(),
       Placeholder.configure({ placeholder: `Write back to ${recipientPseudonym}…` }),
       PhotoMoment,
+      VideoMoment,
       PostcardMoment,
       MomentAffordance.configure({
         enabled: momentsQualified && canSendPhoto,
@@ -591,6 +597,13 @@ export default function MomentsComposer({
     setPostcardEditorOpen(false)
   }
 
+  function chooseVideoSource() {
+    if (openPicker === null) return
+    pendingTargetRef.current = openPicker.index
+    setOpenPicker(null)
+    videoInputRef.current?.click()
+  }
+
   function chooseSource(useCamera: boolean) {
     if (openPicker === null) return
     pendingTargetRef.current = openPicker.index
@@ -599,6 +612,76 @@ export default function MomentsComposer({
     // this mapping is decided — never re-decided inline here, so it
     // can't quietly diverge from what's actually under test.
     selectPhotoSourceRef(useCamera, libraryInputRef, cameraInputRef).current?.click()
+  }
+
+  async function handleVideoChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    const index = pendingTargetRef.current
+    e.target.value = ''
+    pendingTargetRef.current = null
+    if (!file || index === null || !editor) return
+    if (!file.type.startsWith('video/')) {
+      setError('Please choose a video file.')
+      return
+    }
+    const previewUrl = URL.createObjectURL(file)
+    const probe = document.createElement('video')
+    probe.preload = 'metadata'
+    probe.src = previewUrl
+    probe.onloadedmetadata = () => {
+      if (!Number.isFinite(probe.duration) || probe.duration <= 0) {
+        URL.revokeObjectURL(previewUrl)
+        setError('Could not read that video. Please try another clip.')
+        return
+      }
+      setPendingVideo({ index, file, previewUrl, duration: probe.duration })
+    }
+    probe.onerror = () => {
+      URL.revokeObjectURL(previewUrl)
+      setError('Could not read that video. Please try another clip.')
+    }
+  }
+
+  async function confirmVideoMoment(trimStartSeconds: number, durationSeconds: number) {
+    if (!pendingVideo || !editor) return
+    const { index, file, previewUrl } = pendingVideo
+    setUploadingIndex(index)
+    setError(null)
+    try {
+      const ext = file.type === 'video/webm' ? 'webm' : file.type === 'video/quicktime' ? 'mov' : 'mp4'
+      const path = `${correspondenceId}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await createClient().storage
+        .from('letter-photos')
+        .upload(path, file, { contentType: file.type || 'video/mp4' })
+      if (uploadError) throw uploadError
+      insertVideoMomentAtParagraphEnd(index, { imagePath: path, previewUrl, trimStartSeconds, durationSeconds })
+      setPendingVideo(null)
+    } catch {
+      setError('Could not add that video. Please try again.')
+    } finally {
+      setUploadingIndex(null)
+    }
+  }
+
+  function insertVideoMomentAtParagraphEnd(
+    paragraphIndex: number,
+    attrs: { imagePath: string; previewUrl: string; trimStartSeconds: number; durationSeconds: number }
+  ) {
+    if (!editor) return
+    const { state } = editor
+    let currentIndex = 0
+    let targetPos: number | null = null
+    state.doc.forEach((node, offset) => {
+      if (node.type.name !== 'paragraph') return
+      if (currentIndex === paragraphIndex) targetPos = offset + node.nodeSize - 1
+      currentIndex += 1
+    })
+    if (targetPos === null) return
+    const momentNode = state.schema.nodes.videoMoment.create(attrs)
+    const tr = state.tr.insert(targetPos, momentNode)
+    tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(state.selection.from))))
+    editor.view.dispatch(tr)
+    editor.view.focus()
   }
 
   async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
@@ -952,6 +1035,7 @@ export default function MomentsComposer({
   return (
     <div ref={composerRootRef} className="space-y-4">
       {memberQuestionPrompt && <div className="space-y-2 border-l-2 border-accent/40 pl-4"><p className="text-sm text-foreground/60">A question from {recipientPseudonym}</p><p className="whitespace-pre-wrap font-serif text-lg leading-relaxed">{memberQuestionPrompt}</p></div>}
+      <VideoSourceInput inputRef={videoInputRef} onChange={handleVideoChosen} />
       <PhotoSourceInputs
         libraryInputRef={libraryInputRef}
         cameraInputRef={cameraInputRef}
@@ -1016,7 +1100,18 @@ export default function MomentsComposer({
         <EditorContent editor={editor} />
       </div>
 
-      {uploadingIndex !== null && <p className={helperTextClass}>Adding photo…</p>}
+      {uploadingIndex !== null && <p className={helperTextClass}>Adding Moment…</p>}
+      {pendingVideo && (
+        <VideoMomentTrimDialog
+          src={pendingVideo.previewUrl}
+          duration={pendingVideo.duration}
+          onCancel={() => {
+            URL.revokeObjectURL(pendingVideo.previewUrl)
+            setPendingVideo(null)
+          }}
+          onConfirm={confirmVideoMoment}
+        />
+      )}
 
       {/* Moment menu anchoring fix (pre-beta UX polish batch 1) —
           spatially anchored to the tapped ⊕ itself (see
@@ -1028,6 +1123,7 @@ export default function MomentsComposer({
           anchorRect={openPicker.anchorRect}
           onChooseLibrary={() => chooseSource(false)}
           onChooseCamera={() => chooseSource(true)}
+          onChooseVideo={chooseVideoSource}
           onCancel={() => setOpenPicker(null)}
         />
       )}
