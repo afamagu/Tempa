@@ -95,6 +95,7 @@ export default function ArchiveList({
   async function removeSelected() {
     if (selected.size === 0) return
 
+    const removingAllVisibleLetters = selected.size === letters.length
     setRemoving(true)
     setRemoveError(null)
 
@@ -109,6 +110,13 @@ export default function ArchiveList({
     setSelected(new Set())
     setConfirmingRemoval(false)
     setRemoving(false)
+
+    if (removingAllVisibleLetters) {
+      router.push('/letters')
+      router.refresh()
+      return
+    }
+
     router.refresh()
   }
 
