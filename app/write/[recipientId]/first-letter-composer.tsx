@@ -58,6 +58,7 @@ export default function FirstLetterComposer({
   dispatchTitle,
   backHref = '/room',
   backLabel = 'The Room',
+  isFollowUp = false,
 }: {
   recipientId: string
   recipientPseudonym: string
@@ -68,12 +69,15 @@ export default function FirstLetterComposer({
   questionPrompt: string | null
   backHref?: string
   backLabel?: string
+  isFollowUp?: boolean
 }) {
   const draftKey = memberQuestionId
     ? `${recipientId}:mq:${memberQuestionId}`
     : dispatchId
       ? `${recipientId}:dispatch:${dispatchId}`
-      : recipientId
+      : isFollowUp
+        ? `${recipientId}:follow-up`
+        : recipientId
   const [sending, setSending] = useState(false)
   const composerRootRef = useRef<HTMLElement | null>(null)
   useKeyboardDismiss(composerRootRef)
@@ -195,6 +199,12 @@ export default function FirstLetterComposer({
         const capacityMessage = firstContactCapacityMessage(sendError, recipientPseudonym)
         if (capacityMessage) {
           setError(capacityMessage)
+        } else if ((sendError.details ?? '').includes('FIRST_CONTACT_FOLLOW_UP_USED')) {
+          setError(`You’ve already used your one follow-up to ${recipientPseudonym}.`)
+        } else if ((sendError.details ?? '').includes('FIRST_CONTACT_FOLLOW_UP_TOO_SOON')) {
+          setError('A follow-up becomes available seven days after your first letter.')
+        } else if ((sendError.details ?? '').includes('FIRST_CONTACT_RECIPIENT_PASSED')) {
+          setError(`${recipientPseudonym} passed on the first letter, so Tempa won’t send another.`)
         } else if (sendError.code === '23505') {
           setError(`You've already written to ${recipientPseudonym}.`)
         } else {
@@ -224,10 +234,14 @@ export default function FirstLetterComposer({
         <div className="w-full max-w-md space-y-6 py-10 text-center">
           <p className={sectionLabelClass}>Sent</p>
           <p className="text-lg leading-relaxed">
-            Your letter to {recipientPseudonym} has been sent.
+            {isFollowUp
+              ? `Your follow-up to ${recipientPseudonym} has been sent.`
+              : `Your letter to ${recipientPseudonym} has been sent.`}
           </p>
           <p className={helperTextClass}>
-            A reply is what begins the correspondence. Until then, there&rsquo;s nothing you need to do.
+            {isFollowUp
+              ? `That was your one follow-up. You won’t be able to write again unless ${recipientPseudonym} replies.`
+              : 'A reply is what begins the correspondence. Until then, there’s nothing you need to do.'}
           </p>
           <Link href={backHref} className={secondaryButtonClass}>
             Back to {backLabel}
@@ -241,8 +255,13 @@ export default function FirstLetterComposer({
     <main ref={composerRootRef} className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-2xl space-y-8 py-10">
         <div className="space-y-2">
-          <p className={sectionLabelClass}>Writing to</p>
+          <p className={sectionLabelClass}>{isFollowUp ? 'One follow-up' : 'Writing to'}</p>
           <h1 className={proseSubheadingClass}>{recipientPseudonym}</h1>
+          {isFollowUp && (
+            <p className={helperTextClass}>
+              Tempa allows one follow-up after seven days. If there’s still no reply, the next move is theirs.
+            </p>
+          )}
           {dispatchId && dispatchTitle ? (
             <div className="space-y-1">
               <p className={helperTextClass}>In response to their Dispatch:</p>
@@ -280,7 +299,7 @@ export default function FirstLetterComposer({
               disabled={!canSend}
               className={primaryButtonClass}
             >
-              {sending ? 'Sending…' : 'Send letter'}
+              {sending ? 'Sending…' : isFollowUp ? 'Send follow-up' : 'Send letter'}
             </button>
           </div>
         </div>
