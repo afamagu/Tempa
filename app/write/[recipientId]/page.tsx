@@ -8,7 +8,9 @@ import {
   getActiveEstablishedCorrespondenceWithUser,
   closeReasonForSender,
   getFirstContact,
-  isEffectivelyExpired,
+  getFirstContactAttempts,
+  deriveFirstContactAttemptState,
+  isReplyableFirstContact,
   isEstablishedForViewer,
   resolveFirstContactDisplayStatus,
 } from '@/lib/letters'
@@ -31,10 +33,10 @@ export default async function WriteToPage({
   searchParams,
 }: {
   params: Promise<{ recipientId: string }>
-  searchParams: Promise<{ a?: string; source?: string; returnTo?: string; mq?: string; d?: string }>
+  searchParams: Promise<{ a?: string; source?: string; returnTo?: string; mq?: string; d?: string; followUp?: string }>
 }) {
   const { recipientId } = await params
-  const { a: answerId, source, returnTo, mq, d: dispatchId } = await searchParams
+  const { a: answerId, source, returnTo, mq, d: dispatchId, followUp } = await searchParams
   const backHref = introductionReturnPath(returnTo) ?? '/room'
   const nav = await getTranslations('Nav')
   const letters = await getTranslations('Letters')
@@ -47,6 +49,7 @@ export default async function WriteToPage({
     if (source) query.set('source', source)
     if (mq) query.set('mq', mq)
     if (dispatchId) query.set('d', dispatchId)
+    if (followUp) query.set('followUp', followUp)
     if (backHref !== '/room') query.set('returnTo', backHref)
     redirect(`/sign-in?next=${encodeURIComponent(`/write/${recipientId}${query.size ? `?${query}` : ''}`)}`)
   }
@@ -120,22 +123,66 @@ export default async function WriteToPage({
   // entry point should continue through that incoming letter rather than
   // manufacture a crossed pair of first letters.
   const incoming = await getFirstContact(supabase, recipientId, user.id)
-  if (incoming?.status === 'sent' && !isEffectivelyExpired(incoming, false)) {
+  if (incoming && isReplyableFirstContact(incoming, false)) {
     redirect(`/letters/${incoming.id}`)
   }
 
-  const existing = await getFirstContact(supabase, user.id, recipientId)
+  const attempts = await getFirstContactAttempts(supabase, user.id, recipientId)
+  const attemptState = deriveFirstContactAttemptState(attempts)
+  const existing = attemptState.latest
 
   if (existing) {
-    const expired = isEffectivelyExpired(existing, false)
     const establishedForExistingViewer =
       existing.status === 'replied'
         ? await isEstablishedForViewer(supabase, existing.correspondenceId)
         : false
-    const effectiveStatus = expired
-      ? 'closed'
-      : resolveFirstContactDisplayStatus(existing.status, establishedForExistingViewer)
-    const effectiveClosedBy = expired ? 'system' : existing.closedBy
+    const effectiveStatus = resolveFirstContactDisplayStatus(existing.status, establishedForExistingViewer)
+
+    if (followUp === '1' && attemptState.canFollowUp && existing.questionAnswerId) {
+      const [{ data: originalAnswer }, capacity] = await Promise.all([
+        supabase
+          .from('question_answers')
+          .select('id, user_id, questions(prompt)')
+          .eq('id', existing.questionAnswerId)
+          .eq('user_id', recipientId)
+          .maybeSingle(),
+        getRelationshipCapacity(supabase),
+      ])
+
+      const capacityMessage = newCorrespondenceUnavailableMessage(capacity)
+      if (capacityMessage) {
+        return (
+          <main className="min-h-screen flex items-center justify-center p-6">
+            <div className="w-full max-w-md space-y-5 py-10 text-center">
+              <p className={sectionLabelClass}>One follow-up</p>
+              <p className={helperTextClass}>{capacityMessage}</p>
+              <Link href={`/letters/with/${recipientId}`} className={secondaryButtonClass}>
+                Back to {recipient.pseudonym}
+              </Link>
+            </div>
+          </main>
+        )
+      }
+
+      if (originalAnswer) {
+        const originalQuestion = Array.isArray(originalAnswer.questions)
+          ? originalAnswer.questions[0]
+          : originalAnswer.questions
+
+        return (
+          <FirstLetterComposer
+            key={`${recipientId}:follow-up`}
+            recipientId={recipientId}
+            recipientPseudonym={recipient.pseudonym}
+            questionAnswerId={existing.questionAnswerId}
+            questionPrompt={originalQuestion?.prompt ?? null}
+            backHref={`/letters/with/${recipientId}`}
+            backLabel={recipient.pseudonym}
+            isFollowUp
+          />
+        )
+      }
+    }
 
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
@@ -144,35 +191,62 @@ export default async function WriteToPage({
 
           {effectiveStatus === 'sent' && (
             <p className={helperTextClass}>
-              You&apos;ve already written to {recipient.pseudonym}. Your letter is waiting for a reply.
+              {attemptState.followUpUsed
+                ? `Your follow-up to ${recipient.pseudonym} is waiting for a reply.`
+                : `You’ve written to ${recipient.pseudonym}. Your letter is waiting for a reply.`}
             </p>
           )}
+
           {effectiveStatus === 'replied' && (
             <p className={helperTextClass}>{recipient.pseudonym} replied to your letter.</p>
           )}
-          {effectiveStatus === 'closed' &&
-            (effectiveClosedBy === 'recipient' ? (
-              <div className="space-y-2">
-                <p className={closureTextClass}>{recipient.pseudonym} passed on this letter.</p>
-                <p className={closureTextClass}>{closeReasonForSender(existing.closeReason)}</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className={closureTextClass}>This letter went unanswered.</p>
-                <p className={closureTextClass}>
-                  Its recipient wasn&apos;t able to respond within the reply window.
-                </p>
-              </div>
-            ))}
+
+          {attemptState.recipientPassed && (
+            <div className="space-y-2">
+              <p className={closureTextClass}>{recipient.pseudonym} passed on this letter.</p>
+              <p className={closureTextClass}>{closeReasonForSender(existing.closeReason)}</p>
+            </div>
+          )}
+
+          {!attemptState.recipientPassed && attemptState.canFollowUp && (
+            <div className="space-y-3 rounded-lg border border-foreground/10 p-4 text-left">
+              <p className="text-[15px] text-foreground">One follow-up is available.</p>
+              <p className={helperTextClass}>
+                Tempa keeps first contact quiet. After seven days, you may send one final follow-up.
+                If there’s still no reply, the next move is theirs.
+              </p>
+              <Link href={`/write/${recipientId}?followUp=1`} className={secondaryButtonClass}>
+                Write one follow-up
+              </Link>
+            </div>
+          )}
+
+          {!attemptState.recipientPassed &&
+            !attemptState.canFollowUp &&
+            !attemptState.followUpUsed &&
+            effectiveStatus !== 'replied' && (
+              <p className={helperTextClass}>
+                Tempa allows one follow-up after seven days. Until then, this stays quiet.
+              </p>
+            )}
+
+          {!attemptState.recipientPassed && attemptState.followUpUsed && effectiveStatus !== 'replied' && (
+            <div className="space-y-2">
+              <p className={closureTextClass}>You’ve used your one follow-up.</p>
+              <p className={helperTextClass}>
+                You won’t be able to write again unless {recipient.pseudonym} replies.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <Link href="/letters" className={secondaryButtonClass}>Your letters</Link>
-            <Link href={backHref.startsWith(`/room/${recipientId}`) ? backHref : `/room/${recipientId}${backHref === '/home' ? '?returnTo=%2Fhome' : backHref.startsWith('/letters/discover') ? `?returnTo=${encodeURIComponent(backHref)}` : ''}`} className={quietLinkClass}>
+            <Link href={`/room/${recipientId}`} className={quietLinkClass}>
               Back to {recipient.pseudonym}&apos;s profile
             </Link>
           </div>
 
-          {effectiveStatus === 'closed' && (
+          {effectiveStatus === 'closed' && !attemptState.canFollowUp && (
             <div className="text-left">
               <ClosureRecommendations letterId={existing.id} />
             </div>
