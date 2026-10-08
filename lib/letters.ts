@@ -1528,21 +1528,16 @@ export async function getLetterboxPeople(
   supabase: SupabaseClient,
   userId: string
 ): Promise<LetterboxPerson[]> {
-  const [
-    { data: correspondences },
-    hiddenCorrespondenceIds,
-    { data: archiveRemovals },
-  ] = await Promise.all([
+  const [{ data: correspondences }, { data: archiveRemovals }] = await Promise.all([
     supabase
       .from('correspondences')
       .select('id, participant_low, participant_high')
       .or(`participant_low.eq.${userId},participant_high.eq.${userId}`),
-    getHiddenCorrespondenceIds(supabase, userId),
     supabase.from('letter_archive_removals').select('letter_id').eq('user_id', userId),
   ])
 
   const rows = correspondences ?? []
-  const visibleIds = rows.filter((c) => !hiddenCorrespondenceIds.has(c.id)).map((c) => c.id)
+  const visibleIds = rows.map((c) => c.id)
   if (visibleIds.length === 0) return []
 
   const { data: letterRows } = await supabase
@@ -1696,16 +1691,13 @@ export async function getVisibleCorrespondenceIdsWithUser(
   const participantLow = userId < otherUserId ? userId : otherUserId
   const participantHigh = userId < otherUserId ? otherUserId : userId
 
-  const [{ data: correspondences }, hiddenCorrespondenceIds] = await Promise.all([
-    supabase
-      .from('correspondences')
-      .select('id')
-      .eq('participant_low', participantLow)
-      .eq('participant_high', participantHigh),
-    getHiddenCorrespondenceIds(supabase, userId),
-  ])
+  const { data: correspondences } = await supabase
+    .from('correspondences')
+    .select('id')
+    .eq('participant_low', participantLow)
+    .eq('participant_high', participantHigh)
 
-  return visibleCorrespondenceIdsForPair(correspondences ?? [], hiddenCorrespondenceIds)
+  return (correspondences ?? []).map((row) => row.id)
 }
 
 export async function getLetterArchiveWithUser(
@@ -1716,18 +1708,16 @@ export async function getLetterArchiveWithUser(
   const participantLow = userId < otherUserId ? userId : otherUserId
   const participantHigh = userId < otherUserId ? otherUserId : userId
 
-  const [{ data: correspondences }, hiddenCorrespondenceIds, { data: removedLetters }] =
-    await Promise.all([
-      supabase
-        .from('correspondences')
-        .select('id')
-        .eq('participant_low', participantLow)
-        .eq('participant_high', participantHigh),
-      getHiddenCorrespondenceIds(supabase, userId),
-      supabase.from('letter_archive_removals').select('letter_id').eq('user_id', userId),
-    ])
+  const [{ data: correspondences }, { data: removedLetters }] = await Promise.all([
+    supabase
+      .from('correspondences')
+      .select('id')
+      .eq('participant_low', participantLow)
+      .eq('participant_high', participantHigh),
+    supabase.from('letter_archive_removals').select('letter_id').eq('user_id', userId),
+  ])
 
-  const visibleIds = visibleCorrespondenceIdsForPair(correspondences ?? [], hiddenCorrespondenceIds)
+  const visibleIds = (correspondences ?? []).map((row) => row.id)
   if (visibleIds.length === 0) return []
 
   const { data } = await supabase
