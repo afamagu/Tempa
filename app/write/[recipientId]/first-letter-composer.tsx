@@ -252,8 +252,11 @@ export default function FirstLetterComposer({
   }
 
   return (
-    <main ref={composerRootRef} className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl space-y-8 py-10">
+    <main
+      ref={composerRootRef}
+      className="min-h-[100dvh] flex items-start justify-center p-4 sm:min-h-screen sm:items-center sm:p-6"
+    >
+      <div className="w-full max-w-2xl space-y-8 py-6 sm:py-10">
         <div className="space-y-2">
           <p className={sectionLabelClass}>{isFollowUp ? 'One follow-up' : 'Writing to'}</p>
           <h1 className={proseSubheadingClass}>{recipientPseudonym}</h1>
