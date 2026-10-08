@@ -8,7 +8,7 @@ import {
   getActiveEstablishedCorrespondenceWithUser,
   closeReasonForSender,
   getFirstContact,
-  isEffectivelyExpired,
+  isReplyableFirstContact,
   isEstablishedForViewer,
   resolveFirstContactDisplayStatus,
 } from '@/lib/letters'
