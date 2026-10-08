@@ -49,9 +49,9 @@ function cleanPseudonym(value?: string | null): string | null {
 }
 
 /**
- * Transactional notification only. Deliberately avoids country artwork,
- * promotional sections, product taglines, or a newsletter-like layout.
- * Mail providers still control inbox categorisation; Tempa can only make the
+ * Transactional notification only. Deliberately plain: no location art,
+ * hero card, marketing tagline, or promotional button treatment. Mail
+ * providers still decide inbox categorisation; Tempa can only make the
  * message accurately resemble the person-to-person event it represents.
  */
 export function renderArrivalEmail(input: ArrivalEmailInput): RenderedArrivalEmail {
@@ -60,21 +60,19 @@ export function renderArrivalEmail(input: ArrivalEmailInput): RenderedArrivalEma
   const settingsHref = `${origin}/you/notifications#letter-arrivals`
   const name = cleanPseudonym(input.senderPseudonym)
 
-  // Preserve the existing first-contact privacy rule: the arrival email
-  // does not identify a new sender before the recipient opens the letter.
+  // Preserve first-contact privacy until the recipient opens the letter.
   const establishedName = !input.firstContact ? name : null
   const subject = establishedName
-    ? `${establishedName} wrote to you on Tempa`
-    : 'You have a new letter on Tempa'
-  const headline = 'You have a new letter.'
+    ? `${establishedName} sent you a letter on Tempa`
+    : 'A letter has arrived on Tempa'
   const detail = input.firstContact
-    ? 'Someone sent you a first letter on Tempa.'
+    ? 'Someone sent you a letter on Tempa.'
     : establishedName
-      ? `${establishedName} wrote to you on Tempa.`
-      : 'A new letter is waiting in your Letterbox.'
+      ? `${establishedName} sent you a letter on Tempa.`
+      : 'A letter has arrived in your Tempa Letterbox.'
 
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:0;background:#f7f3eb;color:#192e40"><table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr><td align="center" style="padding:24px 12px"><table role="presentation" cellpadding="0" cellspacing="0" width="560" style="width:100%;max-width:560px;background:#fffcf6;border:1px solid #e3ddd1"><tr><td style="padding:26px 30px 12px;font:600 17px Georgia,serif;letter-spacing:0.10em">TEMPA</td></tr><tr><td style="padding:12px 30px 8px"><h1 style="font:normal 28px/1.25 Georgia,serif;color:#192e40;margin:0">${escapeHtml(headline)}</h1></td></tr><tr><td style="padding:8px 30px 22px;font:16px/1.55 Arial,sans-serif;color:#333b40">${escapeHtml(detail)}</td></tr><tr><td style="padding:0 30px 30px"><a href="${escapeHtml(href)}" style="display:inline-block;background:#192e40;color:#fff;text-decoration:none;border-radius:4px;padding:13px 18px;font:600 14px Arial,sans-serif">Open your letter</a></td></tr><tr><td style="border-top:1px solid #e3ddd1;padding:16px 30px 22px;font:12px/1.55 Arial,sans-serif;color:#686e72">This email only tells you that a letter arrived; it does not include the letter itself.<br><a href="${escapeHtml(settingsHref)}" style="color:#58646d">Letter-arrival notification settings</a></td></tr></table></td></tr></table></body></html>`
-  const text = `TEMPA\n\n${headline}\n\n${detail}\n\nOpen your letter: ${href}\n\nThis email only tells you that a letter arrived; it does not include the letter itself.\nLetter-arrival notification settings: ${settingsHref}`
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:24px;font:16px/1.6 Arial,sans-serif;color:#222;background:#fff"><p style="margin:0 0 16px">${escapeHtml(detail)}</p><p style="margin:0 0 20px"><a href="${escapeHtml(href)}" style="color:#192e40">Read your letter on Tempa</a></p><p style="margin:0;font-size:12px;color:#666">You can change letter-arrival notifications in <a href="${escapeHtml(settingsHref)}" style="color:#666">Tempa notification settings</a>.</p></body></html>`
+  const text = `${detail}\n\nRead your letter on Tempa: ${href}\n\nChange letter-arrival notifications: ${settingsHref}`
 
   return { subject, html, text }
 }
