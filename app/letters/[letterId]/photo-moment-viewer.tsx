@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import ReportButton from '@/app/report-button'
 
 /**
@@ -28,24 +28,56 @@ export default function PhotoMomentViewer({
   momentId?: string
   onClose: () => void
 }) {
+  const closingFromHistoryRef = useRef(false)
+
+  // A full-screen photo behaves like a transient navigation layer on mobile:
+  // opening it adds one history entry, so Android's system/browser Back button
+  // closes the photo before it can leave the letter.
+  useEffect(() => {
+    const marker = { ...(window.history.state ?? {}), tempaPhotoMoment: true }
+    window.history.pushState(marker, '', window.location.href)
+
+    function handlePopState() {
+      closingFromHistoryRef.current = true
+      onClose()
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [onClose])
+
+  const requestClose = useCallback(() => {
+    if (closingFromHistoryRef.current) {
+      onClose()
+      return
+    }
+
+    if (window.history.state?.tempaPhotoMoment) {
+      window.history.back()
+      return
+    }
+
+    onClose()
+  }, [onClose])
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') requestClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [requestClose])
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onClick={requestClose}
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4"
     >
       <button
         type="button"
-        onClick={onClose}
+        onClick={requestClose}
         aria-label="Close"
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-lg text-white"
       >
