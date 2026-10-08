@@ -30,8 +30,17 @@ vi.mock('@/lib/letters', () => ({
   getActiveEstablishedCorrespondenceWithUser: async () => state.established ? { id:'corr' } : null,
   isEstablishedForViewer: async () => state.established,
   getFirstContact: async () => null,
+  getFirstContactAttempts: async () => [],
+  deriveFirstContactAttemptState: () => ({
+    attemptCount: 0,
+    latest: null,
+    canFollowUp: false,
+    followUpUsed: false,
+    recipientPassed: false,
+    followUpAvailableAt: null,
+  }),
+  isReplyableFirstContact: () => false,
   closeReasonForSender: vi.fn(),
-  isEffectivelyExpired: vi.fn(),
   resolveFirstContactDisplayStatus: vi.fn(),
 }))
 vi.mock('./first-letter-composer', () => ({ default: () => null }))
