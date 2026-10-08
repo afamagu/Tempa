@@ -1,13 +1,14 @@
 -- Tempa — 10-second Video Moments
--- Forward-only extension of the live letter Moment contract.
--- REVIEW/APPLY in Supabase before merging the client branch.
+-- Reconciled 2026-10-08 against the live letter RPC signatures.
+-- Forward-only: extends Moment storage and preserves all current letter behavior.
 begin;
 
 alter table public.moments add column if not exists trim_start_seconds numeric;
 alter table public.moments add column if not exists duration_seconds numeric;
 
 alter table public.moments drop constraint if exists moments_type_check;
-alter table public.moments add constraint moments_type_check check (type in ('photo','video','postcard'));
+alter table public.moments add constraint moments_type_check
+  check (type in ('photo','video','postcard'));
 
 alter table public.moments drop constraint if exists moments_type_fields_consistent;
 alter table public.moments add constraint moments_type_fields_consistent check (
@@ -18,20 +19,12 @@ alter table public.moments add constraint moments_type_fields_consistent check (
   (type = 'postcard' and postcard_key is not null and image_path is null and trim_start_seconds is null and duration_seconds is null)
 );
 
-create or replace function public.write_letter(
-  p_correspondence_id uuid,
-  p_body text,
-  p_safety_evaluation_id uuid,
-  p_reply_to_id uuid default null,
-  p_moments jsonb default '[]'::jsonb,
-  p_postcard jsonb default null,
-  p_warning_acknowledged boolean default false
-)
-returns public.letters_for_participant
-language plpgsql
-security definer
-set search_path to 'pg_catalog'
-as $function$
+CREATE OR REPLACE FUNCTION public.write_letter(p_correspondence_id uuid, p_body text, p_safety_evaluation_id uuid, p_reply_to_id uuid DEFAULT NULL::uuid, p_moments jsonb DEFAULT '[]'::jsonb, p_postcard jsonb DEFAULT NULL::jsonb, p_warning_acknowledged boolean DEFAULT false)
+ RETURNS letters_for_participant
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
 
 declare
   corr public.correspondences;
@@ -159,8 +152,8 @@ begin
 
       if m->>'type' = 'video' then
         if m->>'image_path' is null
-          or (m->>'trim_start_seconds') is null
-          or (m->>'duration_seconds') is null
+          or m->>'trim_start_seconds' is null
+          or m->>'duration_seconds' is null
           or (m->>'trim_start_seconds')::numeric < 0
           or (m->>'duration_seconds')::numeric <= 0
           or (m->>'duration_seconds')::numeric > 10
@@ -195,7 +188,7 @@ begin
 
     v_postcard_key := p_postcard->>'postcard_key';
     v_reveal_line := p_postcard->>'reveal_line';
-    v_back_message := p_postcard->>'back_message';
+    v_back_message := coalesce(p_postcard->>'back_message', '');
 
     if v_postcard_key is null or char_length(trim(v_postcard_key)) = 0 then
       raise exception 'A Postcard requires a postcard key.';
@@ -221,9 +214,7 @@ begin
       raise exception 'A Postcard''s Reveal Line is too long.';
     end if;
 
-    if v_back_message is null or char_length(trim(both from v_back_message)) = 0 then
-      raise exception 'A Postcard needs its own written message before it can be sent.';
-    end if;
+    
 
     if char_length(trim(both from v_back_message)) > 300 then
       raise exception 'A Postcard''s back message is too long.';
@@ -367,31 +358,18 @@ begin
   return result;
 
 end;
-$function$;
+$function$
+;
 
 revoke all on function public.write_letter(uuid, text, uuid, uuid, jsonb, jsonb, boolean) from public, anon, authenticated;
 grant execute on function public.write_letter(uuid, text, uuid, uuid, jsonb, jsonb, boolean) to authenticated;
 
-
--- ============================================================
--- 3. REPLY_TO_LETTER
--- ============================================================
-
-drop function public.reply_to_letter(uuid, text, jsonb, jsonb);
-
-create or replace function public.reply_to_letter(
-  p_letter_id uuid,
-  p_body text,
-  p_safety_evaluation_id uuid,
-  p_moments jsonb default '[]'::jsonb,
-  p_postcard jsonb default null,
-  p_warning_acknowledged boolean default false
-)
-returns public.letters_for_participant
-language plpgsql
-security definer
-set search_path to 'pg_catalog'
-as $function$
+CREATE OR REPLACE FUNCTION public.reply_to_letter(p_letter_id uuid, p_body text, p_safety_evaluation_id uuid, p_moments jsonb DEFAULT '[]'::jsonb, p_postcard jsonb DEFAULT NULL::jsonb, p_warning_acknowledged boolean DEFAULT false)
+ RETURNS letters_for_participant
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
 
 declare
   original public.letters;
@@ -402,9 +380,6 @@ declare
   paragraph_count integer;
   has_photo boolean;
   is_first_reply boolean;
-  v_late_first_reply boolean;
-  v_sender_capacity record;
-  v_recipient_capacity record;
   m jsonb;
   v_previous_deliver_at timestamptz;
   v_natural_deliver_at timestamptz;
@@ -432,20 +407,11 @@ begin
   where
     id = p_letter_id
     and recipient_id = auth.uid()
+    and status = 'sent'
     and deliver_at <= now()
     and (
-      (reply_to_id is not null and status = 'sent')
-      or (
-        reply_to_id is null
-        and (
-          status = 'sent'
-          or (
-            status = 'closed'
-            and closed_by = 'system'
-            and close_reason is null
-          )
-        )
-      )
+      reply_to_id is not null
+      or expires_at > now()
     )
 
   for update;
@@ -480,52 +446,6 @@ begin
   where id = original.correspondence_id
 
   for update;
-
-
-  v_late_first_reply :=
-    is_first_reply
-    and original.expires_at <= now();
-
-  if v_late_first_reply then
-    if corr.established_at is not null or corr.status not in ('pending', 'closed') then
-      raise exception
-        'This first letter can no longer begin a correspondence.'
-        using errcode = 'P0001', detail = 'FIRST_CONTACT_EPISODE_NO_LONGER_AVAILABLE';
-    end if;
-
-    perform tempa_private.lock_relationship_capacity_pair(original.sender_id, auth.uid());
-
-    if exists (
-      select 1
-      from public.correspondences c
-      where c.id <> corr.id
-        and c.participant_low = least(original.sender_id, auth.uid())
-        and c.participant_high = greatest(original.sender_id, auth.uid())
-        and c.status in ('pending', 'active', 'paused')
-    ) then
-      raise exception
-        'A newer correspondence already exists between these members.'
-        using errcode = 'P0001', detail = 'PAIR_ALREADY_HAS_OPEN_CORRESPONDENCE';
-    end if;
-
-    select * into v_sender_capacity
-    from tempa_private.relationship_capacity_state(original.sender_id);
-
-    if v_sender_capacity.committed_count >= v_sender_capacity.active_limit then
-      raise exception
-        'The original sender does not currently have room for a new correspondence.'
-        using errcode = 'P0001', detail = 'COUNTERPART_RELATIONSHIP_CAPACITY_REACHED';
-    end if;
-
-    select * into v_recipient_capacity
-    from tempa_private.relationship_capacity_state(auth.uid());
-
-    if v_recipient_capacity.committed_count >= v_recipient_capacity.active_limit then
-      raise exception
-        'You need an open correspondence slot before accepting another correspondence.'
-        using errcode = 'P0001', detail = 'RELATIONSHIP_CAPACITY_REACHED';
-    end if;
-  end if;
 
 
   moment_count := coalesce(jsonb_array_length(p_moments), 0);
@@ -569,8 +489,8 @@ begin
 
       if m->>'type' = 'video' then
         if m->>'image_path' is null
-          or (m->>'trim_start_seconds') is null
-          or (m->>'duration_seconds') is null
+          or m->>'trim_start_seconds' is null
+          or m->>'duration_seconds' is null
           or (m->>'trim_start_seconds')::numeric < 0
           or (m->>'duration_seconds')::numeric <= 0
           or (m->>'duration_seconds')::numeric > 10
@@ -605,7 +525,7 @@ begin
 
     v_postcard_key := p_postcard->>'postcard_key';
     v_reveal_line := p_postcard->>'reveal_line';
-    v_back_message := p_postcard->>'back_message';
+    v_back_message := coalesce(p_postcard->>'back_message', '');
 
     if v_postcard_key is null or char_length(trim(v_postcard_key)) = 0 then
       raise exception 'A Postcard requires a postcard key.';
@@ -631,9 +551,7 @@ begin
       raise exception 'A Postcard''s Reveal Line is too long.';
     end if;
 
-    if v_back_message is null or char_length(trim(both from v_back_message)) = 0 then
-      raise exception 'A Postcard needs its own written message before it can be sent.';
-    end if;
+    
 
     if char_length(trim(both from v_back_message)) > 300 then
       raise exception 'A Postcard''s back message is too long.';
@@ -765,15 +683,13 @@ begin
   end if;
 
 
-  if original.status = 'sent' then
-    update public.letters
+  update public.letters
 
-    set
-      status = 'replied',
-      replied_at = now()
+  set
+    status = 'replied',
+    replied_at = now()
 
-    where id = original.id;
-  end if;
+  where id = original.id;
 
 
   if is_first_reply then
@@ -782,13 +698,7 @@ begin
 
     set
       status = 'active',
-      established_at = coalesce(established_at, now()),
-      closed_at = null,
-      paused_at = null,
-      paused_by = null,
-      resume_requested_at = null,
-      resume_requested_by = null,
-      ended_by = null
+      established_at = coalesce(established_at, now())
 
     where id = original.correspondence_id;
 
@@ -806,10 +716,10 @@ begin
   return result;
 
 end;
-$function$;
+$function$
+;
 
 revoke all on function public.reply_to_letter(uuid, text, uuid, jsonb, jsonb, boolean) from public, anon, authenticated;
 grant execute on function public.reply_to_letter(uuid, text, uuid, jsonb, jsonb, boolean) to authenticated;
-
 
 commit;
