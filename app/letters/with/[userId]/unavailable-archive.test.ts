@@ -30,3 +30,17 @@ describe('Letter archive when a correspondent profile is unavailable', () => {
     expect(source).toMatch(/if \(!otherProfile && !hasHistoricalAccess\) \{\s*notFound\(\)\s*\}/)
   })
 })
+
+
+describe('Letter archive management polish', () => {
+  it('uses a named Letterbox removal action instead of the ambiguous header tray/bin glyph', () => {
+    expect(source).toContain('triggerLabel="Remove from my Letterbox"')
+    expect(source).not.toContain('RemoveFromLetterboxIcon')
+  })
+
+  it('surfaces the one-follow-up action for an unanswered first contact', () => {
+    expect(source).toContain('One follow-up is available.')
+    expect(source).toContain('Write one follow-up')
+    expect(source).toContain('?followUp=1')
+  })
+})
