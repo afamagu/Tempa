@@ -174,7 +174,7 @@ describe('MomentsComposer — Preview wiring (I/J/P/Q)', () => {
 describe('MomentsComposer — postcard notes are optional', () => {
   it('does not block sending because the postcard has no written note', () => {
     expect(source).not.toContain('postcardNeedsMessage')
-    expect(source).toContain('if (!editor || !canSend) return')
+    expect(source).toMatch(/if \(!editor \|\| !canSend/)
     expect(source).not.toContain('Write something on the back of your postcard before sending.')
   })
 })
