@@ -29,7 +29,7 @@ export function visualKeyboardInset(
  * Important: this hook deliberately does NOT scroll the page to the caret,
  * listen to VisualViewport scroll, or react to selectionchange. Safari can
  * report changing VisualViewport geometry during a finger drag, and forcing
- * window.scrollBy() from those events makes native scrolling fight the page.
+ * programmatic scrolling from those events makes native scrolling fight the page.
  *
  * The browser remains responsible for caret movement and finger scrolling.
  * Tempa only reserves bottom space while a keyboard-owning field in this
@@ -50,7 +50,7 @@ export function useEditorVisualViewport(rootRef: RefObject<HTMLElement | null>) 
     let touching = false
     let reservedInset = 0
 
-    function syncViewport(force = false) {
+    const syncViewport = (force = false) => {
       if (touching && !force) return
 
       window.cancelAnimationFrame(frame)
