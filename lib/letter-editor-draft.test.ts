@@ -494,3 +494,29 @@ describe('letter-editor-draft — no window/localStorage available (SSR or stora
     expect(() => clearFirstContactDraft('recipient-a')).not.toThrow()
   })
 })
+
+
+describe('retired video draft compatibility', () => {
+  afterEach(uninstallFakeLocalStorage)
+
+  it('restores text, formatting, photo paths and paragraphs from a video-era draft', () => {
+    installFakeLocalStorage()
+    const original = { type: 'doc', content: [
+      { type: 'paragraph', content: [
+        { type: 'text', text: 'Keep my words', marks: [{ type: 'bold' }] },
+        { type: 'videoMoment', attrs: { imagePath: 'corr/video/old.mp4' } },
+        { type: 'photoMoment', attrs: { imagePath: 'corr/photo.jpg', previewUrl: 'blob:expired' } },
+      ] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Second paragraph' }] },
+    ] }
+    window.localStorage.setItem('tempa-letter-editor-draft:corr', JSON.stringify(original))
+    const restored = readLetterEditorDraft('corr')!
+    expect(restored.content?.[0].content).toEqual([
+      { type: 'text', text: 'Keep my words', marks: [{ type: 'bold' }] },
+      { type: 'photoMoment', attrs: { imagePath: 'corr/photo.jpg', previewUrl: null } },
+    ])
+    expect(restored.content?.[1].content).toEqual([{ type: 'text', text: 'Second paragraph' }])
+    expect(writeLetterEditorDraft('corr', restored)).toBe(true)
+    expect(readLetterEditorDraft('corr')).toEqual(restored)
+  })
+})

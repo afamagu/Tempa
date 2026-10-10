@@ -19,15 +19,11 @@ export type PhotoMomentNodeJSON = {
   type: 'photoMoment'
   attrs: { imagePath: string; previewUrl?: string | null }
 }
-export type VideoMomentNodeJSON = {
-  type: 'videoMoment'
-  attrs: { imagePath: string; previewUrl?: string | null; trimStartSeconds: number; durationSeconds: number }
-}
 export type PostcardMomentNodeJSON = {
   type: 'postcardMoment'
   attrs: { postcardKey: string }
 }
-export type InlineNodeJSON = TextNodeJSON | HardBreakNodeJSON | PhotoMomentNodeJSON | VideoMomentNodeJSON | PostcardMomentNodeJSON
+export type InlineNodeJSON = TextNodeJSON | HardBreakNodeJSON | PhotoMomentNodeJSON | PostcardMomentNodeJSON
 export type ParagraphNodeJSON = { type: 'paragraph'; content?: InlineNodeJSON[] }
 export type LetterDocJSON = { type: 'doc'; content?: ParagraphNodeJSON[] }
 
@@ -297,12 +293,13 @@ export function stripTransientPhotoPreviews(doc: LetterDocJSON): LetterDocJSON {
     ...doc,
     content: (doc.content ?? []).map((paragraph) => ({
       ...paragraph,
-      content: (paragraph.content ?? []).map((node) =>
+      // Retired video nodes must not make a saved text/photo draft unreadable.
+      content: (paragraph.content ?? []).filter((node) =>
+        (node as { type: string }).type !== 'videoMoment'
+      ).map((node) =>
         node.type === 'photoMoment'
           ? { type: 'photoMoment' as const, attrs: { imagePath: node.attrs.imagePath, previewUrl: null } }
-          : node.type === 'videoMoment'
-            ? { type: 'videoMoment' as const, attrs: { ...node.attrs, previewUrl: null } }
-            : node
+          : node
       ),
     })),
   }
@@ -362,15 +359,6 @@ export function docToMomentDrafts(doc: LetterDocJSON): MomentDraft[] {
     for (const node of paragraph.content ?? []) {
       if (node.type === 'photoMoment') {
         drafts.push({ position, type: 'photo', imagePath: node.attrs.imagePath })
-      }
-      if (node.type === 'videoMoment') {
-        drafts.push({
-          position,
-          type: 'video',
-          imagePath: node.attrs.imagePath,
-          trimStartSeconds: node.attrs.trimStartSeconds,
-          durationSeconds: node.attrs.durationSeconds,
-        })
       }
       if (node.type === 'postcardMoment') {
         drafts.push({ position, type: 'postcard', postcardKey: node.attrs.postcardKey })
@@ -454,7 +442,6 @@ function paragraphCollapsedPositions(paragraphs: ParagraphNodeJSON[]): number[] 
  * paragraphCollapsedPositions above). */
 export type DraftMomentDescriptor =
   | { id: string; position: number; type: 'photo'; imagePath: string; previewUrl: string | null }
-  | { id: string; position: number; type: 'video'; imagePath: string; previewUrl: string | null; trimStartSeconds: number; durationSeconds: number }
   | { id: string; position: number; type: 'postcard'; postcardKey: string }
 
 /**
@@ -481,17 +468,6 @@ export function docToDraftMomentDescriptors(doc: LetterDocJSON): DraftMomentDesc
           type: 'photo',
           imagePath: node.attrs.imagePath,
           previewUrl: node.attrs.previewUrl ?? null,
-        })
-      }
-      if (node.type === 'videoMoment') {
-        descriptors.push({
-          id: `preview-video-${rawIndex}-${nodeIndex}`,
-          position,
-          type: 'video',
-          imagePath: node.attrs.imagePath,
-          previewUrl: node.attrs.previewUrl ?? null,
-          trimStartSeconds: node.attrs.trimStartSeconds,
-          durationSeconds: node.attrs.durationSeconds,
         })
       }
       if (node.type === 'postcardMoment') {
@@ -566,21 +542,6 @@ export async function resolveDraftPreviewMoments(
           type: 'postcard',
           imageUrl: null,
           postcardKey: descriptor.postcardKey,
-        }
-      }
-
-      if (descriptor.type === 'video') {
-        const url = descriptor.previewUrl
-          ? descriptor.previewUrl
-          : (await resolvePhotoUrl(descriptor.imagePath)).url
-        return {
-          id: descriptor.id,
-          position: descriptor.position,
-          type: 'video',
-          imageUrl: url,
-          postcardKey: null,
-          trimStartSeconds: descriptor.trimStartSeconds,
-          durationSeconds: descriptor.durationSeconds,
         }
       }
 
