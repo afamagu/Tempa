@@ -43,7 +43,9 @@ export function selectRoomLetterBatch<T extends RoomLetterCandidate>(
   }
 
   const freshAuthors = uniqueCandidates.filter(item => !previousAuthorIds.has(item.authorId))
-  const preferred = freshAuthors.length ? freshAuthors : uniqueCandidates
+  // Prefer authors not encountered in this browsing session, then fill from
+  // previously encountered authors only when the pool cannot fill six.
+  const preferred = [...freshAuthors, ...uniqueCandidates.filter(item => previousAuthorIds.has(item.authorId))]
   const usedAuthors = new Set<string>()
   const letters: T[] = []
   for (const item of preferred) {
