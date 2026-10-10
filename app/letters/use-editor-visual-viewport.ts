@@ -50,7 +50,7 @@ export function useEditorVisualViewport(rootRef: RefObject<HTMLElement | null>) 
     let touching = false
     let reservedInset = 0
 
-    function syncViewport(force = false) {
+    const syncViewport = (force = false) => {
       if (touching && !force) return
 
       window.cancelAnimationFrame(frame)

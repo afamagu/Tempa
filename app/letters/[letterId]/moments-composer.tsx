@@ -64,6 +64,8 @@ import PhotoSourceInputs, { selectPhotoSourceRef } from './photo-source-inputs'
 import MomentSourceMenu from './moment-source-menu'
 import VideoSourceInput from './video-source-input'
 import VideoMomentTrimDialog from './video-moment-trim-dialog'
+import { extractVideoClip, VIDEO_SOURCE_MAX_BYTES } from '@/lib/video-clip'
+import { uploadVideoClip } from '@/lib/video-upload'
 import { processImageForUpload } from '@/lib/image-processing'
 import { reportLetterSendTiming, resourceNet, startLetterSendTiming, type LetterSendTiming } from '@/lib/letter-send-timing'
 import { useKeyboardDismiss } from '@/app/letters/use-keyboard-dismiss'
@@ -306,6 +308,12 @@ export default function MomentsComposer({
   const [pendingFirstPhoto, setPendingFirstPhoto] = useState<
     { index: number; imagePath: string; previewUrl: string } | null
   >(null)
+  const videoBusyRef = useRef(false)
+  const videoAbortRef = useRef<AbortController | null>(null)
+  const preparedVideoRef = useRef<{ file: File; start: number; duration: number; clip: Blob; path: string; uploaded: boolean } | null>(null)
+  const [videoProgress, setVideoProgress] = useState<string | null>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  useEffect(() => () => { videoAbortRef.current?.abort() }, [])
   const videoInputRef = useRef<HTMLInputElement | null>(null)
   const [pendingVideo, setPendingVideo] = useState<{ index: number; file: File; previewUrl: string; duration: number } | null>(null)
   // Repeated-first-photo-explanation fix — flips true the moment THIS
@@ -624,6 +632,12 @@ export default function MomentsComposer({
       setError('Please choose a video file.')
       return
     }
+    if (file.size > VIDEO_SOURCE_MAX_BYTES) {
+      setError('Choose a video smaller than 100 MB. You can shorten it in your Photos app first.')
+      return
+    }
+    setVideoError(null)
+    preparedVideoRef.current = null
     const previewUrl = URL.createObjectURL(file)
     const probe = document.createElement('video')
     probe.preload = 'metadata'
@@ -643,22 +657,46 @@ export default function MomentsComposer({
   }
 
   async function confirmVideoMoment(trimStartSeconds: number, durationSeconds: number) {
-    if (!pendingVideo || !editor) return
+    if (!pendingVideo || !editor || videoBusyRef.current) return
+    videoBusyRef.current = true
+    const controller = new AbortController()
+    videoAbortRef.current = controller
     const { index, file, previewUrl } = pendingVideo
     setUploadingIndex(index)
+    setVideoError(null)
     setError(null)
+    let clipUrl: string | null = null
     try {
-      const ext = file.type === 'video/webm' ? 'webm' : file.type === 'video/quicktime' ? 'mov' : 'mp4'
-      const path = `${correspondenceId}/${crypto.randomUUID()}.${ext}`
-      const { error: uploadError } = await createClient().storage
-        .from('letter-photos')
-        .upload(path, file, { contentType: file.type || 'video/mp4' })
-      if (uploadError) throw uploadError
-      insertVideoMomentAtParagraphEnd(index, { imagePath: path, previewUrl, trimStartSeconds, durationSeconds })
+      let prepared = preparedVideoRef.current
+      if (!prepared || prepared.file !== file || prepared.start !== trimStartSeconds || prepared.duration !== durationSeconds) {
+        setVideoProgress('Preparing your selected clip… Keep this screen open.')
+        const clip = await extractVideoClip(file, trimStartSeconds, durationSeconds, controller.signal)
+        prepared = { file, start: trimStartSeconds, duration: durationSeconds, clip,
+          path: `${correspondenceId}/video/${crypto.randomUUID()}.mp4`, uploaded: false }
+        preparedVideoRef.current = prepared
+      }
+      if (!prepared.uploaded) {
+        setVideoProgress('Uploading video… 0%')
+        await uploadVideoClip(createClient(), prepared.path, prepared.clip, controller.signal,
+          (percent) => setVideoProgress(percent === 100 ? 'Finishing upload…' : `Uploading video… ${percent}%`))
+        prepared.uploaded = true
+      }
+      controller.signal.throwIfAborted()
+      clipUrl = URL.createObjectURL(prepared.clip)
+      insertVideoMomentAtParagraphEnd(index, { imagePath: prepared.path, previewUrl: clipUrl, trimStartSeconds: 0, durationSeconds })
+      clipUrl = null // editor owns the selected clip preview
+      URL.revokeObjectURL(previewUrl)
+      preparedVideoRef.current = null
       setPendingVideo(null)
-    } catch {
-      setError('Could not add that video. Please try again.')
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        console.error('[video-moment] attach failed', cause)
+        setVideoError(cause instanceof Error ? cause.message : 'The video could not be prepared. Your selection is kept. Try again or choose another video.')
+      }
     } finally {
+      if (clipUrl) URL.revokeObjectURL(clipUrl)
+      videoBusyRef.current = false
+      setVideoProgress(null)
       setUploadingIndex(null)
     }
   }
@@ -676,7 +714,7 @@ export default function MomentsComposer({
       if (currentIndex === paragraphIndex) targetPos = offset + node.nodeSize - 1
       currentIndex += 1
     })
-    if (targetPos === null) return
+    if (targetPos === null) throw new Error('The paragraph has changed. Close this window and choose where to attach the video again.')
     const momentNode = state.schema.nodes.videoMoment.create(attrs)
     const tr = state.tr.insert(targetPos, momentNode)
     tr.setSelection(TextSelection.near(tr.doc.resolve(tr.mapping.map(state.selection.from))))
@@ -1105,7 +1143,12 @@ export default function MomentsComposer({
         <VideoMomentTrimDialog
           src={pendingVideo.previewUrl}
           duration={pendingVideo.duration}
+          busy={videoProgress !== null}
+          progress={videoProgress}
+          error={videoError}
           onCancel={() => {
+            videoAbortRef.current?.abort()
+            preparedVideoRef.current = null
             URL.revokeObjectURL(pendingVideo.previewUrl)
             setPendingVideo(null)
           }}

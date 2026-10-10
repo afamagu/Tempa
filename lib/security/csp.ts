@@ -53,7 +53,7 @@ export function buildCsp({ nonce, supabaseOrigins, isDev, enforce = false }: Csp
   const supabase = [...new Set(supabaseOrigins.filter(Boolean))]
   const directives: [string, string[]][] = [
     ['default-src', ["'self'"]],
-    ['script-src', ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", TURNSTILE_ORIGIN, `${GOOGLE_GSI_ORIGIN}client`, ...(isDev ? ["'unsafe-eval'"] : [])]],
+    ['script-src', ["'self'", "'wasm-unsafe-eval'", `'nonce-${nonce}'`, "'strict-dynamic'", TURNSTILE_ORIGIN, `${GOOGLE_GSI_ORIGIN}client`, ...(isDev ? ["'unsafe-eval'"] : [])]],
     ['style-src', ["'self'", `'nonce-${nonce}'`, `${GOOGLE_GSI_ORIGIN}style`]],
     ['style-src-attr', ["'unsafe-inline'"]],
     ['img-src', ["'self'", 'data:', 'blob:', ...supabase]],

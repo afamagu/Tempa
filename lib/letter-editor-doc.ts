@@ -577,6 +577,7 @@ export async function resolveDraftPreviewMoments(
           id: descriptor.id,
           position: descriptor.position,
           type: 'video',
+          imagePath: descriptor.imagePath,
           imageUrl: url,
           postcardKey: null,
           trimStartSeconds: descriptor.trimStartSeconds,

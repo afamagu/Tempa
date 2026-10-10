@@ -1119,6 +1119,7 @@ export async function getMomentsForLetters(
           ? (signedUrlByPath.get(row.image_path) ?? null)
           : null,
       postcardKey: row.postcard_key,
+      imagePath: row.type === 'video' ? row.image_path : undefined,
       trimStartSeconds: row.type === 'video' ? row.trim_start_seconds : null,
       durationSeconds: row.type === 'video' ? row.duration_seconds : null,
     }
@@ -1528,16 +1529,17 @@ export async function getLetterboxPeople(
   supabase: SupabaseClient,
   userId: string
 ): Promise<LetterboxPerson[]> {
-  const [{ data: correspondences }, { data: archiveRemovals }] = await Promise.all([
+  const [{ data: correspondences }, { data: archiveRemovals }, hiddenCorrespondenceIds] = await Promise.all([
     supabase
       .from('correspondences')
       .select('id, participant_low, participant_high')
       .or(`participant_low.eq.${userId},participant_high.eq.${userId}`),
     supabase.from('letter_archive_removals').select('letter_id').eq('user_id', userId),
+    getHiddenCorrespondenceIds(supabase, userId),
   ])
 
   const rows = correspondences ?? []
-  const visibleIds = rows.map((c) => c.id)
+  const visibleIds = rows.map((c) => c.id).filter((id) => !hiddenCorrespondenceIds.has(id))
   if (visibleIds.length === 0) return []
 
   const { data: letterRows } = await supabase

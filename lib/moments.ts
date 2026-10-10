@@ -7,6 +7,7 @@ export type Moment = {
   /** Photo only — a short-lived signed URL, resolved server-side per request. Never a public URL. */
   imageUrl: string | null
   /** Video only — playback window selected by the sender. */
+  imagePath?: string | null
   trimStartSeconds?: number | null
   durationSeconds?: number | null
   /** Postcard only. */
