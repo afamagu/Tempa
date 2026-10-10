@@ -23,7 +23,13 @@ export async function uploadVideoClip(supabase: SupabaseClient, path: string, cl
       // Retrying the same UUID after an uncertain network result never creates a second object.
       if (xhr.status === 409) { resolve(); return }
       let detail = ''
-      try { detail = String(JSON.parse(xhr.responseText).message ?? '') } catch { /* non-JSON gateway response */ }
+      let duplicate = false
+      try {
+        const body = JSON.parse(xhr.responseText)
+        detail = String(body.message ?? '')
+        duplicate = String(body.statusCode) === '409' && /already exists/i.test(detail)
+      } catch { /* non-JSON gateway response */ }
+      if (duplicate) { resolve(); return }
       if (/mime|type.*not.*supported/i.test(detail)) reject(new Error('Video uploads are not enabled yet. Your selection is kept; please try again after Tempa’s video update.'))
       else if (xhr.status === 401 || xhr.status === 403) reject(new Error('Video upload was denied. Check that you are signed in and this correspondence allows Moments.'))
       else reject(new Error(`Video upload failed (${xhr.status}${detail ? `: ${detail.slice(0, 160)}` : ''}). Your selection is kept. Try again.`))

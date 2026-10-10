@@ -36,6 +36,9 @@ function VideoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) 
     durationSeconds: number
   }
   const [failed, setFailed] = useState(false)
+  useEffect(() => () => {
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
 
   useEffect(() => {
     if (previewUrl || !imagePath) return

@@ -316,6 +316,9 @@ export default function MomentsComposer({
   useEffect(() => () => { videoAbortRef.current?.abort() }, [])
   const videoInputRef = useRef<HTMLInputElement | null>(null)
   const [pendingVideo, setPendingVideo] = useState<{ index: number; file: File; previewUrl: string; duration: number } | null>(null)
+  useEffect(() => () => {
+    if (pendingVideo) URL.revokeObjectURL(pendingVideo.previewUrl)
+  }, [pendingVideo])
   // Repeated-first-photo-explanation fix — flips true the moment THIS
   // member continues past the explanation for the FIRST photo (see
   // confirmFirstPhoto), so a second/third/... photo added later in this

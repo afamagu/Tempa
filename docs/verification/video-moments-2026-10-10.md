@@ -24,11 +24,16 @@ Two existing `main` build blockers required minimal repairs: closure narrowing i
 ## Evidence
 
 - Actual pinned WASM encoder: 20-second red/green/blue source, select 5–15s. Result: 10.000000 seconds, 136,061 bytes, H.264/AAC, 300 decoded frames, every frame green. No red or blue footage in the stored output.
-- 15 new regression tests pass, including eight isolated PostgreSQL tests applying the exact migration with production-equivalent policy fixtures: uploader drafts, recipient/outsider denial, JPEG preservation, MIME disguise rejection, delivery/consent gates, blocked users, invalid duration/start and missing objects.
+- 17 new regression tests pass, including eight isolated PostgreSQL tests applying the exact migration with production-equivalent policy fixtures: uploader drafts, recipient/outsider denial, JPEG preservation, MIME disguise rejection, delivery/consent gates, blocked users, invalid duration/start and missing objects.
 - TypeScript and production build pass.
-- Full test baseline on untouched main: 48 failed files, 106 failed tests, 6,085 passed. Initial fix run: same 106 failures plus seven new passing tests; final full run to be recorded below.
-- Repository ESLint baseline: 14 errors, 41 warnings. Changed video files: no errors; existing composer image warning only. Final full lint to be recorded below.
-- Physical iPhone Safari / Android Chrome and live sender→recipient workflow are not yet verified. Browser-engine check results will be added before review.
+- Full test baseline on untouched main: 48 failed files, 106 failed tests, 6,085 passed. Final fix run: the same 106 existing failures; 17 new regression tests pass; 6,102 passed / 106 existing failures across 393 files.
+- Repository ESLint baseline: 14 errors, 41 warnings. Changed video files: no errors; existing composer image warning only. Final full lint: the same 14 existing errors; one existing composer image warning in changed components.
+- WebKit with iPhone 13 viewport: MP4 select → 5–15s range → selected preview (currentTime 5.55s) → real WASM export passed. Output is 10.000s, 136,061 bytes, and all 300 frames are selected footage.
+- WebKit native playback of the exported MP4 passed on first open and after refresh: duration 10s, currentTime advanced beyond 0.5s, no media error. This used a local persisted file URL, not production signed URLs.
+- Chromium 134 with Pixel 5 viewport: WebM select → 5–15s range → selected preview (currentTime 5.44s) → real WASM export passed. Output is 10.000s, 136,003 bytes, and all 300 frames are selected footage. This downloaded open-source Linux Chromium reports no H.264 playback support (`canPlayType` returns empty); it does not certify Android Chrome MP4 playback.
+- Vercel preview for `ab7e33af39a6706b6a33977d9aeb84fc908a8f0d`: GitHub Vercel status **success**, Vercel bot **Ready**, deployment `dpl_CRQV6PYQdut92wVNEtu3Md3PT555`. Preview: https://tempa-git-feat-video-moments-complete-fix-2026-10-10-afam.vercel.app . Later evidence-only/retry commits require checking their own deployment status.
+- Protected preview asset inspection is blocked by the Vercel connection (403 for team/project access). No Vercel CLI credentials are available as a fallback. Deployment success is independently verified from GitHub, but signed-in preview rendering has not been inspected.
+- Physical iPhone Safari / Android Chrome and the live sender→recipient workflow are not yet verified. Production SQL remains unapplied. Local browser tests used a temporary harness importing the real trim component and extractor; that harness is excluded from the PR.
 
 ## Deployment order and approval
 

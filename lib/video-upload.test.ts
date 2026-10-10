@@ -24,6 +24,10 @@ describe('clip upload', () => {
     response = { status: 400, body: JSON.stringify({ message: 'mime type video/mp4 is not supported' }) }
     await expect(uploadVideoClip(client, 'corr/video/id.mp4', new Blob(), new AbortController().signal, vi.fn())).rejects.toThrow('not enabled yet')
   })
+  it('recovers an uncertain upload when Storage reports the same UUID already exists', async () => {
+    response = { status: 400, body: JSON.stringify({ statusCode: '409', message: 'The resource already exists' }) }
+    await expect(uploadVideoClip(client, 'corr/video/id.mp4', new Blob(), new AbortController().signal, vi.fn())).resolves.toBeUndefined()
+  })
   it('does not attempt uploads without a session', async () => {
     const expired = { auth: { getSession: async () => ({ data: { session: null }, error: null }) } } as unknown as SupabaseClient
     await expect(uploadVideoClip(expired, 'x', new Blob(), new AbortController().signal, vi.fn())).rejects.toThrow('session has expired')
