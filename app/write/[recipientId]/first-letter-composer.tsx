@@ -20,6 +20,10 @@ import {
 } from '@/app/profile/ui'
 import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
+import EmojiSuggestions from '@/app/letters/emoji-suggestions'
+import { useWritingState } from '@/app/letters/use-writing-state'
+import { useWritingDraft } from '@/app/letters/use-writing-draft'
+import { settleWritingInput, DRAFT_CHANGED } from '@/lib/settle-writing-input'
 import { docToPlainBody, canSendLetter, EMPTY_LETTER_DOC, type LetterDocJSON } from '@/lib/letter-editor-doc'
 import { QUESTION_ANSWER_MAX_CHARS } from '@/lib/questions'
 import {
@@ -101,7 +105,7 @@ export default function FirstLetterComposer({
 
   const editor = useEditor({
     immediatelyRender: false,
-    shouldRerenderOnTransaction: true,
+    shouldRerenderOnTransaction: false,
     extensions: [...baseWritingExtensions(), Placeholder.configure({ placeholder: 'Begin writing…' })],
     content: EMPTY_LETTER_DOC,
     editorProps: {
@@ -111,12 +115,17 @@ export default function FirstLetterComposer({
           'min-h-64 w-full rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
     },
-    onUpdate({ editor: current }) {
-      if (!writeFirstContactDraft(draftKey, current.getJSON() as LetterDocJSON)) {
-        setDraftStorageFailed(true)
-      }
-    },
+
   })
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    editor.setEditable(!sending, false)
+  }, [editor, sending])
+
+  const draftSave = useWritingDraft(editor, (current) => writeFirstContactDraft(draftKey, current.getJSON() as LetterDocJSON), () => setDraftStorageFailed(true), draftKey)
+  const inputBusy = useRef(false)
+  const evaluatedBody = useRef<string | null>(null)
 
   useEffect(() => {
     if (!editor) return
@@ -124,18 +133,24 @@ export default function FirstLetterComposer({
     if (draft) editor.commands.setContent(draft)
   }, [editor, draftKey])
 
-  const docJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
-  const charCount = charLength(docToPlainBody(docJSON))
+  const { hasContent, charCount } = useWritingState(editor, true)
   const aboveMax = charCount > MAX_CHARS
-  const canSend = Boolean(editor) && canSendLetter(docJSON, { aboveMax, submitting: sending })
+  const canSend = Boolean(editor) && hasContent && !aboveMax && !sending
   const showCharCount = charCount >= CHAR_WARNING_THRESHOLD
 
   async function handleSend() {
-    if (!editor || !canSend) return
+    if (!editor || !canSend || inputBusy.current) return
+    inputBusy.current = true
+    let committed: LetterDocJSON
+    try { committed = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not finish your input.'); inputBusy.current = false; return }
+    inputBusy.current = false
+    if (!canSendLetter(committed, { aboveMax: charLength(docToPlainBody(committed)) > MAX_CHARS, submitting: false })) return
     setSending(true)
     setError(null)
 
-    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    const body = docToPlainBody(committed)
+    evaluatedBody.current = body
     const outcome = await evaluateSafety({ surface: 'first_letter', recipientId, questionAnswerId, body })
 
     if (outcome.status === 'error') {
@@ -171,7 +186,16 @@ export default function FirstLetterComposer({
     if (!editor) return
     setSending(true)
     setError(null)
-    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    let currentDoc: LetterDocJSON
+    try { currentDoc = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not finish your input.'); setSending(false); return }
+    const body = evaluatedBody.current
+    if (body === null || body !== docToPlainBody(currentDoc)) {
+      setError(DRAFT_CHANGED)
+      setSending(false)
+      setPendingWarning(null)
+      return
+    }
 
     try {
       const supabase = createClient()
@@ -213,6 +237,7 @@ export default function FirstLetterComposer({
         return
       }
 
+      draftSave.cancel()
       clearFirstContactDraft(draftKey)
       setPendingWarning(null)
       await refreshWrittenProfile(recipientId).catch(() => {})
@@ -281,6 +306,7 @@ export default function FirstLetterComposer({
         <div className="space-y-4">
           <div className="space-y-2">
             <WritingToolbar editor={editor} />
+        <div className="min-h-11"><EmojiSuggestions editor={editor} /></div>
             <EditorContent editor={editor} />
           </div>
 

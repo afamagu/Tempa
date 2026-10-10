@@ -1,6 +1,6 @@
 'use client'
 
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import { iconButtonClass } from '@/app/profile/ui'
 import Tooltip from '@/app/profile/tooltip'
 import EmojiPicker from './emoji-picker'
@@ -83,6 +83,12 @@ function toggleButtonClass(active: boolean) {
  * default Tiptap keybindings — nothing extra is wired here.
  */
 export default function WritingToolbar({ editor }: { editor: Editor | null }) {
+  const state = useEditorState({ editor, selector: ({ editor: current }) => current ? ({
+    undo: current?.can().undo() ?? false,
+    redo: current?.can().redo() ?? false,
+    bold: current?.isActive('bold') ?? false,
+    italic: current?.isActive('italic') ?? false,
+  }) : null })
   function insertEmoji(emoji: string) {
     editor?.chain().focus().insertContent(emoji).run()
   }
@@ -93,7 +99,7 @@ export default function WritingToolbar({ editor }: { editor: Editor | null }) {
         <button
           type="button"
           onClick={() => editor?.chain().focus().undo().run()}
-          disabled={!editor || !editor.can().undo()}
+          disabled={!editor || !(state?.undo ?? editor.can().undo())}
           aria-label="Undo"
           className={iconButtonClass}
         >
@@ -104,7 +110,7 @@ export default function WritingToolbar({ editor }: { editor: Editor | null }) {
         <button
           type="button"
           onClick={() => editor?.chain().focus().redo().run()}
-          disabled={!editor || !editor.can().redo()}
+          disabled={!editor || !(state?.redo ?? editor.can().redo())}
           aria-label="Redo"
           className={iconButtonClass}
         >
@@ -117,8 +123,8 @@ export default function WritingToolbar({ editor }: { editor: Editor | null }) {
           onClick={() => editor?.chain().focus().toggleBold().run()}
           disabled={!editor}
           aria-label="Bold"
-          aria-pressed={editor?.isActive('bold') ?? false}
-          className={toggleButtonClass(editor?.isActive('bold') ?? false)}
+          aria-pressed={state?.bold ?? editor?.isActive('bold') ?? false}
+          className={toggleButtonClass(state?.bold ?? editor?.isActive('bold') ?? false)}
         >
           <BoldIcon />
         </button>
@@ -129,8 +135,8 @@ export default function WritingToolbar({ editor }: { editor: Editor | null }) {
           onClick={() => editor?.chain().focus().toggleItalic().run()}
           disabled={!editor}
           aria-label="Italic"
-          aria-pressed={editor?.isActive('italic') ?? false}
-          className={toggleButtonClass(editor?.isActive('italic') ?? false)}
+          aria-pressed={state?.italic ?? editor?.isActive('italic') ?? false}
+          className={toggleButtonClass(state?.italic ?? editor?.isActive('italic') ?? false)}
         >
           <ItalicIcon />
         </button>

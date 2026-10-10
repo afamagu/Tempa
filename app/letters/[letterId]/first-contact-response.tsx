@@ -13,6 +13,10 @@ import { readLetterDraft, writeLetterDraft, clearLetterDraft } from '@/lib/lette
 import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import { useEditorVisualViewport } from '@/app/letters/use-editor-visual-viewport'
 import WritingToolbar from '@/app/letters/writing-toolbar'
+import EmojiSuggestions from '@/app/letters/emoji-suggestions'
+import { useWritingState } from '@/app/letters/use-writing-state'
+import { useWritingDraft } from '@/app/letters/use-writing-draft'
+import { settleWritingInput, DRAFT_CHANGED } from '@/lib/settle-writing-input'
 import {
   docToPlainBody,
   canSendLetter,
@@ -144,12 +148,8 @@ export default function FirstContactResponse({
   // markupBodyToLetterDoc (see that function's own doc comment).
   const editor = useEditor({
     immediatelyRender: false,
-    // Send-button reactivity audit (2026-09-05, following the same fix
-    // already applied to first-letter-composer.tsx) — see that file's
-    // comment for the full explanation. Without this, canSendReply/
-    // the toolbar's Bold/Italic active state would be frozen at
-    // whatever they were on first render.
-    shouldRerenderOnTransaction: true,
+    // Subscribe to eligibility separately; cursor moves do not rerender the page.
+    shouldRerenderOnTransaction: false,
     extensions: [
       ...baseWritingExtensions(),
       Placeholder.configure({ placeholder: `Write back to ${recipientPseudonym}…` }),
@@ -162,12 +162,17 @@ export default function FirstContactResponse({
           'min-h-64 w-full rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
     },
-    onUpdate({ editor: current }) {
-      if (!writeLetterDraft(correspondenceId, docToPlainBody(current.getJSON() as LetterDocJSON))) {
-        setDraftStorageFailed(true)
-      }
-    },
+
   })
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    editor.setEditable(!sendingReply, false)
+  }, [editor, sendingReply])
+
+  const draftSave = useWritingDraft(editor, (current) => writeLetterDraft(correspondenceId, docToPlainBody(current.getJSON() as LetterDocJSON)), () => setDraftStorageFailed(true), correspondenceId)
+  const inputBusy = useRef(false)
+  const evaluatedBody = useRef<string | null>(null)
 
   // Restored after mount, not as the editor's initial `content` — same
   // SSR-hydration-mismatch reasoning as moments-composer.tsx.
@@ -192,9 +197,8 @@ export default function FirstContactResponse({
   // and is choosing to accept. Treated identically to every later
   // Write Anytime letter (moments-composer.tsx), never the
   // stranger/discovery-writing cap first-letter-composer.tsx uses.
-  const replyDocJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
-  const canSendReply =
-    Boolean(editor) && canSendLetter(replyDocJSON, { aboveMax: false, submitting: sendingReply })
+  const { hasContent } = useWritingState(editor)
+  const canSendReply = Boolean(editor) && hasContent && !sendingReply
 
   // Safety 2, Checkpoint 3 — evaluates before ever calling
   // reply_to_letter. Never a Postcard here — this reply is always
@@ -203,11 +207,18 @@ export default function FirstContactResponse({
   // failed evaluation (status: error) never falls back to an unscreened
   // send.
   async function handleReply() {
-    if (!editor || !canSendReply) return
+    if (!editor || !canSendReply || inputBusy.current) return
+    inputBusy.current = true
+    let committed: LetterDocJSON
+    try { committed = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setReplyError(err instanceof Error ? err.message : 'Could not finish your input.'); inputBusy.current = false; return }
+    inputBusy.current = false
+    if (!canSendLetter(committed, { aboveMax: false, submitting: false })) return
     setSendingReply(true)
     setReplyError(null)
 
-    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    const body = docToPlainBody(committed)
+    evaluatedBody.current = body
     const outcome = await evaluateSafety({ surface: 'reply', letterId, body })
 
     if (outcome.status === 'error') {
@@ -247,7 +258,16 @@ export default function FirstContactResponse({
     // Re-read fresh, never a value captured before the warning dialog
     // opened — same reasoning as first-letter-composer.tsx's own
     // sendLetter.
-    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    let currentDoc: LetterDocJSON
+    try { currentDoc = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setReplyError(err instanceof Error ? err.message : 'Could not finish your input.'); setSendingReply(false); return }
+    const body = evaluatedBody.current
+    if (body === null || body !== docToPlainBody(currentDoc)) {
+      setReplyError(DRAFT_CHANGED)
+      setSendingReply(false)
+      setPendingWarning(null)
+      return
+    }
 
     // try/finally so a thrown rejection (never just an RPC-level
     // {error} response, already handled below) can't leave
@@ -279,6 +299,7 @@ export default function FirstContactResponse({
         return
       }
 
+      draftSave.cancel()
       clearLetterDraft(correspondenceId)
       setPendingWarning(null)
       router.refresh()
@@ -358,6 +379,7 @@ export default function FirstContactResponse({
         </div>
         <div className="space-y-2">
           <WritingToolbar editor={editor} />
+        <div className="min-h-11"><EmojiSuggestions editor={editor} /></div>
           <EditorContent editor={editor} />
         </div>
         {draftStorageFailed && <DraftPersistenceWarning />}

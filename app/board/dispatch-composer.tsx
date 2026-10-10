@@ -20,14 +20,18 @@ import {
 import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import { useEditorVisualViewport } from '@/app/letters/use-editor-visual-viewport'
 import WritingToolbar from '@/app/letters/writing-toolbar'
+import EmojiSuggestions from '@/app/letters/emoji-suggestions'
+import { useWritingState } from '@/app/letters/use-writing-state'
+import { useWritingDraft } from '@/app/letters/use-writing-draft'
+import { settleWritingInput, DRAFT_CHANGED } from '@/lib/settle-writing-input'
 import {
   docToPlainBody,
+  stripTransientPhotoPreviews,
   docToMomentDrafts,
   docToDraftMomentDescriptors,
   resolveDraftPreviewMoments,
   dispatchBodyToDoc,
   canSendLetter,
-  letterDocHasContent,
   stripRichBodyMarker,
   EMPTY_LETTER_DOC,
   type LetterDocJSON,
@@ -181,6 +185,7 @@ export default function DispatchComposer({
   const [previewMoments, setPreviewMoments] = useState<DispatchMoment[] | null>(null)
   const [preparingPreview, setPreparingPreview] = useState(false)
   const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
+  const livePostcard = useRef(postcardDraft)
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
   const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
   const [activePostcards, setActivePostcards] = useState<PostcardCatalogEntry[]>([])
@@ -205,11 +210,11 @@ export default function DispatchComposer({
   useEffect(() => {
     if (isEdit) return
     const restored = readDispatchPostcardDraft(draftKey)
-    queueMicrotask(() => setPostcardDraft(restored))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    queueMicrotask(() => { livePostcard.current = restored; setPostcardDraft(restored) })
   }, [isEdit, draftKey])
 
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
+    livePostcard.current = next
     setPostcardDraft(next)
     if (!writeDispatchPostcardDraft(draftKey, next)) {
       setDraftStorageFailed(true)
@@ -237,7 +242,7 @@ export default function DispatchComposer({
 
   const editor = useEditor({
     immediatelyRender: false,
-    shouldRerenderOnTransaction: true,
+    shouldRerenderOnTransaction: false,
     extensions: [
       ...baseWritingExtensions(),
       Placeholder.configure({ placeholder: 'Begin writing…' }),
@@ -257,18 +262,25 @@ export default function DispatchComposer({
           'min-h-64 w-full rounded-md border border-foreground/15 bg-surface-shell px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
     },
-    onUpdate({ editor: current }) {
-      if (isEdit) return
-      if (!writeDispatchDraft(draftKey, { title, doc: current.getJSON() as LetterDocJSON, topics })) {
-        setDraftStorageFailed(true)
-      }
-    },
+
   })
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    editor.setEditable(!publishing, false)
+  }, [editor, publishing])
+
+  const draftMeta = useRef({ title, topics })
+  const inputBusy = useRef(false)
+  const evaluatedDraft = useRef<{ doc: LetterDocJSON; title: string; topics: string[]; postcard: LetterPostcardDraft | null } | null>(null)
+  const draftSave = useWritingDraft(editor, (current) => isEdit || writeDispatchDraft(draftKey, { ...draftMeta.current, doc: current.getJSON() as LetterDocJSON }), () => setDraftStorageFailed(true), draftKey)
+  const [previewBody, setPreviewBody] = useState('')
 
   useEffect(() => {
     if (!editor || isEdit) return
     const draft = readDispatchDraft(draftKey)
     if (draft) {
+      draftMeta.current = { title: draft.title, topics: draft.topics }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(draft.title)
       setTopics(draft.topics)
@@ -278,10 +290,8 @@ export default function DispatchComposer({
   }, [editor, draftKey])
 
   function persistDraft(nextTitle: string, nextTopics: string[]) {
-    if (!editor || isEdit) return
-    if (!writeDispatchDraft(draftKey, { title: nextTitle, doc: editor.getJSON() as LetterDocJSON, topics: nextTopics })) {
-      setDraftStorageFailed(true)
-    }
+    draftMeta.current = { title: nextTitle, topics: nextTopics }
+    if (!isEdit) draftSave.schedule()
   }
 
   function handleTitleChange(value: string) {
@@ -295,24 +305,24 @@ export default function DispatchComposer({
     persistDraft(title, normalized)
   }
 
-  const docJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
+  const { hasContent } = useWritingState(editor)
   const titleError = dispatchTitleError(title)
   const canSubmit =
     Boolean(editor) &&
     titleError === null &&
-    canSendLetter(docJSON, { aboveMax: false, submitting: publishing }) &&
+    (hasContent && !publishing) &&
     !uploadingIndex
   const canPreview =
     Boolean(editor) &&
     titleError === null &&
-    canSendLetter(docJSON, { aboveMax: false, submitting: publishing || preparingPreview }) &&
+    (hasContent && !publishing && !preparingPreview) &&
     !uploadingIndex
   const previewBlockedReason: string | null =
     isEdit || publishing || preparingPreview
       ? null
       : titleError
         ? titleError
-        : !letterDocHasContent(docJSON)
+        : !hasContent
           ? 'Write something before you can preview.'
           : null
 
@@ -401,7 +411,14 @@ export default function DispatchComposer({
 
   async function handleSubmit() {
     const canPublish = isEdit ? canSubmit && !sponsorError : canPreview && !publishBlockedReason
-    if (!editor || !canPublish) return
+    if (!editor || !canPublish || inputBusy.current) return
+    inputBusy.current = true
+    let committed: LetterDocJSON
+    try { committed = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not finish your input.'); inputBusy.current = false; return }
+    inputBusy.current = false
+    if (!canSendLetter(committed, { aboveMax: false, submitting: false })) return
+    evaluatedDraft.current = { doc: committed, title, topics, postcard: postcardDraft }
     setPublishing(true)
     setError(null)
     if (official) {
@@ -409,7 +426,7 @@ export default function DispatchComposer({
       return
     }
 
-    const finalDoc = editor.getJSON() as LetterDocJSON
+    const finalDoc = committed
     const body = docToPlainBody(finalDoc)
     const normalizedTopics = normalizeTopics(topics)
     const outcome =
@@ -461,7 +478,17 @@ export default function DispatchComposer({
     if (!editor) return
     setPublishing(true)
     setError(null)
-    const finalDoc = editor.getJSON() as LetterDocJSON
+    let currentDoc: LetterDocJSON
+    try { currentDoc = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not finish your input.'); setPublishing(false); return }
+    const evaluated = evaluatedDraft.current
+    if (!evaluated || JSON.stringify(stripTransientPhotoPreviews(currentDoc)) !== JSON.stringify(stripTransientPhotoPreviews(evaluated.doc)) || draftMeta.current.title !== evaluated.title || JSON.stringify(draftMeta.current.topics) !== JSON.stringify(evaluated.topics) || JSON.stringify(livePostcard.current) !== JSON.stringify(evaluated.postcard)) {
+      setError(DRAFT_CHANGED)
+      setPendingWarning(null)
+      setPublishing(false)
+      return
+    }
+    const finalDoc = evaluated.doc
     const body = docToPlainBody(finalDoc)
     const moments: DispatchMomentDraft[] = docToMomentDrafts(finalDoc)
       .filter((m) => m.type === 'photo')
@@ -563,6 +590,7 @@ export default function DispatchComposer({
       }
 
       if (!isEdit) {
+        draftSave.cancel()
         clearDispatchDraft(draftKey)
         clearDispatchPostcardDraft(draftKey)
       }
@@ -583,7 +611,10 @@ export default function DispatchComposer({
     if (!editor || preparingPreview) return
     setPreparingPreview(true)
     try {
-      const descriptors = docToDraftMomentDescriptors(editor.getJSON() as LetterDocJSON)
+      const committed = await settleWritingInput(editor)
+      draftSave.flush()
+      setPreviewBody(docToPlainBody(committed))
+      const descriptors = docToDraftMomentDescriptors(committed)
       const supabase = createClient()
       const resolved = await resolveDraftPreviewMoments(descriptors, (imagePath) => resolveDispatchPhotoUrl(supabase, imagePath))
       setPreviewMoments(
@@ -591,6 +622,8 @@ export default function DispatchComposer({
           .filter((m) => m.type === 'photo')
           .map((m) => ({ id: m.id, position: m.position, imageUrl: m.imageUrl }))
       )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not prepare your preview.')
     } finally {
       setPreparingPreview(false)
     }
@@ -697,6 +730,7 @@ export default function DispatchComposer({
 
         <div className="space-y-2">
           <WritingToolbar editor={editor} />
+        <div className="min-h-11"><EmojiSuggestions editor={editor} /></div>
           <CorrespondentPicker editor={editor} onSelect={mentions.select}><EditorContent editor={editor} /></CorrespondentPicker>
         </div>
 
@@ -763,7 +797,7 @@ export default function DispatchComposer({
           authorPseudonym={postcardSenderName}
           authorMarkUrl={authorMarkUrl}
           title={title}
-          body={docToPlainBody(docJSON)}
+          body={previewBody}
           topics={topics}
           moments={previewMoments}
           postcardDraft={postcardDraft}

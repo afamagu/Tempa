@@ -124,14 +124,17 @@ export function useKeyboardDismiss(rootRef: RefObject<HTMLElement | null>) {
       }
       start = null
     }
+    const onCancel = () => { start = null }
 
     document.addEventListener('touchstart', onStart, { passive: true })
     document.addEventListener('touchmove', onMove, { passive: true })
     document.addEventListener('touchend', onEnd, { passive: true })
+    document.addEventListener('touchcancel', onCancel, { passive: true })
     return () => {
       document.removeEventListener('touchstart', onStart)
       document.removeEventListener('touchmove', onMove)
       document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onCancel)
     }
   }, [rootRef])
 }

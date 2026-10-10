@@ -14,6 +14,7 @@ import { getActivePostcards, type PostcardCatalogEntry } from '@/lib/postcards'
 import FeatureIntroduction from '@/app/feature-introduction'
 import {
   docToPlainBody,
+  stripTransientPhotoPreviews,
   docToMomentDrafts,
   docToDraftMomentDescriptors,
   resolveDraftPreviewMoments,
@@ -56,6 +57,10 @@ import SafetyWarningDialog from '@/app/safety-warning-dialog'
 import SafetyBlockedDialog from '@/app/safety-blocked-dialog'
 import { baseWritingExtensions, nativeWritingAttributes } from '@/app/letters/writing-extensions'
 import WritingToolbar from '@/app/letters/writing-toolbar'
+import EmojiSuggestions from '@/app/letters/emoji-suggestions'
+import { useWritingState } from '@/app/letters/use-writing-state'
+import { useWritingDraft } from '@/app/letters/use-writing-draft'
+import { settleWritingInput, DRAFT_CHANGED } from '@/lib/settle-writing-input'
 import { PhotoMoment } from './photo-moment-node'
 import { PostcardMoment } from './postcard-moment-node'
 import { MomentAffordance } from './moment-affordance-extension'
@@ -325,6 +330,7 @@ export default function MomentsComposer({
   // postcard" — there is only ever one picker, never two independently-
   // maintained instances of it.
   const [postcardDraft, setPostcardDraft] = useState<LetterPostcardDraft | null>(null)
+  const livePostcard = useRef(postcardDraft)
   const [postcardPickerOpen, setPostcardPickerOpen] = useState(false)
   const [postcardEditorOpen, setPostcardEditorOpen] = useState(false)
   // Post-onboarding corrections checkpoint (Section G) — same fix as
@@ -358,16 +364,8 @@ export default function MomentsComposer({
 
   const editor = useEditor({
     immediatelyRender: false,
-    // Send-button reactivity audit (2026-09-05, following the same
-    // fix already applied to first-letter-composer.tsx) —
-    // @tiptap/react's useEditor() does not re-render its host
-    // component on typing/formatting by default; the editor mutates
-    // the contenteditable DOM directly via ProseMirror, entirely
-    // outside React's render cycle. Without this, canSend/
-    // the toolbar's Bold/Italic active state (all derived from
-    // editor.getJSON()/editor.isActive() in the render body) would be
-    // frozen at whatever they were on first render.
-    shouldRerenderOnTransaction: true,
+    // Editor DOM updates natively; eligibility and toolbar subscribe separately.
+    shouldRerenderOnTransaction: false,
     extensions: [
       ...baseWritingExtensions(),
       Placeholder.configure({ placeholder: `Write back to ${recipientPseudonym}…` }),
@@ -386,12 +384,18 @@ export default function MomentsComposer({
           'min-h-32 w-full rounded-md border border-foreground/15 bg-transparent px-4 py-3 font-serif text-lg leading-relaxed outline-none transition-colors focus:border-accent [&_p]:my-0 [&_p+p]:mt-4',
       },
     },
-    onUpdate({ editor: current }) {
-      if (!writeLetterEditorDraft(draftKey, current.getJSON() as LetterDocJSON)) {
-        setDraftStorageFailed(true)
-      }
-    },
+
   })
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    editor.setEditable(!sending, false)
+  }, [editor, sending])
+
+  const draftSave = useWritingDraft(editor, (current) => writeLetterEditorDraft(draftKey, current.getJSON() as LetterDocJSON), () => setDraftStorageFailed(true), draftKey)
+  const inputBusy = useRef(false)
+  const evaluatedDraft = useRef<{ doc: LetterDocJSON; postcard: ReturnType<typeof buildPostcardPayload> } | null>(null)
+  const [previewBody, setPreviewBody] = useState('')
 
   // Restore a saved draft once, after mount — deliberately not passed
   // as the editor's initial `content` (which would read localStorage
@@ -430,6 +434,7 @@ export default function MomentsComposer({
             if (!writeLetterPostcardDraft(draftKey, migrated)) {
               setDraftStorageFailed(true)
             }
+            livePostcard.current = migrated
             return migrated
           })
         })
@@ -445,7 +450,8 @@ export default function MomentsComposer({
     const legacyDraft = readLetterDraft(draftKey)
     if (legacyDraft) {
       editor.commands.setContent(plainBodyToLetterDoc(legacyDraft))
-      clearLetterDraft(draftKey)
+      if (writeLetterEditorDraft(draftKey, editor.getJSON() as LetterDocJSON)) clearLetterDraft(draftKey)
+      else queueMicrotask(() => setDraftStorageFailed(true))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])
@@ -465,7 +471,7 @@ export default function MomentsComposer({
   // synchronous-setState-in-effect pattern React's own lint rule flags.
   useEffect(() => {
     const restored = readLetterPostcardDraft(draftKey)
-    queueMicrotask(() => setPostcardDraft(restored))
+    queueMicrotask(() => { livePostcard.current = restored; setPostcardDraft(restored) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -495,6 +501,7 @@ export default function MomentsComposer({
   // drift apart. Writing `null` removes the stored draft entirely (see
   // writeLetterPostcardDraft's own doc comment).
   function setPostcardDraftAndPersist(next: LetterPostcardDraft | null) {
+    livePostcard.current = next
     setPostcardDraft(next)
     if (!writeLetterPostcardDraft(draftKey, next)) {
       setDraftStorageFailed(true)
@@ -518,11 +525,11 @@ export default function MomentsComposer({
   // Never derived from character count here, so an intentionally very
   // long established letter can never be blocked by a length gate that
   // no longer exists as product policy.
-  const docJSON = (editor?.getJSON() as LetterDocJSON | undefined) ?? EMPTY_LETTER_DOC
+  const { hasContent } = useWritingState(editor)
   const canSend =
     Boolean(editor) &&
-    canSendLetter(docJSON, { aboveMax: false, submitting: sending }) &&
-    !uploadingIndex &&
+    hasContent && !sending &&
+    uploadingIndex === null &&
     !pendingFirstPhoto
 
   // Admin Phase 2A-2 — resolved once here, passed down to the
@@ -681,11 +688,12 @@ export default function MomentsComposer({
   // body itself already gets, in case the member edits the Postcard
   // between evaluating and actually sending.
   function buildPostcardPayload(): { postcard_key: string; reveal_line: string | null; back_message: string } | null {
-    if (!postcardDraft) return null
+    const live = livePostcard.current
+    if (!live) return null
     return {
-      postcard_key: postcardDraft.postcardKey,
-      reveal_line: postcardDraft.revealLine.trim().length > 0 ? postcardDraft.revealLine : null,
-      back_message: postcardDraft.backMessage,
+      postcard_key: live.postcardKey,
+      reveal_line: live.revealLine.trim().length > 0 ? live.revealLine : null,
+      back_message: live.backMessage,
     }
   }
 
@@ -706,15 +714,22 @@ export default function MomentsComposer({
   }
 
   async function handleSend() {
-    if (!editor || !canSend) return
+    if (!editor || !canSend || inputBusy.current) return
     if (submittingRef.current || sentRef.current) return
+    inputBusy.current = true
+    let committed: LetterDocJSON
+    try { committed = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not finish your input.'); inputBusy.current = false; return }
+    inputBusy.current = false
+    if (!canSendLetter(committed, { aboveMax: false, submitting: false })) return
     submittingRef.current = true
     timingRef.current = startLetterSendTiming()
     setSending(true)
     setError(null)
 
-    const body = docToPlainBody(editor.getJSON() as LetterDocJSON)
+    const body = docToPlainBody(committed)
     const postcardPayload = buildPostcardPayload()
+    evaluatedDraft.current = { doc: committed, postcard: postcardPayload }
     const outcome = await evaluateSafety({
       surface: 'write_anytime',
       correspondenceId,
@@ -776,7 +791,25 @@ export default function MomentsComposer({
     setSending(true)
     setError(null)
 
-    const finalDoc = editor.getJSON() as LetterDocJSON
+    let currentDoc: LetterDocJSON
+    try { currentDoc = await settleWritingInput(editor); draftSave.flush() }
+    catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not finish your input.')
+      setSending(false)
+      submittingRef.current = false
+      finishFailedTiming('failed')
+      return
+    }
+    const evaluated = evaluatedDraft.current
+    if (!evaluated || JSON.stringify(stripTransientPhotoPreviews(currentDoc)) !== JSON.stringify(stripTransientPhotoPreviews(evaluated.doc)) || JSON.stringify(buildPostcardPayload()) !== JSON.stringify(evaluated.postcard)) {
+      setError(DRAFT_CHANGED)
+      setPendingWarning(null)
+      setSending(false)
+      submittingRef.current = false
+      finishFailedTiming('failed')
+      return
+    }
+    const finalDoc = evaluated.doc
     const body = docToPlainBody(finalDoc)
     const momentDrafts = docToMomentDrafts(finalDoc)
     const postcardPayload = buildPostcardPayload()
@@ -894,6 +927,7 @@ export default function MomentsComposer({
         timingRef.current.report.outcome = 'sent'
         timingRef.current.ackAt = performance.now()
       }
+      draftSave.cancel()
       clearLetterEditorDraft(draftKey)
       clearLetterPostcardDraft(draftKey)
       setPendingWarning(null)
@@ -938,12 +972,17 @@ export default function MomentsComposer({
     if (!editor || preparingPreview) return
     setPreparingPreview(true)
     try {
-      const descriptors = docToDraftMomentDescriptors(editor.getJSON() as LetterDocJSON)
+      const committed = await settleWritingInput(editor)
+      draftSave.flush()
+      setPreviewBody(docToPlainBody(committed))
+      const descriptors = docToDraftMomentDescriptors(committed)
       const supabase = createClient()
       const resolved = await resolveDraftPreviewMoments(descriptors, (imagePath) =>
         resolveLetterPhotoUrl(supabase, imagePath)
       )
       setPreviewMoments(resolved)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not prepare your preview.')
     } finally {
       setPreparingPreview(false)
     }
@@ -1013,6 +1052,7 @@ export default function MomentsComposer({
           </div>
         )}
         <WritingToolbar editor={editor} />
+        <div className="min-h-11"><EmojiSuggestions editor={editor} /></div>
         <EditorContent editor={editor} />
       </div>
 
@@ -1129,7 +1169,7 @@ export default function MomentsComposer({
 
       {previewMoments && (
         <LetterPreview
-          body={docToPlainBody(docJSON)}
+          body={previewBody}
           moments={previewMoments}
           postcard={postcardDraft}
           postcardCatalogEntry={postcardCatalogEntry}

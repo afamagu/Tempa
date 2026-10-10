@@ -41,6 +41,7 @@ export function baseWritingExtensions(): AnyExtension[] {
  */
 export const nativeWritingAttributes: Record<string, string> = {
   autocapitalize: 'sentences',
+  autocorrect: 'on',
   spellcheck: 'true',
   inputmode: 'text',
   'data-keep-keyboard': 'true',

@@ -72,7 +72,9 @@ describe('FirstLetterComposer — Safety-gated send (Checkpoint 3)', () => {
 
   it('re-reads the editor fresh inside sendLetter rather than trusting a value captured before the warning dialog opened', () => {
     const sendLetterBody = source.slice(source.indexOf('async function sendLetter'), source.indexOf('if (sent) {'))
-    expect(sendLetterBody).toContain('docToPlainBody(editor.getJSON()')
+    expect(sendLetterBody).toContain('await settleWritingInput(editor)')
+    expect(sendLetterBody).toContain('body !== docToPlainBody(currentDoc)')
+    expect(sendLetterBody).toContain('DRAFT_CHANGED')
   })
 })
 

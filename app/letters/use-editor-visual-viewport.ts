@@ -75,7 +75,7 @@ export function useEditorVisualViewport(rootRef: RefObject<HTMLElement | null>) 
         // editor. WebKit can transiently report a taller visual viewport while
         // the user drags. Shrinking here would move content under their finger.
         reservedInset = Math.max(reservedInset, inset)
-        root.style.paddingBottom = `${reservedInset + KEYBOARD_GUTTER_PX}px`
+        root.style.paddingBottom = `calc(${originalPaddingBottom || '0px'} + ${reservedInset + KEYBOARD_GUTTER_PX}px)`
       })
     }
 
@@ -84,15 +84,21 @@ export function useEditorVisualViewport(rootRef: RefObject<HTMLElement | null>) 
     const onFocusOut = () => syncViewport(true)
     const onTouchStart = () => {
       touching = true
+      window.cancelAnimationFrame(frame)
     }
     const onTouchEnd = () => {
       touching = false
       syncViewport()
     }
+    const onOrientationChange = () => {
+      reservedInset = 0
+      syncViewport(true)
+    }
 
     viewport.addEventListener('resize', onViewportResize)
     window.addEventListener('focusin', onFocusIn)
     window.addEventListener('focusout', onFocusOut)
+    window.addEventListener('orientationchange', onOrientationChange)
     document.addEventListener('touchstart', onTouchStart, { passive: true })
     document.addEventListener('touchend', onTouchEnd, { passive: true })
     document.addEventListener('touchcancel', onTouchEnd, { passive: true })
@@ -104,6 +110,7 @@ export function useEditorVisualViewport(rootRef: RefObject<HTMLElement | null>) 
       viewport.removeEventListener('resize', onViewportResize)
       window.removeEventListener('focusin', onFocusIn)
       window.removeEventListener('focusout', onFocusOut)
+      window.removeEventListener('orientationchange', onOrientationChange)
       document.removeEventListener('touchstart', onTouchStart)
       document.removeEventListener('touchend', onTouchEnd)
       document.removeEventListener('touchcancel', onTouchEnd)
