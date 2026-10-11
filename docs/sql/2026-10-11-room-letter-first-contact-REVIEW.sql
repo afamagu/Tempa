@@ -463,9 +463,7 @@ begin
     return false;
   end if;
 end;
-$function$
-
-
+$function$;
 CREATE OR REPLACE FUNCTION public.record_safety_evaluation(p_user_id uuid, p_surface text, p_context_id uuid, p_question_answer_id uuid, p_secondary_context_id uuid, p_title text, p_topics text[], p_postcard jsonb, p_body text, p_risk_band text, p_reason_codes text[], p_mutation_disposition text, p_escalate_case boolean)
  RETURNS TABLE(evaluation_id uuid, expires_at timestamp with time zone, is_new boolean)
  LANGUAGE plpgsql
@@ -691,9 +689,7 @@ begin
 
   return query select v_new_id, v_expires_at, true;
 end;
-$function$
-
-
+$function$;
 CREATE OR REPLACE FUNCTION tempa_private.consume_safety_evaluation(p_evaluation_id uuid, p_user_id uuid, p_surface text, p_context_id uuid, p_question_answer_id uuid, p_secondary_context_id uuid, p_title text, p_topics text[], p_postcard jsonb, p_body text, p_warning_acknowledged boolean, p_new_content_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -826,9 +822,7 @@ begin
     on conflict (letter_id) do nothing;
   end if;
 end;
-$function$
-
-
+$function$;
 CREATE OR REPLACE FUNCTION tempa_private.evaluate_behavior(p_subject_user_id uuid, p_first_contact_outreach_fingerprint text DEFAULT NULL::text, p_new_content_reason_codes text[] DEFAULT NULL::text[], p_report_check boolean DEFAULT false, p_block_check boolean DEFAULT false)
  RETURNS void
  LANGUAGE plpgsql
@@ -1040,9 +1034,7 @@ begin
   end if;
 
 end;
-$function$
-
-
+$function$;
 CREATE OR REPLACE FUNCTION tempa_private.safety_target_key(p_user_id uuid, p_surface text, p_context_id uuid)
  RETURNS text
  LANGUAGE plpgsql
@@ -1084,9 +1076,7 @@ begin
 
   return p_surface || ':' || coalesce(p_context_id::text, '');
 end;
-$function$
-
-
+$function$;
 CREATE OR REPLACE FUNCTION tempa_private.send_first_letter_core(p_recipient_id uuid, p_question_answer_id uuid, p_room_letter_id uuid, p_body text, p_safety_evaluation_id uuid, p_warning_acknowledged boolean DEFAULT false)
  RETURNS public.letters_for_participant
  LANGUAGE plpgsql
@@ -1366,9 +1356,7 @@ begin
 
   return result;
 end;
-$function$
-
-
+$function$;
 create or replace function public.send_first_letter(p_recipient_id uuid, p_question_answer_id uuid, p_body text, p_safety_evaluation_id uuid, p_warning_acknowledged boolean DEFAULT false)
 returns public.letters_for_participant language plpgsql security definer
 set search_path to 'pg_catalog' as $$
