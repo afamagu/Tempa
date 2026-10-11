@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import ISO6391 from 'iso-639-1'
@@ -25,6 +25,8 @@ export default function ProfileForm({ userId }: { userId: string }) {
   const router = useRouter()
 
   const [pseudonym,setPseudonym] = useState('')
+  const [nameStatus,setNameStatus] = useState<'idle'|'checking'|'reserved'|'taken'|'available'>('idle')
+  const nameRequest=useRef(0)
   const [country,setCountry] = useState('')
   const [languages,setLanguages] = useState<string[]>([])
   const [aiPreference,setAiPreference] = useState('')
@@ -53,9 +55,45 @@ export default function ProfileForm({ userId }: { userId: string }) {
     description:writingDescription(x.value as never),
   }))
 
+  function changeName(next:string) {
+    ++nameRequest.current
+    setPseudonym(next)
+    setSuggestions([])
+    if(isReservedPseudonym(next)){
+      setNameStatus('reserved')
+      setError(t('reserved'))
+    }else if(next.trim().length<3||next.trim().length>24||!/^[A-Za-z0-9 -]+$/.test(next.trim())){
+      setNameStatus('idle')
+      setError(null)
+    }else{
+      setNameStatus('checking')
+      setError(null)
+    }
+  }
+
+  useEffect(()=>{
+    const name=pseudonym.trim()
+    if(!name||isReservedPseudonym(name)||name.length<3||
+       name.length>24||!/^[A-Za-z0-9 -]+$/.test(name))return
+    const current=nameRequest.current
+    let cancelled=false
+    const timeout=setTimeout(async()=>{
+      try {
+        const {data, error}=await createClient().rpc('is_pseudonym_available',{candidate:name})
+        if(cancelled||nameRequest.current!==current)return
+        if(error){setNameStatus('idle');return}
+        setNameStatus(data?'available':'taken')
+        if(!data)setError(arrival('taken'))
+      }catch{
+        if(!cancelled&&nameRequest.current===current)setNameStatus('idle')
+      }
+    },500)
+    return ()=>{cancelled=true;clearTimeout(timeout)}
+  },[pseudonym,arrival])
+
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if(busy)return
+    if(busy||nameStatus==='checking'||nameStatus==='reserved'||nameStatus==='taken')return
     setError(null)
     setSuggestions([])
     const name=pseudonym.trim()
@@ -113,12 +151,14 @@ export default function ProfileForm({ userId }: { userId: string }) {
     <form onSubmit={submit} className="mt-10 space-y-8">
       <div className="space-y-2">
         <label htmlFor="pseudonym" className={fieldLabelClass}>{t('nameLabel')}</label>
-        <input id="pseudonym" value={pseudonym} onChange={e=>setPseudonym(e.target.value)}
-          autoComplete="off" maxLength={24} placeholder={t('namePlaceholder')}
+        <input id="pseudonym" value={pseudonym} onChange={e=>changeName(e.target.value)}
+          autoComplete="off" maxLength={24} aria-invalid={nameStatus==='reserved'||nameStatus==='taken'} placeholder={t('namePlaceholder')}
           className="min-h-12 w-full rounded-md border border-foreground/20 bg-background px-4 text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" />
         <p className={helperTextClass}>{t('nameHelp')}</p>
+        {nameStatus==='checking'&&<p role="status" className={helperTextClass}>{t('checking')}</p>}
+        {nameStatus==='available'&&<p role="status" className="text-sm text-accent">{t('available')}</p>}
         {suggestions.length>0&&<div className="flex flex-wrap gap-2">{suggestions.map(n=>
-          <button type="button" key={n} onClick={()=>setPseudonym(n)}
+          <button type="button" key={n} onClick={()=>changeName(n)}
             className="min-h-11 rounded-md border border-foreground/20 px-3 text-sm">{n}</button>)}</div>}
       </div>
       <div className="space-y-2">
@@ -141,7 +181,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
         {arrival('browse')}
       </p>
       {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
-      <button type="submit" disabled={busy} className="min-h-12 w-full rounded-md bg-accent px-5 py-3 text-[15px] font-medium text-accent-foreground disabled:opacity-60">
+      <button type="submit" disabled={busy||nameStatus==='checking'||nameStatus==='taken'||nameStatus==='reserved'} className="min-h-12 w-full rounded-md bg-accent px-5 py-3 text-[15px] font-medium text-accent-foreground disabled:opacity-60">
         {busy?arrival('saving'):arrival('continue')}
       </button>
     </form>
