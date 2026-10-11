@@ -13,9 +13,9 @@ import { primaryButtonClass } from '@/app/profile/ui'
  */
 export default function WriteDispatchButton() {
   return (
-    <Link href="/board/write" className={`gap-2 ${primaryButtonClass}`}>
+    <Link href="/room/write" className={`gap-2 ${primaryButtonClass}`}>
       <QuillIcon className="h-4 w-4" />
-      Write a Dispatch
+      Leave a letter
     </Link>
   )
 }
