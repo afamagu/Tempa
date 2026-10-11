@@ -45,6 +45,7 @@ BEGIN
         AND d.status = 'published'
         AND d.moderation_status = 'visible'
         AND coalesce(d.published_as,'member') = 'member'
+        AND tempa_private.author_content_publicly_visible(d.author_id)
       ORDER BY d.published_at DESC, d.id DESC
       LIMIT 1
     ) latest ON true
