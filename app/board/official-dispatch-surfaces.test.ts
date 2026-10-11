@@ -44,7 +44,7 @@ describe('authenticated reader', () => {
     expect(reader).toContain('allowPin={isMemberDispatch}')
     expect(reader).toContain('editHref={officialEditHref}')
     expect(authorMenu).toContain('{allowPin && (')
-    expect(authorMenu).toContain('href={editHref ?? `/board/${dispatchId}/edit`}')
+    expect(authorMenu).toContain('href={editHref ?? `/room/letters/${dispatchId}/edit`}')
   })
 
   it('member edit route refuses official rows (redirects to the staff editor)', () => {
