@@ -4,12 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import {
   getWaitingLetterCount,
   getActiveCorrespondencePartnerIds,
-  getContactedAnswerIds,
   getFirstContact,
   isEffectivelyExpired,
 } from '@/lib/letters'
-import { getMyAnswers } from '@/lib/questions'
-import { canWriteToMind } from '@/app/minds/[userId]/page'
 import {
   getRelationshipCapacity,
   newCorrespondenceUnavailableMessage,
@@ -64,6 +61,7 @@ import LetterheadPostcard from '@/app/letters/letterhead-postcard'
 import DispatchIdentityLabel, { SponsorCta } from '../dispatch-identity-label'
 import { dispatchShareText } from '@/lib/dispatch-identity'
 import { getDispatchWritingStyles } from '@/lib/writing-style-data'
+import { roomLetterContactPath, roomLetterPath, roomLetterEditPath } from '@/lib/room-paths'
 
 function FlagIcon() {
   return (
@@ -107,10 +105,10 @@ export default async function DispatchPage({
     if (typeof value === 'string') returnQuery.set(key, value)
     else if (Array.isArray(value)) value.forEach((entry) => returnQuery.append(key, entry))
   }
-  const dispatchReturnHref = `/board/${dispatch.id}${returnQuery.size ? `?${returnQuery.toString()}` : ''}`
+  const dispatchReturnHref = `${roomLetterPath(dispatch.id)}${returnQuery.size ? `?${returnQuery.toString()}` : ''}`
   const boardReturnHref = trailContext
-    ? `/board?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
-    : '/board'
+    ? `/room?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
+    : '/room'
 
   const isAuthor = dispatch.authorId === user.id
   const isMemberDispatch = dispatch.identity.kind === 'member'
@@ -124,14 +122,14 @@ export default async function DispatchPage({
   if (dispatch.moderationStatus === 'hidden') {
     const waitingCount = await getWaitingLetterCount(supabase, user.id)
     return (
-      <AppShell active="board" waitingLetterCount={waitingCount}>
+      <AppShell active="room" waitingLetterCount={waitingCount}>
         <main className="flex min-h-screen items-center justify-center p-6">
           <div className="w-full max-w-sm space-y-4 text-center">
             <p className={sectionTitleClass}>{dispatch.title}</p>
             <p className={helperTextClass}>Hidden by TEMPA.</p>
             <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
               <BackArrowIcon />
-              Back to The Board
+              Back to The Room
             </Link>
           </div>
         </main>
@@ -151,9 +149,7 @@ export default async function DispatchPage({
     worthReading,
     nextTrailItems,
     postcard,
-    authorAnswers,
     activePartnerIds,
-    contactedAnswerIds,
     readingIntroSeen,
     dispatchWritingStyles,
     outgoingFirstContact,
@@ -173,9 +169,7 @@ export default async function DispatchPage({
     isAuthor ? Promise.resolve(false) : isDispatchWorthReading(supabase, user.id, dispatch.id),
     trailContext && !fromFiniteBoard ? getNextTrailItems(supabase, trailContext, dispatch.id) : Promise.resolve([]),
     getDispatchPostcard(supabase, dispatch.id),
-    isAuthor || !isMemberDispatch ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId),
     isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, user.id),
-    isAuthor || !isMemberDispatch ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, user.id),
     hasCompletedGuide(supabase, user.id, 'dispatch_reading'),
     getDispatchWritingStyles(supabase, [dispatch.id]),
     isAuthor || !isMemberDispatch ? Promise.resolve(null) : getFirstContact(supabase, user.id, dispatch.authorId),
@@ -200,17 +194,8 @@ export default async function DispatchPage({
     replyExists: replies.length > 0,
   })
 
-  const authorPrimaryAnswer = authorAnswers.find((a) => a.isPrimary) ?? null
   const alreadyCorrespondingWithAuthor = isMemberDispatch && activePartnerIds.has(dispatch.authorId)
-  const authorPrimaryAnswerAlreadyContacted = authorPrimaryAnswer
-    ? contactedAnswerIds.has(authorPrimaryAnswer.id)
-    : false
-  const structurallyCanWriteToAuthor = isMemberDispatch && canWriteToMind({
-    isSelf: isAuthor,
-    alreadyCorresponding: alreadyCorrespondingWithAuthor,
-    hasCurrentAnswer: authorPrimaryAnswer !== null,
-    currentAnswerAlreadyContacted: authorPrimaryAnswerAlreadyContacted || outgoingFirstContact !== null,
-  })
+  const structurallyCanWriteToAuthor = isMemberDispatch && !isAuthor && !alreadyCorrespondingWithAuthor
   const incomingIsLive = incomingFirstContact?.status === 'sent' && !isEffectivelyExpired(incomingFirstContact, false)
   const outgoingIsLive = outgoingFirstContact?.status === 'sent' && !isEffectivelyExpired(outgoingFirstContact, false)
   const pendingFirstContact = outgoingIsLive ? outgoingFirstContact : incomingIsLive ? incomingFirstContact : null
@@ -222,12 +207,12 @@ export default async function DispatchPage({
   const initialPosition = clampReadingPosition(viewState?.lastParagraphIndex ?? 0, paragraphCount)
 
   return (
-    <AppShell active="board" waitingLetterCount={waitingCount}>
+    <AppShell active="room" waitingLetterCount={waitingCount}>
       <main className="min-h-screen flex justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
           <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
             <BackArrowIcon />
-            The Board
+            The Room
           </Link>
 
           <div className="space-y-4">
@@ -292,7 +277,7 @@ export default async function DispatchPage({
                         targetId={dispatch.id}
                         triggerClassName={iconButtonClass}
                         triggerLabel={<FlagIcon />}
-                        triggerAriaLabel="Report this Dispatch"
+                        triggerAriaLabel="Report this letter"
                         panelClassName="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-foreground/10 bg-background p-3 shadow-md"
                       />
                     </div>
@@ -318,9 +303,9 @@ export default async function DispatchPage({
             )}
 
             {!readingIntroSeen && (
-              <FeatureIntroduction guideKey="dispatch_reading" title="Reading a Dispatch" ctaLabel="Start reading">
+              <FeatureIntroduction guideKey="dispatch_reading" title="Reading a letter" ctaLabel="Start reading">
                 <p>
-                  Take your time. A Dispatch may have little Moments tucked into the writing —
+                  Take your time. A letter may have little Moments tucked into the writing —
                   glimpses from the writer&rsquo;s world that you can open as you go. At the end,
                   you can mark it Worth Reading, reply publicly, or write privately if
                   you&rsquo;d like to know the writer.
@@ -359,12 +344,12 @@ export default async function DispatchPage({
                       <Link href={`/letters/${pendingFirstContact.id}`} className={quietLinkClass}>
                         View your letter with {dispatch.authorPseudonym}
                       </Link>
-                    ) : showWriteToAuthor && authorPrimaryAnswer ? (
+                    ) : showWriteToAuthor ? (
                       <Link
-                        href={`/write/${dispatch.authorId}?a=${authorPrimaryAnswer.id}&d=${dispatch.id}&source=dispatch&returnTo=${encodeURIComponent(dispatchReturnHref)}`}
+                        href={roomLetterContactPath(dispatch.authorId, dispatch.id)}
                         className={quietLinkClass}
                       >
-                        Write from this
+                        Write to {dispatch.authorPseudonym}
                       </Link>
                     ) : structurallyCanWriteToAuthor && newCorrespondenceMessage ? (
                       <span className={helperTextClass}>{newCorrespondenceMessage}</span>
@@ -394,7 +379,7 @@ export default async function DispatchPage({
             <div className="border-t border-foreground/10 pt-4">
               <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
                 <BackArrowIcon />
-                Back to The Board
+                Back to The Room
               </Link>
             </div>
           </div>
