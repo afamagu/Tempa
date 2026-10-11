@@ -7,7 +7,24 @@ CREATE TEMP TABLE room_reviewed_answer_ids (answer_id uuid PRIMARY KEY) ON COMMI
 
 -- The reviewer must INSERT exact answer UUIDs here after reading the
 -- original question and response. Leave blank to fail closed.
--- INSERT INTO room_reviewed_answer_ids(answer_id) VALUES ('uuid-from-review');
+-- Editorial/house accounts are not represented as ordinary members.
+-- The 13 rows below are a non-destructive candidate manifest prepared by
+-- examining all 15 current visible answers. The two house/editorial answers
+-- are deliberately excluded. Live content eligibility is rechecked below.
+INSERT INTO room_reviewed_answer_ids(answer_id) VALUES
+('d201938b-6fb7-4372-acdf-990ea8e4f0a2'),
+('499515de-9377-4035-8c5e-a8cff83436bf'),
+('b8997358-6877-45e0-a090-d30979d90350'),
+('b0514861-bc79-46a4-b105-0675e199b8e5'),
+('f27eaa6e-6a6c-41ae-88ce-6968056574fb'),
+('9c7a40e7-8f33-4984-8cde-0f3a1d25445d'),
+('3b022585-6913-4d45-a158-69d12005b49d'),
+('1430ae81-46d8-4a2d-a8ae-66bd462c9a01'),
+('93515012-2b09-4adf-84c4-b536991962a1'),
+('555d8e8f-ae2b-4fa4-bc03-417cd74aff87'),
+('b4c6332a-500e-488c-95d7-6a596d5f8955'),
+('281b6e25-0411-4472-a1ec-4f3272765c35'),
+('dfb49da9-08a8-43cb-b1f5-13775d1d6d28');
 
 DO $guard$
 BEGIN
@@ -20,8 +37,8 @@ BEGIN
     FROM room_reviewed_answer_ids a
     LEFT JOIN public.question_answers qa ON qa.id=a.answer_id
     LEFT JOIN public.questions q ON q.id=qa.question_id
-    LEFT JOIN public.public_profiles pp ON pp.id=qa.user_id
-    WHERE qa.id IS NULL OR q.id IS NULL OR pp.id IS NULL
+    LEFT JOIN public.profiles pp ON pp.id=qa.user_id
+    WHERE qa.id IS NULL OR q.id IS NULL OR pp.id IS NULL OR pp.is_editorial IS TRUE
       OR qa.moderation_status IS DISTINCT FROM 'visible'
       OR coalesce(btrim(qa.body),'')=''
       OR coalesce(btrim(q.prompt),'')=''
@@ -71,7 +88,9 @@ WITH chosen AS (
   FROM room_reviewed_answer_ids a
   JOIN public.question_answers qa ON qa.id=a.answer_id
   JOIN public.questions q ON q.id=qa.question_id
+  JOIN public.profiles member ON member.id=qa.user_id
   WHERE qa.moderation_status='visible'
+    AND member.is_editorial IS DISTINCT FROM true
     AND public.dispatch_visible_length(qa.body)<=200000
     AND tempa_private.author_content_publicly_visible(qa.user_id)
     AND NOT EXISTS (SELECT 1 FROM public.dispatches d WHERE d.origin_answer_id=qa.id)
