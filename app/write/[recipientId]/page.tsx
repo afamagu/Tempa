@@ -139,6 +139,38 @@ export default async function WriteToPage({
         : false
     const effectiveStatus = resolveFirstContactDisplayStatus(existing.status, establishedForExistingViewer)
 
+    if (followUp === '1' && attemptState.canFollowUp && !existing.questionAnswerId) {
+      const [{ data: source }, capacity] = await Promise.all([
+        supabase.from('dispatch_letter_contexts').select('dispatch_id,title_snapshot').eq('letter_id', existing.id).maybeSingle(),
+        getRelationshipCapacity(supabase),
+      ])
+      if (source?.dispatch_id) {
+        const capacityMessage = newCorrespondenceUnavailableMessage(capacity)
+        if (capacityMessage) {
+          return <main className="min-h-screen flex items-center justify-center p-6">
+            <div className="w-full max-w-md space-y-5 py-10 text-center">
+              <p className={sectionLabelClass}>One follow-up</p>
+              <p className={helperTextClass}>{capacityMessage}</p>
+              <Link href={`/letters/with/${recipientId}`} className={secondaryButtonClass}>Back to {recipient.pseudonym}</Link>
+            </div>
+          </main>
+        }
+        return <FirstLetterComposer
+          key={`${recipientId}:room-follow-up`}
+          recipientId={recipientId}
+          recipientPseudonym={recipient.pseudonym}
+          questionAnswerId={null}
+          questionPrompt={null}
+          roomLetterId={source.dispatch_id}
+          dispatchId={source.dispatch_id}
+          dispatchTitle={source.title_snapshot}
+          backHref={`/letters/with/${recipientId}`}
+          backLabel={recipient.pseudonym}
+          isFollowUp
+        />
+      }
+    }
+
     if (followUp === '1' && attemptState.canFollowUp && existing.questionAnswerId) {
       const [{ data: originalAnswer }, capacity] = await Promise.all([
         supabase
