@@ -151,7 +151,7 @@ export const TITLE_MAX_CHARS = 140
  * migration's own RAISE EXCEPTION messages, worded identically).
  */
 export function dispatchTitleError(title: string): string | null {
-  if (title.trim().length === 0) return 'A Dispatch needs a title.'
+  if (title.trim().length === 0) return 'A letter needs a title.'
   if (title.length > TITLE_MAX_CHARS) return 'Title is too long.'
   return null
 }
