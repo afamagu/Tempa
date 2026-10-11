@@ -36,6 +36,7 @@ export type AccountEntryState = {
   /** See lib/onboarding.ts — optional; only the proxy's entry-state read
    * supplies it. */
   needsWritingStyle?: boolean
+  firstArrivalPending?: boolean
 }
 
 /**
@@ -75,6 +76,7 @@ export function resolveAccountEntryDestination(state: AccountEntryState, request
       hasProfile: state.hasProfile,
       onboardingStage: state.onboardingStage,
       needsWritingStyle: state.needsWritingStyle,
+      firstArrivalPending: state.firstArrivalPending,
     },
     requestedDestination
   )
