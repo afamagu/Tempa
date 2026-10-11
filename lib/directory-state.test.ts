@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { directoryUrl, parseDirectoryFilters } from './directory-state'
 
 describe('Discover People URL contract', () => {
-  it('defaults to writers who left a Room letter', () => {
+  it('defaults to writers who left a Board letter', () => {
     expect(parseDirectoryFilters({})).toEqual({})
-    expect(directoryUrl(parseDirectoryFilters({}))).toBe('/letters/discover')
+    expect(directoryUrl(parseDirectoryFilters({}))).toBe('/board/people')
   })
 
   it('makes profiles without letters an explicit opt-in', () => {
     expect(parseDirectoryFilters({ letters: 'all' }).letters).toBe('all')
-    expect(directoryUrl({ country:'Japan',letters:'all' })).toBe('/letters/discover?country=Japan&letters=all')
+    expect(directoryUrl({ country:'Japan',letters:'all' })).toBe('/board/people?country=Japan&letters=all')
     expect(parseDirectoryFilters({ letters: 'on' }).letters).toBeUndefined()
   })
 
   it('keeps country and language filters in return URLs and discards unknown redirect params', () => {
     const filters = parseDirectoryFilters({ country:'Nigeria', language:'English',returnTo:'https://evil.example' })
-    expect(directoryUrl(filters,true)).toBe('/letters/discover?country=Nigeria&language=English&restore=1')
-    expect(directoryUrl(filters)).toBe('/letters/discover?country=Nigeria&language=English')
+    expect(directoryUrl(filters,true)).toBe('/board/people?country=Nigeria&language=English&restore=1')
+    expect(directoryUrl(filters)).toBe('/board/people?country=Nigeria&language=English')
   })
 
   it('preserves established advanced filters without making them default', () => {
