@@ -24,7 +24,7 @@ function item(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
 describe('BoardShelfCard', () => {
   it('links to the Dispatch reader', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
-    expect(html).toContain('href="/room/letters/11111111-2222-4333-8444-555555555555"')
+    expect(html).toContain('href="/board/letters/11111111-2222-4333-8444-555555555555"')
   })
 
   it('shows title, excerpt, pseudonym, and date — writing-first content', () => {
@@ -84,7 +84,7 @@ describe('BoardShelfCard', () => {
   it('never nests the profile link inside the Dispatch-reader link — two sibling anchors, not one inside the other', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
     const profileLinkEnd = html.indexOf('</a>', html.indexOf('href="/minds/author-1"'))
-    const readerLinkStart = html.indexOf('href="/room/letters/11111111-2222-4333-8444-555555555555"')
+    const readerLinkStart = html.indexOf('href="/board/letters/11111111-2222-4333-8444-555555555555"')
     expect(profileLinkEnd).toBeGreaterThan(-1)
     expect(profileLinkEnd).toBeLessThan(readerLinkStart)
   })
@@ -96,12 +96,12 @@ describe('BoardShelfCard', () => {
       const html = renderToStaticMarkup(
         <BoardShelfCard dispatch={item()} trailQuery="s=2026-09-01T00%3A00%3A00Z&seed=abc&tier=1&aseq=2&shash=5" />
       )
-      expect(html).toContain('href="/room/letters/11111111-2222-4333-8444-555555555555?s=2026-09-01T00%3A00%3A00Z&amp;seed=abc&amp;tier=1&amp;aseq=2&amp;shash=5"')
+      expect(html).toContain('href="/board/letters/11111111-2222-4333-8444-555555555555?s=2026-09-01T00%3A00%3A00Z&amp;seed=abc&amp;tier=1&amp;aseq=2&amp;shash=5"')
     })
 
     it('omits the query string entirely when trailQuery is not supplied', () => {
       const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
-      expect(html).toContain('href="/room/letters/11111111-2222-4333-8444-555555555555"')
+      expect(html).toContain('href="/board/letters/11111111-2222-4333-8444-555555555555"')
       expect(html).not.toContain('?')
     })
   })
