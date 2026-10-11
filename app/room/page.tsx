@@ -118,7 +118,7 @@ export default async function RoomPage({
           <p className="text-[13px] text-foreground/60">You can leave something here, too. It doesn’t need to be a grand story.</p>
           <div className="mt-4 flex flex-wrap items-center gap-4">
             <Link href={ROOM_WRITE} className="text-[14px] underline underline-offset-4">Leave your first letter</Link>
-            <Link href="/letters/discover" className="text-[14px] underline underline-offset-4">Discover people</Link>
+            <Link href="/letters/discover" className="text-[14px] underline underline-offset-4">Browse people by place</Link>
           </div>
         </div>
       </main>
