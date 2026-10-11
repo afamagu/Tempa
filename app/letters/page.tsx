@@ -15,7 +15,6 @@ import { pageTitleClass, helperTextClass, sectionLabelClass } from '@/app/profil
 import AppShell from '@/app/app-shell'
 import MemberNotices from '@/app/member-notices'
 import LetterboxSearch from './letterbox-search'
-import LettersTabs from './letters-tabs'
 import ReplyReminders from './reply-reminders'
 import { getTranslations } from 'next-intl/server'
 
@@ -52,7 +51,7 @@ export default async function LettersPage() {
         <div className="w-full max-w-5xl">
           <MemberNotices />
           <h1 className={pageTitleClass}>{t('heading')}</h1>
-          <LettersTabs active="correspondence" />
+          <p className={`${helperTextClass} mb-7 mt-3`}>Your private letters and the people you correspond with.</p>
 
           {capacitySummary && (
             <div className="mb-7 border-l-2 border-accent/35 pl-4">
