@@ -40,6 +40,6 @@ describe('minimal first-arrival identity', () => {
 
   it('has restrained, actionable error feedback without technical database text', () => {
     expect(source).toContain('role="alert"')
-    expect(source).toContain('We could not save these details. Please try again.')
+    expect(source).toContain("arrival('saveError')")
   })
 })
