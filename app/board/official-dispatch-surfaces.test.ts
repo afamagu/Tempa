@@ -31,7 +31,7 @@ describe('authenticated reader', () => {
   })
 
   it('member header (Mark, pseudonym, country, profile link) is untouched; official rows use DispatchIdentityLabel', () => {
-    expect(reader).toContain('{isMemberDispatch ? (\n                <Link\n                  href={`/minds/${dispatch.authorId}`}')
+    expect(reader).toContain('{isMemberDispatch ? (\n                <Link href={`/minds/${dispatch.authorId}`}')
     expect(reader).toContain('<DispatchIdentityLabel identity={dispatch.identity} size="md" />')
   })
 
