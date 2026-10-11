@@ -56,10 +56,10 @@ describe('Dispatch detail page — correspondence entry point', () => {
     return sourceBlock(text, actionRowMarker, actionRowEndMarker)
   }
 
-  it('reuses the existing structural correspondence predicate rather than creating a separate Dispatch rule', () => {
-    expect(source).toContain("import { canWriteToMind } from '@/app/minds/[userId]/page'")
-    expect(source).not.toMatch(/function\s+canWriteToMind/)
-    expect(source).toContain('canWriteToMind({')
+  it('starts Room-letter-origin first contact without depending on a Question answer', () => {
+    expect(source).toContain('const structurallyCanWriteToAuthor = isMemberDispatch && !isAuthor && !alreadyCorrespondingWithAuthor')
+    expect(source).toContain('roomLetterContactPath(dispatch.authorId, dispatch.id)')
+    expect(source).not.toContain('getMyAnswers(supabase, dispatch.authorId)')
   })
 
   it('adds the canonical relationship-capacity read instead of calculating capacity locally', () => {
@@ -70,18 +70,18 @@ describe('Dispatch detail page — correspondence entry point', () => {
   })
 
   it('does not fetch private-entry state for the author or non-member Dispatches', () => {
-    expect(source).toContain('isAuthor || !isMemberDispatch ? Promise.resolve([]) : getMyAnswers(supabase, dispatch.authorId)')
+    expect(source).not.toContain('getMyAnswers(supabase, dispatch.authorId)')
     expect(source).toContain('isAuthor || !isMemberDispatch ? Promise.resolve(null) : getRelationshipCapacity(supabase)')
   })
 
   it('never offers self-correspondence', () => {
-    expect(source).toContain('isSelf: isAuthor,')
+    expect(source).toContain('isMemberDispatch && !isAuthor && !alreadyCorrespondingWithAuthor')
     expect(source).toContain('{!isAuthor && (')
   })
 
   it('routes a fresh eligible person into the existing private-write flow', () => {
-    expect(source).toContain('d=${dispatch.id}&source=dispatch&returnTo=${encodeURIComponent(dispatchReturnHref)}')
-    expect(source).toContain('Write from this')
+    expect(source).toContain('roomLetterContactPath(dispatch.authorId, dispatch.id)')
+    expect(source).toContain('Write to {dispatch.authorPseudonym}')
   })
 
   it('opens existing correspondence instead of offering another first letter', () => {
@@ -156,11 +156,11 @@ describe('Dispatch detail page — attached Postcard', () => {
 describe('Dispatch detail page — Phase 11 origin and finite Board return', () => {
   it('preserves the exact Dispatch as the private-letter return destination', () => {
     expect(source).toContain('const dispatchReturnHref =')
-    expect(source).toContain('returnTo=${encodeURIComponent(dispatchReturnHref)}')
+    expect(source).toContain('roomLetterPath(dispatch.id)')
   })
 
   it('returns a finite-session reader to the same Board session', () => {
-    expect(source).toContain('const boardReturnHref = trailContext')
+    expect(source).toContain('const boardReturnHref = explicitReturn ?? (trailContext')
     expect(source).toContain('sessionStartedAt')
     expect(source).toContain('seed')
     expect((source.match(/href=\\{boardReturnHref\\}/g) ?? []).length).toBeGreaterThanOrEqual(1)
