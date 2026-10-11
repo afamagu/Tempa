@@ -177,7 +177,7 @@ describe('DispatchComposer — edit mode (item 11)', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" mode="edit" existingDispatch={existingDispatch} />
     )
-    expect(html).toContain('href="/room/letters/dispatch-1"')
+    expect(html).toContain('href="/board/letters/dispatch-1"')
   })
 
   it('labels the screen "Edit Dispatch"', () => {
