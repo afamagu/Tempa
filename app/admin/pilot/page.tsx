@@ -18,7 +18,7 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
 export default async function AdminPilotPage() {
   const supabase = await createClient()
   if (!(await isStaff(supabase, 'admin'))) {
-    return <p className="text-sm text-red-700">Pilot controls are limited to admins.</p>
+    return <p className="text-sm text-red-700">Invitation controls are limited to administrators.</p>
   }
 
   const [healthResult, invitesResult] = await Promise.all([
@@ -32,7 +32,7 @@ export default async function AdminPilotPage() {
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <h1 className={sectionTitleClass}>Founding Correspondents Pilot</h1>
+        <h1 className={sectionTitleClass}>Invitations and early members</h1>
         <p className={adminMetadataClass}>
           Closed cohort health. Aggregate relationship metadata only — never letter bodies or popularity scoring.
         </p>
@@ -45,7 +45,7 @@ export default async function AdminPilotPage() {
           <section className="space-y-3">
             <h2 className="text-[17px] font-medium text-foreground">Cohort</h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Pilot members" value={health.cohortMembers} hint="Hard ceiling: 200 accounts" />
+              <Stat label="Members with access" value={health.cohortMembers} hint="Current admission limit: 200 accounts" />
               <Stat label="Pending invitations" value={health.pendingInvites} />
               <Stat label="Profiles created" value={health.profilesCreated} />
             </div>
@@ -101,7 +101,7 @@ export default async function AdminPilotPage() {
 
       <section className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-[17px] font-medium text-foreground">Invite a Founding Correspondent</h2>
+          <h2 className="text-[17px] font-medium text-foreground">Approve a new member</h2>
           <p className={adminMetadataClass}>
             The invitation is bound to the email address. Existing accounts are already grandfathered.
           </p>
@@ -110,7 +110,7 @@ export default async function AdminPilotPage() {
 
         <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10 bg-background">
           {invitesResult.data.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-muted">No pilot invitations yet.</p>
+            <p className="px-4 py-6 text-center text-sm text-muted">No invitations have been added yet.</p>
           ) : (
             invitesResult.data.map((invite) => (
               <div key={invite.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
@@ -130,7 +130,7 @@ export default async function AdminPilotPage() {
       </section>
 
       <section className="rounded-md border border-foreground/10 bg-background px-4 py-4">
-        <h2 className="text-[16px] font-medium text-foreground">Pilot guardrails</h2>
+        <h2 className="text-[16px] font-medium text-foreground">Admission safeguards</h2>
         <p className={adminMetadataClass}>
           Five active/committed correspondences. Maximum two unresolved outgoing first letters. No paid capacity expansion, boosts, priority delivery, read receipts, last-seen, streaks, likes or follower mechanics.
         </p>
