@@ -12,7 +12,7 @@
   "SignIn": {
     "tagline": "Une façon plus humaine de créer du lien",
     "signIn": "Se connecter",
-    "createAccountHeading": "Entrer dans le pilote des Founding Correspondents",
+    "createAccountHeading": "Rejoindre Tempa",
     "pilotInviteNote": "Tempa est actuellement accessible sur invitation uniquement. Utilisez la même adresse e-mail que celle qui a reçu votre invitation.",
     "continueWithGoogle": "Continuer avec Google",
     "redirecting": "Redirection…",
@@ -476,5 +476,44 @@
     "saved": "Préférence enregistrée.",
     "failed": "Impossible d’enregistrer. Réessayez.",
     "unavailable": "Préférences indisponibles. Rechargez la page et réessayez."
+  },
+  "Welcome": {
+    "eyebrow": "Pour commencer",
+    "title": "Bienvenue sur Tempa.",
+    "intro": "Ici, chacun peut laisser des lettres sur les petits moments de sa vie.",
+    "body": "Vous pouvez lire, découvrir quelqu’un et écrire quand vous en avez envie. Rien ne vous oblige à écrire pour commencer.",
+    "overview": "Découvrir Tempa",
+    "board": "Le Tableau",
+    "boardHelp": "Des lettres ouvertes laissées par les membres. Lisez, découvrez des personnes ou épinglez votre propre lettre.",
+    "letterbox": "Boîte aux lettres",
+    "letterboxHelp": "Vos lettres privées, envoyées, reçues et échangées.",
+    "home": "Accueil",
+    "homeHelp": "Ce qui compte pour vous au fil de vos rencontres.",
+    "you": "Vous",
+    "youHelp": "Votre profil et vos préférences, à votre rythme.",
+    "button": "Entrer sur le Tableau",
+    "replay": "Vous retrouverez cette présentation dans Vous → Guide Tempa."
+  },
+  "Board": {
+    "tagline": "Lettres laissées ici",
+    "intro": "Des lettres ouvertes sur des vies ordinaires. Lisez ce qui vous attire, ou laissez un mot.",
+    "open": "Lettres ouvertes",
+    "people": "Personnes",
+    "pin": "Épingler une lettre",
+    "pinnedHint": "Vous pouvez aussi laisser une lettre. Un jour ordinaire suffit.",
+    "pinFirst": "Épingler une lettre ouverte",
+    "find": "Découvrir des personnes",
+    "findHeading": "Trouver quelqu’un à qui écrire",
+    "findHelp": "Lisez des lettres ouvertes ou cherchez des personnes par lieu, langue ou centres d’intérêt.",
+    "filters": "Rechercher par lieu, langue ou intérêt",
+    "peopleHelp": "Commencez par une lettre qui vous a touché, ou cherchez plus précisément."
+  },
+  "FirstArrivalProfile": {
+    "eyebrow": "Votre place ici",
+    "title": "Quelques détails suffisent.",
+    "intro": "Un nom, un lieu et vos langues permettent aux autres de vous trouver. Vous compléterez votre profil plus tard.",
+    "writing": "Comment écrivez-vous habituellement ?",
+    "writingHelp": "Tempa valorise votre propre voix. Choisissez ce qui correspond à votre façon d’écrire.",
+    "browse": "Vous pouvez lire les lettres sans écrire ni ajouter de photographie."
   }
 }
