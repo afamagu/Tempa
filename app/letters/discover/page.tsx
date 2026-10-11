@@ -1,105 +1,62 @@
 import { randomUUID } from 'node:crypto'
 import { redirect } from 'next/navigation'
-import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getRelationshipCapacity, newCorrespondenceUnavailableMessage } from '@/lib/relationship-capacity'
-import { getDiscoveryPage, type DiscoveryPage } from '@/lib/discovery'
-import { discoveryEntries } from '@/lib/discovery-entries'
+import { getRoomDirectoryPage } from '@/lib/room-directory'
+import { parseDirectoryFilters } from '@/lib/directory-state'
 import AppShell from '@/app/app-shell'
-import { pageTitleClass, helperTextClass } from '@/app/profile/ui'
+import { helperTextClass } from '@/app/profile/ui'
 import LettersTabs from '../letters-tabs'
-import DiscoverBrowser from './discover-browser'
-import { loadPassiveIntroductions } from './actions'
-import {
-  discoveryRequest,
-  hasIntentionalDiscoverCriteria,
-} from '@/lib/discover-browser-state'
+import DirectoryBrowser from './directory-browser'
 
-const EMPTY_PAGE: DiscoveryPage = {
-  candidates: [],
-  eligibleCount: 0,
-  filteredCount: 0,
-  fairRankingApplied: true,
-  browseStartedAt: null,
-}
-
+/**
+ * Secondary, intentional discovery: an author directory, not another feed.
+ * Questions are deliberately not a prerequisite for appearing here.
+ */
 export default async function DiscoverPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const raw = await searchParams
-  const value = (key: string) =>
-    typeof raw[key] === 'string' ? raw[key].slice(0, key === 'search' ? 80 : 100) : ''
-  const values = Object.fromEntries(
-    ['country', 'language', 'age', 'gender', 'intent', 'interest', 'search'].map((key) => [key, value(key)])
-  )
-  const intentional = hasIntentionalDiscoverCriteria(values)
+  const filters = parseDirectoryFilters(raw)
   const seed = randomUUID()
-  const request = discoveryRequest(values, seed)
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/sign-in')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/sign-in?next=%2Fletters%2Fdiscover')
 
-  const [t, letters, waitingCount, relationshipCapacity] = await Promise.all([
-    getTranslations('Discovery'),
-    getTranslations('Letters'),
+  const [waitingCount, relationshipCapacity, page] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getRelationshipCapacity(supabase),
+    getRoomDirectoryPage(supabase, filters, seed),
   ])
 
-  // Blank Discover is deliberately finite and encounter-backed. Intentional
-  // search/filter remains broad discovery and does not manufacture familiarity.
-  const mayShowPassiveIntroductions = relationshipCapacity?.canStartFirstContact !== false
-  let page = EMPTY_PAGE
-  let entries = [] as Awaited<ReturnType<typeof discoveryEntries>>
-  let initialUnavailable = false
+  const capacityMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
 
-  if (intentional) {
-    page = await getDiscoveryPage(supabase, request)
-    entries = await discoveryEntries(supabase, page.candidates)
-    initialUnavailable = !!page.unavailable
-  } else if (mayShowPassiveIntroductions) {
-    const passive = await loadPassiveIntroductions()
-    entries = passive.entries
-    initialUnavailable = passive.error === 'failed'
-  }
-
-  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
-
-  return (
-    <AppShell active="letters" waitingLetterCount={waitingCount}>
-      <main className="flex min-h-screen justify-center px-4 py-8 sm:px-8">
-        <div className="w-full max-w-5xl space-y-6">
-          <div>
-            <h1 className={pageTitleClass}>{letters('heading')}</h1>
-            <LettersTabs active="discover" />
-          </div>
-          <p className={helperTextClass}>{t('intro')}</p>
-          {newCorrespondenceMessage && (
-            <div className="rounded-md border border-foreground/10 bg-surface-shell px-4 py-3">
-              <p className="text-xs uppercase tracking-widest text-foreground/55">Your correspondence</p>
-              <p className={`mt-1 ${helperTextClass}`}>
-                {newCorrespondenceMessage} You can still search, read profiles and take part in the Room and Board.
-              </p>
-            </div>
-          )}
-          <DiscoverBrowser
-            viewerId={user.id}
-            restore={value('restore') === '1'}
-            initialValues={values}
-            initialEntries={entries}
-            initialHasMore={intentional && page.filteredCount > entries.length}
-            initialUnavailable={initialUnavailable}
-            seed={seed}
-            passiveIntroductionsEnabled={mayShowPassiveIntroductions}
-          />
-        </div>
-      </main>
-    </AppShell>
-  )
+  return <AppShell active="letters" waitingLetterCount={waitingCount}>
+    <main className="mx-auto min-h-screen w-full max-w-4xl px-5 py-9 sm:px-8 sm:py-12">
+      <LettersTabs active="discover" />
+      <header className="mb-8 max-w-xl space-y-3">
+        <p className="text-[11px] font-medium uppercase tracking-[.2em] text-[#9a7967]">Letterbox · Intentional discovery</p>
+        <h1 className="font-serif text-[38px] font-normal tracking-[-.025em] text-foreground sm:text-[48px]">Discover people</h1>
+        <p className="font-serif text-[19px] leading-relaxed text-foreground/75">
+          Filter if you already know the kind of person you’re looking for.
+        </p>
+      </header>
+      {capacityMessage && <div className="mb-7 border-l-2 border-accent/30 pl-4">
+        <p className={helperTextClass}>{capacityMessage} You can still explore people's letters.</p>
+      </div>}
+      <DirectoryBrowser
+        initialFilters={filters}
+        initialEntries={page.entries}
+        initialHasMore={page.hasMore}
+        initialError={page.error}
+        viewerId={user.id}
+        seed={seed}
+        restore={raw.restore === '1'}
+      />
+    </main>
+  </AppShell>
 }
