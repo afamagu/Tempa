@@ -8,6 +8,8 @@ export function introductionReturnPath(value: string | null | undefined): string
   if (url.pathname === '/home') return '/home'
   if (url.pathname === '/room' || url.pathname === '/letters/discover'
     || /^\/room\/[^/]+$/.test(url.pathname)
+    || /^\/room\/letters\/[0-9a-f-]+$/i.test(url.pathname)
+    || /^\/minds\/[0-9a-f-]+$/i.test(url.pathname)
     || /^\/board\/[0-9a-f-]+$/i.test(url.pathname)) return path
   return null
 }
