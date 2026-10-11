@@ -12,7 +12,9 @@ CREATE TEMP TABLE room_reviewed_answer_ids (
 -- The original public Question remains preserved as provenance and appears
 -- in the Room reader. Every authored paragraph is copied exactly.
 -- Selected after inspecting all fifteen visible original answers:
--- thirteen ordinary-member answers, two editorial house answers excluded.
+-- eleven substantial ordinary-member answers selected. Two editorial house
+-- answers and two very short introductions are left in their original
+-- Question locations, not presented as standalone Room letters.
 INSERT INTO room_reviewed_answer_ids(answer_id,editorial_title) VALUES
 ('d201938b-6fb7-4372-acdf-990ea8e4f0a2','What I understand differently now'),
 ('499515de-9377-4035-8c5e-a8cff83436bf','A television drought'),
@@ -23,8 +25,6 @@ INSERT INTO room_reviewed_answer_ids(answer_id,editorial_title) VALUES
 ('3b022585-6913-4d45-a158-69d12005b49d','Nature, food and technology'),
 ('1430ae81-46d8-4a2d-a8ae-66bd462c9a01','The old clockmaker'),
 ('93515012-2b09-4adf-84c4-b536991962a1','Laughter, kindness and nature'),
-('555d8e8f-ae2b-4fa4-bc03-417cd74aff87','Trying new things'),
-('b4c6332a-500e-488c-95d7-6a596d5f8955','Books and good meals'),
 ('281b6e25-0411-4472-a1ec-4f3272765c35','A boring Tuesday into a story'),
 ('dfb49da9-08a8-43cb-b1f5-13775d1d6d28','The versions of me in my head');
 
