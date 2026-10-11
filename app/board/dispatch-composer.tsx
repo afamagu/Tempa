@@ -159,7 +159,7 @@ export default function DispatchComposer({
   const [error, setError] = useState<string | null>(null)
   const [draftStorageFailed, setDraftStorageFailed] = useState(false)
 
-  // New Dispatches are public on the web by default. Editing always
+  // New member letters stay on Tempa only by default. Editing always
   // preserves the existing Dispatch's actual state. The choice remains
   // explicit and reversible before and after publication.
   const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : false
@@ -572,8 +572,8 @@ export default function DispatchComposer({
           hint: submitError?.hint,
         })
         const devDetail = process.env.NODE_ENV === 'development' ? formatDevErrorDetail(submitError) : ''
-        const editLockMessage = 'This Dispatch can no longer be edited.'
-        const momentPlacementMessage = 'Moment position is out of range for this Dispatch.'
+        const editLockMessage = 'This letter can no longer be edited.'
+        const momentPlacementMessage = 'Moment position is out of range for this letter.'
         const webRefusal = webVisibilityRefusal(submitError?.message)
         if (webRefusal) {
           setError(webRefusal)
@@ -710,7 +710,7 @@ export default function DispatchComposer({
                 }}
               >
                 <p className="italic">Send a little piece of a place.</p>
-                <p>Choose a postcard, add a few words to the front, and write something more on the back — then send it along with your Letter or Dispatch as a small keepsake.</p>
+                <p>Choose a postcard, add a few words to the front, and write something more on the back — then send it along with your letter as a small keepsake.</p>
               </FeatureIntroduction>
             )}
             <PostcardComposerSlot draft={postcardDraft} catalogEntry={postcardCatalogEntry} onAdd={handleAddPostcard} onEdit={() => setPostcardEditorOpen(true)} />
