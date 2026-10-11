@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { COUNTRY_OPTIONS, LANGUAGE_OPTIONS, AGE_RANGE_OPTIONS, GENDER_OPTIONS, INTENT_OPTIONS } from '@/app/profile/data'
 import { INTEREST_TAXONOMY } from '@/lib/interests'
-import type { DirectoryFilters } from '@/lib/room-directory'
+import type { DirectoryFilters as DirectoryFilterValues } from '@/lib/room-directory'
 
 const fieldClass = 'min-h-11 w-full rounded-md border border-foreground/15 bg-background px-3 py-2.5 text-[14px] text-foreground focus-visible:outline-2 focus-visible:outline-accent'
 const labelClass = 'mb-2 block text-[12px] font-medium text-foreground/65'
@@ -28,18 +28,18 @@ function FilterSelect({
 export default function DirectoryFilters({
   values, onChange,
 }: {
-  values: DirectoryFilters
-  onChange: (values: DirectoryFilters) => void
+  values: DirectoryFilterValues
+  onChange: (values: DirectoryFilterValues) => void
 }) {
   const [search, setSearch] = useState(values.search ?? '')
   useEffect(() => { setSearch(values.search ?? '') }, [values.search])
 
-  function update(key: keyof DirectoryFilters, value: string) {
+  function update(key: keyof DirectoryFilterValues, value: string) {
     onChange({ ...values, [key]: value })
   }
 
-  const advancedCount = ['age','gender','intent','interest'].filter(key => Boolean(values[key as keyof DirectoryFilters])).length
-  const selectedCount = ['country','language','search','age','gender','intent','interest'].filter(key => Boolean(values[key as keyof DirectoryFilters])).length
+  const advancedCount = ['age','gender','intent','interest'].filter(key => Boolean(values[key as keyof DirectoryFilterValues])).length
+  const selectedCount = ['country','language','search','age','gender','intent','interest'].filter(key => Boolean(values[key as keyof DirectoryFilterValues])).length
     + (values.letters === 'all' ? 1 : 0)
   return <details className="group rounded-[5px] border border-[#dfd3c2] bg-[#fffdf8]">
     <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[14px] font-medium text-foreground marker:hidden [&::-webkit-details-marker]:hidden">
