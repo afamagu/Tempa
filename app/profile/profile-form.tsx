@@ -2,439 +2,192 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import ISO6391 from 'iso-639-1'
 import { useRouter } from 'next/navigation'
+import ISO6391 from 'iso-639-1'
 import { createClient } from '@/lib/supabase/client'
 import {
-  COUNTRY_OPTIONS,
-  GENDER_OPTIONS,
-  INTENT_OPTIONS,
-  LANGUAGE_OPTIONS,
-  RECEIVING_OPTIONS,
-  WRITING_STYLE_OPTIONS,
-  findCountryIsoCode,
-  getRegionOptions,
-  type ChoiceOption,
-  type Option,
+  COUNTRY_OPTIONS, LANGUAGE_OPTIONS, WRITING_STYLE_OPTIONS,
+  findCountryIsoCode, type Option,
 } from './data'
-import ChoiceGroup from './choice-group'
 import SearchableSelect from './searchable-select'
 import SearchableMultiSelect from './searchable-multi-select'
-import WritingRhythmChoice from './writing-rhythm-choice'
-import { inputClass, sectionLabelClass, helperTextClass, fieldLabelClass } from './ui'
-import {
-  INTEREST_TAXONOMY,
-  MIN_RECOMMENDED_INTERESTS,
-  MAX_INTERESTS,
-  isReadingInterestsCountValidForNewProfile,
-} from '@/lib/interests'
+import ChoiceGroup from './choice-group'
+import { fieldLabelClass, helperTextClass } from './ui'
 import { isReservedPseudonym, RESERVED_PSEUDONYM_MESSAGE } from '@/lib/reserved-pseudonyms'
-import { setProfileInterests } from '@/lib/profile-interests'
-import { isWritingRhythm, writingRhythmCopy } from '@/lib/writing-rhythm'
 
-type PseudonymStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken' | 'reserved'
-
-function validatePseudonym(raw: string) {
-  const value = raw.trim()
-  if (value.length < 3 || value.length > 24) {
-    return { valid: false, value, message: 'Must be 3–24 characters.' }
-  }
-  if (!/^[A-Za-z0-9 -]+$/.test(value)) {
-    return { valid: false, value, message: 'Use only letters, numbers, spaces, or hyphens.' }
-  }
-  if (isReservedPseudonym(value)) {
-    return { valid: false, value, message: RESERVED_PSEUDONYM_MESSAGE }
-  }
-  return { valid: true, value, message: '' }
-}
-
-export type RequiredFieldKey =
-  | 'country'
-  | 'languages'
-  | 'intent'
-  | 'interests'
-  | 'writingStyle'
-  | 'receiving'
-  | 'rhythm'
-
-export function validateRequiredFields(state: {
-  country: string
-  languages: string[]
-  intentSelections: string[]
-  readingInterestsCount: number
-  aiPreference: string
-  receivingPreference: string
-  writingRhythm: string
-}): Partial<Record<RequiredFieldKey, string>> {
-  const errors: Partial<Record<RequiredFieldKey, string>> = {}
-  if (!state.country) errors.country = 'Choose your country.'
-  if (state.languages.length === 0) errors.languages = 'Add at least one language.'
-  if (state.intentSelections.length === 0) errors.intent = 'Choose what brings you to Tempa.'
-  if (!isReadingInterestsCountValidForNewProfile(state.readingInterestsCount)) {
-    errors.interests = `Choose at least ${MIN_RECOMMENDED_INTERESTS} things you enjoy reading about (up to ${MAX_INTERESTS}).`
-  }
-  if (!state.aiPreference) errors.writingStyle = 'Choose how you usually write your letters.'
-  if (!state.receivingPreference) errors.receiving = "Choose what you're comfortable receiving."
-  if (!isWritingRhythm(state.writingRhythm)) errors.rhythm = 'Choose your usual writing rhythm.'
-  return errors
-}
-
+/** Basic identity only. No forced Mark, introduction essay, or typography choice. */
 export default function ProfileForm({ userId }: { userId: string }) {
-  const router = useRouter()
   const locale = useLocale()
   const t = useTranslations('ProfileSetup')
-  const common = useTranslations('Common')
-  const genderT = useTranslations('ProfileSetup.genderOptions')
-  const intentT = useTranslations('ProfileSetup.intentOptions')
+  const arrival = useTranslations('FirstArrivalProfile')
   const writingT = useTranslations('ProfileSetup.writingOptions')
-  const writingDescriptionT = useTranslations('ProfileSetup.writingDescriptions')
-  const receivingT = useTranslations('ProfileSetup.receivingOptions')
-  const interestT = useTranslations('ProfileSetup.interestOptions')
+  const writingDescription = useTranslations('ProfileSetup.writingDescriptions')
+  const router = useRouter()
 
-  const [pseudonym, setPseudonym] = useState('')
-  const [pseudonymStatus, setPseudonymStatus] = useState<PseudonymStatus>('idle')
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [country, setCountry] = useState('')
-  const [region, setRegion] = useState('')
-  const [languages, setLanguages] = useState<string[]>([])
-  const [gender, setGender] = useState('')
-  const [genderCustom, setGenderCustom] = useState('')
-  const [intentSelections, setIntentSelections] = useState<string[]>([])
-  const [intentOther, setIntentOther] = useState('')
-  const [readingInterests, setReadingInterests] = useState<string[]>([])
-  const [aiPreference, setAiPreference] = useState('')
-  const [receivingPreference, setReceivingPreference] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<RequiredFieldKey, string>>>({})
+  const [pseudonym,setPseudonym] = useState('')
+  const [nameStatus,setNameStatus] = useState<'idle'|'checking'|'reserved'|'taken'|'available'>('idle')
+  const nameRequest=useRef(0)
+  const [country,setCountry] = useState('')
+  const [languages,setLanguages] = useState<string[]>([])
+  const [aiPreference,setAiPreference] = useState('')
+  const [busy,setBusy] = useState(false)
+  const [error,setError] = useState<string|null>(null)
+  const [suggestions,setSuggestions] = useState<string[]>([])
 
-  const checkIdRef = useRef(0)
-  const pseudonymFieldRef = useRef<HTMLInputElement | null>(null)
-  const fieldRefs = useRef<Partial<Record<RequiredFieldKey, HTMLDivElement | null>>>({})
-
-  const countryDisplayNames = useMemo(() => {
-    try { return new Intl.DisplayNames([locale], { type: 'region' }) } catch { return null }
-  }, [locale])
-  const languageDisplayNames = useMemo(() => {
-    try { return new Intl.DisplayNames([locale], { type: 'language' }) } catch { return null }
-  }, [locale])
-
-  const countryOptions: Option[] = useMemo(
-    () => COUNTRY_OPTIONS.map((option) => ({
-      value: option.value,
-      label: countryDisplayNames?.of(option.isoCode) ?? option.label,
-    })),
-    [countryDisplayNames]
+  const countryLabels = useMemo(() => {
+    try { return new Intl.DisplayNames([locale],{type:'region'}) } catch { return null }
+  },[locale])
+  const languageLabels = useMemo(() => {
+    try { return new Intl.DisplayNames([locale],{type:'language'}) } catch { return null }
+  },[locale])
+  const countries:Option[] = useMemo(() =>
+    COUNTRY_OPTIONS.map(c => ({value:c.value,label:countryLabels?.of(c.isoCode)??c.label})),
+    [countryLabels]
   )
-  const languageOptions: Option[] = useMemo(
-    () => LANGUAGE_OPTIONS.map((option) => {
-      const code = ISO6391.getCode(option.value)
-      return { value: option.value, label: (code && languageDisplayNames?.of(code)) || option.label }
-    }),
-    [languageDisplayNames]
-  )
-
-  const genderOptions: ChoiceOption[] = GENDER_OPTIONS.map((option) => ({ ...option, label: genderT(option.value as never) }))
-  const intentOptions: ChoiceOption[] = INTENT_OPTIONS.map((option) => ({ ...option, label: intentT(option.value as never) }))
-  const writingStyleOptions: ChoiceOption[] = WRITING_STYLE_OPTIONS.map((option) => ({
-    ...option,
-    label: writingT(option.value as never),
-    description: writingDescriptionT(option.value as never),
-  }))
-  const receivingOptions: ChoiceOption[] = RECEIVING_OPTIONS.map((option) => ({ ...option, label: receivingT(option.value as never) }))
-  const interestOptions: ChoiceOption[] = INTEREST_TAXONOMY.map((interest) => ({
-    value: interest.key,
-    label: interestT(interest.key as never),
+  const languageOptions:Option[] = useMemo(() =>
+    LANGUAGE_OPTIONS.map(x => {
+      const code=ISO6391.getCode(x.value)
+      return {value:x.value,label:(code&&languageLabels?.of(code))||x.label}
+    }),[languageLabels])
+  const writingOptions=WRITING_STYLE_OPTIONS.map(x => ({
+    ...x,
+    label:writingT(x.value as never),
+    description:writingDescription(x.value as never),
   }))
 
-  function registerFieldRef(key: RequiredFieldKey) {
-    return (el: HTMLDivElement | null) => { fieldRefs.current[key] = el }
+  function changeName(next:string) {
+    ++nameRequest.current
+    setPseudonym(next)
+    setSuggestions([])
+    if(isReservedPseudonym(next)){
+      setNameStatus('reserved')
+      setError(t('reserved'))
+    }else if(next.trim().length<3||next.trim().length>24||!/^[A-Za-z0-9 -]+$/.test(next.trim())){
+      setNameStatus('idle')
+      setError(null)
+    }else{
+      setNameStatus('checking')
+      setError(null)
+    }
   }
 
-  function scrollToField(key: RequiredFieldKey) {
-    const el = fieldRefs.current[key]
-    if (!el) return
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    el.querySelector<HTMLElement>('input, button, [tabindex]')?.focus()
-  }
-
-  const regionOptions = useMemo(() => getRegionOptions(country), [country])
-  const hasStructuredRegions = regionOptions.length > 0
-  const countryCode = useMemo(() => findCountryIsoCode(country), [country])
-
-  function handleCountryChange(value: string) {
-    setCountry(value)
-    setRegion('')
-  }
-
-  function pseudonymValidationMessage(raw: string) {
-    if (isReservedPseudonym(raw)) return t('reserved')
-    const value = raw.trim()
-    if (value.length < 3 || value.length > 24) return t('pseudonymLength')
-    if (!/^[A-Za-z0-9 -]+$/.test(value)) return t('pseudonymChars')
-    return ''
-  }
-
-  function translatedFieldErrors(keys: RequiredFieldKey[]) {
-    const result: Partial<Record<RequiredFieldKey, string>> = {}
-    for (const key of keys) {
-      if (key === 'interests') {
-        result[key] = t('fieldErrors.interests', { min: MIN_RECOMMENDED_INTERESTS, max: MAX_INTERESTS })
-      } else if (key === 'rhythm') {
-        const base = locale.split('-')[0]
-        result[key] = base === 'fr'
-          ? 'Choisissez votre rythme habituel.'
-          : base === 'es'
-            ? 'Elige tu ritmo habitual.'
-            : base === 'pt'
-              ? 'Escolha o seu ritmo habitual.'
-              : 'Choose your usual writing rhythm.'
-      } else {
-        result[key] = t(`fieldErrors.${key}` as 'fieldErrors.country' | 'fieldErrors.languages' | 'fieldErrors.intent' | 'fieldErrors.writingStyle' | 'fieldErrors.receiving')
+  useEffect(()=>{
+    const name=pseudonym.trim()
+    if(!name||isReservedPseudonym(name)||name.length<3||
+       name.length>24||!/^[A-Za-z0-9 -]+$/.test(name))return
+    const current=nameRequest.current
+    let cancelled=false
+    const timeout=setTimeout(async()=>{
+      try {
+        const {data, error}=await createClient().rpc('is_pseudonym_available',{candidate:name})
+        if(cancelled||nameRequest.current!==current)return
+        if(error){setNameStatus('idle');return}
+        setNameStatus(data?'available':'taken')
+        if(!data)setError(arrival('taken'))
+      }catch{
+        if(!cancelled&&nameRequest.current===current)setNameStatus('idle')
       }
-    }
-    return result
-  }
+    },500)
+    return ()=>{cancelled=true;clearTimeout(timeout)}
+  },[pseudonym,arrival])
 
-  useEffect(() => {
-    const requestId = ++checkIdRef.current
-    const { valid, value } = validatePseudonym(pseudonym)
-    if (!valid) {
-      setPseudonymStatus(isReservedPseudonym(pseudonym) ? 'reserved' : pseudonym.trim() ? 'invalid' : 'idle')
-      setSuggestions([])
+  async function submit(event:FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if(busy||nameStatus==='checking'||nameStatus==='reserved'||nameStatus==='taken')return
+    setError(null)
+    setSuggestions([])
+    const name=pseudonym.trim()
+    if(name.length<3||name.length>24||!/^[A-Za-z0-9 -]+$/.test(name)){
+      setError(arrival('nameError'))
       return
     }
-
-    setPseudonymStatus('checking')
-    let cancelled = false
-    const timeout = setTimeout(async () => {
-      const supabase = createClient()
-      const { data, error } = await supabase.rpc('is_pseudonym_available', { candidate: value })
-
-      if (cancelled || checkIdRef.current !== requestId) return
-
-      if (error) {
-        setPseudonymStatus('idle')
-        return
+    if(isReservedPseudonym(name)){setError(RESERVED_PSEUDONYM_MESSAGE);return}
+    if(!country){setError(arrival('countryError'));return}
+    if(!languages.length){setError(arrival('languagesError'));return}
+    if(!WRITING_STYLE_OPTIONS.some(x=>x.value===aiPreference)){
+      setError(arrival('writingError'))
+      return
+    }
+    setBusy(true)
+    try {
+      const supabase=createClient()
+      const {data:available,error:checkError}=await supabase.rpc('is_pseudonym_available',{candidate:name})
+      if(checkError)throw new Error(arrival('checkError'))
+      if(!available){
+        const {data:alternatives}=await supabase.rpc('suggest_available_pseudonyms',{base:name,needed:3})
+        setSuggestions(alternatives??[])
+        throw new Error(arrival('taken'))
       }
-      if (data) {
-        setPseudonymStatus('available')
-        setSuggestions([])
-      } else {
-        setPseudonymStatus('taken')
-        const { data: suggestionData } = await supabase.rpc('suggest_available_pseudonyms', { base: value, needed: 3 })
-        if (!cancelled && checkIdRef.current === requestId) setSuggestions(suggestionData ?? [])
+      const {error:insertError}=await supabase.from('profiles').insert({
+        id:userId,
+        pseudonym:name,
+        country,
+        country_code:findCountryIsoCode(country),
+        languages,
+        ai_preference:aiPreference,
+        onboarding_stage:'complete',
+      })
+      if(insertError){
+        if(insertError.code==='23514'){
+          setNameStatus('reserved')
+          throw new Error(t('reserved'))
+        }
+        if(insertError.code==='23505')throw new Error(arrival('takenNow'))
+        throw new Error(arrival('saveError'))
       }
-    }, 500)
-
-    return () => { clearTimeout(timeout); cancelled = true }
-  }, [pseudonym])
-
-  function toggleIntent(option: string) {
-    setIntentSelections((prev) => prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option])
+      router.replace('/welcome')
+      router.refresh()
+    }catch(e){
+      setBusy(false)
+      setError(e instanceof Error?e.message:arrival('saveError'))
+    }
   }
 
-  function toggleInterest(key: string) {
-    setReadingInterests((prev) => {
-      if (prev.includes(key)) return prev.filter((k) => k !== key)
-      if (prev.length >= MAX_INTERESTS) return prev
-      return [...prev, key]
-    })
-  }
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setFormError(null)
-    setFieldErrors({})
-
-    const { valid, value } = validatePseudonym(pseudonym)
-    if (!valid) {
-      setPseudonymStatus(isReservedPseudonym(pseudonym) ? 'reserved' : 'invalid')
-      setFormError(pseudonymValidationMessage(pseudonym))
-      pseudonymFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      pseudonymFieldRef.current?.focus()
-      return
-    }
-
-    const formData = new FormData(e.currentTarget)
-    const writingRhythm = String(formData.get('writing_rhythm') ?? '')
-
-    const errors = validateRequiredFields({
-      country,
-      languages,
-      intentSelections,
-      readingInterestsCount: readingInterests.length,
-      aiPreference,
-      receivingPreference,
-      writingRhythm,
-    })
-    const invalidKeys = Object.keys(errors) as RequiredFieldKey[]
-    const firstInvalidKey = invalidKeys[0]
-    if (firstInvalidKey) {
-      setFieldErrors(translatedFieldErrors(invalidKeys))
-      scrollToField(firstInvalidKey)
-      return
-    }
-
-    if (!isWritingRhythm(writingRhythm)) return
-
-    setSubmitting(true)
-    const supabase = createClient()
-    const { data: available, error: checkError } = await supabase.rpc('is_pseudonym_available', { candidate: value })
-
-    if (checkError) {
-      setSubmitting(false)
-      console.error('[profile] pseudonym availability check failed', { code: checkError.code })
-      setFormError(t('checkNameError'))
-      return
-    }
-
-    if (!available) {
-      setSubmitting(false)
-      setPseudonymStatus('taken')
-      const { data: suggestionData } = await supabase.rpc('suggest_available_pseudonyms', { base: value, needed: 3 })
-      setSuggestions(suggestionData ?? [])
-      return
-    }
-
-    const { error: insertError } = await supabase.from('profiles').insert({
-      id: userId,
-      onboarding_stage: 'mark',
-      pseudonym: value,
-      country,
-      country_code: countryCode,
-      region: region.trim() || null,
-      languages,
-      gender: gender || null,
-      gender_custom: gender === 'Self-describe' ? genderCustom.trim() || null : null,
-      intent: intentSelections,
-      intent_other: intentSelections.includes('Something else') ? intentOther.trim() || null : null,
-      ai_preference: aiPreference,
-      receiving_preference: receivingPreference,
-      writing_rhythm: writingRhythm,
-    })
-
-    if (insertError) {
-      setSubmitting(false)
-      console.error('[profile] profile insert failed', { code: insertError.code })
-      if (insertError.code === '23514' && insertError.message.includes(RESERVED_PSEUDONYM_MESSAGE)) {
-        setPseudonymStatus('reserved')
-        setSuggestions([])
-        setFormError(t('reserved'))
-      } else if (insertError.code === '23505') {
-        setPseudonymStatus('taken')
-        const { data: suggestionData } = await supabase.rpc('suggest_available_pseudonyms', { base: value, needed: 3 })
-        setSuggestions(suggestionData ?? [])
-      } else {
-        setFormError(t('saveError'))
-      }
-      return
-    }
-
-    if (readingInterests.length > 0) await setProfileInterests(supabase, readingInterests)
-    router.push('/profile/mark')
-    router.refresh()
-  }
-
-  return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-8 py-10">
-        <div className="space-y-2">
-          <p className="font-serif text-xs italic tracking-[0.2em] text-muted">Tempa</p>
-          <h1 className="font-serif text-2xl font-medium">{t('heading')}</h1>
-          <p className="text-sm text-muted">{t('intro')}</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-10">
-          <section className="space-y-6">
-            <p className={sectionLabelClass}>{t('aboutYou')}</p>
-
-            <div className="space-y-1.5">
-              <label htmlFor="pseudonym" className={fieldLabelClass}>{t('nameLabel')}</label>
-              <input id="pseudonym" ref={pseudonymFieldRef} value={pseudonym} onChange={(e) => setPseudonym(e.target.value)} placeholder={t('namePlaceholder')} autoComplete="off" aria-invalid={pseudonymStatus === 'invalid' || pseudonymStatus === 'taken' || pseudonymStatus === 'reserved'} className={inputClass} />
-              <p className={helperTextClass}>{t('nameHelp')}</p>
-              {pseudonymStatus === 'invalid' && formError === null && <p className="text-xs text-red-600">{pseudonymValidationMessage(pseudonym)}</p>}
-              {pseudonymStatus === 'reserved' && formError === null && <p className="text-xs text-red-600" role="alert">{t('reserved')}</p>}
-              {pseudonymStatus === 'checking' && <p className={helperTextClass}>{t('checking')}</p>}
-              {pseudonymStatus === 'available' && <p className="text-xs text-accent">{t('available')}</p>}
-              {pseudonymStatus === 'taken' && (
-                <div className="space-y-2">
-                  <p className="text-sm text-red-600">{t('taken')}</p>
-                  {suggestions.length > 0 && <div className="flex flex-wrap gap-2">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => setPseudonym(suggestion)} className="rounded-full border border-foreground/15 px-3 py-1.5 text-sm transition-colors hover:border-foreground/30 hover:bg-foreground/[.03]">{suggestion}</button>)}</div>}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-1.5" ref={registerFieldRef('country')}>
-              <label htmlFor="country" className={fieldLabelClass}>{t('country')}</label>
-              <SearchableSelect id="country" value={country} onChange={handleCountryChange} options={countryOptions} placeholder={t('searchCountries')} />
-              {fieldErrors.country && <p className="text-xs text-red-600" role="alert">{fieldErrors.country}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="region" className={fieldLabelClass}>{t('region')} <span className="text-muted">({common('optional')})</span></label>
-              {!country ? <input disabled placeholder={t('selectCountryFirst')} className={inputClass} /> : hasStructuredRegions ? <SearchableSelect id="region" value={region} onChange={setRegion} options={regionOptions} placeholder={t('searchRegions')} /> : <input id="region" value={region} onChange={(e) => setRegion(e.target.value)} className={inputClass} />}
-            </div>
-
-            <div className="space-y-1.5" ref={registerFieldRef('languages')}>
-              <label htmlFor="languages" className={fieldLabelClass}>{t('languages')}</label>
-              <SearchableMultiSelect id="languages" values={languages} onChange={setLanguages} options={languageOptions} placeholder={t('searchLanguages')} allowCustom />
-              {fieldErrors.languages && <p className="text-xs text-red-600" role="alert">{fieldErrors.languages}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <p className={fieldLabelClass}>{t('gender')} <span className="text-muted">({common('optional')})</span></p>
-              <ChoiceGroup ariaLabel={t('gender')} options={genderOptions} selected={gender ? [gender] : []} onToggle={setGender} layout="pill" />
-              {gender === 'Self-describe' && <input id="gender_custom" value={genderCustom} onChange={(e) => setGenderCustom(e.target.value)} placeholder={t('selfDescribe')} className={inputClass} />}
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <p className={sectionLabelClass}>{t('whatBrings')}</p>
-            <div className="space-y-1.5" ref={registerFieldRef('intent')}>
-              <p className={helperTextClass}>{t('chooseMany')}</p>
-              <ChoiceGroup ariaLabel={t('whatBrings')} options={intentOptions} selected={intentSelections} onToggle={toggleIntent} layout="pill" />
-              {intentSelections.includes('Something else') && <input id="intent_other" value={intentOther} onChange={(e) => setIntentOther(e.target.value)} placeholder={t('tellMore')} className={inputClass} />}
-              {fieldErrors.intent && <p className="text-xs text-red-600" role="alert">{fieldErrors.intent}</p>}
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <p className={sectionLabelClass}>{t('readingInterests')}</p>
-            <div className="space-y-1.5" ref={registerFieldRef('interests')}>
-              <p className={helperTextClass}>{t('interestsHelp', { min: MIN_RECOMMENDED_INTERESTS })}</p>
-              <p className={helperTextClass}>{t('interestDiscoveryHelp')}</p>
-              <ChoiceGroup ariaLabel={t('readingInterests')} options={interestOptions} selected={readingInterests} onToggle={toggleInterest} layout="pill" />
-              {fieldErrors.interests && <p className="text-xs text-red-600" role="alert">{fieldErrors.interests}</p>}
-            </div>
-          </section>
-
-          <section className="space-y-6">
-            <div className="space-y-1.5">
-              <p className={sectionLabelClass}>{t('correspondence')}</p>
-              <p className={helperTextClass}>{t('correspondenceCapacity')}</p>
-            </div>
-            <div className="space-y-1.5" ref={registerFieldRef('writingStyle')}>
-              <p className={fieldLabelClass}>{t('writingQuestion')}</p>
-              <ChoiceGroup ariaLabel={t('writingQuestion')} options={writingStyleOptions} selected={aiPreference ? [aiPreference] : []} onToggle={setAiPreference} layout="card" />
-              {fieldErrors.writingStyle && <p className="text-xs text-red-600" role="alert">{fieldErrors.writingStyle}</p>}
-            </div>
-            <div className="space-y-1.5" ref={registerFieldRef('receiving')}>
-              <p className={fieldLabelClass}>{t('receivingQuestion')}</p>
-              <ChoiceGroup ariaLabel={t('receivingQuestion')} options={receivingOptions} selected={receivingPreference ? [receivingPreference] : []} onToggle={setReceivingPreference} layout="pill" />
-              {fieldErrors.receiving && <p className="text-xs text-red-600" role="alert">{fieldErrors.receiving}</p>}
-            </div>
-            <div ref={registerFieldRef('rhythm')}>
-              <WritingRhythmChoice error={fieldErrors.rhythm} />
-            </div>
-          </section>
-
-          {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <button type="submit" disabled={submitting || pseudonymStatus === 'checking' || pseudonymStatus === 'taken' || pseudonymStatus === 'reserved'} className="w-full rounded-md bg-accent text-accent-foreground px-4 py-3 text-base font-medium transition-colors hover:bg-accent/90 disabled:opacity-50">
-            {submitting ? common('saving') : common('continue')}
-          </button>
-        </form>
+  return <main className="mx-auto flex min-h-[100svh] max-w-2xl flex-col justify-center px-6 py-14 sm:px-10">
+    <header className="space-y-4">
+      <p className="font-serif text-lg italic text-foreground/70">Tempa</p>
+      <p className="pt-5 text-[11px] font-medium uppercase tracking-[.21em] text-[#94745f]">{arrival('eyebrow')}</p>
+      <h1 className="font-serif text-[37px] font-normal leading-tight sm:text-[47px]">{arrival('title')}</h1>
+      <p className="max-w-lg font-serif text-[19px] leading-relaxed text-foreground/75">
+        {arrival('intro')}
+      </p>
+    </header>
+    <form onSubmit={submit} className="mt-10 space-y-8">
+      <div className="space-y-2">
+        <label htmlFor="pseudonym" className={fieldLabelClass}>{t('nameLabel')}</label>
+        <input id="pseudonym" value={pseudonym} onChange={e=>changeName(e.target.value)}
+          autoComplete="off" maxLength={24} aria-invalid={nameStatus==='reserved'||nameStatus==='taken'} placeholder={t('namePlaceholder')}
+          className="min-h-12 w-full rounded-md border border-foreground/20 bg-background px-4 text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" />
+        <p className={helperTextClass}>{t('nameHelp')}</p>
+        {nameStatus==='checking'&&<p role="status" className={helperTextClass}>{t('checking')}</p>}
+        {nameStatus==='available'&&<p role="status" className="text-sm text-accent">{t('available')}</p>}
+        {suggestions.length>0&&<div className="flex flex-wrap gap-2">{suggestions.map(n=>
+          <button type="button" key={n} onClick={()=>changeName(n)}
+            className="min-h-11 rounded-md border border-foreground/20 px-3 text-sm">{n}</button>)}</div>}
       </div>
-    </main>
-  )
+      <div className="space-y-2">
+        <label htmlFor="country" className={fieldLabelClass}>{t('country')}</label>
+        <SearchableSelect id="country" value={country} onChange={setCountry}
+          options={countries} placeholder={t('searchCountries')} />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="languages" className={fieldLabelClass}>{t('languages')}</label>
+        <SearchableMultiSelect id="languages" values={languages} onChange={setLanguages}
+          options={languageOptions} placeholder={t('searchLanguages')} allowCustom />
+      </div>
+      <fieldset className="space-y-3 border-t border-foreground/10 pt-6">
+        <legend className="font-serif text-[20px]">{arrival('writing')}</legend>
+        <p className={helperTextClass}>{arrival('writingHelp')}</p>
+        <ChoiceGroup ariaLabel="How you usually write" options={writingOptions}
+          selected={aiPreference?[aiPreference]:[]} onToggle={setAiPreference} layout="card" />
+      </fieldset>
+      <p className="text-[13px] leading-relaxed text-foreground/65">
+        {arrival('browse')}
+      </p>
+      {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
+      <button type="submit" disabled={busy||nameStatus==='checking'||nameStatus==='taken'||nameStatus==='reserved'} className="min-h-12 w-full rounded-md bg-accent px-5 py-3 text-[15px] font-medium text-accent-foreground disabled:opacity-60">
+        {busy?arrival('saving'):arrival('continue')}
+      </button>
+    </form>
+  </main>
 }

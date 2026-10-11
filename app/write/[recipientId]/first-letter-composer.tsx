@@ -61,8 +61,8 @@ export default function FirstLetterComposer({
   memberQuestionId,
   dispatchId,
   dispatchTitle,
-  backHref = '/room',
-  backLabel = 'The Room',
+  backHref = '/board',
+  backLabel = 'The Board',
   isFollowUp = false,
 }: {
   recipientId: string

@@ -4,7 +4,7 @@ import { signOutAndReturnToSignIn } from '@/app/begin/sign-out-action'
 import { pageTitleClass, secondaryButtonClass, systemBodyClass } from '@/app/profile/ui'
 
 export const metadata = {
-  title: 'Founding Correspondents — Tempa',
+  title: 'Account access — Tempa',
   robots: { index: false, follow: false },
 }
 
@@ -35,13 +35,13 @@ export default async function PilotAccessPage() {
       <div className="w-full max-w-md space-y-6">
         <p className="font-serif text-lg italic text-foreground">Tempa</p>
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">Founding Correspondents</p>
-          <h1 className={pageTitleClass}>Tempa is in a small, invitation-only pilot.</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-clay">Account access</p>
+          <h1 className={pageTitleClass}>This email address is not approved for registration yet.</h1>
           <p className={systemBodyClass}>
-            We&rsquo;re keeping the first cohort deliberately small while we watch how real correspondence develops and fix what needs fixing.
+            Tempa is currently welcoming new members gradually.
           </p>
           <p className={systemBodyClass}>
-            If you were invited, sign in with the same email address that received the invitation.
+            If your email has been approved, sign out and continue with that address.
           </p>
         </div>
         <form action={signOutAndReturnToSignIn}>

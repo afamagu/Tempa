@@ -9,6 +9,9 @@ on:
       - 'package-lock.json'
       - '.github/workflows/room-pr-quality.yml'
   workflow_dispatch:
+concurrency:
+  group: tempa-board-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:

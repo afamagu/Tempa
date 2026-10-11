@@ -26,7 +26,7 @@ export default function RoomQuestionControl({
     const { error: actionError } = await startRoomQuestion(createClient(), restart && current ? current.id : selectedId, restart)
     setBusy(false)
     if (actionError) {
-      setError(actionError.message || 'Could not change the current Room Question.')
+      setError(actionError.message || 'Could not change the current question.')
       return
     }
     router.refresh()
@@ -35,7 +35,7 @@ export default function RoomQuestionControl({
   return (
     <section className="space-y-3 rounded-md border border-foreground/10 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className={adminBadgeClass}>THE ROOM</p>
+        <p className={adminBadgeClass}>QUESTIONS</p>
         {current ? (
           <span className="text-xs text-foreground/55">Current</span>
         ) : (
@@ -49,7 +49,7 @@ export default function RoomQuestionControl({
           <p className={adminMetadataClass}>{current.answerCount} answer{current.answerCount === 1 ? '' : 's'}</p>
         </div>
       ) : (
-        <p className={adminMetadataClass}>Members will not see a weekly Room Question until one is selected.</p>
+        <p className={adminMetadataClass}>Members will not see a weekly question until one is selected.</p>
       )}
 
       {current && (
@@ -92,7 +92,7 @@ export default function RoomQuestionControl({
               disabled={busy || !selectedId || selectedId === current?.id}
               onClick={() => void makeCurrent()}
             >
-              {busy ? 'Changing…' : 'Make this the current Room Question'}
+              {busy ? 'Changing…' : 'Make this the current question'}
             </button>
             {current && selectedId !== current.id && (
               <button type="button" className={secondaryButtonClass} onClick={() => setSelectedId(current.id)} disabled={busy}>

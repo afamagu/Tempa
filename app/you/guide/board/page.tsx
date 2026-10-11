@@ -21,7 +21,7 @@ export default async function ReplayBoardGuide() {
     >
       <p className="italic">Writing meant to be stumbled upon.</p>
       <p>
-        Dispatches are public pieces Tempa members leave behind — stories, observations,
+        Open letters are writing Tempa members choose to share — stories, observations,
         questions, things they&rsquo;ve been thinking about.
       </p>
       <p>

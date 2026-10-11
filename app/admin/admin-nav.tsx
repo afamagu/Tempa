@@ -2,91 +2,61 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 
 type Destination = { href: string; label: string; matchPrefix?: string }
-
 const DESTINATIONS: Destination[] = [
-  { href: '/admin', label: 'Overview' },
-  { href: '/admin/moderation/reports', label: 'Moderation', matchPrefix: '/admin/moderation' },
-  { href: '/admin/members', label: 'Members' },
-  { href: '/admin/pilot', label: 'Pilot', matchPrefix: '/admin/pilot' },
-  { href: '/admin/content', label: 'Content', matchPrefix: '/admin/content' },
-  // Commerce Checkpoint 4 — Admin → Commerce (admin-only inside).
-  { href: '/admin/commerce', label: 'Commerce', matchPrefix: '/admin/commerce' },
+  { href: '/admin', label: 'Home' },
+  { href: '/admin/members', label: 'People' },
+  { href: '/admin/moderation/reports', label: 'Safety', matchPrefix: '/admin/moderation' },
+  { href: '/admin/content', label: 'Content' },
+  { href: '/admin/commerce', label: 'Commerce' },
   { href: '/admin/system/email', label: 'System', matchPrefix: '/admin/system' },
-  // Account lifecycle checkpoint — account-exit feedback (breaks,
-  // deletions, reasons) and private "Something else" letter notes.
-  { href: '/admin/feedback/account-exits', label: 'Feedback', matchPrefix: '/admin/feedback' },
 ]
-
-function isActive(pathname: string, dest: Destination): boolean {
-  if (dest.href === '/admin') return pathname === '/admin'
-  return pathname.startsWith(dest.matchPrefix ?? dest.href)
+const OTHER_DESTINATIONS: Destination[] = [
+  { href: '/admin/pilot', label: 'Invitations' },
+  { href: '/admin/feedback/account-exits', label: 'Account exits' },
+]
+function isActive(path: string, item: Destination): boolean {
+  return item.href === '/admin'
+    ? path === '/admin'
+    : path === item.href || path.startsWith((item.matchPrefix ?? item.href) + '/')
 }
+const MOBILE = DESTINATIONS.slice(0,4)
 
-/**
- * Admin Command Center Phase 2A-1 — the permanent nav, originally
- * exactly 4 destinations (Overview / Moderation / Members / Content).
- * One component owning BOTH the desktop horizontal nav and the mobile
- * bottom tab bar, rather than two parallel implementations that could
- * drift — they share the same DESTINATIONS list and the same
- * usePathname()-driven active-tab logic, just different layout classes
- * per breakpoint. No "More" tab was added speculatively (Decision —
- * Phase 2A-1 mobile nav): a 5th tab only gets added once real content
- * exists to put behind it. That happened with the arrival-email
- * delivery system (docs/sql/2026-10-01-arrival-email-delivery.sql) —
- * System / Email delivery is real, staff-facing operational content,
- * not a placeholder, so it earns the 5th slot here (grid-cols-5 below).
- */
 export default function AdminNav() {
-  const pathname = usePathname()
-
-  return (
-    <>
-      {/* Desktop / tablet — restrained horizontal nav, unchanged shape
-          from Phase 1, just one more destination. */}
-      <nav className="hidden gap-4 text-[16px] font-medium text-foreground/70 sm:flex">
-        {DESTINATIONS.map((dest) => (
-          <Link
-            key={dest.href}
-            href={dest.href}
-            className={`rounded-md px-1 py-2 transition-colors hover:text-foreground ${
-              isActive(pathname, dest) ? 'text-foreground' : ''
-            }`}
-          >
-            {dest.label}
-          </Link>
-        ))}
-      </nav>
-
-      {/* Mobile — a real bottom tab bar, not a shrunk horizontal row.
-          Fixed, safe-area-aware (iPhone home-indicator inset), never
-          obscuring page content (see the layout's own bottom padding on
-          mobile) or causing horizontal scroll (a fixed grid, no wrapping). */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-8 border-t border-foreground/10 bg-background sm:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        {DESTINATIONS.map((dest) => {
-          const active = isActive(pathname, dest)
-          return (
-            <Link
-              key={dest.href}
-              href={dest.href}
-              aria-current={active ? 'page' : undefined}
-              className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[12px] font-medium transition-colors ${
-                active ? 'text-accent' : 'text-foreground/60'
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-accent' : 'bg-transparent'}`}
-              />
-              {dest.label}
-            </Link>
-          )
-        })}
-      </nav>
-    </>
-  )
+  const path = usePathname()
+  const [more, setMore] = useState(false)
+  const otherActive = [...DESTINATIONS.slice(4),...OTHER_DESTINATIONS].some(item => isActive(path,item))
+  return <>
+    <nav aria-label="Admin sections" className="hidden flex-wrap gap-2 sm:flex">
+      {[...DESTINATIONS,...OTHER_DESTINATIONS].map(item => <Link
+        key={item.href} href={item.href}
+        aria-current={isActive(path,item)?'page':undefined}
+        className={`min-h-11 rounded-md px-4 py-2.5 text-sm transition-colors ${
+          isActive(path,item) ? 'bg-accent/15 font-semibold text-foreground' : 'text-foreground/70 hover:bg-foreground/5'
+        }`}>{item.label}</Link>)}
+    </nav>
+    {more && <div id="admin-more-menu" className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 rounded-lg border border-foreground/15 bg-background p-3 shadow-lg sm:hidden">
+      <p className="px-2 pb-2 text-xs uppercase tracking-wider text-foreground/55">More in Admin</p>
+      {[...DESTINATIONS.slice(4),...OTHER_DESTINATIONS].map(item => <Link
+        key={item.href} href={item.href} onClick={()=>setMore(false)}
+        aria-current={isActive(path,item)?'page':undefined}
+        className={`block min-h-11 rounded-md px-3 py-3 text-sm ${
+          isActive(path,item) ? 'bg-accent/15 font-semibold' : 'hover:bg-foreground/5'
+        }`}>{item.label}</Link>)}
+    </div>}
+    <nav aria-label="Admin navigation" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-foreground/15 bg-background sm:hidden"
+      style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
+      {MOBILE.map(item => <Link key={item.href} href={item.href}
+        aria-current={isActive(path,item)?'page':undefined}
+        className={`flex min-h-12 items-center justify-center px-1 text-[12px] ${
+          isActive(path,item)?'bg-accent/10 font-semibold text-foreground':'text-foreground/65'
+        }`}>{item.label}</Link>)}
+      <button type="button" aria-expanded={more} aria-controls="admin-more-menu"
+        onClick={()=>setMore(v=>!v)} className={`min-h-12 px-1 text-[12px] ${
+          otherActive||more?'bg-accent/10 font-semibold':'text-foreground/65'
+        }`}>More</button>
+    </nav>
+  </>
 }

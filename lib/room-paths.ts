@@ -1,16 +1,16 @@
 /**
- * Canonical Room destinations. Keep historic route acceptance separate:
+ * Canonical Board destinations. Keep historic route acceptance separate:
  * redirects should only happen after preserving access and context.
  * These helpers are presentation-only and must never authorize content.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export const ROOM_HOME = '/room'
-export const ROOM_WRITE = '/room/write'
+export const ROOM_HOME = '/board'
+export const ROOM_WRITE = '/board/write'
 
 export function roomLetterPath(id: string): string {
   if (!UUID.test(id)) throw new Error('Invalid public-letter identifier')
-  return `/room/letters/${id}`
+  return `/board/letters/${id}`
 }
 
 export function roomLetterEditPath(id: string): string {

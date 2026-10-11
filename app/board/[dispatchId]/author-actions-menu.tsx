@@ -159,7 +159,7 @@ export default function AuthorActionsMenu({
       if (momentImagePaths.length > 0) {
         await supabase.storage.from('dispatch-photos').remove(momentImagePaths)
       }
-      router.push('/room')
+      router.push('/board')
     } finally {
       setBusy(false)
     }
@@ -183,7 +183,7 @@ export default function AuthorActionsMenu({
               <div className="flex flex-col gap-1.5">
                 {editable && (
                   <Link
-                    href={editHref ?? `/room/letters/${dispatchId}/edit`}
+                    href={editHref ?? `/board/letters/${dispatchId}/edit`}
                     className={secondaryButtonClass}
                     onClick={closeMenu}
                   >
@@ -235,7 +235,7 @@ export default function AuthorActionsMenu({
               <div className="space-y-2">
                 <p className={helperTextClass}>Delete this letter permanently?</p>
                 <p className={helperTextClass}>
-                  It will disappear from The Room and from your profile, and any external share link
+                  It will disappear from The Board and from your profile, and any external share link
                   will stop working. This cannot be undone.
                 </p>
                 {error && <p className="text-sm text-red-600">{error}</p>}

@@ -120,7 +120,7 @@ export default function DirectoryBrowser({
     <section aria-label="Discover people" aria-busy={pending} aria-live="polite">
       {entries.length>0 && <div className="space-y-3">
         {entries.map((person)=>{
-          const target=`/minds/${person.userId}?returnTo=${encodeURIComponent(directoryUrl(filters,true))}`
+          const target=`/board/people/${person.userId}?returnTo=${encodeURIComponent(directoryUrl(filters,true))}`
           return <article key={person.userId} className="min-w-0 rounded-[5px] border border-[#ded3c3] bg-[#fffdf8] shadow-[0_7px_22px_rgba(65,49,34,.035)]">
             <Link href={target} onClick={saveReturn} className="flex min-w-0 items-start gap-4 rounded-[5px] px-5 py-5 transition-colors hover:bg-[#faf6ee] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7 sm:py-6">
               <ProfileIdentityMark identifier={person.userId} markUrl={person.markUrl} label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined} size="lg"/>
@@ -155,9 +155,9 @@ export default function DirectoryBrowser({
          </div> :
          !entries.length ? <div className="max-w-sm space-y-3 text-center">
            <p className="font-serif text-[21px]">No one matches just now.</p>
-           <p className="text-[13px] leading-relaxed text-foreground/60">Try a wider place—or leave a letter in The Room.</p>
+           <p className="text-[13px] leading-relaxed text-foreground/60">Try a wider place—or leave a letter on The Board.</p>
            {hasApplied && <button type="button" className="text-[13px] underline underline-offset-4" onClick={()=>change({})}>Clear filters</button>}
-           <p><Link href="/room/write" className="text-[13px] underline underline-offset-4">Leave a letter</Link></p>
+           <p><Link href="/board/write" className="text-[13px] underline underline-offset-4">Leave a letter</Link></p>
          </div> :
          hasMore ? <button type="button" onClick={()=>void load(filters,false)} className="min-h-11 rounded-md border border-foreground/20 px-7 py-3 text-[14px] font-medium hover:bg-foreground/[.035]">Keep looking <span aria-hidden="true">→</span></button> :
          <p className="text-[13px] text-foreground/55">That’s everyone here for now.</p>}

@@ -178,13 +178,13 @@ describe('SignInPage — controlled pilot framing', () => {
     expect(html).toContain('Use your invitation')
   })
 
-  it('join intent explains that the Founding Correspondents pilot is invitation only', () => {
+  it('join intent gives clear, truthful admission guidance without pilot branding', () => {
     currentSearchParams = new URLSearchParams('intent=join')
     try {
       const html = render()
-      expect(html).toContain('Enter the Founding Correspondents pilot')
-      expect(html).toContain('Tempa is currently invitation only.')
-      expect(html).toContain('Use the same email address that received your invitation.')
+      expect(html).toContain('Join Tempa')
+      expect(html).toContain('Tempa is welcoming new members gradually.')
+      expect(html).toContain('Please use the email address approved for your account.')
     } finally {
       currentSearchParams = new URLSearchParams()
     }

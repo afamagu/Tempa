@@ -112,8 +112,8 @@ export default async function DispatchPage({
     ? introductionReturnPath(resolvedSearchParams.returnTo)
     : null
   const boardReturnHref = explicitReturn ?? (trailContext
-    ? `/room?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
-    : '/room')
+    ? `/board?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
+    : '/board')
 
   const isAuthor = dispatch.authorId === user.id
   // An author may inspect and restore a voluntarily withdrawn letter.
@@ -126,7 +126,7 @@ export default async function DispatchPage({
       const waitingCount = await getWaitingLetterCount(supabase, user.id)
       return <AppShell active="room" waitingLetterCount={waitingCount}>
         <main className="mx-auto max-w-xl space-y-5 px-6 py-16">
-          <Link href="/room" className={quietLinkClass}>← The Room</Link>
+          <Link href="/board" className={quietLinkClass}>← The Board</Link>
           <h1 className="font-serif text-3xl">{dispatch.title}</h1>
           <p className={helperTextClass}>You withdrew this letter. Others cannot discover or read it.</p>
           <RestoreRoomLetterAction letterId={dispatch.id} />
@@ -153,7 +153,7 @@ export default async function DispatchPage({
             <p className={helperTextClass}>Hidden by TEMPA.</p>
             <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
               <BackArrowIcon />
-              Back to The Room
+              Back to The Board
             </Link>
           </div>
         </main>
@@ -414,7 +414,7 @@ export default async function DispatchPage({
             <div className="border-t border-foreground/10 pt-4">
               <Link href={boardReturnHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
                 <BackArrowIcon />
-                Back to The Room
+                Back to The Board
               </Link>
             </div>
           </div>

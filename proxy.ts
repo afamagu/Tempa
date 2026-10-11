@@ -26,6 +26,7 @@ export const PROTECTED_MATCHERS = [
   '/question/:path*',
   '/room/:path*',
   '/write/:path*',
+  '/welcome/:path*',
   '/you/:path*',
 ] as const
 

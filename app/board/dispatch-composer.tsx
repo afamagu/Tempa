@@ -596,7 +596,7 @@ export default function DispatchComposer({
       }
       mentions.clear()
       setPendingWarning(null)
-      router.push(official ? `/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}` : `/room/letters/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
+      router.push(official ? `/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}` : `/board/letters/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error(isEdit ? '[board] edit threw' : '[board] publish threw', { message })
@@ -630,7 +630,7 @@ export default function DispatchComposer({
   }
 
   const backHref = isEdit && existingDispatch
-    ? `/room/letters/${existingDispatch.id}`
+    ? `/board/letters/${existingDispatch.id}`
     : official
       ? `/admin/content/${official.publishedAs === 'tempa' ? 'dispatches' : 'sponsored'}`
       : '/room'
@@ -680,7 +680,7 @@ export default function DispatchComposer({
         {!isEdit && showComposerIntro && (
           <FeatureIntroduction guideKey="dispatch_composer" title="Leave a letter" ctaLabel="Start writing">
             <p>
-              A letter left in The Room can be a story from your day,
+              A letter pinned on The Board can be a story from your day,
               something you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something worth putting into words.
             </p>
             <p>

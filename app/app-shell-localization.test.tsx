@@ -8,7 +8,7 @@ import pt from '@/messages/pt.json'
 import AppShell from './app-shell'
 
 const DICTIONARIES = { en, fr, es, pt } as const
-const HREFS = ['/home', '/letters', '/room', '/you']
+const HREFS = ['/home', '/letters', '/board', '/you']
 
 function render(locale: keyof typeof DICTIONARIES, waitingLetterCount = 0) {
   return renderToStaticMarkup(
@@ -21,10 +21,10 @@ function render(locale: keyof typeof DICTIONARIES, waitingLetterCount = 0) {
 }
 
 const EXPECTED = {
-  en: ['Home', 'Letterbox', 'The Room', 'You'],
-  fr: ['Accueil', 'Boîte aux lettres', 'La Salle', 'Vous'],
-  es: ['Inicio', 'Buzón', 'La Sala', 'Tú'],
-  pt: ['Início', 'Caixa de cartas', 'A Sala', 'Você'],
+  en: ['Home', 'Letterbox', 'The Board', 'You'],
+  fr: ['Accueil', 'Boîte aux lettres', 'Le Tableau', 'Vous'],
+  es: ['Inicio', 'Buzón', 'El Tablón', 'Tú'],
+  pt: ['Início', 'Caixa de cartas', 'O Mural', 'Você'],
 } as const
 
 describe('AppShell navigation is localized from the dictionaries', () => {
@@ -38,19 +38,19 @@ describe('AppShell navigation is localized from the dictionaries', () => {
         expect(mobile).toContain(`>${label}</span>`)
       }
       for (const href of HREFS) expect((html.match(new RegExp(`href="${href}"`, 'g')) ?? []).length).toBe(2)
-      expect(html).not.toContain('href="/board"')
+      expect(html).not.toContain('href="/room"')
       expect(html).not.toMatch(/href="\/(en|fr|es|pt)\//)
       expect(html).toContain('>Tempa<')
     })
   }
 
-  it('legacy minds active state maps to the canonical Room item', () => {
+  it('legacy minds active state maps to the canonical Board item', () => {
     const html = renderToStaticMarkup(
       <NextIntlClientProvider locale="en" messages={en}>
         <AppShell active="minds" waitingLetterCount={0}>{null}</AppShell>
       </NextIntlClientProvider>
     )
-    const roomIndex = html.indexOf('href="/room"')
+    const roomIndex = html.indexOf('href="/board"')
     const tagStart = html.lastIndexOf('<a ', roomIndex)
     const tagEnd = html.indexOf('</a>', roomIndex)
     expect(html.slice(tagStart, tagEnd)).toContain('bg-accent/10')

@@ -27,7 +27,7 @@ export function PilotInviteForm() {
 
     setEmail('')
     setNote('')
-    setMessage('Invitation ready.')
+    setMessage('Email approved for registration.')
     router.refresh()
   }
 
@@ -72,7 +72,7 @@ export function RevokePilotInviteButton({ inviteId }: { inviteId: string }) {
       type="button"
       disabled={busy}
       onClick={async () => {
-        if (!window.confirm('Revoke this pending pilot invitation?')) return
+        if (!window.confirm('Revoke this pending invitation?')) return
         setBusy(true)
         await revokePilotInvite(createClient(), inviteId)
         setBusy(false)

@@ -1,94 +1,45 @@
 import { describe, it, expect } from 'vitest'
-import { validateRequiredFields } from './profile-form'
-import { MIN_RECOMMENDED_INTERESTS, MAX_INTERESTS } from '@/lib/interests'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const source = readFileSync(path.join(__dirname, 'profile-form.tsx'), 'utf8')
 
-function validState() {
-  return {
-    country: 'United States',
-    languages: ['English'],
-    intentSelections: ['Meaningful friendship'],
-    readingInterestsCount: MIN_RECOMMENDED_INTERESTS,
-    aiPreference: 'self_written',
-    receivingPreference: 'any',
-    writingRhythm: 'one_week',
-  }
-}
-
-describe('validateRequiredFields', () => {
-  it('returns no errors when every required section is complete', () => {
-    expect(validateRequiredFields(validState())).toEqual({})
+describe('minimal first-arrival identity', () => {
+  it('asks for name, country, languages and a truthful writing approach', () => {
+    expect(source).toContain('pseudonym')
+    expect(source).toContain('SearchableSelect id="country"')
+    expect(source).toContain('SearchableMultiSelect id="languages"')
+    expect(source).toContain('WRITING_STYLE_OPTIONS.some(x=>x.value===aiPreference)')
   })
 
-  it('country: specific message, not a generic combined one', () => {
-    const errors = validateRequiredFields({ ...validState(), country: '' })
-    expect(errors.country).toBe('Choose your country.')
+  it('retains real pseudonym validation and server-checked uniqueness', () => {
+    expect(source).toContain('isReservedPseudonym(name)')
+    expect(source).toContain("rpc('is_pseudonym_available'")
+    expect(source).toContain("rpc('suggest_available_pseudonyms'")
   })
 
-  it('languages: specific message', () => {
-    expect(validateRequiredFields({ ...validState(), languages: [] }).languages)
-      .toBe('Add at least one language.')
+  it('cannot falsify a writing-method declaration as a convenient default', () => {
+    expect(source).toContain("useState('')")
+    expect(source).toContain("if(!WRITING_STYLE_OPTIONS.some(x=>x.value===aiPreference))")
+    expect(source).toContain('ai_preference:aiPreference')
   })
 
-  it('intent: specific message', () => {
-    expect(validateRequiredFields({ ...validState(), intentSelections: [] }).intent)
-      .toBe('Choose what brings you to Tempa.')
+  it('does not require a photograph, essay, typography, interests or writing rhythm', () => {
+    expect(source).not.toContain('persistGeneratedMark')
+    expect(source).not.toContain('WritingRhythmChoice')
+    expect(source).not.toContain("router.push('/profile/question')")
+    expect(source).not.toContain('readingInterestsCount')
+    expect(source).not.toContain('getFlagshipQuestion')
   })
 
-  it('reading interests use the actual new-profile range', () => {
-    const errors = validateRequiredFields({ ...validState(), readingInterestsCount: 0 })
-    expect(errors.interests).toBe(
-      `Choose at least ${MIN_RECOMMENDED_INTERESTS} things you enjoy reading about (up to ${MAX_INTERESTS}).`
-    )
+  it('creates only the member’s own profile and continues to the durable welcome', () => {
+    expect(source).toContain('id:userId')
+    expect(source).toContain("onboarding_stage:'complete'")
+    expect(source).toContain("router.replace('/welcome')")
   })
 
-  it('writing style: specific message', () => {
-    expect(validateRequiredFields({ ...validState(), aiPreference: '' }).writingStyle)
-      .toBe('Choose how you usually write your letters.')
-  })
-
-  it('receiving preference: specific message', () => {
-    expect(validateRequiredFields({ ...validState(), receivingPreference: '' }).receiving)
-      .toBe("Choose what you're comfortable receiving.")
-  })
-
-  it('writing rhythm is required and rejects the retired unbounded option', () => {
-    expect(validateRequiredFields({ ...validState(), writingRhythm: '' }).rhythm)
-      .toBe('Choose your usual writing rhythm.')
-    expect(validateRequiredFields({ ...validState(), writingRhythm: 'whenever' }).rhythm)
-      .toBe('Choose your usual writing rhythm.')
-  })
-
-  it('reports every incomplete section at once in DOM order', () => {
-    const errors = validateRequiredFields({
-      ...validState(),
-      country: '',
-      languages: [],
-      aiPreference: '',
-      receivingPreference: '',
-      writingRhythm: '',
-    })
-    expect(Object.keys(errors)).toEqual([
-      'country',
-      'languages',
-      'writingStyle',
-      'receiving',
-      'rhythm',
-    ])
-  })
-})
-
-describe('new-profile onboarding handoff', () => {
-  it('stores rhythm on the profile before continuing to the Mark step', () => {
-    expect(source).toContain('writing_rhythm: writingRhythm')
-    expect(source).toContain("onboarding_stage: 'mark'")
-    expect(source).toContain("router.push('/profile/mark')")
-  })
-
-  it('renders the rhythm choice inside the correspondence section', () => {
-    expect(source).toContain('<WritingRhythmChoice error={fieldErrors.rhythm} />')
+  it('has restrained, actionable error feedback without technical database text', () => {
+    expect(source).toContain('role="alert"')
+    expect(source).toContain("arrival('saveError')")
   })
 })

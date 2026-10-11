@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import BoardOpenLettersPage from './open-letters-page'
+import BoardTabs from './board-tabs'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
@@ -7,7 +9,6 @@ import {
   searchDispatches,
   getKeptUserIds,
   getFiniteBoardComposition,
-  generateBoardSeed,
   readingTrailSearchParams,
   type DispatchListItem,
 } from '@/lib/dispatches'
@@ -31,10 +32,13 @@ import BoardCrossedPathImpression from './board-crossed-path-impression'
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; s?: string; seed?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { q, s, seed } = await searchParams
-  const query = (q ?? '').trim()
+  const raw=await searchParams
+  const q=typeof raw.q==='string'?raw.q:''
+  const s=typeof raw.s==='string'?raw.s:undefined
+  const seed=typeof raw.seed==='string'?raw.seed:undefined
+  const query=q.trim()
 
   const supabase = await createClient()
   const {
@@ -45,18 +49,12 @@ export default async function BoardPage({
     redirect('/sign-in')
   }
 
-  if (!query && (!s || !seed)) {
-    redirect(`/board?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
-  }
 
-  // Historic Board links now land in The Room. Preserve explicit keyword
-  // searches in this compatibility-only route; never expose a second
-  // non-search member feed under the retired Board name.
+  // Historic Board keyword searches remain functional. Everything else,
+  // including ?question=... and reading-trail state, goes to the canonical
+  // Board page without dropping query parameters.
   if (!query) {
-    const state = new URLSearchParams()
-    if (s) state.set('s',s)
-    if (seed) state.set('seed',seed)
-    redirect(`/room${state.size ? `?${state.toString()}` : ''}`)
+    return BoardOpenLettersPage({ searchParams })
   }
 
   // Search and passive Board composition stay separate: Search is an
@@ -110,6 +108,7 @@ export default async function BoardPage({
             </FeatureIntroduction>
           )}
 
+          <BoardTabs active="letters" />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DispatchSearch key={query} initialQuery={query} sessionStartedAt={s} seed={seed} />
             {query && (
