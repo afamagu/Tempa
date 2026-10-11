@@ -514,6 +514,16 @@
     "intro": "Un nombre, un lugar y tus idiomas ayudan a que las personas se encuentren. Puedes completar tu perfil después.",
     "writing": "¿Cómo sueles escribir?",
     "writingHelp": "Tempa valora tu propia voz. Elige la opción que describa cómo escribes.",
-    "browse": "Puedes leer las cartas sin escribir nada ni añadir una fotografía."
+    "browse": "Puedes leer las cartas sin escribir nada ni añadir una fotografía.",
+    "nameError": "Elige un nombre de 3 a 24 caracteres: letras, números, espacios o guiones.",
+    "countryError": "Elige tu país.",
+    "languagesError": "Elige al menos un idioma.",
+    "writingError": "Indica cómo sueles escribir.",
+    "checkError": "No pudimos comprobar ese nombre. Inténtalo de nuevo.",
+    "taken": "Ese nombre ya está en uso. Elige otro.",
+    "takenNow": "Ese nombre acaba de quedar ocupado. Elige otro.",
+    "saveError": "No pudimos guardar estos datos. Inténtalo de nuevo.",
+    "saving": "Guardando…",
+    "continue": "Continuar"
   }
 }
