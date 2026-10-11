@@ -278,7 +278,7 @@ describe('the author’s choice', () => {
 
   it('the composer sends the requested web state WITH the save (one transaction) — no separate follow-up call', () => {
     const composer = read('app/board/dispatch-composer.tsx')
-    expect(composer).toContain('const requestedWeb = showWebChoice ? webPublic : undefined')
+    expect(composer).toContain('const requestedWeb = official ? (showWebChoice ? webPublic : undefined) : (showWebChoice ? webPublic : isEdit ? undefined : false)')
     expect(composer.match(/webPublic: requestedWeb,/g)).toHaveLength(4)
     expect(composer).not.toContain('setDispatchWebPublic')
     // a web-visibility refusal is shown, and the composer stays put (no navigation)
