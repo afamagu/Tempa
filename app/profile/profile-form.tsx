@@ -19,6 +19,7 @@ import { isReservedPseudonym, RESERVED_PSEUDONYM_MESSAGE } from '@/lib/reserved-
 export default function ProfileForm({ userId }: { userId: string }) {
   const locale = useLocale()
   const t = useTranslations('ProfileSetup')
+  const arrival = useTranslations('FirstArrivalProfile')
   const writingT = useTranslations('ProfileSetup.writingOptions')
   const writingDescription = useTranslations('ProfileSetup.writingDescriptions')
   const router = useRouter()
@@ -59,25 +60,25 @@ export default function ProfileForm({ userId }: { userId: string }) {
     setSuggestions([])
     const name=pseudonym.trim()
     if(name.length<3||name.length>24||!/^[A-Za-z0-9 -]+$/.test(name)){
-      setError('Choose a name of 3–24 letters, numbers, spaces or hyphens.')
+      setError(arrival('nameError'))
       return
     }
     if(isReservedPseudonym(name)){setError(RESERVED_PSEUDONYM_MESSAGE);return}
-    if(!country){setError('Choose your country.');return}
-    if(!languages.length){setError('Choose at least one language.');return}
+    if(!country){setError(arrival('countryError'));return}
+    if(!languages.length){setError(arrival('languagesError'));return}
     if(!WRITING_STYLE_OPTIONS.some(x=>x.value===aiPreference)){
-      setError('Tell us which writing approach you normally use.')
+      setError(arrival('writingError'))
       return
     }
     setBusy(true)
     try {
       const supabase=createClient()
       const {data:available,error:checkError}=await supabase.rpc('is_pseudonym_available',{candidate:name})
-      if(checkError)throw new Error('We could not check that name. Please try again.')
+      if(checkError)throw new Error(arrival('checkError'))
       if(!available){
         const {data:alternatives}=await supabase.rpc('suggest_available_pseudonyms',{base:name,needed:3})
         setSuggestions(alternatives??[])
-        throw new Error('That name is already taken. Choose another.')
+        throw new Error(arrival('taken'))
       }
       const {error:insertError}=await supabase.from('profiles').insert({
         id:userId,
@@ -89,24 +90,24 @@ export default function ProfileForm({ userId }: { userId: string }) {
         onboarding_stage:'complete',
       })
       if(insertError){
-        if(insertError.code==='23505')throw new Error('That name has just been taken. Choose another.')
-        throw new Error('We could not save these details. Please try again.')
+        if(insertError.code==='23505')throw new Error(arrival('takenNow'))
+        throw new Error(arrival('saveError'))
       }
       router.replace('/welcome')
       router.refresh()
     }catch(e){
       setBusy(false)
-      setError(e instanceof Error?e.message:'We could not save these details. Please try again.')
+      setError(e instanceof Error?e.message:arrival('saveError'))
     }
   }
 
   return <main className="mx-auto flex min-h-[100svh] max-w-2xl flex-col justify-center px-6 py-14 sm:px-10">
     <header className="space-y-4">
       <p className="font-serif text-lg italic text-foreground/70">Tempa</p>
-      <p className="pt-5 text-[11px] font-medium uppercase tracking-[.21em] text-[#94745f]">Your place here</p>
-      <h1 className="font-serif text-[37px] font-normal leading-tight sm:text-[47px]">Just a few details.</h1>
+      <p className="pt-5 text-[11px] font-medium uppercase tracking-[.21em] text-[#94745f]">{arrival('eyebrow')}</p>
+      <h1 className="font-serif text-[37px] font-normal leading-tight sm:text-[47px]">{arrival('title')}</h1>
       <p className="max-w-lg font-serif text-[19px] leading-relaxed text-foreground/75">
-        A name, a place and the languages you know help people find each other. You can make the rest of your profile your own later.
+        {arrival('intro')}
       </p>
     </header>
     <form onSubmit={submit} className="mt-10 space-y-8">
@@ -131,17 +132,17 @@ export default function ProfileForm({ userId }: { userId: string }) {
           options={languageOptions} placeholder={t('searchLanguages')} allowCustom />
       </div>
       <fieldset className="space-y-3 border-t border-foreground/10 pt-6">
-        <legend className="font-serif text-[20px]">How do you usually write?</legend>
-        <p className={helperTextClass}>Tempa values writing in your own voice. Choose the description that fits how you write.</p>
+        <legend className="font-serif text-[20px]">{arrival('writing')}</legend>
+        <p className={helperTextClass}>{arrival('writingHelp')}</p>
         <ChoiceGroup ariaLabel="How you usually write" options={writingOptions}
           selected={aiPreference?[aiPreference]:[]} onToggle={setAiPreference} layout="card" />
       </fieldset>
       <p className="text-[13px] leading-relaxed text-foreground/65">
-        You can browse the open letters without writing anything or adding a photograph.
+        {arrival('browse')}
       </p>
       {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
       <button type="submit" disabled={busy} className="min-h-12 w-full rounded-md bg-accent px-5 py-3 text-[15px] font-medium text-accent-foreground disabled:opacity-60">
-        {busy?'Saving…':'Continue'}
+        {busy?arrival('saving'):arrival('continue')}
       </button>
     </form>
   </main>
