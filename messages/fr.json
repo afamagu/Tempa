@@ -514,6 +514,16 @@
     "intro": "Un nom, un lieu et vos langues permettent aux autres de vous trouver. Vous compléterez votre profil plus tard.",
     "writing": "Comment écrivez-vous habituellement ?",
     "writingHelp": "Tempa valorise votre propre voix. Choisissez ce qui correspond à votre façon d’écrire.",
-    "browse": "Vous pouvez lire les lettres sans écrire ni ajouter de photographie."
+    "browse": "Vous pouvez lire les lettres sans écrire ni ajouter de photographie.",
+    "nameError": "Choisissez un nom de 3 à 24 caractères : lettres, chiffres, espaces ou traits d’union.",
+    "countryError": "Choisissez votre pays.",
+    "languagesError": "Choisissez au moins une langue.",
+    "writingError": "Indiquez votre façon habituelle d’écrire.",
+    "checkError": "Impossible de vérifier ce nom pour l’instant. Réessayez.",
+    "taken": "Ce nom est déjà utilisé. Choisissez-en un autre.",
+    "takenNow": "Ce nom vient d’être pris. Choisissez-en un autre.",
+    "saveError": "Impossible d’enregistrer ces informations. Réessayez.",
+    "saving": "Enregistrement…",
+    "continue": "Continuer"
   }
 }
