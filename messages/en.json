@@ -514,6 +514,16 @@
     "intro": "A name, a place and the languages you know help people find each other. You can make the rest of your profile your own later.",
     "writing": "How do you usually write?",
     "writingHelp": "Tempa values writing in your own voice. Choose the description that fits how you write.",
-    "browse": "You can browse the open letters without writing anything or adding a photograph."
+    "browse": "You can browse the open letters without writing anything or adding a photograph.",
+    "nameError": "Choose a name of 3–24 letters, numbers, spaces or hyphens.",
+    "countryError": "Choose your country.",
+    "languagesError": "Choose at least one language.",
+    "writingError": "Tell us which writing approach you normally use.",
+    "checkError": "We could not check that name. Please try again.",
+    "taken": "That name is already taken. Choose another.",
+    "takenNow": "That name has just been taken. Choose another.",
+    "saveError": "We could not save these details. Please try again.",
+    "saving": "Saving…",
+    "continue": "Continue"
   }
 }
