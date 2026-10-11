@@ -38,6 +38,8 @@ BEGIN
       latest.title AS latest_letter_title,
       left(latest.body, 750) AS latest_letter_body
     FROM public.public_profiles p
+    JOIN public.profiles member ON member.id=p.id
+      AND member.is_editorial IS DISTINCT FROM true
     LEFT JOIN LATERAL (
       SELECT d.id, d.title, d.body
       FROM public.dispatches d
