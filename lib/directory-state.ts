@@ -20,5 +20,5 @@ export function directoryUrl(filters: DirectoryFilters, restore=false): string {
   }
   if(filters.letters === 'all') params.set('letters','all')
   if(restore) params.set('restore','1')
-  return `/letters/discover${params.size ? `?${params}` : ''}`
+  return `/board/people${params.size ? `?${params}` : ''}`
 }
