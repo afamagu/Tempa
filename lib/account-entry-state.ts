@@ -26,7 +26,7 @@ type EntryStateRow = {
 }
 
 export async function readProxyAccountEntry(supabase: SupabaseClient, userId: string): Promise<ProxyAccountEntry> {
-  const [entryResult, languageResult, pilotResult] = await Promise.all([
+  const [entryResult, languageResult, pilotResult, firstArrivalResult] = await Promise.all([
     supabase.rpc('current_account_entry_state', {
       p_terms_version: CURRENT_TERMS_VERSION,
       p_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
@@ -37,6 +37,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
       .eq('user_id', userId)
       .maybeSingle(),
     supabase.rpc('current_pilot_access'),
+    supabase.from('profiles').select('first_arrival_seen_at').eq('id', userId).maybeSingle(),
   ])
 
   const { data, error } = entryResult
@@ -52,6 +53,9 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
     ? languageRow.interface_locale
     : undefined
   const pilotAccess = pilotResult.error ? undefined : pilotResult.data === true
+  const firstArrivalPending = firstArrivalResult.error || !firstArrivalResult.data
+    ? undefined
+    : firstArrivalResult.data.first_arrival_seen_at === null
 
   if (!error && row) {
     return {
@@ -67,11 +71,12 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
         hasProfile: Boolean(row.has_profile),
         onboardingStage: (row.onboarding_stage as OnboardingStage | null) ?? null,
         needsWritingStyle: row.has_writing_style === false,
+        firstArrivalPending,
       },
     }
   }
 
-  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale, pilotAccess)
+  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale, pilotAccess, firstArrivalPending)
 }
 
 async function readLegacyProxyAccountEntry(
@@ -79,7 +84,8 @@ async function readLegacyProxyAccountEntry(
   userId: string,
   languageConfirmed: boolean | undefined,
   interfaceLocale: InterfaceLocale | undefined,
-  pilotAccess: boolean | undefined
+  pilotAccess: boolean | undefined,
+  firstArrivalPending: boolean | undefined
 ): Promise<ProxyAccountEntry> {
   const [{ data: accountStatus }, { data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
     supabase.rpc('current_account_status'),
@@ -105,6 +111,7 @@ async function readLegacyProxyAccountEntry(
       ),
       hasProfile: Boolean(profile),
       onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
+      firstArrivalPending,
     },
   }
 }
