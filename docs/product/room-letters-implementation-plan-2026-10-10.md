@@ -132,7 +132,7 @@ No part of this plan authorizes changing production data, activating payments, m
 
 ## Existing-answer conversion release gate (2026-10-11)
 
-Owner approved reusing existing public Question answers to give The Room authentic depth. Snapshot: 15 visible answers by 10 members; eight published member letters by four members; six answer authors have no published member letter. This is an INVENTORY, not approval of individual contents.
+Owner approved reusing existing public Question answers to give The Room authentic depth. Current editorial review found 11 substantive answers suitable as standalone letters; two very short, generic introductions remain historical answers rather than being represented as letters. All author/source records are preserved. Snapshot: 15 visible answers by 10 members; eight published member letters by four members; six answer authors have no published member letter. This is an INVENTORY, not approval of individual contents.
 
 Files staged **only in this PR**:
 - `docs/sql/2026-10-11-room-existing-answers-review-READONLY.sql`: individually review the original question and answer, content suitability, duplicate publication, moderation and account visibility.
