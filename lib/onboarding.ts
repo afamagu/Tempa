@@ -9,6 +9,8 @@ export type OnboardingState = {
    * chosen a style. Absent/false (including an app deployed before the
    * migration) never gates anything. */
   needsWritingStyle?: boolean
+  /** New members see an enduring one-time welcome after their identity is created. */
+  firstArrivalPending?: boolean
 }
 
 /** The one-time Writing Style step — step 4 of onboarding for a new
@@ -50,8 +52,14 @@ export function resolveOnboardingDestination(
   if (!state.hasProfile) return '/profile'
   if (state.onboardingStage === 'mark') return '/profile/mark'
   if (state.onboardingStage === 'question') return '/profile/question'
-  if (state.needsWritingStyle === true && !isWritingStyleExemptPath(requestedDestination)) {
-    return writingStyleStepHref(requestedDestination)
+  // Writing style is personalisation, never a registration hurdle.
+  // The optional migration field fails open until deployed.
+  if (state.firstArrivalPending === true &&
+      requestedDestination.split(/[?#]/, 1)[0] !== '/welcome' &&
+      !isWritingStyleExemptPath(requestedDestination) &&
+      !requestedDestination.startsWith('/you/account') &&
+      !requestedDestination.startsWith('/admin')) {
+    return '/welcome'
   }
   return requestedDestination
 }
