@@ -222,7 +222,7 @@ export default async function PublicProfilePage({
             <section className="space-y-3 border-t border-foreground/10 pt-6">
               <div className="flex items-center justify-between gap-3">
                 <p className={sectionLabelClass}>Letters</p>
-                <Link href={`/room/${userId}/dispatches`} className={quietLinkClass}>See all letters</Link>
+                <Link href={`/room/${userId}/dispatches?returnTo=${encodeURIComponent(profileReturnHref)}`} className={quietLinkClass}>See all letters</Link>
               </div>
               {recentDispatches.length > 0 && (
                 <div className="space-y-4">
