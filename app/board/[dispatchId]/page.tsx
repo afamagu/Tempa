@@ -122,7 +122,7 @@ export default async function DispatchPage({
   if (isAuthor) {
     const { data: visibility } = await supabase
       .from('dispatches').select('status').eq('id', dispatch.id).maybeSingle()
-    if (visibility?.status === 'unpublished') {
+    if (visibility?.status === 'unpublished' && dispatch.moderationStatus === 'visible' && dispatch.publishedAs === 'member') {
       const waitingCount = await getWaitingLetterCount(supabase, user.id)
       return <AppShell active="room" waitingLetterCount={waitingCount}>
         <main className="mx-auto max-w-xl space-y-5 px-6 py-16">
