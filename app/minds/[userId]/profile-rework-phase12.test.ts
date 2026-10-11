@@ -61,3 +61,19 @@ describe('Phase 12 public profile hierarchy', () => {
     expect(source).not.toContain("rawAnswers.map(async")
   })
 })
+
+
+describe('Room-letter restoration visibility', () => {
+  it('queries withdrawn letters only for the author, not for other profile visitors', () => {
+    expect(source).toContain("isSelf\n      ? supabase.from('dispatches')")
+    expect(source).toContain(".eq('status', 'unpublished')")
+    expect(source).toContain(".eq('moderation_status', 'visible')")
+    expect(source).toContain(".eq('published_as', 'member')")
+    expect(source).toContain("isSelf && (withdrawnLettersResult.data?.length ?? 0) > 0")
+  })
+
+  it('provides a canonical restoration link for withdrawn letters in the owner profile', () => {
+    expect(source).toContain('Your withdrawn letters')
+    expect(source).toContain('roomLetterPath(letter.id)')
+  })
+})
