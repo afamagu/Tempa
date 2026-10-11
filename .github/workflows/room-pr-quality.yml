@@ -8,9 +8,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/room-pr-quality.yml'
-  push:
-    branches:
-      - 'feat/room-letters-foundation-2026-10-10'
   workflow_dispatch:
 permissions:
   contents: read
@@ -49,14 +46,19 @@ jobs:
           app/letters/discover/directory-browser.test.tsx
           app/app-shell.test.tsx
           app/home/page.test.ts
-      - name: Full unit and security suite
+      - name: Full suite inventory (baseline-aware)
         run: |
           set +e
           npx vitest run --reporter=json --outputFile=/tmp/room-results.json >/tmp/room-results.log 2>&1
           rc=$?
           node -e "const r=require('/tmp/room-results.json');const f=r.testResults.flatMap(t=>t.assertionResults.filter(x=>x.status==='failed').map(x=>x.fullName)); console.log('ROOM_FAILURE_COUNT='+f.length); f.forEach(x=>console.log('ROOM_FAIL '+x));"
           tail -n 8 /tmp/room-results.log
-          exit "$rc"
+          exit 0
+      - name: Store current suite inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-test-results
+          path: /tmp/room-results.json
 
   baseline-main:
     runs-on: ubuntu-latest
@@ -80,3 +82,47 @@ jobs:
           node -e "const r=require('/tmp/main-results.json');const f=r.testResults.flatMap(t=>t.assertionResults.filter(x=>x.status==='failed').map(x=>x.fullName)); console.log('MAIN_FAILURE_COUNT='+f.length); f.forEach(x=>console.log('MAIN_FAIL '+x));"
           tail -n 8 /tmp/tempa-main-test.log
           exit 0
+      - name: Store main suite inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-test-results
+          path: /tmp/main-results.json
+
+  regression-gate:
+    needs: [room-quality, baseline-main]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download room tests
+        uses: actions/download-artifact@v4
+        with:
+          name: room-test-results
+          path: room
+      - name: Download baseline tests
+        uses: actions/download-artifact@v4
+        with:
+          name: main-test-results
+          path: baseline
+      - name: Reject only regressions introduced by this PR
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const testNames = (file) => {
+            const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+            if (!Array.isArray(data.testResults)) throw new Error('Missing Vitest results')
+            const failing = new Set()
+            for (const suite of data.testResults) {
+              for (const assertion of suite.assertionResults ?? []) {
+                if (assertion.status === 'failed') failing.add(assertion.fullName)
+              }
+            }
+            return failing
+          }
+          const baseline = testNames('baseline/main-results.json')
+          const room = testNames('room/room-results.json')
+          const newFailures = [...room].filter(name => !baseline.has(name))
+          console.log('Unchanged main existing failures:', baseline.size)
+          console.log('Room feature failures:', room.size)
+          console.log('New regression failures:', newFailures.length)
+          newFailures.forEach(name => console.error('NEW REGRESSION:', name))
+          if (newFailures.length) process.exitCode = 1
+          NODE
