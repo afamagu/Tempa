@@ -682,7 +682,7 @@ export async function getBoardFeedPage(
 ): Promise<{ items: BoardFeedItem[]; nextCursor: BoardFeedCursor | null }> {
   const limit = params.limit ?? BOARD_FEED_PAGE_SIZE
 
-  const { data: rows } = await supabase.rpc('board_feed_page', {
+  const { data: rows, error: feedError } = await supabase.rpc('board_feed_page', {
     p_session_started_at: params.sessionStartedAt,
     p_seed: params.seed,
     p_limit: limit,
@@ -692,6 +692,7 @@ export async function getBoardFeedPage(
     p_cursor_id: params.cursor?.id ?? null,
   })
 
+  if (feedError) throw feedError
   const typedRows = (rows ?? []) as BoardFeedRow[]
   const listItems = await attachTopicsAndAuthors(supabase, typedRows)
   const rowById = new Map(typedRows.map((row) => [row.id, row]))
