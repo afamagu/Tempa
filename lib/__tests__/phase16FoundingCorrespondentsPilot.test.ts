@@ -65,9 +65,9 @@ describe('Phase 16 — Founding Correspondents pilot', () => {
     expect(pilotPage).toContain('if (error) redirect(\'/home\')')
   })
 
-  it('provides a neutral invitation-only boundary and an admin pilot workspace', () => {
-    expect(pilotPage).toContain('Founding Correspondents')
-    expect(pilotPage).toContain('invitation-only pilot')
+  it('retains a truthful access boundary and a premium admin invitations workspace', () => {
+    expect(pilotPage).toContain('Account access')
+    expect(pilotPage).toContain('not approved for registration')
     expect(adminPilot).toContain('Meaningful exchange funnel')
     expect(adminPilot).toContain('Correspondence survival')
     expect(adminNav).toContain("href: '/admin/pilot'")
