@@ -12,7 +12,7 @@
   "SignIn": {
     "tagline": "Um jeito mais humano de se conectar",
     "signIn": "Entrar",
-    "createAccountHeading": "Entre no piloto Founding Correspondents",
+    "createAccountHeading": "Junte-se ao Tempa",
     "pilotInviteNote": "O Tempa está atualmente disponível apenas por convite. Use o mesmo endereço de e-mail que recebeu o seu convite.",
     "continueWithGoogle": "Continuar com o Google",
     "redirecting": "Redirecionando…",
@@ -476,5 +476,44 @@
     "saved": "Preferência salva.",
     "failed": "Não foi possível salvar. Tente novamente.",
     "unavailable": "As preferências estão indisponíveis. Recarregue a página."
+  },
+  "Welcome": {
+    "eyebrow": "Para começar",
+    "title": "Bem-vindo ao Tempa.",
+    "intro": "Aqui, as pessoas deixam cartas sobre momentos comuns das suas vidas.",
+    "body": "Pode ler, descobrir alguém e escrever quando quiser. Não precisa de escrever nada antes de explorar.",
+    "overview": "Conheça o Tempa",
+    "board": "O Mural",
+    "boardHelp": "Cartas abertas deixadas por membros. Leia, descubra pessoas ou afixe uma carta sua.",
+    "letterbox": "Caixa de cartas",
+    "letterboxHelp": "As suas cartas privadas, enviadas, recebidas e trocadas.",
+    "home": "Início",
+    "homeHelp": "O que importa enquanto conhece outras pessoas.",
+    "you": "Você",
+    "youHelp": "O seu perfil e preferências, quando quiser personalizar.",
+    "button": "Entrar no Mural",
+    "replay": "Pode rever esta apresentação em Você → Guia do Tempa."
+  },
+  "Board": {
+    "tagline": "Cartas deixadas aqui",
+    "intro": "Cartas abertas sobre vidas comuns. Leia o que lhe chamar a atenção ou deixe algo seu.",
+    "open": "Cartas abertas",
+    "people": "Pessoas",
+    "pin": "Afixar uma carta",
+    "pinnedHint": "Também pode deixar uma carta. Um dia comum é suficiente.",
+    "pinFirst": "Afixar uma carta aberta",
+    "find": "Descobrir pessoas",
+    "findHeading": "Encontre alguém a quem escrever",
+    "findHelp": "Leia cartas abertas ou procure pessoas por local, língua e interesses.",
+    "filters": "Procurar por local, língua ou interesse",
+    "peopleHelp": "Comece por uma carta que lhe diga algo, ou procure de forma mais intencional."
+  },
+  "FirstArrivalProfile": {
+    "eyebrow": "O seu lugar aqui",
+    "title": "Bastam alguns detalhes.",
+    "intro": "Um nome, um lugar e as suas línguas ajudam as pessoas a encontrar-se. Pode completar o perfil mais tarde.",
+    "writing": "Como costuma escrever?",
+    "writingHelp": "O Tempa valoriza a sua voz. Escolha a opção que melhor descreve a forma como escreve.",
+    "browse": "Pode ler cartas sem escrever nada nem acrescentar uma fotografia."
   }
 }
