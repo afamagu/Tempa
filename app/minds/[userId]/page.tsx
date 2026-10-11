@@ -14,7 +14,7 @@ import {
   newCorrespondenceUnavailableMessage,
 } from '@/lib/relationship-capacity'
 import { getPublishedDispatchesByAuthor, getPinnedDispatch } from '@/lib/dispatches'
-import { roomLetterContactPath } from '@/lib/room-paths'
+import { roomLetterContactPath, roomLetterPath } from '@/lib/room-paths'
 import { getBlockScope } from '@/lib/blocking'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import type { MyQuestionAnswer } from '@/lib/questions'
@@ -106,7 +106,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle] = await Promise.all([
+  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle, withdrawnLettersResult] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -119,6 +119,16 @@ export default async function PublicProfilePage({
     isSelf ? Promise.resolve(null) : getRelationshipCapacity(supabase),
     getPublicProfileCorrespondenceState(supabase, userId),
     isSelf ? Promise.resolve(null) : getCorrespondenceLifecycleWithMember(supabase, userId),
+    isSelf
+      ? supabase.from('dispatches')
+          .select('id,title')
+          .eq('author_id', viewer.id)
+          .eq('status', 'unpublished')
+          .eq('moderation_status', 'visible')
+          .eq('published_as', 'member')
+          .order('published_at', { ascending: false })
+          .limit(25)
+      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
   ])
   const [{ data: memberQuestions }, { data: legacyQuestions }, incomingFirstContact] = await Promise.all([
     supabase.rpc('profile_member_questions', { p_owner: userId, p_offset: 0, p_limit: 12 }),
@@ -229,6 +239,21 @@ export default async function PublicProfilePage({
                   {recentDispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}
                 </div>
               )}
+            </section>
+          )}
+
+          {isSelf && (withdrawnLettersResult.data?.length ?? 0) > 0 && (
+            <section aria-label="Your withdrawn letters" className="space-y-3 border-t border-foreground/10 pt-6">
+              <p className={sectionLabelClass}>Your withdrawn letters</p>
+              <p className={helperTextClass}>Only you can see these. Open one to leave it in The Room again.</p>
+              <div className="space-y-2">
+                {(withdrawnLettersResult.data ?? []).map(letter => (
+                  <Link key={letter.id} href={roomLetterPath(letter.id)}
+                    className="block rounded-md border border-foreground/10 bg-surface-shell px-4 py-3 font-serif text-[17px] underline-offset-4 hover:underline">
+                    {letter.title}
+                  </Link>
+                ))}
+              </div>
             </section>
           )}
 
