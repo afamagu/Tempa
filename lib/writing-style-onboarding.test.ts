@@ -24,13 +24,9 @@ describe('Writing Style — onboarding order: Mark → Flagship Question → Wri
     }
   })
 
-  it('after the Flagship Question (stage complete, no style yet) the member is sent to the style step, carrying where they were going', () => {
-    expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/home')).toBe(
-      `${WRITING_STYLE_PATH}?next=%2Fhome`
-    )
-    expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/letters/abc?x=1')).toBe(
-      writingStyleStepHref('/letters/abc?x=1')
-    )
+  it('a completed member can explore without selecting a visual writing style', () => {
+    expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/home')).toBe('/home')
+    expect(resolveOnboardingDestination({ ...complete, needsWritingStyle: true }, '/letters/abc?x=1')).toBe('/letters/abc?x=1')
   })
 
   it('the Flagship completion screen continues to the style step, then Home', () => {
@@ -63,7 +59,7 @@ describe('Writing Style — onboarding order: Mark → Flagship Question → Wri
 
   it('the account-entry layer passes the signal through unchanged, after eligibility and legal gates', () => {
     const base = { authenticated: true, eligibilityStatus: 'eligible' as const, eligibleOn: null, legalCurrent: true, hasProfile: true, onboardingStage: 'complete' as const }
-    expect(resolveAccountEntryDestination({ ...base, needsWritingStyle: true }, '/home')).toBe('/profile/writing-style?next=%2Fhome')
+    expect(resolveAccountEntryDestination({ ...base, needsWritingStyle: true }, '/home')).toBe('/home')
     expect(resolveAccountEntryDestination({ ...base, legalCurrent: false, needsWritingStyle: true }, '/home')).toBe('/begin')
   })
 })
@@ -71,6 +67,7 @@ describe('Writing Style — onboarding order: Mark → Flagship Question → Wri
 function fakeEntryRpc(row: Record<string, unknown> | null, error: unknown = null) {
   return {
     rpc: async () => ({ data: row ? [row] : null, error }),
+    from: () => ({select: () => ({eq: () => ({maybeSingle: async () => ({data:null,error:{code:'42703'}})})})}),
   } as unknown as SupabaseClient
 }
 
