@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import BoardOpenLettersPage from './open-letters-page'
+import BoardTabs from './board-tabs'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
@@ -53,10 +55,7 @@ export default async function BoardPage({
   // searches in this compatibility-only route; never expose a second
   // non-search member feed under the retired Board name.
   if (!query) {
-    const state = new URLSearchParams()
-    if (s) state.set('s',s)
-    if (seed) state.set('seed',seed)
-    redirect(`/room${state.size ? `?${state.toString()}` : ''}`)
+    return BoardOpenLettersPage({ searchParams })
   }
 
   // Search and passive Board composition stay separate: Search is an
@@ -110,6 +109,7 @@ export default async function BoardPage({
             </FeatureIntroduction>
           )}
 
+          <BoardTabs active="letters" />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <DispatchSearch key={query} initialQuery={query} sessionStartedAt={s} seed={seed} />
             {query && (
