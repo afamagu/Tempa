@@ -26,7 +26,7 @@ describe('authenticated reader', () => {
   })
 
   it('no "Write to this mind" / correspondence lookups against the admin', () => {
-    expect(reader).toContain('const showWriteToAuthor = isMemberDispatch && canWriteToMind({')
+    expect(reader).toContain('const structurallyCanWriteToAuthor = isMemberDispatch && !isAuthor && !alreadyCorrespondingWithAuthor')
     expect(reader).toContain('const alreadyCorrespondingWithAuthor = isMemberDispatch && activePartnerIds.has(dispatch.authorId)')
   })
 
