@@ -53,8 +53,11 @@ export default function RoomBrowser({
       if(saved.origin!==origin||Date.now()-saved.at>30*60*1000||
         !Array.isArray(saved.state?.shown)||!Array.isArray(saved.state?.pool))return
       stateRef.current=saved.state
-      setState(saved.state)
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{if(alive.current)window.scrollTo(0,saved.scrollY)}))
+      requestAnimationFrame(()=>{
+        if(!alive.current)return
+        setState(saved.state)
+        requestAnimationFrame(()=>{if(alive.current)window.scrollTo(0,saved.scrollY)})
+      })
     }catch{ /* sessionStorage is optional */ }
     // Hydrate just once after return from a profile or letter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
