@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
-import type { DirectoryFilters, DirectoryPerson } from '@/lib/room-directory'
+import type { DirectoryFilters as DirectoryFilterValues, DirectoryPerson } from '@/lib/room-directory'
 import { directoryUrl, parseDirectoryFilters } from '@/lib/directory-state'
 import { loadDirectoryPeople } from './directory-actions'
 import DirectoryFilters from './directory-filters'
 
 type DirectoryBrowserProps = {
-  initialFilters: DirectoryFilters
+  initialFilters: DirectoryFilterValues
   initialEntries: DirectoryPerson[]
   initialHasMore: boolean
   initialError: string | null
@@ -56,7 +56,7 @@ export default function DirectoryBrowser({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 
-  const load=useCallback(async (nextFilters:DirectoryFilters, reset:boolean)=>{
+  const load=useCallback(async (nextFilters:DirectoryFilterValues, reset:boolean)=>{
     const version=++generation.current
     const previous=reset ? [] : state.current.entries
     if(reset){
@@ -86,7 +86,7 @@ export default function DirectoryBrowser({
     }
   },[])
 
-  function change(nextFilters:DirectoryFilters) {
+  function change(nextFilters:DirectoryFilterValues) {
     visitSeed.current=crypto.randomUUID()
     window.history.replaceState(null,'',directoryUrl(nextFilters))
     void load(nextFilters,true)
