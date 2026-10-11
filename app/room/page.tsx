@@ -7,6 +7,7 @@ import { ROOM_WRITE } from '@/lib/room-paths'
 import { pageTitleClass, primaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 import RoomBrowser from './room-browser'
+import { getEditorialBylines, editorialTitleFor } from '@/lib/editorial-byline'
 
 // Bounded permission-checked initial window. The client retains unshown
 // candidates rather than skipping them between six-letter batches.
@@ -38,9 +39,10 @@ export default async function RoomPage({
     redirect(`/room?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
   }
 
-  const [waiting, result] = await Promise.all([
+  const [waiting, result, editorialBylines] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
     getBoardFeedPage(supabase, { sessionStartedAt: session, seed, cursor: null, limit: CANDIDATE_WINDOW }),
+    getEditorialBylines(supabase),
   ])
   return (
     <AppShell active="room" waitingLetterCount={waiting}>
@@ -60,7 +62,7 @@ export default async function RoomPage({
           viewerId={user.id}
           startedAt={session}
           seed={seed}
-          initialPool={result.items}
+          initialPool={result.items.filter(item => item.publishedAs === 'member' && !editorialTitleFor(editorialBylines, item.authorPseudonym))}
           initialCursor={result.nextCursor}
           restore={raw.restore === '1'}
         />
