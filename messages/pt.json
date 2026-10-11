@@ -514,6 +514,16 @@
     "intro": "Um nome, um lugar e as suas línguas ajudam as pessoas a encontrar-se. Pode completar o perfil mais tarde.",
     "writing": "Como costuma escrever?",
     "writingHelp": "O Tempa valoriza a sua voz. Escolha a opção que melhor descreve a forma como escreve.",
-    "browse": "Pode ler cartas sem escrever nada nem acrescentar uma fotografia."
+    "browse": "Pode ler cartas sem escrever nada nem acrescentar uma fotografia.",
+    "nameError": "Escolha um nome de 3 a 24 caracteres: letras, números, espaços ou hífenes.",
+    "countryError": "Escolha o seu país.",
+    "languagesError": "Escolha pelo menos uma língua.",
+    "writingError": "Indique como costuma escrever.",
+    "checkError": "Não foi possível verificar este nome. Tente novamente.",
+    "taken": "Este nome já está em uso. Escolha outro.",
+    "takenNow": "Este nome acabou de ser usado. Escolha outro.",
+    "saveError": "Não foi possível guardar estes dados. Tente novamente.",
+    "saving": "A guardar…",
+    "continue": "Continuar"
   }
 }
