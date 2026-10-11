@@ -256,7 +256,7 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     expect(shown).toContain('Start writing')
 
     const hidden = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(hidden).not.toContain('Leave a letter')
+    expect(hidden).not.toContain('Start writing')
   })
 
   // Post-onboarding corrections checkpoint (Section G) — a live smoke
