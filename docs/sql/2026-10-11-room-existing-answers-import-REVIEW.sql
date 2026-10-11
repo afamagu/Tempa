@@ -3,28 +3,30 @@
 -- Keep all original questions, answers, histories and private correspondence.
 -- A member's writing is copied verbatim, not rewritten.
 BEGIN;
-CREATE TEMP TABLE room_reviewed_answer_ids (answer_id uuid PRIMARY KEY) ON COMMIT DROP;
+CREATE TEMP TABLE room_reviewed_answer_ids (
+  answer_id uuid PRIMARY KEY,
+  editorial_title text NOT NULL CHECK (char_length(btrim(editorial_title)) BETWEEN 1 AND 140)
+) ON COMMIT DROP;
 
--- The reviewer must INSERT exact answer UUIDs here after reading the
--- original question and response. Leave blank to fail closed.
--- Editorial/house accounts are not represented as ordinary members.
--- The 13 rows below are a non-destructive candidate manifest prepared by
--- examining all 15 current visible answers. The two house/editorial answers
--- are deliberately excluded. Live content eligibility is rechecked below.
-INSERT INTO room_reviewed_answer_ids(answer_id) VALUES
-('d201938b-6fb7-4372-acdf-990ea8e4f0a2'),
-('499515de-9377-4035-8c5e-a8cff83436bf'),
-('b8997358-6877-45e0-a090-d30979d90350'),
-('b0514861-bc79-46a4-b105-0675e199b8e5'),
-('f27eaa6e-6a6c-41ae-88ce-6968056574fb'),
-('9c7a40e7-8f33-4984-8cde-0f3a1d25445d'),
-('3b022585-6913-4d45-a158-69d12005b49d'),
-('1430ae81-46d8-4a2d-a8ae-66bd462c9a01'),
-('93515012-2b09-4adf-84c4-b536991962a1'),
-('555d8e8f-ae2b-4fa4-bc03-417cd74aff87'),
-('b4c6332a-500e-488c-95d7-6a596d5f8955'),
-('281b6e25-0411-4472-a1ec-4f3272765c35'),
-('dfb49da9-08a8-43cb-b1f5-13775d1d6d28');
+-- The title is editorial framing, not an alteration to the author's body.
+-- The original public Question remains preserved as provenance and appears
+-- in the Room reader. Every authored paragraph is copied exactly.
+-- Selected after inspecting all fifteen visible original answers:
+-- thirteen ordinary-member answers, two editorial house answers excluded.
+INSERT INTO room_reviewed_answer_ids(answer_id,editorial_title) VALUES
+('d201938b-6fb7-4372-acdf-990ea8e4f0a2','What I understand differently now'),
+('499515de-9377-4035-8c5e-a8cff83436bf','A television drought'),
+('b8997358-6877-45e0-a090-d30979d90350','What visitors hear'),
+('b0514861-bc79-46a4-b105-0675e199b8e5','The uninterpreted hour'),
+('f27eaa6e-6a6c-41ae-88ce-6968056574fb','I tend to show people I like them by feeding them'),
+('9c7a40e7-8f33-4984-8cde-0f3a1d25445d','When I walk into a room'),
+('3b022585-6913-4d45-a158-69d12005b49d','Nature, food and technology'),
+('1430ae81-46d8-4a2d-a8ae-66bd462c9a01','The old clockmaker'),
+('93515012-2b09-4adf-84c4-b536991962a1','Laughter, kindness and nature'),
+('555d8e8f-ae2b-4fa4-bc03-417cd74aff87','Trying new things'),
+('b4c6332a-500e-488c-95d7-6a596d5f8955','Books and good meals'),
+('281b6e25-0411-4472-a1ec-4f3272765c35','A boring Tuesday into a story'),
+('dfb49da9-08a8-43cb-b1f5-13775d1d6d28','The versions of me in my head');
 
 DO $guard$
 BEGIN
@@ -79,7 +81,7 @@ END;
 $schema$;
 
 WITH chosen AS (
-  SELECT qa.id source_answer_id, qa.user_id author_id,
+  SELECT a.editorial_title, qa.id source_answer_id, qa.user_id author_id,
          qa.question_id original_question_id, qa.body,
          qa.created_at original_date,
          btrim(regexp_replace(q.prompt,'[[:cntrl:]]+',' ','g')) original_prompt,
@@ -105,9 +107,7 @@ INSERT INTO public.dispatches (
   created_at,published_at,web_public,web_slug,
   origin_answer_id,origin_question_id,origin_question_prompt,origin_answer_created_at
 )
-SELECT author_id,
-       CASE WHEN length(original_prompt)>140 THEN left(original_prompt,137)||'...'
-            ELSE original_prompt END,
+SELECT author_id, editorial_title,
        body,'published','visible','member',
        original_date,original_date,false,null,
        source_answer_id,original_question_id,original_prompt,original_date
