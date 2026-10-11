@@ -217,7 +217,7 @@ export default function FirstLetterComposer({
 
       const { error: sendError } = await supabase.rpc(rpcName, {
         ...(memberQuestionId ? { p_member_question_id: memberQuestionId } : {}),
-        ...(dispatchId ? { p_dispatch_id: dispatchId } : {}),
+        ...(roomLetterId ? { p_room_letter_id: roomLetterId } : dispatchId ? { p_dispatch_id: dispatchId } : {}),
         p_recipient_id: recipientId,
         ...(roomLetterId ? {} : { p_question_answer_id: questionAnswerId }),
         p_body: body,
