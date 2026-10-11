@@ -20,16 +20,15 @@ describe('Phase 12 public profile hierarchy', () => {
     expect(headerBlock).not.toContain('<InterestsDisclosure')
   })
 
-  it('keeps strongest writing ahead of authored Questions, Dispatches and other responses', () => {
-    const featured = source.indexOf('id="profile-featured-writing"')
+  it('leads with the author's public letters, then preserves historic Question answers below', () => {
+    const letters = source.indexOf('>Letters</p>')
+    const featuredAnswer = source.indexOf('id="profile-featured-writing"')
     const questions = source.indexOf('<ProfileQuestions')
-    const dispatches = source.indexOf('>Dispatches</p>')
     const otherResponses = source.indexOf('<OtherAnswersDisclosure')
-
-    expect(featured).toBeGreaterThan(-1)
-    expect(questions).toBeGreaterThan(featured)
-    expect(dispatches).toBeGreaterThan(questions)
-    expect(otherResponses).toBeGreaterThan(dispatches)
+    expect(letters).toBeGreaterThan(-1)
+    expect(featuredAnswer).toBeGreaterThan(letters)
+    expect(questions).toBeGreaterThan(featuredAnswer)
+    expect(otherResponses).toBeGreaterThan(questions)
   })
 
   it('puts correspondence availability and rhythm below the writing', () => {
@@ -44,8 +43,10 @@ describe('Phase 12 public profile hierarchy', () => {
     expect(source).toContain('Not taking another first letter right now')
   })
 
-  it('has no detached generic Write to person button', () => {
-    expect(source).not.toContain('Write to {profile.pseudonym}')
+  it('offers native letter-origin private contact only for eligible profiles', () => {
+    expect(source).toContain('Write to {profile.pseudonym}')
+    expect(source).toContain('roomLetterContactPath(userId, sourceRoomLetter.id)')
+    expect(source).toContain('!hasPendingEpisode && !blockScope && canBeginNewCorrespondence')
     expect(source).toContain('writeHref={primaryWriteHref}')
   })
 
