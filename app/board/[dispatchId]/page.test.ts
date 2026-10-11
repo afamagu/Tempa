@@ -97,7 +97,7 @@ describe('Dispatch detail page — correspondence entry point', () => {
   })
 
   it('uses person language and never exposes the retired mind terminology', () => {
-    expect(source).toContain('Write from this')
+    expect(source).toContain('Write to {dispatch.authorPseudonym}')
     expect(executable).not.toContain('Write to this mind')
   })
 
