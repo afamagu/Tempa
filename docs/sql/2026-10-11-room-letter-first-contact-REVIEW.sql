@@ -93,6 +93,11 @@ begin
           and coalesce(d.published_as,'member')='member'
           and not tempa_private.is_blocked_pair(auth.uid(), d.author_id)
           and tempa_private.author_content_publicly_visible(d.author_id)
+          and exists (
+            select 1 from public.profiles member
+            where member.id=d.author_id
+              and member.is_editorial is distinct from true
+          )
       ) then
         return false;
       end if;
@@ -1083,7 +1088,7 @@ $function$
 
 
 CREATE OR REPLACE FUNCTION tempa_private.send_first_letter_core(p_recipient_id uuid, p_question_answer_id uuid, p_room_letter_id uuid, p_body text, p_safety_evaluation_id uuid, p_warning_acknowledged boolean DEFAULT false)
- RETURNS letters_for_participant
+ RETURNS public.letters_for_participant
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
@@ -1147,6 +1152,11 @@ begin
        and coalesce(d.published_as, 'member') = 'member'
        and not tempa_private.is_blocked_pair(auth.uid(), d.author_id)
        and tempa_private.author_content_publicly_visible(d.author_id)
+          and exists (
+            select 1 from public.profiles member
+            where member.id=d.author_id
+              and member.is_editorial is distinct from true
+          )
      for share;
     if not found then
       raise exception 'This letter is no longer available for first contact.' using errcode='P0002';
