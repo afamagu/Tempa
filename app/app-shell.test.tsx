@@ -14,12 +14,11 @@ const renderToStaticMarkup = (node: ReactNode) =>
     </NextIntlClientProvider>
   )
 
-const NAV_KEYS = ['home', 'letters', 'room', 'board', 'you'] as const
+const NAV_KEYS = ['home', 'letters', 'room', 'you'] as const
 const NAV_HREFS: Record<(typeof NAV_KEYS)[number], string> = {
   home: '/home',
   letters: '/letters',
   room: '/room',
-  board: '/board',
   you: '/you',
 }
 
@@ -52,7 +51,7 @@ describe('AppShell — compact sidebar branding', () => {
     expect(sidebar).not.toContain('tempa-logo-master.png')
   })
 
-  it('the mobile bottom nav gets no emblem/wordmark forced into it — it stays exactly the 5-item tab bar', () => {
+  it('the mobile bottom nav gets no emblem/wordmark forced into it — it stays exactly the 4-item tab bar', () => {
     const html = renderToStaticMarkup(<AppShell active="home" waitingLetterCount={0}>{null}</AppShell>)
     const mobile = mobileNavHtml(html)
     expect(mobile).not.toContain('tempa-emblem')
@@ -69,7 +68,7 @@ describe('AppShell — canonical Room navigation', () => {
     )
     expect((html.match(/>Letterbox</g) ?? []).length).toBe(2)
     expect((html.match(/>The Room</g) ?? []).length).toBe(2)
-    expect((html.match(/>The Board</g) ?? []).length).toBe(2)
+    expect((html.match(/>The Board</g) ?? []).length).toBe(0)
     expect(html).toContain('href="/room"')
     expect(html).not.toContain('href="/minds"')
   })
@@ -120,6 +119,14 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
     }
   })
 
+  it('maps legacy Board active state to The Room without a fifth tab', () => {
+    const html=renderToStaticMarkup(<AppShell active="board" waitingLetterCount={0}>{null}</AppShell>)
+    const mobile=mobileNavHtml(html)
+    expect(mobile).not.toContain('href="/board"')
+    const roomIndex=mobile.indexOf('href="/room"')
+    expect(mobile.slice(mobile.lastIndexOf('<a ',roomIndex),roomIndex)).toContain('aria-current="page"')
+  })
+
   it('uses a short 150ms transition, never a bounce/pulse/scale animation', () => {
     const html = renderToStaticMarkup(
       <AppShell active="home" waitingLetterCount={0}>
@@ -133,7 +140,7 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
 
   it('preserves the canonical navigation hrefs', () => {
     const html = renderToStaticMarkup(
-      <AppShell active="board" waitingLetterCount={0}>
+      <AppShell active="room" waitingLetterCount={0}>
         <div>content</div>
       </AppShell>
     )
