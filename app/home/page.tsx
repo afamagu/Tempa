@@ -40,7 +40,7 @@ import MemberNotices from '@/app/member-notices'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import FormattedText from '@/app/letters/formatted-text'
 import ArrivalSenderLink from './arrival-sender-link'
-import RoomInvitations from './room-invitations'
+import HomeFamiliarFaces from './familiar-faces-home'
 import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
@@ -234,7 +234,7 @@ export default async function HomePage() {
               )}
 
               {mailOnTheWay && <MailOnTheWay />}
-              <RoomInvitations />
+              <HomeFamiliarFaces />
 
               {introductionQuestion && !reminderSnoozed && (
                 <IntroductionReminder userId={user.id} questionId={introductionQuestion.id} />
