@@ -46,7 +46,7 @@ export default async function DiscoverPage({
         </p>
       </header>
       {capacityMessage && <div className="mb-7 border-l-2 border-accent/30 pl-4">
-        <p className={helperTextClass}>{capacityMessage} You can still explore people's letters.</p>
+        <p className={helperTextClass}>{capacityMessage} You can still explore people&rsquo;s letters.</p>
       </div>}
       <DirectoryBrowser
         initialFilters={filters}
