@@ -3,7 +3,7 @@
  * redirects should only happen after preserving access and context.
  * These helpers are presentation-only and must never authorize content.
  */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const ROOM_HOME = '/room'
 export const ROOM_WRITE = '/room/write'
