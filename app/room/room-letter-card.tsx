@@ -11,15 +11,15 @@ import { roomLetterPath } from '@/lib/room-paths'
 export default function RoomLetterCard({
   letter,
   featured = false,
-  sessionSearch,
+  returnTo,
 }: {
   letter: BoardFeedItem
   featured?: boolean
-  sessionSearch?: string
+  returnTo?: string
 }) {
-  const destination = `${roomLetterPath(letter.id)}${sessionSearch ? `?${sessionSearch}` : ''}`
+  const destination = `${roomLetterPath(letter.id)}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`
   return (
-    <article className={`group min-w-0 rounded-[5px] border border-[#ded3c3] bg-[#fffdf8] px-6 py-7 shadow-[0_10px_28px_rgba(65,49,34,0.045)] transition-shadow hover:shadow-[0_12px_30px_rgba(65,49,34,0.09)] sm:px-8 sm:py-8 ${featured ? 'md:col-span-2 md:px-10 md:py-10' : ''}`}>
+    <article className={`group min-w-0 h-full rounded-[5px] border border-[#ded3c3] bg-[#fffdf8] px-6 py-7 shadow-[0_10px_28px_rgba(65,49,34,0.045)] transition-shadow hover:shadow-[0_12px_30px_rgba(65,49,34,0.09)] sm:px-8 sm:py-8 ${featured ? 'md:px-10 md:py-10' : ''}`}>
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <span className="text-[10px] font-medium uppercase tracking-[.2em] text-[#9a7967]">
           A letter left here
@@ -40,7 +40,7 @@ export default function RoomLetterCard({
         </span>
       </Link>
       <div className="mt-7 flex min-w-0 items-center gap-2 border-t border-[#eae2d6] pt-4 text-[13px] text-[#686155]">
-        <Link href={`/minds/${letter.authorId}`} className="min-w-0 truncate font-medium underline-offset-4 hover:underline">
+        <Link href={`/minds/${letter.authorId}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`} className="min-w-0 truncate font-medium underline-offset-4 hover:underline">
           {letter.authorPseudonym}
         </Link>
         {letter.authorCountry && <span className="min-w-0 truncate">· {letter.authorCountry}</span>}
