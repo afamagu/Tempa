@@ -38,7 +38,7 @@ describe('AppShell navigation is localized from the dictionaries', () => {
         expect(mobile).toContain(`>${label}</span>`)
       }
       for (const href of HREFS) expect((html.match(new RegExp(`href="${href}"`, 'g')) ?? []).length).toBe(2)
-      expect(html).not.toContain('href="/board"')
+      expect(html).not.toContain('href="/room"')
       expect(html).not.toMatch(/href="\/(en|fr|es|pt)\//)
       expect(html).toContain('>Tempa<')
     })
