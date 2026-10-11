@@ -57,6 +57,7 @@ export default function FirstLetterComposer({
   recipientPseudonym,
   questionAnswerId,
   questionPrompt,
+  roomLetterId,
   memberQuestionId,
   dispatchId,
   dispatchTitle,
@@ -66,7 +67,8 @@ export default function FirstLetterComposer({
 }: {
   recipientId: string
   recipientPseudonym: string
-  questionAnswerId: string
+  questionAnswerId: string | null
+  roomLetterId?: string
   memberQuestionId?: string
   dispatchId?: string
   dispatchTitle?: string
@@ -75,7 +77,9 @@ export default function FirstLetterComposer({
   backLabel?: string
   isFollowUp?: boolean
 }) {
-  const draftKey = memberQuestionId
+  const draftKey = roomLetterId
+    ? `${recipientId}:room-letter:${roomLetterId}`
+    : memberQuestionId
     ? `${recipientId}:mq:${memberQuestionId}`
     : dispatchId
       ? `${recipientId}:dispatch:${dispatchId}`
@@ -151,7 +155,11 @@ export default function FirstLetterComposer({
 
     const body = docToPlainBody(committed)
     evaluatedBody.current = body
-    const outcome = await evaluateSafety({ surface: 'first_letter', recipientId, questionAnswerId, body })
+    const outcome = roomLetterId
+      ? await evaluateSafety({ surface: 'first_letter_from_room_letter', recipientId, roomLetterId, body })
+      : questionAnswerId
+        ? await evaluateSafety({ surface: 'first_letter', recipientId, questionAnswerId, body })
+        : { status: 'error' as const }
 
     if (outcome.status === 'error') {
       setError(SAFETY_CHECK_FAILED_MESSAGE)
@@ -199,7 +207,9 @@ export default function FirstLetterComposer({
 
     try {
       const supabase = createClient()
-      const rpcName = memberQuestionId
+      const rpcName = roomLetterId
+        ? 'send_first_letter_from_room_letter'
+        : memberQuestionId
         ? 'send_first_letter_from_member_question'
         : dispatchId
           ? 'send_first_letter_from_dispatch'
@@ -209,7 +219,7 @@ export default function FirstLetterComposer({
         ...(memberQuestionId ? { p_member_question_id: memberQuestionId } : {}),
         ...(dispatchId ? { p_dispatch_id: dispatchId } : {}),
         p_recipient_id: recipientId,
-        p_question_answer_id: questionAnswerId,
+        ...(roomLetterId ? {} : { p_question_answer_id: questionAnswerId }),
         p_body: body,
         p_safety_evaluation_id: safetyEvaluationId,
         p_warning_acknowledged: warningAcknowledged,
@@ -292,7 +302,7 @@ export default function FirstLetterComposer({
           )}
           {dispatchId && dispatchTitle ? (
             <div className="space-y-1">
-              <p className={helperTextClass}>In response to their Dispatch:</p>
+              <p className={helperTextClass}>In response to their letter:</p>
               <p className={contextQuestionClass}>{dispatchTitle}</p>
             </div>
           ) : questionPrompt ? (

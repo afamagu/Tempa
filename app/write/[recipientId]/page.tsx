@@ -37,6 +37,7 @@ export default async function WriteToPage({
 }) {
   const { recipientId } = await params
   const { a: answerId, source, returnTo, mq, d: dispatchId, followUp } = await searchParams
+  const roomLetterId = source === 'room_letter' && dispatchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dispatchId) ? dispatchId : null
   const backHref = introductionReturnPath(returnTo) ?? '/room'
   const nav = await getTranslations('Nav')
   const letters = await getTranslations('Letters')
@@ -68,7 +69,7 @@ export default async function WriteToPage({
   if (mq && !memberQuestion) redirect(backHref)
 
   const { data: dispatchContext } =
-    source === 'dispatch' && dispatchId
+    (source === 'dispatch' || source === 'room_letter') && dispatchId
       ? await supabase
           .from('dispatches')
           .select('id, title, author_id, status, moderation_status, published_as')
@@ -79,8 +80,8 @@ export default async function WriteToPage({
           .maybeSingle()
       : { data: null }
 
-  if (source === 'dispatch' && (!dispatchId || !dispatchContext || (dispatchContext.published_as ?? 'member') !== 'member')) {
-    redirect('/board')
+  if ((source === 'dispatch' || source === 'room_letter') && (!dispatchId || !dispatchContext || (dispatchContext.published_as ?? 'member') !== 'member')) {
+    redirect('/room')
   }
 
   const lifecycle = await getCorrespondenceLifecycleWithMember(supabase, recipientId)
@@ -137,6 +138,38 @@ export default async function WriteToPage({
         ? await isEstablishedForViewer(supabase, existing.correspondenceId)
         : false
     const effectiveStatus = resolveFirstContactDisplayStatus(existing.status, establishedForExistingViewer)
+
+    if (followUp === '1' && attemptState.canFollowUp && !existing.questionAnswerId) {
+      const [{ data: source }, capacity] = await Promise.all([
+        supabase.from('dispatch_letter_contexts').select('dispatch_id,title_snapshot').eq('letter_id', existing.id).maybeSingle(),
+        getRelationshipCapacity(supabase),
+      ])
+      if (source?.dispatch_id) {
+        const capacityMessage = newCorrespondenceUnavailableMessage(capacity)
+        if (capacityMessage) {
+          return <main className="min-h-screen flex items-center justify-center p-6">
+            <div className="w-full max-w-md space-y-5 py-10 text-center">
+              <p className={sectionLabelClass}>One follow-up</p>
+              <p className={helperTextClass}>{capacityMessage}</p>
+              <Link href={`/letters/with/${recipientId}`} className={secondaryButtonClass}>Back to {recipient.pseudonym}</Link>
+            </div>
+          </main>
+        }
+        return <FirstLetterComposer
+          key={`${recipientId}:room-follow-up`}
+          recipientId={recipientId}
+          recipientPseudonym={recipient.pseudonym}
+          questionAnswerId={null}
+          questionPrompt={null}
+          roomLetterId={source.dispatch_id}
+          dispatchId={source.dispatch_id}
+          dispatchTitle={source.title_snapshot}
+          backHref={`/letters/with/${recipientId}`}
+          backLabel={recipient.pseudonym}
+          isFollowUp
+        />
+      }
+    }
 
     if (followUp === '1' && attemptState.canFollowUp && existing.questionAnswerId) {
       const [{ data: originalAnswer }, capacity] = await Promise.all([
@@ -258,19 +291,16 @@ export default async function WriteToPage({
 
   // A first contact must originate from something the recipient actually wrote.
   // The Room is now the canonical place to recover that context.
-  if (!answerId) redirect('/room')
+  if (!answerId && !roomLetterId) redirect('/room')
 
   const [{ data: answer }, capacity] = await Promise.all([
-    supabase
-      .from('question_answers')
-      .select('id, user_id, questions(prompt)')
-      .eq('id', answerId)
-      .eq('user_id', recipientId)
-      .maybeSingle(),
+    answerId
+      ? supabase.from('question_answers').select('id, user_id, questions(prompt)').eq('id', answerId).eq('user_id', recipientId).maybeSingle()
+      : Promise.resolve({ data: null }),
     getRelationshipCapacity(supabase),
   ])
 
-  if (!answer) redirect('/room')
+  if (!answer && !roomLetterId) redirect('/room')
 
   const capacityMessage = newCorrespondenceUnavailableMessage(capacity)
   const backLabel =
@@ -300,14 +330,15 @@ export default async function WriteToPage({
     )
   }
 
-  const question = Array.isArray(answer.questions) ? answer.questions[0] : answer.questions
+  const question = answer ? (Array.isArray(answer.questions) ? answer.questions[0] : answer.questions) : null
 
   return (
     <FirstLetterComposer
       key={memberQuestion?.id ?? recipientId}
       recipientId={recipientId}
       recipientPseudonym={recipient.pseudonym}
-      questionAnswerId={answer.id}
+      questionAnswerId={answer?.id ?? null}
+      roomLetterId={roomLetterId ?? undefined}
       questionPrompt={memberQuestion?.body ?? question?.prompt ?? null}
       memberQuestionId={memberQuestion?.id}
       backHref={backHref}
