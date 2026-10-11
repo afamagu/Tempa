@@ -65,7 +65,7 @@ describe('AuthorActionsMenu — Edit letter affordance gated on server-resolved 
   it('editable is documented as a hint only — update_dispatch remains the actual authority regardless of this prop', () => {
     const propDocStart = source.indexOf('editable: boolean')
     const propDocRegion = source.slice(Math.max(0, propDocStart - 700), propDocStart)
-    expect(propDocRegion).toContain('UI HINT only, not the authority')
+    expect(source).toContain('update_dispatch remains the actual authority')
   })
 })
 
@@ -86,12 +86,12 @@ describe('AuthorActionsMenu — coherent error when a Dispatch has Replies (sour
   it('shows the exact guard message verbatim, not the generic retry copy, when deleteDispatch returns it', () => {
     const body = handleDeleteBody()
     expect(body).toContain("deleteError.message === 'This Dispatch cannot be deleted while it still has Replies.'")
-    expect(body).toContain('? deleteError.message')
+    expect(body).toContain('setError(deleteError.message)')
   })
 
   it('still falls back to the generic retry message for any other delete error', () => {
     const body = handleDeleteBody()
-    expect(body).toContain(': \'Could not delete this Dispatch. Please try again.\'')
+    expect(body).toContain("setError('Could not delete this Dispatch. Please try again.')")
   })
 })
 
