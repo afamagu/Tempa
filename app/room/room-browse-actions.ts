@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getBoardFeedPage, type BoardFeedCursor } from '@/lib/dispatches'
+import { getEditorialBylines, editorialTitleFor } from '@/lib/editorial-byline'
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -29,7 +30,8 @@ export async function loadRoomLetterWindow(args:{
     })
     // The service already applies RLS, but the member-authored condition is
     // repeated here so no official/sponsored content enters the new Room UI.
-    return {items:items.filter(x=>x.publishedAs==='member'&&x.authorId!==user.id),nextCursor,error:null}
+    const houseBylines=await getEditorialBylines(supabase)
+    return {items:items.filter(x=>x.publishedAs==='member'&&x.authorId!==user.id&&!editorialTitleFor(houseBylines,x.authorPseudonym)),nextCursor,error:null}
   }catch(error){
     console.error('[room] next window failed',error)
     return {items:[],nextCursor:null,error:'Could not find more letters. Please try again.'}
