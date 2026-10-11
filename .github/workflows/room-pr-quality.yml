@@ -50,7 +50,13 @@ jobs:
           app/app-shell.test.tsx
           app/home/page.test.ts
       - name: Full unit and security suite
-        run: npm test
+        run: |
+          set +e
+          npx vitest run --reporter=json --outputFile=/tmp/room-results.json >/tmp/room-results.log 2>&1
+          rc=$?
+          node -e "const r=require('/tmp/room-results.json');const f=r.testResults.flatMap(t=>t.assertionResults.filter(x=>x.status==='failed').map(x=>x.fullName)); console.log('ROOM_FAILURE_COUNT='+f.length); f.forEach(x=>console.log('ROOM_FAIL '+x));"
+          tail -n 8 /tmp/room-results.log
+          exit "$rc"
 
   baseline-main:
     runs-on: ubuntu-latest
@@ -68,8 +74,9 @@ jobs:
       - name: Baseline main tests (non-release evidence)
         run: |
           set +e
-          npm test > /tmp/tempa-main-test.log 2>&1
+          npx vitest run --reporter=json --outputFile=/tmp/main-results.json >/tmp/tempa-main-test.log 2>&1
           rc=$?
           echo "BASELINE_EXIT_CODE=${rc}"
-          grep -E 'Test Files|     Tests  | FAIL  ' /tmp/tempa-main-test.log | tail -n 180 || true
+          node -e "const r=require('/tmp/main-results.json');const f=r.testResults.flatMap(t=>t.assertionResults.filter(x=>x.status==='failed').map(x=>x.fullName)); console.log('MAIN_FAILURE_COUNT='+f.length); f.forEach(x=>console.log('MAIN_FAIL '+x));"
+          tail -n 8 /tmp/tempa-main-test.log
           exit 0
