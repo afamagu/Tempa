@@ -62,6 +62,7 @@ import DispatchIdentityLabel, { SponsorCta } from '../dispatch-identity-label'
 import { dispatchShareText } from '@/lib/dispatch-identity'
 import { getDispatchWritingStyles } from '@/lib/writing-style-data'
 import { roomLetterContactPath, roomLetterPath, roomLetterEditPath } from '@/lib/room-paths'
+import { introductionReturnPath } from '@/lib/introduction-navigation'
 
 function FlagIcon() {
   return (
@@ -106,9 +107,12 @@ export default async function DispatchPage({
     else if (Array.isArray(value)) value.forEach((entry) => returnQuery.append(key, entry))
   }
   const dispatchReturnHref = `${roomLetterPath(dispatch.id)}${returnQuery.size ? `?${returnQuery.toString()}` : ''}`
-  const boardReturnHref = trailContext
+  const explicitReturn = typeof resolvedSearchParams.returnTo === 'string'
+    ? introductionReturnPath(resolvedSearchParams.returnTo)
+    : null
+  const boardReturnHref = explicitReturn ?? (trailContext
     ? `/room?s=${encodeURIComponent(trailContext.sessionStartedAt)}&seed=${encodeURIComponent(trailContext.seed)}`
-    : '/room'
+    : '/room')
 
   const isAuthor = dispatch.authorId === user.id
   const isMemberDispatch = dispatch.identity.kind === 'member'
