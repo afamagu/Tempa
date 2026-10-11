@@ -26,6 +26,7 @@ import {
   readingTrailSearchParams,
 } from '@/lib/dispatches'
 import { getActiveAnnouncement } from '@/lib/announcements'
+import { getEditorialBylines, editorialTitleFor } from '@/lib/editorial-byline'
 import { resolveAnnouncementImageUrl } from '@/lib/announcement-images'
 import {
   sectionLabelClass,
@@ -92,7 +93,8 @@ export default async function HomePage() {
   const homeBoardItems: typeof boardItems = []
   const seenBoardIds = new Set<string>()
   const seenBoardAuthors = new Set<string>()
-  const preferredBoardItems = [featured[0], fromMindsYouKeep[0], serendipity[0], ...boardItems].filter(item => item?.publishedAs === 'member')
+  const editorialBylines = await getEditorialBylines(supabase)
+  const preferredBoardItems = [featured[0], fromMindsYouKeep[0], serendipity[0], ...boardItems].filter(item => item?.publishedAs === 'member' && !editorialTitleFor(editorialBylines, item.authorPseudonym))
 
   for (const item of preferredBoardItems) {
     if (!item || seenBoardIds.has(item.id) || seenBoardAuthors.has(item.authorId)) continue
