@@ -263,6 +263,7 @@ export default async function DispatchPage({
                     momentImagePaths={editableMoments.map((m) => m.imagePath)}
                     editable={dispatchEditable}
                     allowPin={isMemberDispatch}
+                    canWithdraw={isMemberDispatch}
                     editHref={officialEditHref}
                   />
                 ) : (
@@ -291,6 +292,16 @@ export default async function DispatchPage({
             </div>
 
             <h1 className={sectionTitleClass}>{dispatch.title}</h1>
+            {dispatch.originQuestionPrompt && (
+              <aside aria-label="Background to this letter" className="rounded-md border border-foreground/10 bg-surface-shell px-4 py-3">
+                <p className="text-[12px] leading-relaxed text-foreground/70">
+                  Originally shared in response to a Tempa question.
+                </p>
+                <p className="mt-1 font-serif text-[16px] leading-relaxed text-foreground/85">
+                  {dispatch.originQuestionPrompt}
+                </p>
+              </aside>
+            )}
             {dispatch.topics.length > 0 && <TopicChips topics={dispatch.topics} />}
             {webState && <WebVisibilityControl dispatchId={dispatch.id} initial={webState} />}
             {moments.some((m) => m.imageUrl) && <MomentHint dispatchId={dispatch.id} />}
