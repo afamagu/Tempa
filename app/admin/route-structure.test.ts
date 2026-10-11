@@ -106,10 +106,10 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(destinationsSource).toContain("label: 'People'")
     expect(destinationsSource).toContain("label: 'Content'")
     expect(destinationsSource).toContain("label: 'System'")
-    expect(destinationsSource).toContain("label: 'Account exits'")
+    expect(adminNavSource).toContain("label: 'Account exits'")
     expect(destinationsSource).not.toContain('Analytics')
     expect(destinationsSource).toContain("label: 'Commerce'")
-    expect(destinationsSource).toContain('More')
+    expect(adminNavSource).toContain('More')
     expect(destinationsSource).not.toContain('Postcards')
   })
 
