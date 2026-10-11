@@ -27,6 +27,7 @@ let root:ReturnType<typeof createRoot>
 beforeEach(()=>{
   ;(globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true
   vi.clearAllMocks()
+  vi.stubGlobal('crypto', { randomUUID: () => 'fresh-seed' })
   sessionStorage.clear()
   window.history.replaceState(null,'','/letters/discover')
   host=document.createElement('div')
