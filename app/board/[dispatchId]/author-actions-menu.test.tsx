@@ -28,10 +28,10 @@ describe('AuthorActionsMenu — restrained trigger (item 10)', () => {
         editable
       />
     )
-    expect(html).toMatch(/<button[^>]*aria-label="Dispatch options"/)
+    expect(html).toMatch(/<button[^>]*aria-label="Letter options"/)
     // The sheet's own action labels must not be present until opened.
-    expect(html).not.toContain('Edit Dispatch')
-    expect(html).not.toContain('Delete Dispatch')
+    expect(html).not.toContain('Edit letter')
+    expect(html).not.toContain('Delete letter')
     expect(html).not.toContain('Pin to profile')
   })
 
@@ -54,12 +54,12 @@ describe('AuthorActionsMenu — restrained trigger (item 10)', () => {
 // above (the sheet only opens via click-driven state, not a prop), so
 // the conditional gating itself is proven via source inspection —
 // consistent with this file's own established convention.
-describe('AuthorActionsMenu — Edit Dispatch affordance gated on server-resolved eligibility (Section G)', () => {
-  it('the Edit Dispatch link is wrapped in {editable && (...)}, never rendered unconditionally', () => {
+describe('AuthorActionsMenu — Edit letter affordance gated on server-resolved eligibility (Section G)', () => {
+  it('the Edit letter link is wrapped in {editable && (...)}, never rendered unconditionally', () => {
     expect(source).toContain('{editable && (')
     const gateStart = source.indexOf('{editable && (')
     const gateEnd = source.indexOf(')}', gateStart)
-    expect(source.slice(gateStart, gateEnd)).toContain('Edit Dispatch')
+    expect(source.slice(gateStart, gateEnd)).toContain('Edit letter')
   })
 
   it('editable is documented as a hint only — update_dispatch remains the actual authority regardless of this prop', () => {
@@ -92,5 +92,12 @@ describe('AuthorActionsMenu — coherent error when a Dispatch has Replies (sour
   it('still falls back to the generic retry message for any other delete error', () => {
     const body = handleDeleteBody()
     expect(body).toContain(': \'Could not delete this Dispatch. Please try again.\'')
+  })
+})
+
+describe('Room letter author withdrawal', () => {
+  it('shows an explicitly gated withdrawal action, never to official authors', () => {
+    expect(source).toContain('{canWithdraw && <WithdrawRoomLetterAction letterId={dispatchId} />}')
+    expect(source).toContain('canWithdraw = false')
   })
 })
