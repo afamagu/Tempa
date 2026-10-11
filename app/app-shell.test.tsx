@@ -18,7 +18,7 @@ const NAV_KEYS = ['home', 'letters', 'room', 'you'] as const
 const NAV_HREFS: Record<(typeof NAV_KEYS)[number], string> = {
   home: '/home',
   letters: '/letters',
-  room: '/room',
+  room: '/board',
   you: '/you',
 }
 
@@ -67,20 +67,20 @@ describe('AppShell — canonical Room navigation', () => {
       </AppShell>
     )
     expect((html.match(/>Letterbox</g) ?? []).length).toBe(2)
-    expect((html.match(/>The Room</g) ?? []).length).toBe(2)
-    expect((html.match(/>The Board</g) ?? []).length).toBe(0)
-    expect(html).toContain('href="/room"')
+    expect((html.match(/>The Board</g) ?? []).length).toBe(2)
+    expect((html.match(/>The Room</g) ?? []).length).toBe(0)
+    expect(html).toContain('href="/board"')
     expect(html).not.toContain('href="/minds"')
   })
 
-  it('maps the temporary legacy minds active key to The Room', () => {
+  it('maps the temporary legacy minds active key to The Board', () => {
     const html = renderToStaticMarkup(
       <AppShell active="minds" waitingLetterCount={0}>
         <div>content</div>
       </AppShell>
     )
     const mobileNav = mobileNavHtml(html)
-    const hrefIndex = mobileNav.indexOf('href="/room"')
+    const hrefIndex = mobileNav.indexOf('href="/board"')
     const tagStart = mobileNav.lastIndexOf('<a ', hrefIndex)
     const anchorEnd = mobileNav.indexOf('</a>', hrefIndex)
     const anchor = mobileNav.slice(tagStart, anchorEnd)
@@ -119,11 +119,11 @@ describe('AppShell — mobile bottom nav active-location treatment', () => {
     }
   })
 
-  it('maps legacy Board active state to The Room without a fifth tab', () => {
+  it('maps legacy Board active state to The Board without a fifth tab', () => {
     const html=renderToStaticMarkup(<AppShell active="board" waitingLetterCount={0}>{null}</AppShell>)
     const mobile=mobileNavHtml(html)
-    expect(mobile).not.toContain('href="/board"')
-    const roomIndex=mobile.indexOf('href="/room"')
+    expect(mobile).not.toContain('href="/room"')
+    const roomIndex=mobile.indexOf('href="/board"')
     expect(mobile.slice(mobile.lastIndexOf('<a ',roomIndex),roomIndex)).toContain('aria-current="page"')
   })
 
