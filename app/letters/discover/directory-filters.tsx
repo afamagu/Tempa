@@ -32,7 +32,10 @@ export default function DirectoryFilters({
   onChange: (values: DirectoryFilterValues) => void
 }) {
   const [search, setSearch] = useState(values.search ?? '')
-  useEffect(() => { setSearch(values.search ?? '') }, [values.search])
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setSearch(values.search ?? ''))
+    return () => cancelAnimationFrame(raf)
+  }, [values.search])
 
   function update(key: Exclude<keyof DirectoryFilterValues, 'letters'>, value: string) {
     onChange({ ...values, [key]: value })
