@@ -51,3 +51,25 @@ jobs:
           app/home/page.test.ts
       - name: Full unit and security suite
         run: npm test
+
+  baseline-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Baseline main tests (non-release evidence)
+        run: |
+          set +e
+          npm test > /tmp/tempa-main-test.log 2>&1
+          rc=$?
+          echo "BASELINE_EXIT_CODE=${rc}"
+          grep -E 'Test Files|     Tests  | FAIL  ' /tmp/tempa-main-test.log | tail -n 180 || true
+          exit 0
