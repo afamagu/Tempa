@@ -12,7 +12,7 @@
   "SignIn": {
     "tagline": "Una forma más humana de conectar",
     "signIn": "Iniciar sesión",
-    "createAccountHeading": "Entra en el piloto de Founding Correspondents",
+    "createAccountHeading": "Únete a Tempa",
     "pilotInviteNote": "Tempa está disponible actualmente solo por invitación. Usa la misma dirección de correo electrónico que recibió tu invitación.",
     "continueWithGoogle": "Continuar con Google",
     "redirecting": "Redirigiendo…",
@@ -476,5 +476,44 @@
     "saved": "Preferencia guardada.",
     "failed": "No se pudo guardar. Inténtalo de nuevo.",
     "unavailable": "Las preferencias no están disponibles. Recarga la página."
+  },
+  "Welcome": {
+    "eyebrow": "Para comenzar",
+    "title": "Te damos la bienvenida a Tempa.",
+    "intro": "Aquí las personas dejan cartas sobre momentos cotidianos de sus vidas.",
+    "body": "Puedes leer, descubrir a alguien y escribir cuando quieras. No tienes que escribir nada antes de explorar.",
+    "overview": "Conoce Tempa",
+    "board": "El Tablón",
+    "boardHelp": "Cartas abiertas de otros miembros. Lee, conoce personas o fija tu propia carta.",
+    "letterbox": "Buzón",
+    "letterboxHelp": "Tus cartas privadas, enviadas, recibidas e intercambiadas.",
+    "home": "Inicio",
+    "homeHelp": "Lo que importa mientras conoces a otras personas.",
+    "you": "Tú",
+    "youHelp": "Tu perfil y preferencias, cuando quieras personalizarlos.",
+    "button": "Entrar en el Tablón",
+    "replay": "Puedes volver a esta presentación en Tú → Guía de Tempa."
+  },
+  "Board": {
+    "tagline": "Cartas dejadas aquí",
+    "intro": "Cartas abiertas sobre vidas cotidianas. Lee lo que llame tu atención o deja algo propio.",
+    "open": "Cartas abiertas",
+    "people": "Personas",
+    "pin": "Fijar una carta",
+    "pinnedHint": "Tú también puedes dejar una carta. Un día corriente basta.",
+    "pinFirst": "Fijar una carta abierta",
+    "find": "Descubrir personas",
+    "findHeading": "Encuentra a alguien a quien escribir",
+    "findHelp": "Lee cartas abiertas o busca personas por lugar, idioma e intereses.",
+    "filters": "Buscar por lugar, idioma o interés",
+    "peopleHelp": "Puedes empezar por una carta que te haya interesado o buscar de forma más precisa."
+  },
+  "FirstArrivalProfile": {
+    "eyebrow": "Tu lugar aquí",
+    "title": "Solo unos pocos datos.",
+    "intro": "Un nombre, un lugar y tus idiomas ayudan a que las personas se encuentren. Puedes completar tu perfil después.",
+    "writing": "¿Cómo sueles escribir?",
+    "writingHelp": "Tempa valora tu propia voz. Elige la opción que describa cómo escribes.",
+    "browse": "Puedes leer las cartas sin escribir nada ni añadir una fotografía."
   }
 }
