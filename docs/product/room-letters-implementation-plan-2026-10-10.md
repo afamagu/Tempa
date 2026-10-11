@@ -129,3 +129,20 @@ No part of this plan authorizes changing production data, activating payments, m
 - QA: search by country + language; default writer ON vs opted-out no-letter results; duplicate author prevention; exact six + Keep looking; filtered empty state; server failure/retry; blocked/deactivated/restricted exclusion; profile→full archive→back→directory restore; mobile filter sheet, keyboard tab order, loading skeletons, author card width, viewport zoom; no fifth nav tab.
 
 **Preview status:** application UI staged on the Room feature branch, RPC scripted for staging, automated checks not fully verified and no logged-in visual walkthrough yet. No production release.
+
+## Existing-answer conversion release gate (2026-10-11)
+
+Owner approved reusing existing public Question answers to give The Room authentic depth. Snapshot: 15 visible answers by 10 members; eight published member letters by four members; six answer authors have no published member letter. This is an INVENTORY, not approval of individual contents.
+
+Files staged **only in this PR**:
+- `docs/sql/2026-10-11-room-existing-answers-review-READONLY.sql`: individually review the original question and answer, content suitability, duplicate publication, moderation and account visibility.
+- `docs/sql/2026-10-11-room-existing-answers-import-REVIEW.sql`: fail-closed, curated UUID manifest; preserves exact author/body/date and question provenance; never flips open-web visibility.
+- `docs/sql/2026-10-11-room-existing-answers-verifier-READONLY.sql`: check source author, exact words, prompt, date, visibility and duplicates.
+- `docs/sql/2026-10-11-room-author-withdrawal-REVIEW.sql`: member-only `withdraw_my_room_letter` revokes discovery, open-web visibility, and active share tokens, without changing private letters.
+- `docs/sql/2026-10-11-room-answer-moderation-propagation-REVIEW.sql`: staged trigger that hides copied letters if the original answer is moderated or deleted.
+
+The reader shows a truthful, small “Originally shared in response to a Tempa question” note; the author's action menu offers withdrawal.
+
+**Cannot release without:** (a) obtaining the full answer review list and approving each selection, (b) validating the staged SQL in a disposable DB with production-equivalent schema, (c) verifying at least one writer can privately contact another from a migrated answer-letter, (d) account closure and answer-moderation regression, (e) notice to affected writers explaining edit/withdraw, and (f) count/attribution assertions at production rollout. DO NOT invent reviewers' approval IDs or run the import with an empty manifest.
+
+The review-only SQL files are not live migrations and must never be executed casually in production. Our most recent connected Supabase SQL attempt was blocked; do not treat the historical aggregate inventory as proof of an approved content review.
