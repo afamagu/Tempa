@@ -92,7 +92,7 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     expect(emailStatusPageSource).not.toContain('redirect(')
   })
 
-  it('the nav offers Overview / Moderation / Members / Content / Commerce / System / Feedback — Commerce only now that Admin → Commerce is real (Checkpoint 4); no empty Analytics, no fake Postcards tab', () => {
+  it('the nav offers Home / People / Safety / Content with Commerce and System nested under More', () => {
     // Scoped to the actual DESTINATIONS array, not the whole file —
     // this file's own doc comment legitimately mentions "Analytics" as
     // a past placeholder name, which a bare whole-file substring check
@@ -101,15 +101,15 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
     const end = adminNavSource.indexOf('\n]', arrayStart)
     const destinationsSource = adminNavSource.slice(arrayStart, end)
 
-    expect(destinationsSource).toContain("label: 'Overview'")
-    expect(destinationsSource).toContain("label: 'Moderation'")
-    expect(destinationsSource).toContain("label: 'Members'")
+    expect(destinationsSource).toContain("label: 'Home'")
+    expect(destinationsSource).toContain("label: 'Safety'")
+    expect(destinationsSource).toContain("label: 'People'")
     expect(destinationsSource).toContain("label: 'Content'")
     expect(destinationsSource).toContain("label: 'System'")
-    expect(destinationsSource).toContain("label: 'Feedback'")
+    expect(destinationsSource).toContain("label: 'Account exits'")
     expect(destinationsSource).not.toContain('Analytics')
     expect(destinationsSource).toContain("label: 'Commerce'")
-    expect(destinationsSource).not.toContain('More')
+    expect(destinationsSource).toContain('More')
     expect(destinationsSource).not.toContain('Postcards')
   })
 
@@ -148,15 +148,15 @@ describe('Admin Command Center — route structure remains staff-gated', () => {
   })
 })
 
-describe('Admin Command Center Phase 2A-1 — mobile nav has exactly 4 destinations, no fake "More"', () => {
+describe('Admin Command Center — four mobile sections plus a useful More menu', () => {
   it('renders a fixed, safe-area-aware bottom tab bar on mobile, hidden on desktop', () => {
     expect(adminNavSource).toContain('sm:hidden')
     expect(adminNavSource).toContain('env(safe-area-inset-bottom)')
     expect(adminNavSource).toContain('fixed inset-x-0 bottom-0')
   })
 
-  it('the desktop nav is hidden on mobile — one shared destinations list, not two parallel implementations', () => {
-    expect(adminNavSource).toContain('hidden gap-4')
+  it('desktop navigation and the mobile More panel expose the same operational destinations', () => {
+    expect(adminNavSource).toContain('hidden flex-wrap gap-2')
     expect(adminNavSource).toContain('sm:flex')
     // Exactly one DESTINATIONS list feeds both renders.
     expect((adminNavSource.match(/DESTINATIONS/g) ?? []).length).toBeGreaterThanOrEqual(3)
