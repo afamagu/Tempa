@@ -9,17 +9,17 @@ import WriteDispatchButton from './write-dispatch-button'
 describe('WriteDispatchButton', () => {
   it('links to the Dispatch composer', () => {
     const html = renderToStaticMarkup(<WriteDispatchButton />)
-    expect(html).toContain('href="/board/write"')
+    expect(html).toContain('href="/room/write"')
   })
 
   it('carries the quill icon alongside a visible, accessible text label', () => {
     const html = renderToStaticMarkup(<WriteDispatchButton />)
     expect(html).toContain('<svg')
-    expect(html).toContain('Write a Dispatch')
+    expect(html).toContain('Leave a letter')
   })
 
   it('is exactly one control — no duplicate/second writing action rendered alongside it', () => {
     const html = renderToStaticMarkup(<WriteDispatchButton />)
-    expect((html.match(/href="\/board\/write"/g) ?? []).length).toBe(1)
+    expect((html.match(/href="\/room\/write"/g) ?? []).length).toBe(1)
   })
 })

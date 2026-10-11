@@ -565,7 +565,7 @@ describe('canEditDispatch', () => {
 
 describe('dispatchTitleError', () => {
   it('rejects a blank title', () => {
-    expect(dispatchTitleError('   ')).toBe('A Dispatch needs a title.')
+    expect(dispatchTitleError('   ')).toBe('A letter needs a title.')
   })
 
   // Smoke-test contract completion checkpoint: 70 -> 140.

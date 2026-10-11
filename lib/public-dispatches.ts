@@ -247,11 +247,11 @@ export type SetWebPublicResult =
   | { ok: false; message: string }
 
 export const WEB_PUBLIC_COPY = {
-  label: 'Public on the web',
-  on: 'Anyone can read this Dispatch, and search engines may index it. Your real identity and profile stay private; readers see only your Tempa identity — your pseudonym, country and Mark.',
+  label: 'Let this letter be found beyond Tempa',
+  on: 'Anyone can read this letter, and search engines may index it. Your real identity and profile stay private; readers see only your Tempa identity — your pseudonym, country and Mark.',
   off: 'Tempa only — readable by Tempa members, not listed on the open web.',
-  previewOn: 'Public on the web. Anyone can read this Dispatch, and search engines may index it. Your real identity and profile stay private; only your Tempa identity — pseudonym, country and Mark — is shown.',
-  previewOff: 'Tempa only. This Dispatch will be available to Tempa members, not listed on the open web.',
+  previewOn: 'Available beyond Tempa. Anyone can read this letter, and search engines may index it. Your real identity and profile stay private; only your Tempa identity — pseudonym, country and Mark — is shown.',
+  previewOff: 'Tempa only. This letter will be available to Tempa members, not listed on the open web.',
   failed: 'Its web visibility couldn’t be changed. Nothing was changed — please try again.',
   saveRefused: 'Nothing was saved: this Dispatch’s web visibility couldn’t be applied. Please try again.',
   accountRefused: 'Nothing was saved: your account can’t make Dispatches public right now.',

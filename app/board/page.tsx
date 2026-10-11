@@ -49,6 +49,16 @@ export default async function BoardPage({
     redirect(`/board?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
   }
 
+  // Historic Board links now land in The Room. Preserve explicit keyword
+  // searches in this compatibility-only route; never expose a second
+  // non-search member feed under the retired Board name.
+  if (!query) {
+    const state = new URLSearchParams()
+    if (s) state.set('s',s)
+    if (seed) state.set('seed',seed)
+    redirect(`/room${state.size ? `?${state.toString()}` : ''}`)
+  }
+
   // Search and passive Board composition stay separate: Search is an
   // intentional lookup; the finite Board is a bounded session-stable surface.
   const [waitingCount, keptUserIds, searchResults, finiteBoard, introSeen] = await Promise.all([
@@ -76,7 +86,7 @@ export default async function BoardPage({
         <div className="w-full max-w-2xl space-y-6 py-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <h1 className={pageTitleClass}>The Board</h1>
+              <h1 className={pageTitleClass}>Search letters</h1>
               <p className={helperTextClass}>Writing shared with everyone on Tempa.</p>
             </div>
             <WriteDispatchButton />
@@ -87,7 +97,7 @@ export default async function BoardPage({
               marks 'board' complete in guide_completions. Replayable
               later from You → Tempa Guide. */}
           {!introSeen && (
-            <FeatureIntroduction guideKey="board" title="The Board" ctaLabel="See what's on the Board">
+            <FeatureIntroduction guideKey="board" title="Search letters" ctaLabel="See what's on the Board">
               <p className="italic">Writing meant to be stumbled upon.</p>
               <p>
                 Dispatches are public pieces Tempa members leave behind — stories, observations,
@@ -111,7 +121,7 @@ export default async function BoardPage({
 
           {searchResults?.failed ? (<p role="alert" className={helperTextClass}>Search is temporarily unavailable. Please try Search again, or clear it to return to the Board.</p>) : query && dispatches.length === 0 ? (
             <div className="space-y-2">
-              <p className={helperTextClass}>No Dispatches match &ldquo;{query}&rdquo;.</p>
+              <p className={helperTextClass}>No letters match &ldquo;{query}&rdquo;.</p>
             </div>
           ) : !query && finiteBoard && finiteBoard.crossedPaths.length === 0 && finiteBoard.kept.length === 0 && finiteBoard.unexpected.length === 0 ? (
             <div className="space-y-2 text-center">

@@ -1,84 +1,79 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentRoomQuestion, getMyAnswers } from '@/lib/questions'
 import { getWaitingLetterCount } from '@/lib/letters'
-import { getRelationshipCapacity, newCorrespondenceUnavailableMessage } from '@/lib/relationship-capacity'
-import { getFamiliarFaces } from '@/lib/familiar-faces'
-import { readRoomAnswers, readRoomLibrary } from '@/lib/room-reading'
-import { hasCompletedGuide } from '@/lib/guide'
-import { recordRoomExposureOpportunities } from '@/lib/room-exposure'
+import { generateBoardSeed, getBoardFeedPage } from '@/lib/dispatches'
+import { ROOM_WRITE } from '@/lib/room-paths'
+import { pageTitleClass, primaryButtonClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
-import FamiliarFaces from '@/app/familiar-faces'
-import FeatureIntroduction from '@/app/feature-introduction'
-import FilterDisclosure from '@/app/minds/filter-disclosure'
-import RoomQuestionCredit from '@/app/member-questions/room-question-credit'
-import { pageTitleClass, helperTextClass, primaryButtonClass, secondaryButtonClass } from '@/app/profile/ui'
-import QuestionAnswerBrowser from './question-answer-browser'
-import QuestionSuggestionForm from './question-suggestion-form'
-import QuestionLibraryCards from './question-library-cards'
+import RoomBrowser from './room-browser'
+import { getEditorialBylines, editorialTitleFor } from '@/lib/editorial-byline'
 
-export default async function RoomPage({ searchParams }: {
+// Bounded permission-checked initial window. The client retains unshown
+// candidates rather than skipping them between six-letter batches.
+const CANDIDATE_WINDOW=48
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export default async function RoomPage({
+  searchParams,
+}: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const raw = await searchParams
-  const textParam = (key: string) => typeof raw[key] === 'string' ? raw[key].slice(0, 100) : undefined
-  const params = { country: textParam('country'), gender: textParam('gender'), age: textParam('age'), question: textParam('question') }
-  const client = await createClient()
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) redirect('/sign-in')
-  const t = await getTranslations('RoomEngagement')
-  const [live, mine, waiting, introSeen, library, relationshipCapacity, familiarFaces] = await Promise.all([
-    getCurrentRoomQuestion(client), getMyAnswers(client, user.id), getWaitingLetterCount(client, user.id),
-    hasCompletedGuide(client, user.id, 'people'), readRoomLibrary(client), getRelationshipCapacity(client),
-    getFamiliarFaces(client, 3),
-  ])
-  let question = live
-  if (params.question && params.question !== live?.id) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.question)) notFound()
-    const { data: allowed, error } = await client.rpc('room_question_published', { p_question_id: params.question })
-    if (error || allowed !== true) notFound()
-    const { data } = await client.from('questions').select('id,prompt').eq('id', params.question).maybeSingle()
-    if (!data) notFound()
-    question = data
+  // Preserve historic links to a specific public Question; never silently
+  // ignore the identifier just because the main Room no longer features it.
+  if (typeof raw.question === 'string') {
+    if (!UUID.test(raw.question)) notFound()
+    redirect(`/question/${raw.question}?source=room`)
   }
-  const filters = { country: params.country, gender: params.gender, age: params.age }
-  const query = new URLSearchParams()
-  if (question) query.set('question', question.id)
-  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value)
-  const returnTo = query.size ? `/room?${query}` : '/room'
-  const answers = question ? await readRoomAnswers(client, question.id, filters, [], 6) : null
-  if (answers?.entries.length) await recordRoomExposureOpportunities(user.id, answers.entries, 'room_question')
-  const current = question?.id === live?.id
-  const answered = mine.some(a => a.questionId === question?.id)
-  const earlier = library.questions.filter(q => !q.is_current)
-  const newCorrespondenceMessage = newCorrespondenceUnavailableMessage(relationshipCapacity)
-  return <AppShell active="room" waitingLetterCount={waiting}>
-    <main className="mx-auto w-full max-w-3xl space-y-10 px-6 py-10">
-      <header className="space-y-2"><h1 className={pageTitleClass}>{t('title')}</h1><p className="font-serif text-xl text-foreground/80">Read what people have written. Let a conversation begin there.</p></header>
-      {newCorrespondenceMessage && <div className="rounded-md border border-foreground/10 bg-surface-shell px-4 py-3"><p className="text-xs uppercase tracking-widest text-foreground/55">Room for someone new</p><p className={`mt-1 ${helperTextClass}`}>{newCorrespondenceMessage} The Room stays open to read and explore.</p></div>}
-      {!introSeen && <FeatureIntroduction guideKey="people" title={t('readRoom')} ctaLabel={t('enterRoom')}><p>{t('guideIntro')}</p></FeatureIntroduction>}
-      {question && <section className="space-y-6" aria-labelledby="room-question-heading">
-        <div className="rounded-lg border border-foreground/10 bg-surface-shell p-6 sm:p-8">
-          <p className="text-xs uppercase tracking-widest text-foreground/55">{current ? 'This week in the Room' : 'From the question library'}</p>
-          <h2 id="room-question-heading" className="my-4 font-serif text-2xl leading-relaxed sm:text-3xl">{question.prompt}</h2>
-          <RoomQuestionCredit questionId={question.id} />
-          <div className="mt-6">{current ? <Link href={`/question/${question.id}?source=room`} className={primaryButtonClass}>{answered ? t('readEdit') : t('answerQuestion')}</Link> : <Link href="/room" className={secondaryButtonClass}>Back to this week&apos;s question</Link>}</div>
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/sign-in?next=%2Froom')
+
+  const session = typeof raw.s === 'string' && !Number.isNaN(Date.parse(raw.s))
+    && raw.s.length <= 40 ? raw.s : null
+  const seed = typeof raw.seed === 'string' && /^[a-z0-9]{1,20}$/.test(raw.seed)
+    ? raw.seed : null
+  if (!session || !seed) {
+    redirect(`/room?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
+  }
+
+  const [waiting, result, editorialBylines] = await Promise.all([
+    getWaitingLetterCount(supabase, user.id),
+    getBoardFeedPage(supabase, { sessionStartedAt: session, seed, cursor: null, limit: CANDIDATE_WINDOW }),
+    getEditorialBylines(supabase),
+  ])
+  return (
+    <AppShell active="room" waitingLetterCount={waiting}>
+      <main className="mx-auto min-h-screen max-w-6xl px-5 pb-20 pt-9 sm:px-8 sm:pt-14 lg:px-12">
+        <header className="flex flex-col justify-between gap-6 border-b border-foreground/10 pb-8 sm:flex-row sm:items-end">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-medium uppercase tracking-[.21em] text-[#94745f]">Letters left here</p>
+            <h1 className={`${pageTitleClass} mt-3 !text-[42px] !font-normal sm:!text-[54px]`}>The Room</h1>
+            <p className="mt-3 max-w-lg font-serif text-[19px] leading-relaxed text-foreground/75">
+              Little things from ordinary lives, left where someone else might find them.
+            </p>
+          </div>
+          <Link href={ROOM_WRITE} className={primaryButtonClass}>Leave a letter <span aria-hidden="true">↗</span></Link>
+        </header>
+
+        <RoomBrowser
+          viewerId={user.id}
+          startedAt={session}
+          seed={seed}
+          initialPool={result.items.filter(item => item.publishedAs === 'member' && !editorialTitleFor(editorialBylines, item.authorPseudonym))}
+          initialCursor={result.nextCursor}
+          restore={raw.restore === '1'}
+        />
+        <div className="mt-16 border-t border-foreground/10 pt-7">
+          <p className="text-[13px] text-foreground/60">You can leave something here, too. It doesn’t need to be a grand story.</p>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <Link href={ROOM_WRITE} className="text-[14px] underline underline-offset-4">Leave your first letter</Link>
+            <Link href="/letters/discover" className="text-[14px] underline underline-offset-4">Browse people by place</Link>
+          </div>
         </div>
-        <div id="question-answers" className="space-y-5 scroll-mt-6">
-          <div className="space-y-3"><h3 className="font-serif text-xl">See how people answered</h3><FilterDisclosure country={params.country ?? ''} gender={params.gender ?? ''} ageRange={params.age ?? ''} /></div>
-          {answers && <QuestionAnswerBrowser viewerId={user.id} key={returnTo} questionId={question.id} initial={answers} filters={filters} returnTo={returnTo} />}
-        </div>
-      </section>}
-      <QuestionSuggestionForm />
-      <section id="read-the-room" className="space-y-5 border-t border-foreground/10 pt-8">
-        <div><p className="text-xs uppercase tracking-widest text-foreground/55">Explore</p><h2 className="mt-2 font-serif text-2xl">Read the Room</h2><p className={`mt-2 ${helperTextClass}`}>Explore how people answered earlier questions.</p></div>
-        {library.error ? <p role="alert" className="text-sm text-red-600">{library.error}</p> : <QuestionLibraryCards questions={earlier} />}
-        <Link href="/room/questions" className={secondaryButtonClass}>Explore the question library</Link>
-      </section>
-      {familiarFaces.length > 0 && <FamiliarFaces entries={familiarFaces} returnTo={returnTo} quiet />}
-      <section className="border-t border-foreground/10 pt-6"><Link href="/letters/discover" className={secondaryButtonClass}>Discover People</Link></section>
-    </main>
-  </AppShell>
+      </main>
+    </AppShell>
+  )
 }

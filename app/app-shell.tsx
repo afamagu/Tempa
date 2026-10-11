@@ -11,7 +11,6 @@ const NAV_ITEMS: { key: NavKey; href: string; label: 'home' | 'letters' | 'room'
   { key: 'home', href: '/home', label: 'home' },
   { key: 'letters', href: '/letters', label: 'letters' },
   { key: 'room', href: '/room', label: 'room' },
-  { key: 'board', href: '/board', label: 'board' },
   { key: 'you', href: '/you', label: 'you' },
 ]
 
@@ -80,7 +79,7 @@ function LetterboxDot() {
 
 /**
  * Tempa's persistent primary navigation. The member-facing destinations are
- * Home, Letterbox, The Room, The Board and You. `minds` remains an accepted
+ * Home, Letterbox, The Room and You. `minds` remains an accepted
  * internal active value temporarily so legacy route call sites cannot break a
  * production build while user-facing terminology stays retired.
  *
@@ -98,7 +97,7 @@ export default function AppShell({
   children: React.ReactNode
 }) {
   const t = useTranslations('Nav')
-  const activeNav: NavKey = active === 'minds' ? 'room' : active
+  const activeNav: NavKey = active === 'minds' || active === 'board' ? 'room' : active
 
   return (
     <div className="tempa-shell w-full min-w-0 max-w-full sm:flex sm:min-h-screen">

@@ -271,16 +271,29 @@ export async function getFirstContactAttempts(
   senderId: string,
   recipientId: string
 ): Promise<Letter[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from(LETTERS_VIEW)
     .select(LETTER_COLUMNS)
     .eq('sender_id', senderId)
     .eq('recipient_id', recipientId)
     .is('reply_to_id', null)
-    .not('question_answer_id', 'is', null)
     .order('created_at', { ascending: false })
 
-  return (data ?? []).map((row) => toLetter(row as LetterRow))
+  if (error) throw error
+  const roots = (data ?? []).map((row) => toLetter(row as LetterRow))
+  // First contact is distinguished by its authentic public source, not merely
+  // reply_to_id=NULL: Write Anytime may also create root letters. Question
+  // answers identify legacy first-contact roots; Room-letter sources are
+  // snapshotted in dispatch_letter_contexts (participant-readable under RLS).
+  const noAnswerRoots = roots.filter((letter) => letter.questionAnswerId === null)
+  if (!noAnswerRoots.length) return roots
+  const { data: contexts, error: sourceError } = await supabase
+    .from('dispatch_letter_contexts')
+    .select('letter_id')
+    .in('letter_id', noAnswerRoots.map((letter) => letter.id))
+  if (sourceError) throw sourceError
+  const sourcedRootIds = new Set((contexts ?? []).map((context) => context.letter_id))
+  return roots.filter((letter) => letter.questionAnswerId !== null || sourcedRootIds.has(letter.id))
 }
 
 /** The latest first-contact attempt from sender to recipient. */

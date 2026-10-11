@@ -27,7 +27,8 @@ import { REPLY_MAX_CHARS } from '@/lib/replies'
 
 export const SAFETY_SURFACES = [
   'first_letter',
-  'reply',
+  'first_letter_from_room_letter',
+  'reply', 
   'write_anytime',
   'dispatch_publish',
   'dispatch_update',
@@ -38,7 +39,7 @@ export type SafetySurface = (typeof SAFETY_SURFACES)[number]
 
 /** The PRIVATE letter surfaces; every other surface publishes its text
  * to other members (pre-beta security F-12). */
-export const PRIVATE_LETTER_SURFACES: readonly SafetySurface[] = ['first_letter', 'reply', 'write_anytime']
+export const PRIVATE_LETTER_SURFACES: readonly SafetySurface[] = ['first_letter', 'first_letter_from_room_letter', 'reply', 'write_anytime']
 
 export function isPrivateLetterSurface(surface: string): boolean {
   return (PRIVATE_LETTER_SURFACES as readonly string[]).includes(surface)
@@ -347,6 +348,33 @@ export function parseEvaluateRequest(payload: unknown): ParseEvaluateRequestResu
         contextId: fields.recipientId,
         secondaryContextId: null,
         questionAnswerId: fields.questionAnswerId,
+        title: null,
+        topics: null,
+        postcard: null,
+        body: bodyResult.body,
+      },
+    }
+  }
+
+  if (surface === 'first_letter_from_room_letter') {
+    // Room letters are independent sources for first contact. Binding
+    // BOTH recipient and specific letter to the safety fingerprint
+    // prevents substituting someone else's public writing after review.
+    if (!isUuid(fields.recipientId)) {
+      return { ok: false, error: 'recipientId must be a UUID.' }
+    }
+    if (!isUuid(fields.roomLetterId)) {
+      return { ok: false, error: 'roomLetterId must be a UUID.' }
+    }
+    const bodyResult = readFirstLetterBody(fields.body)
+    if (!bodyResult.ok) return bodyResult
+    return {
+      ok: true,
+      request: {
+        surface,
+        contextId: fields.recipientId,
+        secondaryContextId: fields.roomLetterId,
+        questionAnswerId: null,
         title: null,
         topics: null,
         postcard: null,

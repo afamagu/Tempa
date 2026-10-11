@@ -8,6 +8,7 @@ import AppShell from '@/app/app-shell'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
 import DispatchCard from '../../../board/dispatch-card'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
+import { introductionReturnPath } from '@/lib/introduction-navigation'
 
 function BackArrowIcon() {
   return (
@@ -18,8 +19,10 @@ function BackArrowIcon() {
   )
 }
 
-export default async function AuthorDispatchesPage({ params }: { params: Promise<{ userId: string }> }) {
+export default async function AuthorDispatchesPage({ params, searchParams }: { params: Promise<{ userId: string }>; searchParams: Promise<{ returnTo?: string }> }) {
   const { userId } = await params
+  const { returnTo } = await searchParams
+  const backHref = introductionReturnPath(returnTo) ?? `/room/${userId}`
   const supabase = await createClient()
   const { data: { user: viewer } } = await supabase.auth.getUser()
   if (!viewer) redirect('/sign-in')
@@ -37,18 +40,18 @@ export default async function AuthorDispatchesPage({ params }: { params: Promise
     <AppShell active="room" waitingLetterCount={waitingCount}>
       <main className="flex min-h-screen justify-center p-6">
         <div className="w-full max-w-2xl space-y-6 py-10">
-          <Link href={`/room/${userId}`} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
+          <Link href={backHref} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 transition-colors hover:text-foreground">
             <BackArrowIcon />
             {profile.pseudonym}
           </Link>
 
           <div className="flex items-center gap-3">
             <ProfileIdentityMark identifier={profile.id} markUrl={markUrl} label={markUrl ? `${profile.pseudonym}'s Mark` : undefined} size="md" />
-            <h1 className={sectionTitleClass}>{profile.pseudonym}&rsquo;s Dispatches</h1>
+            <h1 className={sectionTitleClass}>{profile.pseudonym}&rsquo;s letters</h1>
           </div>
 
           {dispatches.length === 0 ? (
-            <p className={helperTextClass}>No Dispatches yet.</p>
+            <p className={helperTextClass}>No letters left here yet.</p>
           ) : (
             <div className="space-y-4">
               {dispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}

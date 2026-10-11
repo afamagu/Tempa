@@ -4,6 +4,7 @@ import { formatDatePlain } from '@/lib/format-date'
 import FormattedText from '@/app/letters/formatted-text'
 import { dispatchExcerpt, dispatchIsRich, type DispatchListItem } from '@/lib/dispatches'
 import DispatchIdentityLabel from '@/app/board/dispatch-identity-label'
+import { roomLetterPath } from '@/lib/room-paths'
 
 /**
  * One Home Dispatch preview card — a WIDE horizontal card, used across
@@ -83,7 +84,7 @@ export default function BoardShelfCard({
   trailQuery?: string
   size?: BoardShelfCardSize
 }) {
-  const href = trailQuery ? `/board/${dispatch.id}?${trailQuery}` : `/board/${dispatch.id}`
+  const href = trailQuery ? `${roomLetterPath(dispatch.id)}?${trailQuery}` : roomLetterPath(dispatch.id)
   return (
     <div className="min-w-0 max-w-full rounded-md border border-foreground/10 p-4">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">

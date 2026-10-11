@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
 
   const [backstopLimit, surfaceLimit] = await Promise.all([
     service.rpc('check_rate_limit', { p_subject_id: user.id, p_action: 'safety_evaluate' }),
-    service.rpc('check_rate_limit', { p_subject_id: user.id, p_action: parsed.request.surface }),
+    service.rpc('check_rate_limit', { p_subject_id: user.id, p_action: parsed.request.surface === 'first_letter_from_room_letter' ? 'first_letter' : parsed.request.surface }),
   ])
 
   if (backstopLimit.error || surfaceLimit.error) {

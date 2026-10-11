@@ -38,7 +38,7 @@ describe('Dispatch reading introduction — appearance (Q2)', () => {
   })
 
   it('uses the approved copy direction', () => {
-    expect(readerSource).toContain('Reading a Dispatch')
+    expect(readerSource).toContain('Reading a letter')
     expect(readerSource).toContain('Start reading')
     expect(readerSource).toContain('mark it Worth Reading, reply publicly, or write privately')
   })

@@ -20,16 +20,15 @@ describe('Phase 12 public profile hierarchy', () => {
     expect(headerBlock).not.toContain('<InterestsDisclosure')
   })
 
-  it('keeps strongest writing ahead of authored Questions, Dispatches and other responses', () => {
-    const featured = source.indexOf('id="profile-featured-writing"')
+  it('leads with public letters, then preserves historic Question answers below', () => {
+    const letters = source.indexOf('>Letters</p>')
+    const featuredAnswer = source.indexOf('id="profile-featured-writing"')
     const questions = source.indexOf('<ProfileQuestions')
-    const dispatches = source.indexOf('>Dispatches</p>')
     const otherResponses = source.indexOf('<OtherAnswersDisclosure')
-
-    expect(featured).toBeGreaterThan(-1)
-    expect(questions).toBeGreaterThan(featured)
-    expect(dispatches).toBeGreaterThan(questions)
-    expect(otherResponses).toBeGreaterThan(dispatches)
+    expect(letters).toBeGreaterThan(-1)
+    expect(featuredAnswer).toBeGreaterThan(letters)
+    expect(questions).toBeGreaterThan(featuredAnswer)
+    expect(otherResponses).toBeGreaterThan(questions)
   })
 
   it('puts correspondence availability and rhythm below the writing', () => {
@@ -44,8 +43,10 @@ describe('Phase 12 public profile hierarchy', () => {
     expect(source).toContain('Not taking another first letter right now')
   })
 
-  it('has no detached generic Write to person button', () => {
-    expect(source).not.toContain('Write to {profile.pseudonym}')
+  it('offers native letter-origin private contact only for eligible profiles', () => {
+    expect(source).toContain('Write to {profile.pseudonym}')
+    expect(source).toContain('roomLetterContactPath(userId, sourceRoomLetter.id)')
+    expect(source).toContain('!hasPendingEpisode && !blockScope && canBeginNewCorrespondence')
     expect(source).toContain('writeHref={primaryWriteHref}')
   })
 
@@ -58,5 +59,21 @@ describe('Phase 12 public profile hierarchy', () => {
   it('uses one batched authoritative answer-origin read instead of one RPC per answer', () => {
     expect(source).toContain("supabase.rpc('get_profile_writable_answer_ids'")
     expect(source).not.toContain("rawAnswers.map(async")
+  })
+})
+
+
+describe('Room-letter restoration visibility', () => {
+  it('queries withdrawn letters only for the author, not for other profile visitors', () => {
+    expect(source).toContain("isSelf\n      ? supabase.from('dispatches')")
+    expect(source).toContain(".eq('status', 'unpublished')")
+    expect(source).toContain(".eq('moderation_status', 'visible')")
+    expect(source).toContain(".eq('published_as', 'member')")
+    expect(source).toContain("isSelf && (withdrawnLettersResult.data?.length ?? 0) > 0")
+  })
+
+  it('provides a canonical restoration link for withdrawn letters in the owner profile', () => {
+    expect(source).toContain('Your withdrawn letters')
+    expect(source).toContain('roomLetterPath(letter.id)')
   })
 })

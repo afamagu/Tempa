@@ -26,12 +26,12 @@ describe('authenticated reader', () => {
   })
 
   it('no "Write to this mind" / correspondence lookups against the admin', () => {
-    expect(reader).toContain('const showWriteToAuthor = isMemberDispatch && canWriteToMind({')
+    expect(reader).toContain('const structurallyCanWriteToAuthor = isMemberDispatch && !isAuthor && !alreadyCorrespondingWithAuthor')
     expect(reader).toContain('const alreadyCorrespondingWithAuthor = isMemberDispatch && activePartnerIds.has(dispatch.authorId)')
   })
 
   it('member header (Mark, pseudonym, country, profile link) is untouched; official rows use DispatchIdentityLabel', () => {
-    expect(reader).toContain('{isMemberDispatch ? (\n                <Link\n                  href={`/minds/${dispatch.authorId}`}')
+    expect(reader).toContain('{isMemberDispatch ? (\n                <Link href={`/minds/${dispatch.authorId}`}')
     expect(reader).toContain('<DispatchIdentityLabel identity={dispatch.identity} size="md" />')
   })
 
@@ -44,7 +44,7 @@ describe('authenticated reader', () => {
     expect(reader).toContain('allowPin={isMemberDispatch}')
     expect(reader).toContain('editHref={officialEditHref}')
     expect(authorMenu).toContain('{allowPin && (')
-    expect(authorMenu).toContain('href={editHref ?? `/board/${dispatchId}/edit`}')
+    expect(authorMenu).toContain('href={editHref ?? `/room/letters/${dispatchId}/edit`}')
   })
 
   it('member edit route refuses official rows (redirects to the staff editor)', () => {

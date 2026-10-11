@@ -55,9 +55,9 @@ describe('DispatchPreview — Writing Style alongside the web-audience choice', 
     expect(d.querySelector('.authored-prose')!.getAttribute('data-writing-style')).toBe('tempa')
   })
 
-  it('the composer passes both props; official Dispatches never take a personal style; new Dispatches still default public', () => {
+  it('the composer passes both props; official Dispatches take no personal style; new member letters default to Tempa-only', () => {
     expect(composer).toContain('writingStyleId={official ? null : writingStyleId}')
     expect(composer).toContain('webPublic={showWebChoice ? webPublic : undefined}')
-    expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : true')
+    expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : false')
   })
 })
