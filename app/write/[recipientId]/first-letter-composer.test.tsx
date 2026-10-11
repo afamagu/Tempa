@@ -17,8 +17,8 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
   })
 
   it('both Back links use the explicit return context for introductions and default to The Room', () => {
-    expect(source).toContain("backHref = '/room'")
-    expect(source).toContain("backLabel = 'The Room'")
+    expect(source).toContain("backHref = '/board'")
+    expect(source).toContain("backLabel = 'The Board'")
     expect((source.match(/href=\{backHref\}/g) ?? []).length).toBe(2)
     expect((source.match(/Back to \{backLabel\}/g) ?? []).length).toBe(2)
   })
