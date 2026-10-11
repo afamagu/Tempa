@@ -34,7 +34,7 @@ export default function DirectoryFilters({
   const [search, setSearch] = useState(values.search ?? '')
   useEffect(() => { setSearch(values.search ?? '') }, [values.search])
 
-  function update(key: keyof DirectoryFilterValues, value: string) {
+  function update(key: Exclude<keyof DirectoryFilterValues, 'letters'>, value: string) {
     onChange({ ...values, [key]: value })
   }
 
@@ -62,7 +62,7 @@ export default function DirectoryFilters({
       <label className="flex cursor-pointer items-center gap-3 border-t border-foreground/10 pt-5 text-[14px]">
         <input type="checkbox" className="h-[17px] w-[17px] accent-[#455d4b]"
           checked={values.letters !== 'all'}
-          onChange={(e)=>update('letters',e.target.checked ? '' : 'all')} />
+          onChange={(e)=>onChange({ ...values, letters: e.target.checked ? undefined : 'all' })} />
         <span>
           <span className="block font-medium">Has left a letter</span>
           <span className="block text-[12px] text-foreground/60">Show people whose writing you can already read.</span>
