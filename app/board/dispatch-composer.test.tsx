@@ -319,18 +319,18 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     expect(html).not.toContain('Postcards')
   })
 
-  it('describes web-public default only when that visibility choice is genuinely available', () => {
+  it('new member letters default to Tempa-only, with explicit web choice when available', () => {
     const available = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" showComposerIntro webChoiceAvailable />
     )
     expect(available).toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
-    expect(available).not.toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
+    expect(available).toContain('data-testid="web-public-choice"')
+    expect(available).not.toContain('checked=""')
 
     const unavailable = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" showComposerIntro />
     )
     expect(unavailable).toContain('This letter will be available to people on Tempa only.')
-    expect(unavailable).toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
     expect(unavailable).not.toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
   })
 
