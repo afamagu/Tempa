@@ -8,13 +8,16 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/room-pr-quality.yml'
+  push:
+    branches:
+      - 'feat/room-letters-foundation-2026-10-10'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   room-quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,14 +30,12 @@ jobs:
         run: npm ci
       - name: TypeScript
         run: npx next typegen && npx tsc --noEmit
-      - name: ESLint for touched files
+      - name: ESLint on changed source files
         run: |
-          git diff --name-only --diff-filter=ACMRT origin/${{ github.base_ref }}...HEAD |
-            grep -E '\.(ts|tsx|js|jsx)
-        run: npm test
- |
+          git diff --name-only --diff-filter=ACMRT origin/main...HEAD |
+            grep -E '[.](ts|tsx|js|jsx)$' |
             xargs -r npx eslint
-      - name: Repository-wide lint audit (pre-existing debt reported)
+      - name: Repository-wide lint audit
         continue-on-error: true
         run: npm run lint
       - name: Full unit and security suite
