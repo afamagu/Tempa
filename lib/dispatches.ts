@@ -34,6 +34,8 @@ export type Dispatch = {
   title: string
   body: string
   publishedAt: string
+  /** Preserves the original question when an existing answer became a Room letter. */
+  originQuestionPrompt?: string | null
   /** Admin Phase 2A-1 — 'hidden' means TEMPA moderation suppressed this
    * Dispatch from every public/discovery surface. Every LISTING query
    * below (Board, Home, a profile's Dispatch list, search) already
@@ -98,6 +100,7 @@ type DispatchRow = {
   title: string
   body: string
   published_at: string
+  origin_question_prompt?: string | null
   moderation_status: ModerationStatus
   published_as?: string | null
 }
@@ -109,6 +112,7 @@ function toDispatch(row: DispatchRow): Dispatch {
     title: row.title,
     body: row.body,
     publishedAt: row.published_at,
+    originQuestionPrompt: row.origin_question_prompt ?? null,
     moderationStatus: row.moderation_status,
     publishedAs: toPublishedAs(row.published_as),
   }
@@ -239,7 +243,7 @@ export function interleaveByAuthor<T extends { authorId: string }>(items: T[]): 
   return result
 }
 
-const LIST_COLUMNS = 'id, author_id, title, body, published_at, moderation_status'
+const LIST_COLUMNS = 'id, author_id, title, body, published_at, moderation_status, origin_question_prompt'
 const BROWSE_LIMIT = 60
 
 async function attachTopicsAndAuthors(
