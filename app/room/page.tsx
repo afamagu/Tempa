@@ -11,7 +11,7 @@ import RoomBrowser from './room-browser'
 // Bounded permission-checked initial window. The client retains unshown
 // candidates rather than skipping them between six-letter batches.
 const CANDIDATE_WINDOW=48
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default async function RoomPage({
   searchParams,
