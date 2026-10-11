@@ -62,6 +62,7 @@ import DispatchIdentityLabel, { SponsorCta } from '../dispatch-identity-label'
 import { dispatchShareText } from '@/lib/dispatch-identity'
 import { getDispatchWritingStyles } from '@/lib/writing-style-data'
 import { roomLetterContactPath, roomLetterPath, roomLetterEditPath } from '@/lib/room-paths'
+import RestoreRoomLetterAction from '@/app/room/restore-room-letter-action'
 import { introductionReturnPath } from '@/lib/introduction-navigation'
 
 function FlagIcon() {
@@ -115,6 +116,25 @@ export default async function DispatchPage({
     : '/room')
 
   const isAuthor = dispatch.authorId === user.id
+  // An author may inspect and restore a voluntarily withdrawn letter.
+  // Other visitors cannot read it: the existing published-content RLS
+  // rejects their lookup before reaching this branch.
+  if (isAuthor) {
+    const { data: visibility } = await supabase
+      .from('dispatches').select('status').eq('id', dispatch.id).maybeSingle()
+    if (visibility?.status === 'unpublished') {
+      const waitingCount = await getWaitingLetterCount(supabase, user.id)
+      return <AppShell active="room" waitingLetterCount={waitingCount}>
+        <main className="mx-auto max-w-xl space-y-5 px-6 py-16">
+          <Link href="/room" className={quietLinkClass}>← The Room</Link>
+          <h1 className="font-serif text-3xl">{dispatch.title}</h1>
+          <p className={helperTextClass}>You withdrew this letter. Others cannot discover or read it.</p>
+          <RestoreRoomLetterAction letterId={dispatch.id} />
+        </main>
+      </AppShell>
+    }
+  }
+
   const isMemberDispatch = dispatch.identity.kind === 'member'
   const officialEditHref =
     dispatch.publishedAs === 'tempa'
