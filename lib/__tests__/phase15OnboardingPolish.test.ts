@@ -19,10 +19,10 @@ describe('Phase 15 — landing/onboarding final polish', () => {
     expect(questionPage).not.toContain("redirect('/minds')")
   })
 
-  it('teaches the finite correspondence rule during profile onboarding', () => {
-    expect(profileForm).toContain("t('correspondenceCapacity')")
+  it('defers non-essential correspondence choices until a member has entered', () => {
+    expect(profileForm).not.toContain("t('correspondenceCapacity')")
     expect(en.ProfileSetup.correspondenceCapacity).toContain('up to five active correspondences')
-    expect(en.ProfileSetup.correspondenceCapacity).toContain('The Room')
+    expect(en.ProfileSetup.correspondenceCapacity).not.toContain('The Room')
     expect(en.ProfileSetup.correspondenceCapacity).toContain('The Board')
   })
 
