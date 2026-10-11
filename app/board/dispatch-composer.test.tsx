@@ -22,20 +22,20 @@ const dispatchComposerSource = readFileSync(new URL('./dispatch-composer.tsx', i
 // safe pre-mount state — live typing needs a real browser.
 describe('DispatchComposer — initial render (editor not yet mounted)', () => {
   // Dispatch Preview checkpoint (WRITE → PREVIEW → PUBLISH) — the
-  // primary action in create mode is now "Preview Dispatch," never a
+  // primary action in create mode is now "Preview letter," never a
   // direct "Publish Dispatch". A blank title/body starts it disabled,
   // same as before, but now with a visible, understandable reason next
   // to it — the fix for the live "disabled with no explanation" defect.
   it('renders without crashing, starts with Preview disabled, and uses the required button label — never a direct Publish button', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(html).toContain('Preview Dispatch')
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>Preview Dispatch<\/button>/)
+    expect(html).toContain('Preview letter')
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Preview letter<\/button>/)
     expect(html).not.toContain('Publish Dispatch')
   })
 
   it('shows a visible, understandable reason next to the disabled Preview button — never an unexplained disabled control', () => {
     const html = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(html).toContain('A Dispatch needs a title.')
+    expect(html).toContain('A letter needs a title.')
   })
 
   it('never uses any other composer\'s button vocabulary', () => {
@@ -125,7 +125,7 @@ describe('DispatchComposer — initial render (editor not yet mounted)', () => {
 
 describe('DispatchComposer — publish failure guidance', () => {
   it('turns the server placement guard into an actionable, draft-safe message', () => {
-    expect(dispatchComposerSource).toContain("const momentPlacementMessage = 'Moment position is out of range for this Dispatch.'")
+    expect(dispatchComposerSource).toContain("const momentPlacementMessage = 'Moment position is out of range for this letter.'")
     expect(dispatchComposerSource).toContain('One of your Moments could not be placed. Your draft is safe.')
     expect(dispatchComposerSource).toContain('Return to editing and try placing that Moment again.')
   })
@@ -148,13 +148,13 @@ describe('DispatchComposer — edit mode (item 11)', () => {
     postcard: null,
   }
 
-  it('uses "Save changes", never "Publish Dispatch" or "Preview Dispatch" — edit mode has no Preview step at all', () => {
+  it('uses "Save changes", never "Publish Dispatch" or "Preview letter" — edit mode has no Preview step at all', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" mode="edit" existingDispatch={existingDispatch} />
     )
     expect(html).toContain('Save changes')
     expect(html).not.toContain('Publish Dispatch')
-    expect(html).not.toContain('Preview Dispatch')
+    expect(html).not.toContain('Preview letter')
     expect(html).not.toContain('Preview')
   })
 
@@ -177,14 +177,14 @@ describe('DispatchComposer — edit mode (item 11)', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" mode="edit" existingDispatch={existingDispatch} />
     )
-    expect(html).toContain('href="/board/dispatch-1"')
+    expect(html).toContain('href="/room/letters/dispatch-1"')
   })
 
   it('labels the screen "Edit Dispatch"', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" mode="edit" existingDispatch={existingDispatch} />
     )
-    expect(html).toContain('Edit Dispatch')
+    expect(html).toContain('Edit letter')
   })
 })
 
@@ -252,11 +252,11 @@ describe('DispatchComposer — Postcard (Checkpoint 2)', () => {
 describe('DispatchComposer — FeatureIntroduction wiring', () => {
   it('shows the composer introduction only when showComposerIntro is true', () => {
     const shown = renderToStaticMarkup(<DispatchComposer authorId="author-1" showComposerIntro />)
-    expect(shown).toContain('Leave something on the Board')
+    expect(shown).toContain('Leave a letter')
     expect(shown).toContain('Start writing')
 
     const hidden = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
-    expect(hidden).not.toContain('Leave something on the Board')
+    expect(hidden).not.toContain('Leave a letter')
   })
 
   // Post-onboarding corrections checkpoint (Section G) — a live smoke
@@ -280,7 +280,7 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" showComposerIntro showPostcardIntro />
     )
-    expect(html).toContain('Leave something on the Board')
+    expect(html).toContain('Leave a letter')
     expect(html).not.toContain('Postcards')
   })
 
@@ -315,7 +315,7 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
         }}
       />
     )
-    expect(html).not.toContain('Leave something on the Board')
+    expect(html).not.toContain('Leave a letter')
     expect(html).not.toContain('Postcards')
   })
 
@@ -323,15 +323,15 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     const available = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" showComposerIntro webChoiceAvailable />
     )
-    expect(available).toContain('New Dispatches are public on the web by default.')
-    expect(available).not.toContain('Web-public publishing is not available from this composer right now.')
+    expect(available).toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
+    expect(available).not.toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
 
     const unavailable = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" showComposerIntro />
     )
-    expect(unavailable).toContain('This Dispatch will stay on Tempa only.')
-    expect(unavailable).toContain('Web-public publishing is not available from this composer right now.')
-    expect(unavailable).not.toContain('New Dispatches are public on the web by default.')
+    expect(unavailable).toContain('This letter will be available to people on Tempa only.')
+    expect(unavailable).toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
+    expect(unavailable).not.toContain('Your letter stays on Tempa unless you choose to make it available beyond Tempa.')
   })
 
   it('the composer introduction uses the shared FeatureIntroduction card (clay-free, accent-bordered), never inline TempaNote treatment', () => {
