@@ -34,6 +34,54 @@ describe('parseEvaluateRequest — strict per-surface parsing', () => {
     })
   })
 
+  it('accepts independent Room-letter first contact with a bound, non-Question source', () => {
+    const result = parseEvaluateRequest({
+      surface: 'first_letter_from_room_letter',
+      recipientId: RECIPIENT_ID,
+      roomLetterId: LETTER_ID,
+      body: 'Your letter about Sunday stayed with me.',
+    })
+    expect(result).toEqual({
+      ok: true,
+      request: {
+        surface: 'first_letter_from_room_letter',
+        contextId: RECIPIENT_ID,
+        secondaryContextId: LETTER_ID,
+        questionAnswerId: null,
+        title: null,
+        topics: null,
+        postcard: null,
+        body: 'Your letter about Sunday stayed with me.',
+      },
+    })
+  })
+
+  it('rejects a missing or malformed Room-letter source', () => {
+    for (const roomLetterId of [undefined, 'bad', '/admin']) {
+      expect(parseEvaluateRequest({
+        surface: 'first_letter_from_room_letter',
+        recipientId: RECIPIENT_ID,
+        roomLetterId,
+        body: 'Hello.',
+      }).ok).toBe(false)
+    }
+  })
+
+  it('preserves the first-letter limit for native Room origin', () => {
+    expect(parseEvaluateRequest({
+      surface: 'first_letter_from_room_letter',
+      recipientId: RECIPIENT_ID,
+      roomLetterId: LETTER_ID,
+      body: 'x'.repeat(2000),
+    }).ok).toBe(true)
+    expect(parseEvaluateRequest({
+      surface: 'first_letter_from_room_letter',
+      recipientId: RECIPIENT_ID,
+      roomLetterId: LETTER_ID,
+      body: 'x'.repeat(2001),
+    }).ok).toBe(false)
+  })
+
   it('rejects a first_letter request missing questionAnswerId — context_id (the recipient) alone is not the real mutation context', () => {
     const result = parseEvaluateRequest({ surface: 'first_letter', recipientId: RECIPIENT_ID, body: 'Hello there.' })
     expect(result.ok).toBe(false)
