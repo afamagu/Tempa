@@ -114,3 +114,18 @@ Historic paths: `/board` (including old `?q,s,seed`) → `/room` or a Room searc
 | Tests + production deployment + genuine pilot | Not started |
 
 No part of this plan authorizes changing production data, activating payments, merging unrelated PRs or sending email to real members.
+
+
+## Discover People: secondary intentional route (added 2026-10-11)
+
+**The Room is the habit; Discover People is the intentional directory.** Keep exactly four main navigation items. The existing Letterbox → Discover People tab is the primary doorway. The Room's footer offers the subtle “Browse people by place” link. Do not add a fifth main tab or an extra home feed.
+
+- Source **published, moderation-visible member letters** from the canonical `dispatches` table, not Questions/answer responses. The last visible letter supplies the short honest excerpt. When a member has not written anything, show “No letter left yet” only if the visitor explicitly turns off the writer-only filter; never fabricate one.
+- Filters stay collapsed by default. Country, self-declared language and “Has left a letter” (default ON) take priority. Preserve existing intentional name/search and age/gender/intent/interest under subdued advanced filters rather than destroying historical bookmarked searches. Do not show online status, proximity scoring, compatibility percentages or followers.
+- Six people per page, cursor-backed, no infinite scroll. A stable per-visit seed prevents index-jumping when browsing. Preserve filter values, loaded results and scroll position when navigating to profiles and back; do not require a full reload when a filter changes.
+- Cards show Tempa Mark, pseudonym, optional country and latest-letter line. Cards go to the correct **profile**, where visible letters precede historical Question answers. The profile's private “Write to [name]” CTA must use the same Room-letter origin, capacity, block and safety rules; existing Question answer links remain available in secondary historic context.
+- Preserve the existing Letterbox Correspondence tab. Nothing in Discover should imply that full correspondence capacity prevents *reading* members' public writing; restriction gates only new first contact.
+- Migration: `docs/sql/2026-10-11-room-writers-directory-REVIEW.sql` adds `discover_room_writers`, with authenticated-only EXECUTE and restrictive author privacy checks. **NOT APPLIED TO PRODUCTION.** The new directory page will report unavailable until this RPC is deployed, so it must not be merged into production alone.
+- QA: search by country + language; default writer ON vs opted-out no-letter results; duplicate author prevention; exact six + Keep looking; filtered empty state; server failure/retry; blocked/deactivated/restricted exclusion; profile→full archive→back→directory restore; mobile filter sheet, keyboard tab order, loading skeletons, author card width, viewport zoom; no fifth nav tab.
+
+**Preview status:** application UI staged on the Room feature branch, RPC scripted for staging, automated checks not fully verified and no logged-in visual walkthrough yet. No production release.
