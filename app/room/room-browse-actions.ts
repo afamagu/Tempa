@@ -19,7 +19,7 @@ export async function loadRoomLetterWindow(args:{
     args.startedAt.length>40||typeof args.seed!=='string'||!/^[a-z0-9]{1,20}$/.test(args.seed)||
     (args.cursor && (!UUID.test(args.cursor.id)||!/^-?\d{1,28}(\.\d{1,28})?$/.test(args.cursor.rankKey)||
        !Number.isSafeInteger(args.cursor.seedHash)||!Number.isInteger(args.cursor.seenBucket)))){
-    return {items:[],nextCursor:null,error:'The browsing session is no longer valid. Refresh The Room.'}
+    return {items:[],nextCursor:null,error:'The browsing session is no longer valid. Refresh The Board.'}
   }
   try{
     const {items,nextCursor}=await getBoardFeedPage(supabase,{
