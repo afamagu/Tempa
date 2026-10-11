@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { shareDispatch, revokeDispatchShare, pinDispatch, unpinDispatch, deleteDispatch } from '@/lib/dispatches'
 import { helperTextClass, secondaryButtonClass, destructiveButtonClass, iconButtonClass } from '@/app/profile/ui'
 import Tooltip from '@/app/profile/tooltip'
+import WithdrawRoomLetterAction from '@/app/room/withdraw-room-letter-action'
 
 function KebabIcon() {
   return (
@@ -28,6 +29,7 @@ export default function AuthorActionsMenu({
   momentImagePaths,
   editable,
   allowPin = true,
+  canWithdraw = false,
   editHref,
 }: {
   dispatchId: string
@@ -38,6 +40,7 @@ export default function AuthorActionsMenu({
   /** Official/Sponsored Dispatches are never pinned to the creating
    * admin's member profile. */
   allowPin?: boolean
+  canWithdraw?: boolean
   /** Official/Sponsored Dispatches edit through Admin Content. */
   editHref?: string
 }) {
@@ -156,7 +159,7 @@ export default function AuthorActionsMenu({
       if (momentImagePaths.length > 0) {
         await supabase.storage.from('dispatch-photos').remove(momentImagePaths)
       }
-      router.push('/board')
+      router.push('/room')
     } finally {
       setBusy(false)
     }
@@ -164,8 +167,8 @@ export default function AuthorActionsMenu({
 
   return (
     <div className="relative">
-      <Tooltip label="Dispatch options">
-        <button type="button" onClick={openMenu} aria-label="Dispatch options" className={iconButtonClass}>
+      <Tooltip label="Letter options">
+        <button type="button" onClick={openMenu} aria-label="Letter options" className={iconButtonClass}>
           <KebabIcon />
         </button>
       </Tooltip>
@@ -180,11 +183,11 @@ export default function AuthorActionsMenu({
               <div className="flex flex-col gap-1.5">
                 {editable && (
                   <Link
-                    href={editHref ?? `/board/${dispatchId}/edit`}
+                    href={editHref ?? `/room/letters/${dispatchId}/edit`}
                     className={secondaryButtonClass}
                     onClick={closeMenu}
                   >
-                    Edit Dispatch
+                    Edit letter
                   </Link>
                 )}
                 {allowPin && (
@@ -192,6 +195,7 @@ export default function AuthorActionsMenu({
                     {isPinned ? 'Unpin from profile' : 'Pin to profile'}
                   </button>
                 )}
+                {canWithdraw && <WithdrawRoomLetterAction letterId={dispatchId} />}
                 {shareToken ? (
                   <button type="button" onClick={handleStopSharing} disabled={busy} className={secondaryButtonClass}>
                     Stop sharing externally
@@ -210,7 +214,7 @@ export default function AuthorActionsMenu({
                   <p className={`px-1 py-2 ${helperTextClass}`}>Checking deletion availability…</p>
                 ) : deleteLocked ? (
                   <p className={`px-1 py-2 ${helperTextClass}`}>
-                    This Dispatch has responses and can no longer be deleted.
+                    This letter has responses and can no longer be deleted.
                   </p>
                 ) : (
                   <button
@@ -219,7 +223,7 @@ export default function AuthorActionsMenu({
                     disabled={busy}
                     className={destructiveButtonClass}
                   >
-                    Delete Dispatch
+                    Delete letter
                   </button>
                 )}
 
@@ -229,9 +233,9 @@ export default function AuthorActionsMenu({
               </div>
             ) : (
               <div className="space-y-2">
-                <p className={helperTextClass}>Delete this Dispatch permanently?</p>
+                <p className={helperTextClass}>Delete this letter permanently?</p>
                 <p className={helperTextClass}>
-                  It will disappear from The Board and from your profile, and any external share link
+                  It will disappear from The Room and from your profile, and any external share link
                   will stop working. This cannot be undone.
                 </p>
                 {error && <p className="text-sm text-red-600">{error}</p>}
