@@ -162,7 +162,7 @@ export default function DispatchComposer({
   // New Dispatches are public on the web by default. Editing always
   // preserves the existing Dispatch's actual state. The choice remains
   // explicit and reversible before and after publication.
-  const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : true
+  const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : false
   const showWebChoice = webChoiceAvailable && initialWebPublic !== null
   const [webPublic, setWebPublic] = useState<boolean>(initialWebPublic === true)
 
@@ -512,10 +512,10 @@ export default function DispatchComposer({
 
     const genericErrorMessage = isEdit
       ? 'Could not save your changes. Please try again.'
-      : 'Could not publish your Dispatch. Please try again.'
+      : 'Could not leave your letter. Please try again.'
 
     try {
-      const requestedWeb = showWebChoice ? webPublic : undefined
+      const requestedWeb = official ? (showWebChoice ? webPublic : undefined) : (showWebChoice ? webPublic : isEdit ? undefined : false)
       const { data, error: submitError } = official
         ? isEdit && existingDispatch
           ? await updateOfficialDispatch(createClient(), existingDispatch.id, {
@@ -596,7 +596,7 @@ export default function DispatchComposer({
       }
       mentions.clear()
       setPendingWarning(null)
-      router.push(`/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
+      router.push(official ? `/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}` : `/room/letters/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error(isEdit ? '[board] edit threw' : '[board] publish threw', { message })
@@ -630,10 +630,10 @@ export default function DispatchComposer({
   }
 
   const backHref = isEdit && existingDispatch
-    ? `/board/${existingDispatch.id}`
+    ? `/room/letters/${existingDispatch.id}`
     : official
       ? `/admin/content/${official.publishedAs === 'tempa' ? 'dispatches' : 'sponsored'}`
-      : '/board'
+      : '/room'
 
   return (
     <main ref={composerRootRef} className="min-h-screen flex items-start justify-center p-4 sm:items-center sm:p-6">
@@ -645,8 +645,8 @@ export default function DispatchComposer({
             {official
               ? `${isEdit ? 'Edit ' : ''}${official.publishedAs === 'tempa' ? 'Tempa Dispatch' : 'Sponsored Dispatch'}`
               : isEdit
-                ? 'Edit Dispatch'
-                : 'Dispatch'}
+                ? 'Edit letter'
+                : 'Leave a letter'}
           </p>
           <p className={helperTextClass}>
             {official?.publishedAs === 'tempa'
@@ -678,20 +678,20 @@ export default function DispatchComposer({
         )}
 
         {!isEdit && showComposerIntro && (
-          <FeatureIntroduction guideKey="dispatch_composer" title="Leave something on the Board" ctaLabel="Start writing">
+          <FeatureIntroduction guideKey="dispatch_composer" title="Leave a letter" ctaLabel="Start writing">
             <p>
-              A Dispatch is writing offered beyond a private correspondence — a story from your day,
+              A letter left in The Room can be a story from your day,
               something you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something worth putting into words.
             </p>
             <p>
               {showWebChoice
-                ? 'New Dispatches are public on the web by default. You can keep any one on Tempa only before publishing.'
-                : 'This Dispatch will stay on Tempa only. Web-public publishing is not available from this composer right now.'}
+                ? 'Your letter stays on Tempa unless you choose to make it available beyond Tempa.'
+                : 'This letter will be available to people on Tempa only.'}
             </p>
           </FeatureIntroduction>
         )}
 
-        <input type="text" value={title} onChange={(e) => handleTitleChange(e.target.value)} maxLength={TITLE_MAX_CHARS} placeholder="What is this about, in one line?" aria-label="Dispatch title" className={inputClass} />
+        <input type="text" value={title} onChange={(e) => handleTitleChange(e.target.value)} maxLength={TITLE_MAX_CHARS} placeholder="What is this about, in one line?" aria-label="Letter title" className={inputClass} />
         <p className={`text-right text-[12px] ${title.length >= TITLE_MAX_CHARS ? 'text-red-600' : helperTextClass}`}>
           {title.length} / {TITLE_MAX_CHARS}
         </p>
@@ -785,7 +785,7 @@ export default function DispatchComposer({
           {isEdit ? (
             <button type="button" onClick={handleSubmit} disabled={!canSubmit} className={primaryButtonClass}>{publishing ? 'Saving…' : 'Save changes'}</button>
           ) : (
-            <button type="button" onClick={handleOpenPreview} disabled={!canPreview || preparingPreview} className={primaryButtonClass}>{preparingPreview ? 'Preparing…' : 'Preview Dispatch'}</button>
+            <button type="button" onClick={handleOpenPreview} disabled={!canPreview || preparingPreview} className={primaryButtonClass}>{preparingPreview ? 'Preparing…' : 'Preview letter'}</button>
           )}
         </div>
       </div>
