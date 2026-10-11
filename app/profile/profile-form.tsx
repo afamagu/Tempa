@@ -128,6 +128,10 @@ export default function ProfileForm({ userId }: { userId: string }) {
         onboarding_stage:'complete',
       })
       if(insertError){
+        if(insertError.code==='23514'){
+          setNameStatus('reserved')
+          throw new Error(t('reserved'))
+        }
         if(insertError.code==='23505')throw new Error(arrival('takenNow'))
         throw new Error(arrival('saveError'))
       }
