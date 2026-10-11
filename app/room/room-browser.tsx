@@ -35,8 +35,8 @@ export default function RoomBrowser({
   const [error,setError]=useState<string|null>(null)
   const busy=useRef(false)
   const alive=useRef(true)
-  const returnKey=`tempa.room.browse:${viewerId}`
-  const origin=`/room?s=${encodeURIComponent(startedAt)}&seed=${encodeURIComponent(seed)}`
+  const returnKey=`tempa.board.browse:${viewerId}`
+  const origin=`/board?s=${encodeURIComponent(startedAt)}&seed=${encodeURIComponent(seed)}`
   const returnTo=`${origin}&restore=1`
 
   useEffect(()=>{
@@ -111,7 +111,7 @@ export default function RoomBrowser({
   }
 
   const canContinue=state.pool.length>0||Boolean(state.cursor)
-  return <section aria-label="Letters left in The Room" className="mt-9 space-y-9">
+  return <section aria-label="Open letters on The Board" className="mt-9 space-y-9">
     {state.shown.length ? (
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         {state.shown.map((letter,index)=>(
@@ -128,7 +128,7 @@ export default function RoomBrowser({
       <div className="mx-auto max-w-lg py-16 text-center">
         <h2 className="font-serif text-2xl">That’s what has been left here for now.</h2>
         <p className="mt-3 text-[14px] text-foreground/65">There may be more another day. You can also leave something of your own.</p>
-        <Link href="/room/write" className="mt-5 inline-block text-sm underline underline-offset-4">Leave a letter</Link>
+        <Link href="/board/write" className="mt-5 inline-block text-sm underline underline-offset-4">Leave a letter</Link>
       </div>
     )}
     <div className="flex justify-center" aria-live="polite">
