@@ -43,7 +43,7 @@ export default function DirectoryFilters({
     + (values.letters === 'all' ? 1 : 0)
   return <details className="group rounded-[5px] border border-[#dfd3c2] bg-[#fffdf8]">
     <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[14px] font-medium text-foreground marker:hidden [&::-webkit-details-marker]:hidden">
-      <span>Filter people {selectedCount ? <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">{selectedCount} selected</span> : <span className="ml-2 font-normal text-foreground/50">Place · Language</span>}</span>
+      <span>Filter people <span className="ml-2 font-normal text-foreground/55">{values.letters === 'all' ? 'All members' : 'Letters only'}</span>{selectedCount ? <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">{selectedCount} selected</span> : null}</span>
       <span aria-hidden="true" className="text-lg text-foreground/60 transition-transform group-open:rotate-45">+</span>
     </summary>
     <div className="space-y-5 border-t border-[#e8ded1] px-5 pb-6 pt-5">
