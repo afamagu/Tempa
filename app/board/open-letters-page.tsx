@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
@@ -20,6 +21,7 @@ export default async function BoardOpenLettersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
+  const t=await getTranslations('Board')
   const raw = await searchParams
   // Preserve historic links to a specific public Question; never silently
   // ignore the identifier just because the main Room no longer features it.
@@ -50,13 +52,13 @@ export default async function BoardOpenLettersPage({
       <main className="mx-auto min-h-screen max-w-6xl px-5 pb-20 pt-9 sm:px-8 sm:pt-14 lg:px-12">
         <header className="flex flex-col justify-between gap-6 border-b border-foreground/10 pb-8 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
-            <p className="text-[11px] font-medium uppercase tracking-[.21em] text-[#94745f]">Letters left here</p>
+            <p className="text-[11px] font-medium uppercase tracking-[.21em] text-[#94745f]">{t('tagline')}</p>
             <h1 className={`${pageTitleClass} mt-3 !text-[42px] !font-normal sm:!text-[54px]`}>The Board</h1>
             <p className="mt-3 max-w-lg font-serif text-[19px] leading-relaxed text-foreground/75">
-              Open letters from ordinary lives. Read what catches your attention, or leave something of your own.
+              {t('intro')}
             </p>
           </div>
-          <Link href={ROOM_WRITE} className={primaryButtonClass}>Pin a letter <span aria-hidden="true">↗</span></Link>
+          <Link href={ROOM_WRITE} className={primaryButtonClass}>{t('pin')} <span aria-hidden="true">↗</span></Link>
         </header>
 
         <BoardTabs active="letters" />
@@ -69,10 +71,10 @@ export default async function BoardOpenLettersPage({
           restore={raw.restore === '1'}
         />
         <div className="mt-16 border-t border-foreground/10 pt-7">
-          <p className="text-[13px] text-foreground/60">You can leave something here, too. An ordinary day is enough.</p>
+          <p className="text-[13px] text-foreground/60">{t('pinnedHint')}</p>
           <div className="mt-4 flex flex-wrap items-center gap-4">
-            <Link href={ROOM_WRITE} className="text-[14px] underline underline-offset-4">Pin an open letter</Link>
-            <Link href="/board/people" className="text-[14px] underline underline-offset-4">Discover people</Link>
+            <Link href={ROOM_WRITE} className="text-[14px] underline underline-offset-4">{t('pinFirst')}</Link>
+            <Link href="/board/people" className="text-[14px] underline underline-offset-4">{t('find')}</Link>
           </div>
         </div>
       </main>
