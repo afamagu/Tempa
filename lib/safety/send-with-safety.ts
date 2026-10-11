@@ -24,6 +24,7 @@
 
 export type EvaluatePayload =
   | { surface: 'first_letter'; recipientId: string; questionAnswerId: string; body: string }
+  | { surface: 'first_letter_from_room_letter'; recipientId: string; roomLetterId: string; body: string }
   | { surface: 'reply'; letterId: string; body: string }
   | {
       surface: 'write_anytime'
