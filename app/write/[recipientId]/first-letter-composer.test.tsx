@@ -29,7 +29,7 @@ describe('FirstLetterComposer — "Minds" renamed to "People" in user-visible co
     const sentBlock = source.slice(sentBlockStart, sentBlockEnd)
     expect(sentBlock).toContain('Back to {backLabel}')
     expect(sentBlock).toContain('A reply is what begins the correspondence.')
-    expect(sentBlock).toContain('there&rsquo;s nothing you need to do')
+    expect(sentBlock).toContain('there’s nothing you need to do')
   })
 })
 
@@ -86,7 +86,7 @@ describe('FirstLetterComposer — Dispatch-origin first contact', () => {
 
   it('selects the Dispatch wrapper only when dispatchId is present', () => {
     expect(source).toContain("? 'send_first_letter_from_dispatch'")
-    expect(source).toContain('...(dispatchId ? { p_dispatch_id: dispatchId } : {})')
+    expect(source).toContain('...(roomLetterId ? { p_room_letter_id: roomLetterId } : dispatchId ? { p_dispatch_id: dispatchId } : {})')
   })
 
   it('uses a Dispatch-specific local draft key so contexts cannot overwrite one another', () => {
@@ -94,7 +94,7 @@ describe('FirstLetterComposer — Dispatch-origin first contact', () => {
   })
 
   it('shows the Dispatch title instead of mislabeling the Safety Question as the origin', () => {
-    expect(source).toContain('In response to their Dispatch:')
+    expect(source).toContain('In response to their letter:')
     expect(source).toContain('{dispatchTitle}')
   })
 })
