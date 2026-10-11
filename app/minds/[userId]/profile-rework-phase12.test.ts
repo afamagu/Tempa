@@ -20,7 +20,7 @@ describe('Phase 12 public profile hierarchy', () => {
     expect(headerBlock).not.toContain('<InterestsDisclosure')
   })
 
-  it('leads with the author's public letters, then preserves historic Question answers below', () => {
+  it('leads with public letters, then preserves historic Question answers below', () => {
     const letters = source.indexOf('>Letters</p>')
     const featuredAnswer = source.indexOf('id="profile-featured-writing"')
     const questions = source.indexOf('<ProfileQuestions')
