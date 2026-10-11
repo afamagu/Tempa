@@ -34,7 +34,7 @@ export default function DirectoryBrowser({
 
   useEffect(()=>{
     mounted.current = true
-    return ()=>{ mounted.current=false; generation.current++ }
+    return ()=>{ mounted.current=false }
   },[])
 
   useEffect(()=>{
@@ -47,10 +47,13 @@ export default function DirectoryBrowser({
         !Array.isArray(saved.entries) || !/^[a-zA-Z0-9-]{1,80}$/.test(saved.seed)) return
       visitSeed.current=saved.seed
       state.current={filters:initialFilters,entries:saved.entries,hasMore:saved.hasMore}
-      setEntries(saved.entries)
-      setHasMore(saved.hasMore)
-      setError(null)
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{if(mounted.current) window.scrollTo(0,saved.scrollY)}))
+      requestAnimationFrame(()=>{
+        if(!mounted.current)return
+        setEntries(saved.entries)
+        setHasMore(saved.hasMore)
+        setError(null)
+        requestAnimationFrame(()=>{if(mounted.current) window.scrollTo(0,saved.scrollY)})
+      })
     } catch { /* Browsing remains usable when storage is disabled. */ }
     // Rehydrate only on the profile-return mount; never wipe live filter changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
