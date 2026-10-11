@@ -7,12 +7,12 @@ import {
 const letterId = '11111111-2222-4333-8444-555555555555'
 const authorId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
-describe('The Room route contract', () => {
-  it('keeps the four-navigation Room root and a separate public composer', () => {
-    expect(ROOM_HOME).toBe('/room')
-    expect(ROOM_WRITE).toBe('/room/write')
-    expect(roomLetterPath(letterId)).toBe(`/room/letters/${letterId}`)
-    expect(roomLetterEditPath(letterId)).toBe(`/room/letters/${letterId}/edit`)
+describe('The Board route contract', () => {
+  it('keeps the four-navigation Board root and a separate public composer', () => {
+    expect(ROOM_HOME).toBe('/board')
+    expect(ROOM_WRITE).toBe('/board/write')
+    expect(roomLetterPath(letterId)).toBe(`/board/letters/${letterId}`)
+    expect(roomLetterEditPath(letterId)).toBe(`/board/letters/${letterId}/edit`)
   })
 
   it('preserves precise public-letter context when starting private correspondence', () => {
