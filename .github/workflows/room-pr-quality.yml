@@ -24,7 +24,7 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
       - name: TypeScript
-        run: npx tsc --noEmit
+        run: npx next typegen && npx tsc --noEmit
       - name: ESLint
         run: npm run lint
       - name: Full unit and security suite
