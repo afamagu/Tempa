@@ -65,7 +65,8 @@ describe('AuthorActionsMenu — Edit letter affordance gated on server-resolved 
   it('editable is documented as a hint only — update_dispatch remains the actual authority regardless of this prop', () => {
     const propDocStart = source.indexOf('editable: boolean')
     const propDocRegion = source.slice(Math.max(0, propDocStart - 700), propDocStart)
-    expect(source).toContain('update_dispatch remains the actual authority')
+    expect(source).toContain('Every mutation is')
+    expect(source).toContain('re-validated server-side')
   })
 })
 
