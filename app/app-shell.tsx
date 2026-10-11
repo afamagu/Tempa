@@ -10,7 +10,7 @@ type ShellActiveKey = NavKey | 'minds'
 const NAV_ITEMS: { key: NavKey; href: string; label: 'home' | 'letters' | 'room' | 'board' | 'you' }[] = [
   { key: 'home', href: '/home', label: 'home' },
   { key: 'letters', href: '/letters', label: 'letters' },
-  { key: 'room', href: '/room', label: 'room' },
+  { key: 'room', href: '/board', label: 'room' },
   { key: 'you', href: '/you', label: 'you' },
 ]
 
