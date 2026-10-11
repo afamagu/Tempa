@@ -232,7 +232,7 @@ export default async function PublicProfilePage({
             </section>
           )}
 
-          {sourceRoomLetter && !isSelf && !alreadyCorresponding && !pausedCorrespondence && !hasPendingEpisode && canBeginNewCorrespondence && (
+          {sourceRoomLetter && !isSelf && !alreadyCorresponding && !pausedCorrespondence && !hasPendingEpisode && !blockScope && canBeginNewCorrespondence && (
             <div className="border-t border-foreground/10 pt-6">
               <Link href={roomLetterContactPath(userId, sourceRoomLetter.id)} className={primaryButtonClass}>
                 Write to {profile.pseudonym}
