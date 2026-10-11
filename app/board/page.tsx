@@ -9,7 +9,6 @@ import {
   searchDispatches,
   getKeptUserIds,
   getFiniteBoardComposition,
-  generateBoardSeed,
   readingTrailSearchParams,
   type DispatchListItem,
 } from '@/lib/dispatches'
@@ -33,10 +32,13 @@ import BoardCrossedPathImpression from './board-crossed-path-impression'
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; s?: string; seed?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { q, s, seed } = await searchParams
-  const query = (q ?? '').trim()
+  const raw=await searchParams
+  const q=typeof raw.q==='string'?raw.q:''
+  const s=typeof raw.s==='string'?raw.s:undefined
+  const seed=typeof raw.seed==='string'?raw.seed:undefined
+  const query=q.trim()
 
   const supabase = await createClient()
   const {
@@ -47,13 +49,10 @@ export default async function BoardPage({
     redirect('/sign-in')
   }
 
-  if (!query && (!s || !seed)) {
-    redirect(`/board?s=${encodeURIComponent(new Date().toISOString())}&seed=${generateBoardSeed()}`)
-  }
 
-  // Historic Board links now land in The Room. Preserve explicit keyword
-  // searches in this compatibility-only route; never expose a second
-  // non-search member feed under the retired Board name.
+  // Historic Board keyword searches remain functional. Everything else,
+  // including ?question=... and reading-trail state, goes to the canonical
+  // Board page without dropping query parameters.
   if (!query) {
     return BoardOpenLettersPage({ searchParams })
   }
