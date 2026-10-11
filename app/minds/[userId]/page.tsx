@@ -14,6 +14,7 @@ import {
   newCorrespondenceUnavailableMessage,
 } from '@/lib/relationship-capacity'
 import { getPublishedDispatchesByAuthor, getPinnedDispatch } from '@/lib/dispatches'
+import { roomLetterContactPath } from '@/lib/room-paths'
 import { getBlockScope } from '@/lib/blocking'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import type { MyQuestionAnswer } from '@/lib/questions'
@@ -23,6 +24,7 @@ import {
   metadataTextClass,
   helperTextClass,
   secondaryButtonClass,
+  primaryButtonClass,
   quietLinkClass,
 } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
@@ -127,6 +129,7 @@ export default async function PublicProfilePage({
   const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
   const recentDispatches = allDispatches.filter((d) => d.id !== pinnedDispatch?.id).slice(0, 3)
+  const sourceRoomLetter = pinnedDispatch ?? allDispatches[0] ?? null
   // An explicit answer link must never silently open a different answer.
   const selectedAnswer = selectedAnswerId ? rawAnswers.find(answer => answer.id === selectedAnswerId) : null
   if (selectedAnswerId && !selectedAnswer) notFound()
@@ -208,6 +211,36 @@ export default async function PublicProfilePage({
             </div>
           </header>
 
+          {pinnedDispatch && (
+            <section className="space-y-3 border-t border-foreground/10 pt-6">
+              <p className={sectionLabelClass}>Pinned letter</p>
+              <DispatchCard dispatch={pinnedDispatch} />
+            </section>
+          )}
+
+          {allDispatches.length > 0 && (
+            <section className="space-y-3 border-t border-foreground/10 pt-6">
+              <div className="flex items-center justify-between gap-3">
+                <p className={sectionLabelClass}>Letters</p>
+                <Link href={`/room/${userId}/dispatches`} className={quietLinkClass}>See all letters</Link>
+              </div>
+              {recentDispatches.length > 0 && (
+                <div className="space-y-4">
+                  {recentDispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}
+                </div>
+              )}
+            </section>
+          )}
+
+          {sourceRoomLetter && !isSelf && !alreadyCorresponding && !pausedCorrespondence && !hasPendingEpisode && canBeginNewCorrespondence && (
+            <div className="border-t border-foreground/10 pt-6">
+              <Link href={roomLetterContactPath(userId, sourceRoomLetter.id)} className={primaryButtonClass}>
+                Write to {profile.pseudonym}
+              </Link>
+              <p className={`${helperTextClass} mt-3`}>A private letter, inspired by something they left in The Room.</p>
+            </div>
+          )}
+
           {primaryAnswer && (
             <section className="space-y-3" aria-labelledby="profile-featured-writing">
               <p id="profile-featured-writing" className={sectionLabelClass}>From {isSelf ? 'you' : profile.pseudonym}</p>
@@ -239,27 +272,6 @@ export default async function PublicProfilePage({
             writeHref={questionWriteHref}
             returnTo={profileReturnHref}
           />
-
-          {pinnedDispatch && (
-            <section className="space-y-3 border-t border-foreground/10 pt-6">
-              <p className={sectionLabelClass}>Pinned Dispatch</p>
-              <DispatchCard dispatch={pinnedDispatch} />
-            </section>
-          )}
-
-          {allDispatches.length > 0 && (
-            <section className="space-y-3 border-t border-foreground/10 pt-6">
-              <div className="flex items-center justify-between gap-3">
-                <p className={sectionLabelClass}>Dispatches</p>
-                <Link href={`/room/${userId}/dispatches`} className={quietLinkClass}>See all Dispatches</Link>
-              </div>
-              {recentDispatches.length > 0 && (
-                <div className="space-y-4">
-                  {recentDispatches.map((dispatch) => <DispatchCard key={dispatch.id} dispatch={dispatch} />)}
-                </div>
-              )}
-            </section>
-          )}
 
           <OtherAnswersDisclosure
             answers={otherAnswers}
