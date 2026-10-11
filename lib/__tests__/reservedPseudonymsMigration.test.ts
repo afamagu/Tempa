@@ -24,9 +24,9 @@ describe('reserved-name enforcement contract', () => {
     expect(sql).toContain('if public.is_reserved_pseudonym(clean_base) then return suggestions')
   })
   it('uses the same client rule on typing and submission, and handles a database rejection', () => {
-    expect(form).toContain('isReservedPseudonym(value)')
-    expect(form).toContain("insertError.code === '23514'")
-    expect(form).toContain("pseudonymStatus === 'reserved'")
-    expect(form).toContain('++checkIdRef.current')
+    expect(form).toContain('isReservedPseudonym(next)')
+    expect(form).toContain("insertError.code==='23514'")
+    expect(form).toContain("nameStatus==='reserved'")
+    expect(form).toContain('++nameRequest.current')
   })
 })
