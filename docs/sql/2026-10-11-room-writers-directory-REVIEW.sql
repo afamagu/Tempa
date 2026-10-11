@@ -51,7 +51,7 @@ BEGIN
     ) latest ON true
     WHERE p.id <> v_viewer
       AND NOT tempa_private.account_is_banned(p.id)
-      AND NOT tempa_private.is_correspondence_blocked_pair(v_viewer,p.id)
+      AND NOT tempa_private.is_blocked_pair(v_viewer,p.id)
       AND NOT EXISTS (
         SELECT 1 FROM public.account_deactivations ad
         WHERE ad.user_id = p.id AND ad.reactivated_at IS NULL
