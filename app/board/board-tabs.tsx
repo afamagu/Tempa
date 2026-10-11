@@ -1,14 +1,16 @@
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 
 export type BoardTab = 'letters' | 'people'
 
 const TABS = [
-  { key: 'letters', href: '/board', label: 'Open Letters' },
-  { key: 'people', href: '/board/people', label: 'People' },
+  { key: 'letters', href: '/board', label: 'open' },
+  { key: 'people', href: '/board/people', label: 'people' },
 ] as const
 
 /** One navigation for reading people through their letters or deliberately finding them. */
 export default function BoardTabs({ active }: { active: BoardTab }) {
+  const t=useTranslations('Board')
   return (
     <nav aria-label="The Board" className="mt-6 flex gap-8 border-b border-foreground/15">
       {TABS.map(tab => (
@@ -22,7 +24,7 @@ export default function BoardTabs({ active }: { active: BoardTab }) {
               : 'border-transparent text-foreground/65 hover:text-foreground'
           }`}
         >
-          {tab.label}
+          {t(tab.label)}
         </Link>
       ))}
     </nav>
