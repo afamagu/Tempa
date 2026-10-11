@@ -20,6 +20,6 @@ describe('WriteDispatchButton', () => {
 
   it('is exactly one control — no duplicate/second writing action rendered alongside it', () => {
     const html = renderToStaticMarkup(<WriteDispatchButton />)
-    expect((html.match(/href="\/board\/write"/g) ?? []).length).toBe(1)
+    expect((html.match(/href="\/room\/write"/g) ?? []).length).toBe(1)
   })
 })
