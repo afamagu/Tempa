@@ -37,7 +37,7 @@ export default function AdminNav() {
           isActive(path,item) ? 'bg-accent/15 font-semibold text-foreground' : 'text-foreground/70 hover:bg-foreground/5'
         }`}>{item.label}</Link>)}
     </nav>
-    {more && <div className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 rounded-lg border border-foreground/15 bg-background p-3 shadow-lg sm:hidden">
+    {more && <div id="admin-more-menu" className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 rounded-lg border border-foreground/15 bg-background p-3 shadow-lg sm:hidden">
       <p className="px-2 pb-2 text-xs uppercase tracking-wider text-foreground/55">More in Admin</p>
       {[...DESTINATIONS.slice(4),...OTHER_DESTINATIONS].map(item => <Link
         key={item.href} href={item.href} onClick={()=>setMore(false)}
