@@ -1,9 +1,5 @@
 import PublicMentions from './public-mentions'
 import Link from 'next/link'
-import { cookies } from 'next/headers'
-import IntroductionReminder from './introduction-reminder'
-import { getIntroductionReminderQuestion } from '@/lib/introduction-reminder-query'
-import { introductionReminderCookie, introductionReminderSnoozed } from '@/lib/introduction-reminder'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -61,7 +57,6 @@ export default async function HomePage() {
     hiddenCorrespondenceIds,
     boardCandidates,
     activeAnnouncement,
-    introductionQuestion,
     relationshipCapacity,
     relationshipPeople,
   ] = await Promise.all([
@@ -72,16 +67,12 @@ export default async function HomePage() {
     getHiddenCorrespondenceIds(supabase, user.id),
     getHomeBoardCandidates(supabase),
     getActiveAnnouncement(supabase),
-    getIntroductionReminderQuestion(supabase, user.id),
     getRelationshipCapacity(supabase),
     getRelationshipSurfacePeople(supabase, user.id),
   ])
 
   if (!profile) redirect('/profile')
 
-  const reminderSnoozed = introductionReminderSnoozed(
-    (await cookies()).get(introductionReminderCookie(user.id))?.value
-  )
   const capacitySummary = correspondenceCapacitySummary(relationshipCapacity)
   const establishedPeople = relationshipPeople.filter((person) => person.relationshipState === 'established')
   const establishedWithoutWaitingMail = establishedPeople.filter((person) => person.unreadCount === 0)
@@ -238,10 +229,6 @@ export default async function HomePage() {
               {mailOnTheWay && <MailOnTheWay />}
               <HomeFamiliarFaces />
 
-              {introductionQuestion && !reminderSnoozed && (
-                <IntroductionReminder userId={user.id} questionId={introductionQuestion.id} />
-              )}
-
               {capacitySummary && (
                 <div className="border-l-2 border-accent/35 pl-4">
                   <p className={sectionLabelClass}>Your correspondence</p>
@@ -252,7 +239,7 @@ export default async function HomePage() {
               {awaitingReply.length === 0 && establishedPeople.length === 0 && pendingPeople.length === 0 && !mailOnTheWay && (
                 <div className="rounded-md border border-foreground/10 px-5 py-5">
                   <p className={sectionTitleClass}>Nothing needs your attention right now.</p>
-                  <p className={`${helperTextClass} mt-1`}>The Room is always open whenever you feel like reading.</p>
+                  <p className={`${helperTextClass} mt-1`}>The Board is always here when you feel like reading.</p>
                 </div>
               )}
             </section>
@@ -263,8 +250,8 @@ export default async function HomePage() {
               {homeBoardItems.length > 0 && (
                 <section aria-labelledby="home-board-heading">
                   <div className="flex items-center justify-between gap-3">
-                    <p id="home-board-heading" className={sectionLabelClass}>From the Room</p>
-                    <Link href="/room" className={quietLinkClass}>Keep looking</Link>
+                    <p id="home-board-heading" className={sectionLabelClass}>From The Board</p>
+                    <Link href="/board" className={quietLinkClass}>Keep looking</Link>
                   </div>
                   <div className="mt-3 grid gap-4 md:grid-cols-3">
                     {homeBoardItems.map((dispatch) => (
