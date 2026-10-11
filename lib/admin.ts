@@ -482,3 +482,29 @@ export async function setArrivalEmailSendingEnabled(
   if (error) return { error: { message: error.message, code: error.code } }
   return { error: null }
 }
+
+
+export type LocationEvidenceRow = {
+  id: string
+  purpose: 'signup' | 'writing_trust_review'
+  source: 'device_gps' | 'device_network' | 'permission_denied' | 'unavailable'
+  latitude: number | null
+  longitude: number | null
+  accuracyM: number | null
+  claimedCountry: string | null
+  observedAt: string
+}
+
+/** Staff-only raw location evidence. Never expose this through member-facing APIs. */
+export async function listLocationEvidence(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 20
+): Promise<{ data: LocationEvidenceRow[]; error: AdminError }> {
+  const { data, error } = await supabase.rpc('admin_list_location_evidence', { p_user_id: userId, p_limit: limit })
+  if (error) return { data: [], error: { message: error.message, code: error.code } }
+  return { data: ((data ?? []) as any[]).map((r) => ({
+    id: r.id, purpose: r.purpose, source: r.source, latitude: r.latitude ?? null, longitude: r.longitude ?? null,
+    accuracyM: r.accuracy_m ?? null, claimedCountry: r.claimed_country ?? null, observedAt: r.observed_at,
+  })), error: null }
+}
