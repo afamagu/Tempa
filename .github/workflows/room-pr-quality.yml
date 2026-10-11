@@ -38,5 +38,16 @@ jobs:
       - name: Repository-wide lint audit
         continue-on-error: true
         run: npm run lint
+      - name: Focused Room and discovery regression suite
+        run: >-
+          npx vitest run
+          lib/room-paths.test.ts
+          lib/room-letter-selection.test.ts
+          lib/room-browse.test.ts
+          lib/room-directory.test.ts
+          lib/directory-state.test.ts
+          app/letters/discover/directory-browser.test.tsx
+          app/app-shell.test.tsx
+          app/home/page.test.ts
       - name: Full unit and security suite
         run: npm test
