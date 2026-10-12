@@ -11,7 +11,7 @@ describe('central onboarding enforcement', () => {
   it('uses the shared account-entry resolver and reads the private onboarding stage', () => {
     expect(source).toContain('resolveAccountEntryDestination')
     expect(source).toContain('readProxyAccountEntry(supabase, user.id)')
-    expect(entrySource).toContain("select('id, onboarding_stage')")
+    expect(entrySource).toContain("select('id, onboarding_stage, mark_id')")
   })
 
   it('covers authenticated member surfaces, including direct navigation around onboarding', () => {
