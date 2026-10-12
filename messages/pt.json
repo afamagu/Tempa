@@ -439,7 +439,8 @@
     "nextPerson": "Próxima pessoa",
     "done": "Concluído",
     "next": "Seguinte →",
-    "writeTo": "Escrever a {name}"
+    "writeTo": "Escrever a {name}",
+    "previousPerson": "Pessoa anterior"
   },
   "Introduction": {
     "title": "Deixe que conheçam a sua voz.",

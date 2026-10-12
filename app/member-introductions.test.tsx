@@ -27,7 +27,7 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: { getSession: async () => ({ data: { session: { access_token: token() } } }) },
     rpc: async (fn: string, args: Record<string, unknown>) => {
       state.calls.push({ fn, args })
-      if (fn === 'get_member_introductions') {
+      if (fn === 'get_member_introductions_v2') {
         if (state.fail) throw new Error('network down')
         return { data: state.rows, error: null }
       }
@@ -146,16 +146,19 @@ describe('Member introductions — presented vs consumed', () => {
     expect(document.getElementById('app')!.hasAttribute('inert')).toBe(false)
   })
 
-  it('CASE 5 — Next consumes A (advanced) and presents B; there is no way back', async () => {
+  it('CASE 5 — Next consumes A (advanced) and presents B; previous navigation preserves the current session stack', async () => {
     await mount()
     await click(button('Next person'))
     expect(called('consume_member_introduction')).toEqual([{ p_candidate_id: 'A', p_reason: 'advanced' }])
     expect(called('mark_member_introduction_presented')).toEqual([{ p_candidate_id: 'A' }, { p_candidate_id: 'B' }])
     expect(current()).toBe('Name B')
-    expect(button(/previous|back/i)).toBeUndefined()
+    expect(button('Previous person')).toBeTruthy()
     await key('ArrowLeft')
-    await swipe(150)
+    expect(current()).toBe('Name A')
+    await swipe(-150)
     expect(current()).toBe('Name B')
+    await swipe(150)
+    expect(current()).toBe('Name A')
   })
 
   it('left swipe advances; small vertical movement does not dismiss', async () => {
@@ -199,7 +202,7 @@ describe('Member introductions — presented vs consumed', () => {
     await act(async () => { await vi.runOnlyPendingTimersAsync() })
     expect(called('consume_member_introduction')).toEqual([{ p_candidate_id: 'A', p_reason: 'profile' }])
     // Canonical profile preserves Home as the deterministic return destination.
-    expect(push).toHaveBeenCalledWith('/room/A?returnTo=%2Fhome')
+    expect(push).toHaveBeenCalledWith('/board/people/A?returnTo=%2Fhome')
     expect(dialog()).toBeNull()
   })
 })
@@ -209,10 +212,10 @@ describe('Member introductions — once per visit (CASE 8)', () => {
     await mount()
     await click(button('Close introductions'))
     await unmount()
-    const before = called('get_member_introductions').length
+    const before = called('get_member_introductions_v2').length
     await mount()
     expect(dialog()).toBeNull()
-    expect(called('get_member_introductions').length).toBe(before)
+    expect(called('get_member_introductions_v2').length).toBe(before)
   })
 
   it('a new auth session (sign-out → sign-in) is a new visit', async () => {
@@ -250,11 +253,11 @@ describe('Member introductions — presentation contract', () => {
 describe('Member introductions — long-return and navigation gates', () => {
   it('a short absence does not fetch again', async () => {
     await mount(); await click(button('Close introductions'))
-    const before = called('get_member_introductions').length
+    const before = called('get_member_introductions_v2').length
     await act(async () => window.dispatchEvent(new Event('blur')))
     await act(async () => { await vi.advanceTimersByTimeAsync(10 * 60 * 1000) })
     await act(async () => window.dispatchEvent(new Event('focus')))
-    expect(called('get_member_introductions')).toHaveLength(before)
+    expect(called('get_member_introductions_v2')).toHaveLength(before)
     expect(dialog()).toBeNull()
   })
   it('after twenty minutes away, only never-presented newcomers return', async () => {
@@ -280,25 +283,25 @@ describe('Member introductions — long-return and navigation gates', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(25 * 60 * 1000) })
     await unmount(); state.pathname = '/home'; await mount()
     expect(dialog()).toBeNull()
-    expect(called('get_member_introductions')).toHaveLength(1)
+    expect(called('get_member_introductions_v2')).toHaveLength(1)
   })
   it('an active focused composer does not count as an absence', async () => {
     await mount(); await click(button('Close introductions')); await unmount()
     await act(async () => { await vi.advanceTimersByTimeAsync(25 * 60 * 1000) })
     await mount()
     expect(dialog()).toBeNull()
-    expect(called('get_member_introductions')).toHaveLength(1)
+    expect(called('get_member_introductions_v2')).toHaveLength(1)
   })
   it('a profile with Home active in its nav never opens the overlay', async () => {
     state.pathname = '/room/A'; await mount()
     expect(dialog()).toBeNull()
-    expect(called('get_member_introductions')).toHaveLength(0)
+    expect(called('get_member_introductions_v2')).toHaveLength(0)
   })
   it('the name opens the canonical profile with its Home return path', async () => {
     await mount()
     const name = [...dialog()!.querySelectorAll('button')].find(b => b.textContent === 'Name A')!
     await click(name)
-    expect(push).toHaveBeenCalledWith('/room/A?returnTo=%2Fhome')
+    expect(push).toHaveBeenCalledWith('/board/people/A?returnTo=%2Fhome')
   })
   it('focus wraps within the introduction and Escape restores the background', async () => {
     await mount()
@@ -315,7 +318,7 @@ describe('Member introductions — identity and focus', () => {
     await mount()
     const markButton = dialog()!.querySelector<HTMLButtonElement>('button[aria-label="View Name A’s profile"]')!
     await click(markButton)
-    expect(push).toHaveBeenCalledWith('/room/A?returnTo=%2Fhome')
+    expect(push).toHaveBeenCalledWith('/board/people/A?returnTo=%2Fhome')
   })
   it('closing restores the original focused control', async () => {
     const original = document.createElement('button'); document.body.append(original); original.focus()
