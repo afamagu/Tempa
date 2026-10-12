@@ -41,20 +41,12 @@ function NavIcon({ item, className }: { item: NavKey; className?: string }) {
         </svg>
       )
     case 'room':
-      return (
-        <svg {...common}>
-          <path d="M7 20V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V20" />
-          <path d="M4.5 20h15" />
-          <circle cx="14" cy="12" r=".75" fill="currentColor" stroke="none" />
-        </svg>
-      )
     case 'board':
       return (
         <svg {...common}>
-          <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
-          <path d="M7 9h4" />
-          <path d="M7 13h7" />
-          <path d="M7 16.5h5" />
+          <rect x="2.75" y="3.75" width="18.5" height="16.5" rx="1.5" />
+          <path d="M6.75 9.5h5.5M6.75 13h10.5M6.75 16.5h7.5" />
+          <circle cx="16.75" cy="7.5" r="1.1" fill="currentColor" stroke="none" />
         </svg>
       )
     case 'you':
