@@ -3,7 +3,7 @@ import { isStaff } from '@/lib/admin'
 import { getPilotHealth, listPilotInvites, percentage } from '@/lib/admin-pilot'
 import { sectionTitleClass } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
-import { PilotInviteForm, RevokePilotInviteButton } from './pilot-controls'
+import { RevokePilotInviteButton } from './pilot-controls'
 
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
@@ -18,7 +18,7 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
 export default async function AdminPilotPage() {
   const supabase = await createClient()
   if (!(await isStaff(supabase, 'admin'))) {
-    return <p className="text-sm text-red-700">Invitation controls are limited to administrators.</p>
+    return <p className="text-sm text-red-700">Early-member reporting is available to administrators only.</p>
   }
 
   const [healthResult, invitesResult] = await Promise.all([
@@ -32,9 +32,9 @@ export default async function AdminPilotPage() {
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <h1 className={sectionTitleClass}>Invitations and early members</h1>
+        <h1 className={sectionTitleClass}>Early members</h1>
         <p className={adminMetadataClass}>
-          Closed cohort health. Aggregate relationship metadata only — never letter bodies or popularity scoring.
+          Member health and correspondence trends. Aggregate relationship metadata only — never letter bodies or popularity scoring.
         </p>
       </header>
 
@@ -45,8 +45,8 @@ export default async function AdminPilotPage() {
           <section className="space-y-3">
             <h2 className="text-[17px] font-medium text-foreground">Cohort</h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Members with access" value={health.cohortMembers} hint="Current admission limit: 200 accounts" />
-              <Stat label="Pending invitations" value={health.pendingInvites} />
+              <Stat label="Original pilot members" value={health.cohortMembers} hint="Historical pilot count, not a signup limit" />
+              <Stat label="Legacy pending invitations" value={health.pendingInvites} />
               <Stat label="Profiles created" value={health.profilesCreated} />
             </div>
           </section>
@@ -101,12 +101,12 @@ export default async function AdminPilotPage() {
 
       <section className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-[17px] font-medium text-foreground">Approve a new member</h2>
+          <h2 className="text-[17px] font-medium text-foreground">Registration is open</h2>
           <p className={adminMetadataClass}>
-            The invitation is bound to the email address. Existing accounts are already grandfathered.
+            Anyone can register directly. Legacy invitation records remain for reference; email approval is no longer required.
           </p>
         </div>
-        <PilotInviteForm />
+
 
         <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10 bg-background">
           {invitesResult.data.length === 0 ? (
