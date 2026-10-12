@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import TempaEmblem from '@/app/tempa-emblem'
+import MemberIntroductions from '@/app/member-introductions'
 
 type NavKey = 'home' | 'letters' | 'room' | 'board' | 'you'
 type ShellActiveKey = NavKey | 'minds'
@@ -173,6 +174,7 @@ export default function AppShell({
           )
         })}
       </nav>
+      <MemberIntroductions />
     </div>
   )
 }
