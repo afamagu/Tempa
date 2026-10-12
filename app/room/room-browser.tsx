@@ -128,7 +128,7 @@ export default function RoomBrowser({
       <div className="mx-auto max-w-lg py-16 text-center">
         <h2 className="font-serif text-2xl">That’s what has been left here for now.</h2>
         <p className="mt-3 text-[14px] text-foreground/65">There may be more another day. You can also leave something of your own.</p>
-        <Link href="/board/write" className="mt-5 inline-block text-sm underline underline-offset-4">Leave a letter</Link>
+        <Link href="/board/write" className="mt-5 inline-block text-sm underline underline-offset-4">Pin a letter</Link>
       </div>
     )}
     <div className="flex justify-center" aria-live="polite">
