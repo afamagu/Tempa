@@ -15,7 +15,7 @@ describe('WriteDispatchButton', () => {
   it('carries the quill icon alongside a visible, accessible text label', () => {
     const html = renderToStaticMarkup(<WriteDispatchButton />)
     expect(html).toContain('<svg')
-    expect(html).toContain('Leave a letter')
+    expect(html).toContain('Pin a letter')
   })
 
   it('is exactly one control — no duplicate/second writing action rendered alongside it', () => {
