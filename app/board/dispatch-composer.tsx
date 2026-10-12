@@ -709,8 +709,8 @@ export default function DispatchComposer({
                   setPostcardPickerOpen(true)
                 }}
               >
-                <p className="italic">Send a little piece of a place.</p>
-                <p>Choose a postcard, add a few words to the front, and write something more on the back — then send it along with your letter as a small keepsake.</p>
+                <p className="italic">Sometimes a postcard says what words alone cannot.</p>
+                <p>Choose a feeling, a moment, a celebration or a place. Add a few words to the front and something personal on the back. Pin it with your open letter as a little keepsake.</p>
               </FeatureIntroduction>
             )}
             <PostcardComposerSlot draft={postcardDraft} catalogEntry={postcardCatalogEntry} onAdd={handleAddPostcard} onEdit={() => setPostcardEditorOpen(true)} />
