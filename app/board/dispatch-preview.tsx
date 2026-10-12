@@ -158,7 +158,7 @@ export default function DispatchPreview({
               className={primaryButtonClass}
             >
               <span className={publishing ? 'animate-pulse' : undefined}>
-                {publishing ? (identity && identity.kind !== 'member' ? 'Pinning…' : 'Leaving…') : (identity && identity.kind !== 'member' ? 'Publish Dispatch' : 'Leave letter')}
+                {publishing ? (identity && identity.kind !== 'member' ? 'Pinning…' : 'Pinning…') : (identity && identity.kind !== 'member' ? 'Publish Dispatch' : 'Pin letter')}
               </span>
             </button>
           </div>
