@@ -1016,7 +1016,7 @@ export default function MomentsComposer({
             setPostcardPickerOpen(true)
           }}
         >
-          <p className="italic">Send a little piece of a place.</p>
+          <p className="italic">Sometimes a postcard says what words alone cannot.</p>
           <p>
             Choose a postcard, add a few words to the front, and write something more on the
             back — then send it along with your Letter or Dispatch as a small keepsake.
