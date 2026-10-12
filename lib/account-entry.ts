@@ -37,6 +37,7 @@ export type AccountEntryState = {
    * supplies it. */
   needsWritingStyle?: boolean
   firstArrivalPending?: boolean
+  needsMark?: boolean
 }
 
 /**
@@ -77,6 +78,7 @@ export function resolveAccountEntryDestination(state: AccountEntryState, request
       onboardingStage: state.onboardingStage,
       needsWritingStyle: state.needsWritingStyle,
       firstArrivalPending: state.firstArrivalPending,
+      needsMark: state.needsMark,
     },
     requestedDestination
   )
