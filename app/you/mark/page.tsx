@@ -19,7 +19,7 @@ export default async function ManageMarkPage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('pseudonym, onboarding_stage, mark_id')
+    .select('pseudonym, onboarding_stage, mark_id, first_arrival_seen_at')
     .eq('id', user.id)
     .maybeSingle()
   if (!profile) redirect('/profile')
@@ -31,7 +31,7 @@ export default async function ManageMarkPage({
   const markUrl = markId ? publicProfileMarkUrl(supabase, `${markId}.png`) : null
 
   if (!markUrl || (replace === '1' && status.canChange)) {
-    return <YourMarkStep destination="/you" continueLabel={markUrl ? 'Save new Mark' : 'Save your Mark'} />
+    return <YourMarkStep destination={profile.first_arrival_seen_at ? "/you" : "/welcome"} continueLabel={markUrl ? 'Save new Mark' : 'Save your Mark'} />
   }
 
   return (
