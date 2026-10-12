@@ -41,7 +41,7 @@ function visitStore(): Storage | null {
  */
 export default function MemberIntroductions({ enabled = true }: { enabled?: boolean }) {
   const pathname = usePathname()
-  const presentOnHome = enabled && pathname === '/home'
+  const presentOnHome = enabled && (pathname === '/home' || pathname === '/board')
   const [cards, setCards] = useState<IntroductionCard[]>([])
   const [index, setIndex] = useState(0)
   const [open, setOpen] = useState(false)
@@ -230,7 +230,8 @@ export function IntroductionDialog({
     touchStartRef.current = null
     const t = e.changedTouches[0]
     if (!start || !t) return
-    if (isForwardSwipe(t.clientX - start.x, t.clientY - start.y)) advance()
+    if (t.clientY - start.y > 90 && Math.abs(t.clientX - start.x) < 90) onClose()
+    else if (isForwardSwipe(t.clientX - start.x, t.clientY - start.y)) advance()
   }
 
   const titleId = `intro-name-${card.candidateId}`
