@@ -49,8 +49,8 @@ describe('/sign-in is localized', () => {
   it('Spanish and Portuguese render their own copy; ?intent=join uses the create-account heading', () => {
     expect(render('es')).toContain('Iniciar sesión')
     expect(render('pt')).toContain('Enviar link de acesso')
-    expect(render('fr', 'intent=join')).toContain('Créez votre compte Tempa')
-    expect(render('pt', 'intent=join')).toContain('Crie sua conta no Tempa')
+    expect(render('fr', 'intent=join')).toContain('Inscrivez-vous avec Google ou votre e-mail')
+    expect(render('pt', 'intent=join')).toContain('Cadastre-se com Google ou seu e-mail')
   })
 
   it('auth error semantics are unchanged in every language: known codes only, localized, never raw', () => {

@@ -49,7 +49,7 @@ const steps = [
 
 function FeaturedLetter() {
   return (
-    <div className={styles.letterShowcase} aria-label="Illustration of a letter left in The Room and a private reply">
+    <div className={styles.letterShowcase} aria-label="Illustration of a letter left in The Board and a private reply">
       <div className={styles.showcaseAura} aria-hidden="true" />
       <article className={styles.featuredLetter}>
         <div className={styles.letterTopline}>
@@ -91,12 +91,12 @@ export default function LandingPage() {
           <p className={styles.eyebrow}>A QUIETER WAY TO FIND SOMEONE</p>
           <h1>Someone, somewhere, wrote about an <em>ordinary day.</em></h1>
           <p className={styles.heroSecond}>If something in it stays with you, write them.</p>
-          <p className={styles.mechanism}>Letters left in The Room. If one stays with you, write the person.</p>
+          <p className={styles.mechanism}>Letters left on The Board. If one stays with you, write the person.</p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryButton} href={JOIN_HREF}>I have an invitation <span aria-hidden="true">↗</span></Link>
+            <Link className={styles.primaryButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
             <a className={styles.secondaryLink} href="#read">See how it works <span aria-hidden="true">↓</span></a>
           </div>
-          <p className={styles.pilotStatus}>Founding Correspondents <span aria-hidden="true">·</span> Tempa is currently invitation only.</p>
+          <p className={styles.pilotStatus}>Anyone can join Tempa. Start with a letter.</p>
         </div>
         <FeaturedLetter />
       </section>
@@ -139,7 +139,7 @@ export default function LandingPage() {
               </article>
             ))}
           </div>
-          <p className={styles.exampleDisclaimer}>Illustrative excerpts, showing the kind of ordinary writing that belongs in The Room.</p>
+          <p className={styles.exampleDisclaimer}>Illustrative excerpts, showing the kind of ordinary writing that belongs in The Board.</p>
         </div>
       </section>
 
@@ -157,7 +157,7 @@ export default function LandingPage() {
         <p className={styles.eyebrow}>SOMEONE IS OUT THERE</p>
         <h2 id="closing-heading">Find someone you want to <em>keep writing to.</em></h2>
         <p>Every correspondence begins somewhere. Sometimes, it begins with an ordinary day.</p>
-        <Link className={styles.primaryButton} href={JOIN_HREF}>I have an invitation <span aria-hidden="true">↗</span></Link>
+        <Link className={styles.primaryButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
       </section>
 
       <footer className={styles.footer}>

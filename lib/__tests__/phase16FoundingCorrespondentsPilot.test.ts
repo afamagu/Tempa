@@ -62,12 +62,12 @@ describe('Phase 16 — Founding Correspondents pilot', () => {
   it('keeps pilot access fail-open only when the migration/RPC is absent', () => {
     expect(accountEntryState).toContain("supabase.rpc('current_pilot_access')")
     expect(accountEntryState).toContain('pilotResult.error ? undefined')
-    expect(pilotPage).toContain('if (error) redirect(\'/home\')')
+    expect(pilotPage).toContain("redirect('/board')")
   })
 
   it('retains a truthful access boundary and a premium admin invitations workspace', () => {
-    expect(pilotPage).toContain('Account access')
-    expect(pilotPage).toContain('not approved for registration')
+    expect(pilotPage).toContain("redirect('/board')")
+    expect(pilotPage).not.toContain('not approved for registration')
     expect(adminPilot).toContain('Meaningful exchange funnel')
     expect(adminPilot).toContain('Correspondence survival')
     expect(adminNav).toContain("href: '/admin/pilot'")
