@@ -439,7 +439,8 @@
     "nextPerson": "Next person",
     "done": "Done",
     "next": "Next →",
-    "writeTo": "Write to {name}"
+    "writeTo": "Write to {name}",
+    "previousPerson": "Previous person"
   },
   "Introduction": {
     "title": "Leave an answer if you like.",

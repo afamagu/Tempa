@@ -439,7 +439,8 @@
     "nextPerson": "Personne suivante",
     "done": "Terminé",
     "next": "Suivant →",
-    "writeTo": "Écrire à {name}"
+    "writeTo": "Écrire à {name}",
+    "previousPerson": "Personne précédente"
   },
   "Introduction": {
     "title": "Faites entendre votre voix.",

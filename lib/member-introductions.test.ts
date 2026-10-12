@@ -72,7 +72,7 @@ describe('loadMemberIntroductions — one bounded RPC, fails open', () => {
   it('calls get_member_introductions once with the 7 cap, then one batched Writing Style lookup', async () => {
     const calls: { fn: string; args: unknown }[] = []
     const cards = await loadMemberIntroductions(fakeRpc({ data: [row(1)], error: null }, calls))
-    expect(calls[0]).toEqual({ fn: 'get_member_introductions', args: { p_limit: 7 } })
+    expect(calls[0]).toEqual({ fn: 'get_member_introductions_v2', args: { p_limit: 7 } })
     expect(calls.slice(1).map((c) => c.fn)).toEqual(['member_writing_styles'])
     expect(cards[0].markUrl).toBe('https://cdn/m1.png')
   })

@@ -439,7 +439,8 @@
     "nextPerson": "Siguiente persona",
     "done": "Listo",
     "next": "Siguiente →",
-    "writeTo": "Escribir a {name}"
+    "writeTo": "Escribir a {name}",
+    "previousPerson": "Persona anterior"
   },
   "Introduction": {
     "title": "Deja que te conozcan por tus palabras.",
