@@ -19,8 +19,10 @@ import {
 import CatalogueTile from './catalogue-tile'
 import ProductDetail from './product-detail'
 import { defaultUnlock, type UnlockFn } from './use-unlock'
+import CollectionShelf from './collection-shelf'
+import type { PostcardBundleOffer } from '@/lib/postcard-bundles'
 
-type Tab = 'postcards' | 'gifts' | 'yours'
+type Tab = 'postcards' | 'gifts' | 'yours' | 'collections'
 const PAGE = 24
 
 /**
@@ -41,12 +43,14 @@ export default function CatalogueBrowser({
   onPick,
   onClose,
   unlock = defaultUnlock,
+  collections = [],
 }: {
   marketplace: Marketplace
   mode: 'browse' | 'pick'
   onPick?: (postcardKey: string) => void
   onClose?: () => void
   unlock?: UnlockFn
+  collections?: PostcardBundleOffer[]
 }) {
   const [ownedIds, setOwnedIds] = useState(() => new Set(marketplace.ownedProductIds))
   const [balance, setBalance] = useState(marketplace.context.balance)
@@ -102,6 +106,7 @@ export default function CatalogueBrowser({
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'postcards', label: 'Postcards' },
+    ...(collections.length > 0 && mode === 'browse' ? [{ key: 'collections' as Tab, label: 'Collections' }] : []),
     ...(gifts.length > 0 && mode === 'browse' ? [{ key: 'gifts' as Tab, label: 'Gifts' }] : []),
     { key: 'yours', label: 'Yours' },
   ]
@@ -173,6 +178,11 @@ export default function CatalogueBrowser({
           </button>
         ))}
       </div>
+
+      {tab === 'collections' && <CollectionShelf offers={collections} ownedIds={ownedIds} spendEnabled={context.spendEnabled} balance={balance} onUnlocked={(ids, nextBalance) => {
+        setOwnedIds((current) => new Set([...current, ...ids]))
+        setBalance(nextBalance)
+      }} />}
 
       {tab === 'postcards' && (
         <div className="space-y-4" role="tabpanel">
