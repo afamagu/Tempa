@@ -175,7 +175,7 @@ describe('SignInPage — controlled pilot framing', () => {
     expect(html).toContain('Sign in')
     expect(html).toContain('Continue with Google')
     expect(html).toContain('Send magic link')
-    expect(html).toContain('Use your invitation')
+    expect(html).toContain('Create an account')
   })
 
   it('join intent gives clear, truthful admission guidance without pilot branding', () => {
@@ -183,8 +183,8 @@ describe('SignInPage — controlled pilot framing', () => {
     try {
       const html = render()
       expect(html).toContain('Join Tempa')
-      expect(html).toContain('Tempa is welcoming new members gradually.')
-      expect(html).toContain('Please use the email address approved for your account.')
+      expect(html).toContain('Sign up with Google or your email.')
+      expect(html).toContain('No invitation needed.')
     } finally {
       currentSearchParams = new URLSearchParams()
     }
@@ -366,7 +366,7 @@ describe('SignInPage — deleted, permanently banned and expired are three diffe
   it('voluntarily deleted: the exact deleted-account message and a Create a new account button', () => {
     const html = renderWith('error=account_deleted')
     expect(html).toContain('This account was deleted and can’t be restored. If you’d like to return to Tempa, you’ll need to create a new account.')
-    expect(html).toContain('>Enter with an invitation</button>')
+    expect(html).toContain('>Create a new account</button>')
     expect(html).not.toMatch(/banned|no longer valid|expired/i)
   })
 
@@ -375,23 +375,23 @@ describe('SignInPage — deleted, permanently banned and expired are three diffe
     expect(html).toContain(
       'This account has been permanently banned from Tempa and can no longer be used to sign in. If you believe this is a mistake, contact support@jointempa.com.'
     )
-    expect(html).not.toContain('Enter with an invitation')
-    expect(html).not.toContain('Use your invitation')
+    expect(html).not.toContain('Create a new account')
+    expect(html).not.toContain('Create an account')
     expect(html).not.toMatch(/no longer valid|expired/i)
   })
 
   it('deleted during a suspension: no invitation, not called banned', () => {
     const html = renderWith('error=account_deleted_unavailable')
     expect(html).toContain('This account was deleted and can’t be restored.')
-    expect(html).not.toContain('Enter with an invitation')
-    expect(html).not.toContain('Use your invitation')
+    expect(html).not.toContain('Create a new account')
+    expect(html).not.toContain('Create an account')
     expect(html).not.toMatch(/banned/i)
   })
 
   it('unattributable refusal (e.g. Google): neutral, no invitation, not "banned", not "expired"', () => {
     const html = renderWith('error=account_unavailable')
     expect(html).toContain('This account can’t be used to sign in to Tempa.')
-    expect(html).not.toContain('Use your invitation')
+    expect(html).not.toContain('Create an account')
     expect(html).not.toMatch(/banned|expired|no longer valid/i)
   })
 
@@ -399,7 +399,7 @@ describe('SignInPage — deleted, permanently banned and expired are three diffe
     const html = renderWith('error=link_expired')
     expect(html).toContain('This sign-in link is no longer valid. Request a new link and use the newest email.')
     expect(html).not.toMatch(/deleted|banned|can’t be used to sign in/)
-    expect(html).toContain('Use your invitation')
+    expect(html).toContain('Create an account')
   })
 
   it('GoTrue fragment error_code=user_banned is recognised; otp_expired is not', () => {

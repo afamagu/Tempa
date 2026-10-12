@@ -13,7 +13,7 @@
     "tagline": "Una forma más humana de conectar",
     "signIn": "Iniciar sesión",
     "createAccountHeading": "Únete a Tempa",
-    "pilotInviteNote": "Tempa está dando la bienvenida a nuevos miembros de forma gradual. Usa la dirección de correo aprobada para tu cuenta.",
+    "pilotInviteNote": "Regístrate con Google o tu correo. No necesitas invitación.",
     "continueWithGoogle": "Continuar con Google",
     "redirecting": "Redirigiendo…",
     "signingYouIn": "Iniciando sesión…",
@@ -31,9 +31,9 @@
     "useDifferentEmail": "Usar otro correo",
     "verificationRetry": "La verificación no se cargó. Inténtalo de nuevo.",
     "alreadyHaveAccount": "¿Ya tienes una cuenta?",
-    "newToTempa": "¿Tienes una invitación?",
-    "createAnAccount": "Usar tu invitación",
-    "createNewAccount": "Entrar con una invitación",
+    "newToTempa": "¿Nuevo en Tempa?",
+    "createAnAccount": "Crear una cuenta",
+    "createNewAccount": "Crear una nueva cuenta",
     "errors": {
       "captchaFailed": "No pudimos verificar que no eres un robot. Inténtalo de nuevo.",
       "rateLimited": "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
@@ -439,7 +439,8 @@
     "nextPerson": "Siguiente persona",
     "done": "Listo",
     "next": "Siguiente →",
-    "writeTo": "Escribir a {name}"
+    "writeTo": "Escribir a {name}",
+    "previousPerson": "Persona anterior"
   },
   "Introduction": {
     "title": "Deja que te conozcan por tus palabras.",

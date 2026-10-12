@@ -187,6 +187,10 @@ export function IntroductionDialog({
     else onIndexChange(index + 1)
   }, [card, index, isLast, onClose, onIndexChange, supabase])
 
+  const previous = useCallback(() => {
+    if (index > 0 && !busyRef.current) onIndexChange(index - 1)
+  }, [index, onIndexChange])
+
   const leaveTo = useCallback(
     async (reason: Exclude<IntroductionConsumeReason, 'advanced'>, href: string) => {
       if (!card || busyRef.current) return
@@ -206,6 +210,9 @@ export function IntroductionDialog({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
         advance()
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        previous()
       }
       if (e.key === 'Tab') {
         const buttons = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]') ?? [])
@@ -213,11 +220,10 @@ export function IntroductionDialog({
         if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { e.preventDefault(); last?.focus() }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus() }
       }
-      // ArrowLeft intentionally does nothing — there is no previous card.
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [advance, onClose])
+  }, [advance, previous, onClose])
 
   if (!card) return null
 
@@ -232,10 +238,11 @@ export function IntroductionDialog({
     if (!start || !t) return
     if (t.clientY - start.y > 90 && Math.abs(t.clientX - start.x) < 90) onClose()
     else if (isForwardSwipe(t.clientX - start.x, t.clientY - start.y)) advance()
+    else if (isForwardSwipe(start.x - t.clientX, t.clientY - start.y)) previous()
   }
 
   const titleId = `intro-name-${card.candidateId}`
-  const { profileHref, writeHref } = introductionDestinations(card.candidateId, card.answerId)
+  const { profileHref, writeHref } = introductionDestinations(card.candidateId, card.answerId, card.sourceType)
   const hasCommon = card.sharedLanguages.length > 0 || card.sharedIntents.length > 0
 
   const dialog = (
@@ -320,6 +327,7 @@ export function IntroductionDialog({
             {t('viewProfile', { name: card.pseudonym })}
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={previous} disabled={index === 0} aria-label={t('previousPerson')} className="rounded-full px-3 py-2 text-foreground/80 disabled:opacity-30">←</button>
             <button
               type="button"
               onClick={advance}

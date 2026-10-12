@@ -3,7 +3,7 @@ import { isStaff } from '@/lib/admin'
 import { getPilotHealth, listPilotInvites, percentage } from '@/lib/admin-pilot'
 import { sectionTitleClass } from '@/app/profile/ui'
 import { adminMetadataClass, adminTableTextClass } from '@/app/admin/admin-ui'
-import { PilotInviteForm, RevokePilotInviteButton } from './pilot-controls'
+import { RevokePilotInviteButton } from './pilot-controls'
 
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
@@ -101,12 +101,12 @@ export default async function AdminPilotPage() {
 
       <section className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-[17px] font-medium text-foreground">Approve a new member</h2>
+          <h2 className="text-[17px] font-medium text-foreground">Registration is open</h2>
           <p className={adminMetadataClass}>
-            The invitation is bound to the email address. Existing accounts are already grandfathered.
+            Anyone can register directly. Legacy invitation records remain for reference; email approval is no longer required.
           </p>
         </div>
-        <PilotInviteForm />
+
 
         <div className="divide-y divide-foreground/10 rounded-md border border-foreground/10 bg-background">
           {invitesResult.data.length === 0 ? (

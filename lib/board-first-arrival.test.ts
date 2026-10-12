@@ -19,7 +19,7 @@ describe('The Board — one first arrival and one canonical discovery destinatio
     expect(resolveAccountEntryDestination(eligible,'/home')).toBe('/welcome')
     expect(resolveAccountEntryDestination({...eligible,legalCurrent:false},'/home')).toBe('/begin')
     expect(resolveAccountEntryDestination({...eligible,languageConfirmed:false},'/home')).toBe('/language')
-    expect(resolveAccountEntryDestination({...eligible,pilotAccess:false},'/home')).toBe('/pilot-access')
+    expect(resolveAccountEntryDestination({...eligible,pilotAccess:false},'/home')).toBe('/welcome')
     expect(resolveAccountEntryDestination(eligible,'/welcome')).toBe('/welcome')
     expect(resolveAccountEntryDestination({...eligible,firstArrivalPending:false},'/home')).toBe('/home')
   })

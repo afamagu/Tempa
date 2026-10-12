@@ -55,7 +55,7 @@ const CURRENT_LEGAL_ROWS = [
 ]
 
 describe('resolvePostAuthDestination', () => {
-  it('sends an authenticated account outside the controlled pilot directly to /pilot-access', async () => {
+  it('sends an authenticated account outside the controlled pilot through normal onboarding', async () => {
     const supabase = fakeSupabase({
       pilotAccess: false,
       profile: null,
@@ -63,7 +63,7 @@ describe('resolvePostAuthDestination', () => {
       legalRows: [],
     })
 
-    expect(await resolvePostAuthDestination(supabase, 'uninvited', '/home')).toBe('/pilot-access')
+    expect(await resolvePostAuthDestination(supabase, 'uninvited', '/home')).toBe('/begin?next=%2Fhome')
   })
 
   it('fails open only when the pilot RPC itself is unavailable during deploy ordering', async () => {

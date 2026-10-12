@@ -13,7 +13,7 @@
     "tagline": "A more human way to connect",
     "signIn": "Sign in",
     "createAccountHeading": "Join Tempa",
-    "pilotInviteNote": "Tempa is welcoming new members gradually. Please use the email address approved for your account.",
+    "pilotInviteNote": "Sign up with Google or your email. No invitation needed.",
     "continueWithGoogle": "Continue with Google",
     "redirecting": "Redirecting…",
     "signingYouIn": "Signing you in…",
@@ -31,9 +31,9 @@
     "useDifferentEmail": "Use a different email",
     "verificationRetry": "Verification check didn't load. Try again.",
     "alreadyHaveAccount": "Already have an account?",
-    "newToTempa": "Have an invitation?",
-    "createAnAccount": "Use your invitation",
-    "createNewAccount": "Enter with an invitation",
+    "newToTempa": "New to Tempa?",
+    "createAnAccount": "Create an account",
+    "createNewAccount": "Create a new account",
     "errors": {
       "captchaFailed": "We couldn't verify you're not a robot. Please try again.",
       "rateLimited": "Too many attempts. Please wait a few minutes and try again.",
@@ -439,7 +439,8 @@
     "nextPerson": "Next person",
     "done": "Done",
     "next": "Next →",
-    "writeTo": "Write to {name}"
+    "writeTo": "Write to {name}",
+    "previousPerson": "Previous person"
   },
   "Introduction": {
     "title": "Leave an answer if you like.",

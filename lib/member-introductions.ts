@@ -24,6 +24,7 @@ export type IntroductionCard = {
   sharedLanguages: string[]
   sharedIntents: string[]
   answerId: string
+  sourceType?: 'board_letter' | 'question_answer'
   prompt: string
   body: string
   /** The writer's current Writing Style (presentation only). */
@@ -46,6 +47,7 @@ type IntroductionRow = {
   prompt: string | null
   body: string
   priority_tier?: number
+  source_type?: 'board_letter' | 'question_answer'
 }
 
 export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId: string) => string): IntroductionCard[] {
@@ -64,6 +66,7 @@ export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId
       sharedLanguages: row.shared_languages ?? [],
       sharedIntents: row.shared_intents ?? [],
       answerId: row.answer_id,
+      ...(row.source_type ? { sourceType: row.source_type } : {}),
       prompt: row.prompt ?? '',
       body: row.body,
     })
@@ -75,7 +78,9 @@ export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId
 /** Never throws: any failure means "nothing to show" (fail open). */
 export async function loadMemberIntroductions(supabase: SupabaseClient, newcomersOnly = false): Promise<IntroductionCard[]> {
   try {
-    const { data, error } = await supabase.rpc('get_member_introductions', { p_limit: MAX_INTRODUCTIONS })
+    let result = await supabase.rpc('get_member_introductions_v2', { p_limit: MAX_INTRODUCTIONS })
+    if (result.error?.code === 'PGRST202' || result.error?.code === '42883') result = await supabase.rpc('get_member_introductions', { p_limit: MAX_INTRODUCTIONS })
+    const { data, error } = result
     if (error || !Array.isArray(data)) return []
     const cards = toIntroductionCards((data as IntroductionRow[]).filter(row => !newcomersOnly || row.priority_tier === 0), (markId) => publicProfileMarkUrl(supabase, `${markId}.png`))
     const styles = await getMemberWritingStyles(supabase, cards.map((c) => c.candidateId))

@@ -96,7 +96,7 @@ export default function LandingPage() {
             <Link className={styles.primaryButton} href={JOIN_HREF}>I have an invitation <span aria-hidden="true">↗</span></Link>
             <a className={styles.secondaryLink} href="#read">See how it works <span aria-hidden="true">↓</span></a>
           </div>
-          <p className={styles.pilotStatus}>Founding Correspondents <span aria-hidden="true">·</span> Tempa is currently invitation only.</p>
+          <p className={styles.pilotStatus}>Join Tempa. Invite someone you would love to hear from.</p>
         </div>
         <FeaturedLetter />
       </section>
