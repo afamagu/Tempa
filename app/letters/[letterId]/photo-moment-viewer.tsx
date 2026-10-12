@@ -29,6 +29,8 @@ export default function PhotoMomentViewer({
   onClose: () => void
 }) {
   const closingFromHistoryRef = useRef(false)
+  const closeRequestedRef = useRef(false)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   // A full-screen photo behaves like a transient navigation layer on mobile:
   // opening it adds one history entry, so Android's system/browser Back button
@@ -39,7 +41,7 @@ export default function PhotoMomentViewer({
 
     function handlePopState() {
       closingFromHistoryRef.current = true
-      onClose()
+      if (!closeRequestedRef.current) onClose()
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -47,17 +49,14 @@ export default function PhotoMomentViewer({
   }, [onClose])
 
   const requestClose = useCallback(() => {
-    if (closingFromHistoryRef.current) {
-      onClose()
-      return
-    }
-
-    if (window.history.state?.tempaPhotoMoment) {
-      window.history.back()
-      return
-    }
-
+    if (closeRequestedRef.current) return
+    closeRequestedRef.current = true
+    // Dismiss synchronously: never leave a small image holding the screen
+    // hostage while waiting for a mobile browser's asynchronous popstate.
     onClose()
+    if (!closingFromHistoryRef.current && window.history.state?.tempaPhotoMoment) {
+      window.history.back()
+    }
   }, [onClose])
 
   useEffect(() => {
@@ -73,13 +72,25 @@ export default function PhotoMomentViewer({
       role="dialog"
       aria-modal="true"
       onClick={requestClose}
+      onTouchStart={(e) => {
+        const touch = e.touches[0]
+        if (touch) touchStartRef.current = { x: touch.clientX, y: touch.clientY }
+      }}
+      onTouchEnd={(e) => {
+        const start = touchStartRef.current
+        const touch = e.changedTouches[0]
+        touchStartRef.current = null
+        if (start && touch && touch.clientY - start.y > 90 && Math.abs(touch.clientX - start.x) < 100) {
+          requestClose()
+        }
+      }}
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4"
     >
       <button
         type="button"
         onClick={requestClose}
         aria-label="Close"
-        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-lg text-white"
+        className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-lg text-white"
       >
         ×
       </button>
