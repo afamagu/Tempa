@@ -646,7 +646,7 @@ export default function DispatchComposer({
               ? `${isEdit ? 'Edit ' : ''}${official.publishedAs === 'tempa' ? 'Tempa Dispatch' : 'Sponsored Dispatch'}`
               : isEdit
                 ? 'Edit letter'
-                : 'Leave a letter'}
+                : 'Pin a letter'}
           </p>
           <p className={helperTextClass}>
             {official?.publishedAs === 'tempa'
@@ -678,7 +678,7 @@ export default function DispatchComposer({
         )}
 
         {!isEdit && showComposerIntro && (
-          <FeatureIntroduction guideKey="dispatch_composer" title="Leave a letter" ctaLabel="Start writing">
+          <FeatureIntroduction guideKey="dispatch_composer" title="Pin a letter" ctaLabel="Start writing">
             <p>
               A letter pinned on The Board can be a story from your day,
               something you&rsquo;ve noticed, a question you&rsquo;ve been carrying, or simply something worth putting into words.
@@ -819,8 +819,8 @@ export default function DispatchComposer({
         onCancel={handleCancelWarning}
         onAcknowledgeAndSend={handleAcknowledgeWarning}
         sending={publishing}
-        actionLabel={isEdit ? 'Save anyway' : 'Publish anyway'}
-        sendingLabel={isEdit ? 'Saving…' : 'Publishing…'}
+        actionLabel={isEdit ? 'Save anyway' : 'Pin anyway'}
+        sendingLabel={isEdit ? 'Saving…' : 'Pinning…'}
       />
       <SafetyBlockedDialog open={financialBlocked} onClose={() => setFinancialBlocked(false)} />
     </main>
