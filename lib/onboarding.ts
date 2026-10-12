@@ -11,6 +11,8 @@ export type OnboardingState = {
   needsWritingStyle?: boolean
   /** New members see an enduring one-time welcome after their identity is created. */
   firstArrivalPending?: boolean
+  /** True for an existing profile without its required generated Mark. */
+  needsMark?: boolean
 }
 
 /** The one-time Writing Style step — step 4 of onboarding for a new
@@ -52,6 +54,9 @@ export function resolveOnboardingDestination(
   if (!state.hasProfile) return '/profile'
   if (state.onboardingStage === 'mark') return '/profile/mark'
   if (state.onboardingStage === 'question') return '/profile/question'
+  // The Mark is the member's required visual identity. Preserve account access
+  // and the Mark creation page itself to avoid trapping incomplete members.
+  if (state.needsMark === true && !['/you/mark', '/you/account'].some((path) => requestedDestination.split(/[?#]/, 1)[0] === path || requestedDestination.startsWith(`${path}/`)) && !requestedDestination.startsWith('/admin')) return '/you/mark'
   // Writing style is personalisation, never a registration hurdle.
   // The optional migration field fails open until deployed.
   if (state.firstArrivalPending === true &&
