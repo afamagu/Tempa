@@ -142,16 +142,16 @@ describe('DispatchPreview — never a fake live Board page (no reader-only inter
 })
 
 describe('DispatchPreview — actions', () => {
-  it('offers exactly "Back to editing" and "Leave letter"', () => {
+  it('offers exactly "Back to editing" and "Pin letter"', () => {
     const html = renderToStaticMarkup(<DispatchPreview {...baseProps()} />)
     expect(html).toContain('Back to editing')
-    expect(html).toContain('Leave letter')
+    expect(html).toContain('Pin letter')
   })
 
   it('disables Publish while publishing, and swaps the label', () => {
     const html = renderToStaticMarkup(<DispatchPreview {...baseProps({ publishing: true })} />)
-    expect(html).toContain('Leaving…')
-    expect(isButtonDisabled(html, 'Leaving…')).toBe(true)
+    expect(html).toContain('Pinning…')
+    expect(isButtonDisabled(html, 'Pinning…')).toBe(true)
   })
 
   it('never disables "Back to editing" while publishing — the author can always return', () => {
@@ -166,7 +166,7 @@ describe('DispatchPreview — actions', () => {
       />
     )
     expect(html).toContain('Write something on the back of your postcard before publishing.')
-    expect(isButtonDisabled(html, 'Leave letter')).toBe(true)
+    expect(isButtonDisabled(html, 'Pin letter')).toBe(true)
     expect(html).not.toContain('text-red-600')
   })
 
@@ -200,6 +200,6 @@ describe('DispatchPreview — actions', () => {
 
   it('enables Publish with no blocked reason and no error', () => {
     const html = renderToStaticMarkup(<DispatchPreview {...baseProps()} />)
-    expect(isButtonDisabled(html, 'Leave letter')).toBe(false)
+    expect(isButtonDisabled(html, 'Pin letter')).toBe(false)
   })
 })
