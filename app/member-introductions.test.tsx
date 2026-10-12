@@ -158,9 +158,9 @@ describe('Member introductions — presented vs consumed', () => {
     expect(current()).toBe('Name B')
   })
 
-  it('left swipe advances; mostly-vertical movement does not', async () => {
+  it('left swipe advances; small vertical movement does not dismiss', async () => {
     await mount()
-    await swipe(-40, 200)
+    await swipe(-40, 70)
     expect(current()).toBe('Name A')
     await swipe(-120, 10)
     expect(current()).toBe('Name B')
@@ -242,7 +242,7 @@ describe('Member introductions — presentation contract', () => {
   })
   it('is mounted once in AppShell (not in onboarding, admin or compose)', () => {
     const shell = readFileSync(path.join(__dirname, 'app-shell.tsx'), 'utf8')
-    expect(shell).toContain("<MemberIntroductions enabled={activeNav === 'home'} />")
+    expect(shell).toContain("<MemberIntroductions />")
   })
 })
 

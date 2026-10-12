@@ -43,6 +43,7 @@ vi.mock('next/navigation', () => ({
     throw new Error('redirect() should not be called for a signed-in user')
   },
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
+  usePathname: () => '/you/interests',
 }))
 
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({}) }))

@@ -37,7 +37,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
       .eq('user_id', userId)
       .maybeSingle(),
     supabase.rpc('current_pilot_access'),
-    supabase.from('profiles').select('first_arrival_seen_at').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('first_arrival_seen_at, mark_id').eq('id', userId).maybeSingle(),
   ])
 
   const { data, error } = entryResult
@@ -72,6 +72,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
         onboardingStage: (row.onboarding_stage as OnboardingStage | null) ?? null,
         needsWritingStyle: row.has_writing_style === false,
         firstArrivalPending,
+        needsMark: firstArrivalResult.error || !firstArrivalResult.data ? undefined : firstArrivalResult.data.mark_id === null,
       },
     }
   }
@@ -89,7 +90,7 @@ async function readLegacyProxyAccountEntry(
 ): Promise<ProxyAccountEntry> {
   const [{ data: accountStatus }, { data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
     supabase.rpc('current_account_status'),
-    supabase.from('profiles').select('id, onboarding_stage').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('id, onboarding_stage, mark_id').eq('id', userId).maybeSingle(),
     supabase.from('account_eligibility').select('status').eq('user_id', userId).maybeSingle(),
     supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', userId),
   ])
@@ -112,6 +113,7 @@ async function readLegacyProxyAccountEntry(
       hasProfile: Boolean(profile),
       onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
       firstArrivalPending,
+      needsMark: profile?.mark_id === null,
     },
   }
 }

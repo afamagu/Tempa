@@ -252,7 +252,7 @@ describe('DispatchComposer — Postcard (Checkpoint 2)', () => {
 describe('DispatchComposer — FeatureIntroduction wiring', () => {
   it('shows the composer introduction only when showComposerIntro is true', () => {
     const shown = renderToStaticMarkup(<DispatchComposer authorId="author-1" showComposerIntro />)
-    expect(shown).toContain('Leave a letter')
+    expect(shown).toContain('Pin a letter')
     expect(shown).toContain('Start writing')
 
     const hidden = renderToStaticMarkup(<DispatchComposer authorId="author-1" />)
@@ -280,7 +280,7 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
     const html = renderToStaticMarkup(
       <DispatchComposer authorId="author-1" showComposerIntro showPostcardIntro />
     )
-    expect(html).toContain('Leave a letter')
+    expect(html).toContain('Pin a letter')
     expect(html).not.toContain('Postcards')
   })
 
@@ -315,7 +315,7 @@ describe('DispatchComposer — FeatureIntroduction wiring', () => {
         }}
       />
     )
-    expect(html).not.toContain('Leave a letter')
+    expect(html).not.toContain('Pin a letter')
     expect(html).not.toContain('Postcards')
   })
 

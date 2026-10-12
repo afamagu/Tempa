@@ -16,7 +16,7 @@ describe('/you/mark — voluntary Mark management', () => {
     expect(source).toContain('if (!markUrl || (replace === \'1\' && status.canChange))')
     expect(source).toContain('A Mark can be changed only once every 30 days.')
     expect(source).toContain('href="/you/mark?replace=1"')
-    expect(source).toContain('destination="/you"')
+    expect(source).toContain('destination={profile.first_arrival_seen_at ? "/you" : "/welcome"}')
   })
 
   it('shows the server-provided next-change date when replacement is locked', () => {
