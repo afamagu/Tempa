@@ -5,6 +5,7 @@ import { adminMetadataClass } from '@/app/admin/admin-ui'
 import PostcardsCatalogue from './postcards-catalogue'
 import AddPostcardForm from './add-postcard-form'
 import BulkPostcardImport from './bulk-postcard-import'
+import PremiumBatchUpload from './premium-batch-upload'
 
 /**
  * Admin Phase 2A-2 — Admin → Content → Postcards. Active and inactive
@@ -38,6 +39,7 @@ export default async function AdminPostcardsPage() {
 
       {error && <p className="text-sm text-red-600">{error.message}</p>}
 
+      <PremiumBatchUpload />
       <BulkPostcardImport existingKeys={postcards.map((postcard) => postcard.key)} />
 
       <PostcardsCatalogue postcards={postcards} />
