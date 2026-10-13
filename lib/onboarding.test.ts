@@ -61,4 +61,4 @@ describe('resolveOnboardingDestination', () => {
     expect(resolveOnboardingDestination(unreadableMark, '/board')).toBe('/welcome')
   })
 
-}
+})
