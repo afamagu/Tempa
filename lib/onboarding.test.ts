@@ -40,5 +40,25 @@ describe('resolveOnboardingDestination', () => {
       )
     ).toBe('/you/responses?tab=new')
   })
-})
+  it('never loops between welcome and Mark during first arrival, even when mark lookup is unavailable', () => {
+    const markless = {
+      authenticated: true,
+      hasProfile: true,
+      onboardingStage: 'complete' as const,
+      firstArrivalPending: true,
+      needsMark: true,
+    }
+    expect(resolveOnboardingDestination(markless, '/welcome')).toBe('/you/mark')
+    expect(resolveOnboardingDestination(markless, '/you/mark')).toBe('/you/mark')
+    expect(resolveOnboardingDestination(markless, '/home')).toBe('/you/mark')
+    expect(resolveOnboardingDestination(markless, '/you/mark?replace=1')).toBe('/you/mark?replace=1')
 
+    const unreadableMark = { ...markless, needsMark: undefined }
+    expect(resolveOnboardingDestination(unreadableMark, '/welcome')).toBe('/welcome')
+    expect(resolveOnboardingDestination(unreadableMark, '/you/mark')).toBe('/you/mark')
+    expect(resolveOnboardingDestination(unreadableMark, '/profile/mark')).toBe('/profile/mark')
+    expect(resolveOnboardingDestination(unreadableMark, '/profile')).toBe('/profile')
+    expect(resolveOnboardingDestination(unreadableMark, '/board')).toBe('/welcome')
+  })
+
+})
