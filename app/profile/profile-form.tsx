@@ -15,7 +15,7 @@ import ChoiceGroup from './choice-group'
 import { fieldLabelClass, helperTextClass } from './ui'
 import { isReservedPseudonym, RESERVED_PSEUDONYM_MESSAGE } from '@/lib/reserved-pseudonyms'
 
-/** Basic identity only. No forced Mark, introduction essay, or typography choice. */
+/** Basic identity first. The required visual Mark follows before the welcome. */
 export default function ProfileForm({ userId }: { userId: string }) {
   const locale = useLocale()
   const t = useTranslations('ProfileSetup')
@@ -135,7 +135,7 @@ export default function ProfileForm({ userId }: { userId: string }) {
         if(insertError.code==='23505')throw new Error(arrival('takenNow'))
         throw new Error(arrival('saveError'))
       }
-      router.replace('/welcome')
+      router.replace('/you/mark')
       router.refresh()
     }catch(e){
       setBusy(false)
