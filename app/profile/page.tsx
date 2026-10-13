@@ -15,7 +15,7 @@ export default async function ProfileSetupPage() {
 
   const { data: existingProfile } = await supabase
     .from('profiles')
-    .select('id, onboarding_stage')
+    .select('id, onboarding_stage, mark_id')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -23,6 +23,7 @@ export default async function ProfileSetupPage() {
     const stage = existingProfile.onboarding_stage as OnboardingStage
     if (stage === 'mark') redirect('/profile/mark')
     if (stage === 'question') redirect('/profile/question')
+    if (!existingProfile.mark_id) redirect('/you/mark')
     redirect('/home')
   }
 
