@@ -32,10 +32,10 @@ describe('minimal first-arrival identity', () => {
     expect(source).not.toContain('getFlagshipQuestion')
   })
 
-  it('creates only the member’s own profile and continues to the durable welcome', () => {
+  it('creates the member profile and requires Mark before the durable welcome', () => {
     expect(source).toContain('id:userId')
     expect(source).toContain("onboarding_stage:'complete'")
-    expect(source).toContain("router.replace('/welcome')")
+    expect(source).toContain("router.replace('/you/mark')")
   })
 
   it('has restrained, actionable error feedback without technical database text', () => {
