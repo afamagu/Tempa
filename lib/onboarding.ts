@@ -59,8 +59,15 @@ export function resolveOnboardingDestination(
   if (state.needsMark === true && !['/you/mark', '/you/account'].some((path) => requestedDestination.split(/[?#]/, 1)[0] === path || requestedDestination.startsWith(`${path}/`)) && !requestedDestination.startsWith('/admin')) return '/you/mark'
   // Writing style is personalisation, never a registration hurdle.
   // The optional migration field fails open until deployed.
+  // A new member must be able to create or recover their Mark *before*
+  // entering the welcome. Otherwise a transient failure to read mark_id
+  // produces an infinite /you/mark <-> /welcome redirect chain.
+  const pathname = requestedDestination.split(/[?#]/, 1)[0]
   if (state.firstArrivalPending === true &&
-      requestedDestination.split(/[?#]/, 1)[0] !== '/welcome' &&
+      pathname !== '/welcome' &&
+      pathname !== '/you/mark' &&
+      pathname !== '/profile/mark' &&
+      pathname !== '/profile' &&
       !isWritingStyleExemptPath(requestedDestination) &&
       !requestedDestination.startsWith('/you/account') &&
       !requestedDestination.startsWith('/admin')) {
