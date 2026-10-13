@@ -12,12 +12,13 @@ export default async function YourMarkPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, onboarding_stage')
+    .select('id, onboarding_stage, mark_id')
     .eq('id', user.id)
     .maybeSingle()
 
   if (!profile) redirect('/profile')
   if (profile.onboarding_stage === 'question') redirect('/profile/question')
+  if (profile.onboarding_stage === 'complete' && !profile.mark_id) redirect('/you/mark')
   if (profile.onboarding_stage === 'complete') redirect('/home')
 
   return <YourMarkStep />

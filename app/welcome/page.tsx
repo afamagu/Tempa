@@ -9,6 +9,9 @@ async function enterTheBoard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('mark_id').eq('id', user.id).maybeSingle()
+  if (profileError || !profile) throw new Error('We could not verify your profile. Please try again.')
+  if (!profile.mark_id) redirect('/you/mark')
   const { error } = await supabase.rpc('complete_my_first_arrival')
   if (error) throw new Error('We could not finish your welcome. Please try again.')
   redirect('/board')
@@ -25,8 +28,9 @@ export default async function WelcomePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
   const { data: profile } = await supabase.from('profiles')
-    .select('id, first_arrival_seen_at').eq('id', user.id).maybeSingle()
+    .select('id, mark_id, first_arrival_seen_at').eq('id', user.id).maybeSingle()
   if (!profile) redirect('/profile')
+  if (!profile.mark_id) redirect('/you/mark')
   if (profile.first_arrival_seen_at) redirect('/board')
 
   const destinations = [
