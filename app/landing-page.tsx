@@ -54,19 +54,19 @@ function FeaturedLetter() {
       <article className={styles.featuredLetter}>
         <div className={styles.letterTopline}>
           <span className={styles.tinyDiamond} aria-hidden="true">✧</span>
-          <span>LETTER LEFT IN THE ROOM</span>
+          <span>LETTER LEFT ON THE BOARD</span>
         </div>
         <h2>The woman at the orange stand</h2>
         <p>
-          Every morning, the same woman sits outside our gate selling oranges.
-          I’ve lived here for four years, and until yesterday, I didn’t know her name.
+          All summer, a woman sold oranges from a small stand outside the corner shop on my way home.
+          I passed her almost every evening, but I never learned her name.
         </p>
         <p>Yesterday, she wasn’t there. I was surprised by how much I noticed.</p>
-        <div className={styles.letterSignature}>— Adaeze <span>·</span> Nigeria</div>
+        <div className={styles.letterSignature}>— Sandra <span>·</span> Toronto, Canada</div>
       </article>
       <div className={styles.privateReply} aria-hidden="true">
         <p className={styles.replyEyebrow}>A PRIVATE LETTER, IN REPLY</p>
-        <p className={styles.replySalutation}>Dear Adaeze,</p>
+        <p className={styles.replySalutation}>Dear Sandra,</p>
         <p>I think we all have someone like that. You’ve made me wonder if I know her name.</p>
         <p className={styles.replySignoff}>Yours, a reader</p>
       </div>
@@ -89,8 +89,8 @@ export default function LandingPage() {
       <section className={styles.hero} id="top">
         <div className={styles.heroCopy}>
           <p className={styles.eyebrow}>A QUIETER WAY TO FIND SOMEONE</p>
-          <h1>Someone, somewhere, wrote about an <em>ordinary day.</em></h1>
-          <p className={styles.heroSecond}>If something in it stays with you, write them.</p>
+          <h1>Someone, somewhere, wrote down an <em>ordinary day.</em></h1>
+          <p className={styles.heroSecond}>If it sounds like yours, write them.</p>
           <p className={styles.mechanism}>Letters left on The Board. If one stays with you, write the person.</p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
