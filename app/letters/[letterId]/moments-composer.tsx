@@ -75,6 +75,7 @@ import PostcardComposerSlot from './postcard-composer-slot'
 import PostcardEditor from './postcard-editor'
 import LetterPreview from './letter-preview'
 import DraftPersistenceWarning from '@/app/draft-persistence-warning'
+import PhotoAnnotationDialog from './photo-annotation-dialog'
 
 /**
  * The composer for an ESTABLISHED correspondence's ongoing letters —
@@ -301,6 +302,7 @@ export default function MomentsComposer({
   const [previewMoments, setPreviewMoments] = useState<Moment[] | null>(null)
   const [preparingPreview, setPreparingPreview] = useState(false)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
+  const [photoForAnnotation, setPhotoForAnnotation] = useState<{ index: number; blob: Blob } | null>(null)
   const [openPicker, setOpenPicker] = useState<{ index: number; anchorRect: DOMRect } | null>(null)
   // A photo that's been uploaded and is awaiting the member's
   // confirmation on the "first photo" explanation before it's actually
@@ -614,37 +616,34 @@ export default function MomentsComposer({
     e.target.value = ''
     pendingTargetRef.current = null
     if (!file || index === null || !editor) return
-
-    setUploadingIndex(index)
     setError(null)
-
     try {
       const blob = await processImageForUpload(file)
+      setPhotoForAnnotation({ index, blob })
+    } catch {
+      setError('Could not prepare that photo. Please try again.')
+    }
+  }
+
+  async function uploadAnnotatedPhoto(blob: Blob, index: number) {
+    setUploadingIndex(index)
+    setError(null)
+    try {
       const path = `${correspondenceId}/${crypto.randomUUID()}.jpg`
       const supabase = createClient()
       const { error: uploadError } = await supabase.storage
         .from('letter-photos')
         .upload(path, blob, { contentType: 'image/jpeg' })
-
       if (uploadError) throw uploadError
-
       const previewUrl = URL.createObjectURL(blob)
-      // Correspondence-scoped, not photo-scoped: once firstPhotoNoticeDone
-      // is true (this member already continued past the explanation once
-      // for this correspondence — either earlier in this same draft, or
-      // durably in an earlier session, reflected in isFirstPhotoRequest
-      // itself), every later photo attaches immediately, exactly like
-      // canSendPhoto's own 'enabled' case.
       if (isFirstPhotoRequest && !firstPhotoNoticeDone) {
-        // Don't attach yet — the member sees the explanation screen
-        // first and must actively continue before this becomes a real
-        // Moment on the letter.
         setPendingFirstPhoto({ index, imagePath: path, previewUrl })
       } else {
         insertPhotoMomentAtParagraphEnd(index, { imagePath: path, previewUrl })
       }
+      setPhotoForAnnotation(null)
     } catch {
-      setError('Could not add that photo. Please try again.')
+      throw new Error('Could not upload this photo. Please try again.')
     } finally {
       setUploadingIndex(null)
     }
@@ -980,6 +979,9 @@ export default function MomentsComposer({
       const resolved = await resolveDraftPreviewMoments(descriptors, (imagePath) =>
         resolveLetterPhotoUrl(supabase, imagePath)
       )
+      if (resolved.some((moment) => moment.type === 'photo' && moment.imageUrl?.startsWith('data:image/svg+xml'))) {
+        throw new Error('One or more photos could not be loaded. Your draft is safe. Please reopen Preview to retry before sending.')
+      }
       setPreviewMoments(resolved)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not prepare your preview.')
@@ -991,6 +993,13 @@ export default function MomentsComposer({
   return (
     <div ref={composerRootRef} className="space-y-4">
       {memberQuestionPrompt && <div className="space-y-2 border-l-2 border-accent/40 pl-4"><p className="text-sm text-foreground/60">A question from {recipientPseudonym}</p><p className="whitespace-pre-wrap font-serif text-lg leading-relaxed">{memberQuestionPrompt}</p></div>}
+      {photoForAnnotation && (
+        <PhotoAnnotationDialog
+          image={photoForAnnotation.blob}
+          onCancel={() => setPhotoForAnnotation(null)}
+          onApply={(blob) => uploadAnnotatedPhoto(blob, photoForAnnotation.index)}
+        />
+      )}
       <PhotoSourceInputs
         libraryInputRef={libraryInputRef}
         cameraInputRef={cameraInputRef}
