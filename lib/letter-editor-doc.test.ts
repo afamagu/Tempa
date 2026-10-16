@@ -889,6 +889,15 @@ describe('resolveDraftPreviewMoments', () => {
     expect(moments).toEqual([{ id: 'm-1', position: 0, type: 'photo', imageUrl: 'blob:http://x/live', postcardKey: null }])
   })
 
+  it('re-signs an expired URL even if the editor retained its old preview attribute', async () => {
+    const resolver = async (imagePath: string) => ({ url: `https://fresh.example/${imagePath}`, error: null })
+    const descriptors = [
+      { id: 'm-old', position: 0, type: 'photo' as const, imagePath: 'corr-1/old.jpg', previewUrl: 'https://expired.example/token' },
+    ]
+    const moments = await resolveDraftPreviewMoments(descriptors, resolver)
+    expect(moments[0].imageUrl).toBe('https://fresh.example/corr-1/old.jpg')
+  })
+
   it('Case 2 — a descriptor with previewUrl null calls the injected resolver against its imagePath', async () => {
     const calls: string[] = []
     const resolver = async (imagePath: string) => {

@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { createClient } from '@/lib/supabase/client'
 import { resolveLetterPhotoUrl } from '@/lib/draft-photo-url'
 import { resolveRestoredPhotoWithRetries } from '@/lib/resolve-restored-photo'
+import PhotoAnnotationDialog from './photo-annotation-dialog'
 
 // Live-repair checkpoint (2026-09-08), second pass — the first fix (one
 // retry, 1.5s later) was itself an unrecoverable ceiling: live testing
@@ -74,6 +76,9 @@ export const PhotoMoment = Node.create({
 export function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeViewProps) {
   const { imagePath, previewUrl } = node.attrs as { imagePath: string; previewUrl: string | null }
   const [resolveFailed, setResolveFailed] = useState(false)
+  const [editingPhoto, setEditingPhoto] = useState<Blob | null>(null)
+  const [annotationBusy, setAnnotationBusy] = useState(false)
+  const [annotationError, setAnnotationError] = useState<string | null>(null)
   // Bumped only by the member's own "tap to retry" — a genuinely new
   // resolution attempt, distinct from imagePath/previewUrl (which never
   // change on their own once a photo is attached) — is what re-arms the
@@ -122,6 +127,42 @@ export function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeView
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imagePath, previewUrl, retryToken, resolveFailed])
 
+  async function openAnnotation() {
+    if (annotationBusy || !imagePath) return
+    setAnnotationBusy(true)
+    setAnnotationError(null)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.storage.from('letter-photos').download(imagePath)
+      if (error || !data) throw error ?? new Error('Photo download failed')
+      setEditingPhoto(data)
+    } catch {
+      setAnnotationError('Could not open this photo for marking. Try again.')
+    } finally {
+      setAnnotationBusy(false)
+    }
+  }
+
+  async function applyAnnotation(blob: Blob) {
+    if (!imagePath || !blob.size) throw new Error('Photo not ready')
+    setAnnotationBusy(true)
+    try {
+      const replacementPath = `${imagePath.split('/')[0]}/${crypto.randomUUID()}.jpg`
+      const supabase = createClient()
+      const { error } = await supabase.storage.from('letter-photos').upload(replacementPath, blob, { contentType: 'image/jpeg' })
+      if (error) throw error
+      const replacementPreview = URL.createObjectURL(blob)
+      updateAttributes({ imagePath: replacementPath, previewUrl: replacementPreview })
+      if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
+      setEditingPhoto(null)
+      setAnnotationError(null)
+    } catch {
+      throw new Error('Could not save your marked photo. Try again.')
+    } finally {
+      setAnnotationBusy(false)
+    }
+  }
+
   function handleRemove() {
     if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
     deleteNode()
@@ -164,6 +205,25 @@ export function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeView
         </button>
       ) : (
         <span className="flex h-7 w-7 items-center justify-center rounded bg-foreground/10 text-[13px]">📷</span>
+      )}
+      <button
+        type="button"
+        onClick={openAnnotation}
+        disabled={annotationBusy}
+        aria-label="Mark this photo"
+        title="Draw on or circle something in this photo"
+        className="ml-1 inline-flex h-7 min-w-7 items-center justify-center rounded border border-foreground/20 text-[13px] disabled:opacity-40"
+      >
+        {annotationBusy ? '…' : '✎'}
+      </button>
+      {annotationError && <span role="alert" className="ml-2 text-xs text-red-600">{annotationError}</span>}
+      {editingPhoto && createPortal(
+        <PhotoAnnotationDialog
+          image={editingPhoto}
+          onCancel={() => setEditingPhoto(null)}
+          onApply={applyAnnotation}
+        />,
+        document.body
       )}
       {/* Mobile tap-target audit (2026-09-05): the visual circle stays
           small (proportionate to the 28px thumbnail it sits on), but a
