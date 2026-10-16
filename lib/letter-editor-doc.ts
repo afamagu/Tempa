@@ -545,7 +545,9 @@ export async function resolveDraftPreviewMoments(
         }
       }
 
-      if (descriptor.previewUrl) {
+      // Signed URLs expire; only a page-local blob URL is safe to reuse.
+      // Re-sign restored photos from their durable private Storage path.
+      if (descriptor.previewUrl?.startsWith('blob:')) {
         return {
           id: descriptor.id,
           position: descriptor.position,
