@@ -18,6 +18,7 @@ import {
   docToMomentDrafts,
   docToDraftMomentDescriptors,
   resolveDraftPreviewMoments,
+  UNAVAILABLE_PHOTO_DATA_URI,
   extractLegacyPostcardMoment,
   stripPostcardMoments,
   canSendLetter,
@@ -979,7 +980,7 @@ export default function MomentsComposer({
       const resolved = await resolveDraftPreviewMoments(descriptors, (imagePath) =>
         resolveLetterPhotoUrl(supabase, imagePath)
       )
-      if (resolved.some((moment) => moment.type === 'photo' && moment.imageUrl?.startsWith('data:image/svg+xml'))) {
+      if (resolved.some((moment) => moment.type === 'photo' && moment.imageUrl === UNAVAILABLE_PHOTO_DATA_URI)) {
         throw new Error('One or more photos could not be loaded. Your draft is safe. Please reopen Preview to retry before sending.')
       }
       setPreviewMoments(resolved)
