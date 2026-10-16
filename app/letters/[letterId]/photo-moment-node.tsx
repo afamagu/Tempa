@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { createClient } from '@/lib/supabase/client'
@@ -216,12 +217,13 @@ export function PhotoMomentView({ node, deleteNode, updateAttributes }: NodeView
         {annotationBusy ? '…' : '✎'}
       </button>
       {annotationError && <span role="alert" className="ml-2 text-xs text-red-600">{annotationError}</span>}
-      {editingPhoto && (
+      {editingPhoto && createPortal(
         <PhotoAnnotationDialog
           image={editingPhoto}
           onCancel={() => setEditingPhoto(null)}
           onApply={applyAnnotation}
-        />
+        />,
+        document.body
       )}
       {/* Mobile tap-target audit (2026-09-05): the visual circle stays
           small (proportionate to the 28px thumbnail it sits on), but a
