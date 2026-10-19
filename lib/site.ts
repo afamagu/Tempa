@@ -4,7 +4,7 @@
 
 export const SITE_URL = 'https://jointempa.com'
 export const SITE_NAME = 'Tempa'
-export const SITE_DESCRIPTION = 'Social media built around curiosity about people. Discover open letters, begin private conversations, and see where they lead.'
+export const SITE_DESCRIPTION = 'Meet people through what they think, write and choose to share.'
 
 export const BRAND_BACKGROUND = '#f7f2e7' // --background (warm ivory)
 export const BRAND_FOREGROUND = '#24211a' // --foreground (warm ink)
