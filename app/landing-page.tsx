@@ -84,10 +84,10 @@ function FeaturedLetter() {
         </div>
         <h2 id="featured-letter-title">The offer I worked fifteen years for</h2>
         <div className={styles.letterText}>
-          <p>Yesterday, they offered me the partnership I've been working towards for fifteen years.</p>
+          <p>Yesterday, they offered me the partnership I&apos;ve been working towards for fifteen years.</p>
           <p>I thanked everyone. Shook their hands. Let them open the champagne.</p>
           <p>Then I went home and spent three hours looking at furniture-making courses.</p>
-          <p>I think I've spent half my life chasing an ambition that belonged to a younger version of me.</p>
+          <p>I think I&apos;ve spent half my life chasing an ambition that belonged to a younger version of me.</p>
           <p>Has anyone else worked this hard for something they no longer want?</p>
         </div>
         <p className={styles.illustrativeLabel}>Illustrative open letter</p>
@@ -113,9 +113,9 @@ export default function LandingPage() {
       <section className={styles.hero} aria-labelledby="hero-heading">
         <div className={styles.heroCopy}>
           <p className={styles.eyebrow}>DISCOVER PEOPLE BEYOND YOUR EVERYDAY WORLD</p>
-          <h1 id="hero-heading">The world is full of conversations <em>you haven't had.</em></h1>
+          <h1 id="hero-heading">The world is full of conversations <em>you haven&apos;t had.</em></h1>
           <div className={styles.heroDescription}>
-            <p>There are people you've never met with stories you'd love to hear, opinions you'd love to challenge, and experiences nothing like your own.</p>
+            <p>There are people you&apos;ve never met with stories you&apos;d love to hear, opinions you&apos;d love to challenge, and experiences nothing like your own.</p>
             <p>On Tempa, you discover them through open letters. Find something that catches your attention, write privately to the person behind it, or leave a letter of your own and see who responds.</p>
           </div>
           <div className={styles.heroActions}>
@@ -131,8 +131,8 @@ export default function LandingPage() {
           <div className={styles.sectionHeading}>
             <p className={styles.eyebrow}>A WORLD OF DIFFERENT VOICES</p>
             <h2 id="discovery-heading">You never know what someone <em>might have to say.</em></h2>
-            <p className={styles.sectionLead}>A different perspective. An outrageous family story. A question you've never considered.</p>
-            <p className={styles.sectionLead}>Sometimes, the most interesting conversations begin with someone you'd never otherwise meet.</p>
+            <p className={styles.sectionLead}>A different perspective. An outrageous family story. A question you&apos;ve never considered.</p>
+            <p className={styles.sectionLead}>Sometimes, the most interesting conversations begin with someone you&apos;d never otherwise meet.</p>
           </div>
           <div className={styles.discoveryGrid}>
             {discoveries.map((letter) => (
@@ -176,11 +176,11 @@ export default function LandingPage() {
         <div className={styles.reassuranceInner}>
           <div>
             <p className={styles.eyebrow}>YOUR VOICE IS ENOUGH</p>
-            <h2 id="reassurance-heading">You don't have to be a writer <em>to have something to say.</em></h2>
+            <h2 id="reassurance-heading">You don&apos;t have to be a writer <em>to have something to say.</em></h2>
           </div>
           <div className={styles.reassuranceCopy}>
-            <p>Ask a question. Share an opinion. Tell a ridiculous story. Write about something you've been thinking about for days.</p>
-            <p>It doesn't have to be clever or beautifully written.</p>
+            <p>Ask a question. Share an opinion. Tell a ridiculous story. Write about something you&apos;ve been thinking about for days.</p>
+            <p>It doesn&apos;t have to be clever or beautifully written.</p>
             <p>It just has to be something you want to talk about.</p>
           </div>
         </div>
@@ -190,7 +190,7 @@ export default function LandingPage() {
         <div className={styles.closingInner}>
           <span className={styles.closingMark} aria-hidden="true">✳</span>
           <h2 id="closing-heading">Come see who <em>catches your attention.</em></h2>
-          <p>You don't have to know who you're looking for.</p>
+          <p>You don&apos;t have to know who you&apos;re looking for.</p>
           <p>Start with a story, a question, or an opinion that interests you.</p>
           <Link className={styles.closingButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
         </div>
