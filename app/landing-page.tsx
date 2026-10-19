@@ -1,169 +1,204 @@
 import Link from 'next/link'
+import TempaEmblem from './tempa-emblem'
 import styles from './landing-page.module.css'
 
 const JOIN_HREF = '/sign-in?intent=join'
 
-const letterGlimpses = [
+const discoveries = [
   {
-    name: 'Maya',
-    place: 'Nairobi',
-    title: 'Sunday lunch',
-    excerpt: 'Sunday lunch at two. Nobody leaves before six.',
+    number: '01',
+    genre: 'A LITTLE FAMILY HUMOUR',
+    title: 'My mother is still waiting for a doctor.',
+    paragraphs: [
+      "My mother still introduces me as someone who's going to become a doctor.",
+      "I'm forty-one. I've been an architect for eleven years.",
+      'Last Christmas, she asked whether it was too late to reconsider.',
+      "I've started telling people she's a retired surgeon.",
+      'She was an accountant.',
+    ],
   },
   {
-    name: 'Lowtide',
-    place: 'Osaka',
-    title: 'The tea I always buy',
-    excerpt: 'She knows which tea I buy.',
+    number: '02',
+    genre: 'CULTURE & EXPERIENCE',
+    title: 'The thing I miss about home.',
+    paragraphs: [
+      'When people ask what I miss about my country, I usually say the food.',
+      "It's easier than explaining that I miss being rude in my first language and knowing exactly how rude I'm being.",
+    ],
   },
   {
-    name: 'Second Kettle',
-    place: 'Porto Alegre',
-    title: 'While I make dinner',
-    excerpt: 'My brother calls while I make dinner.',
+    number: '03',
+    genre: 'RELATIONSHIPS & REGRET',
+    title: 'I told her not to marry him.',
+    paragraphs: [
+      'Twenty years ago, I told my best friend not to marry her fiancé.',
+      'I gave her a list.',
+      'It had headings.',
+      "They're celebrating their twentieth anniversary next month, and I've been asked to give a toast.",
+      "I'm still deciding whether to apologise or pretend the list never existed.",
+    ],
   },
 ]
 
 const steps = [
   {
     number: '01',
-    title: 'Letters left here',
-    description: 'People leave something from a real day. A small story, an observation, a memory.',
+    title: 'Discover',
+    context: 'THE BOARD',
+    description: 'Explore open letters on The Board.',
+    detail: 'Different lives, different perspectives, and different things worth talking about.',
   },
   {
     number: '02',
-    title: 'You read',
-    description: 'Find a moment that feels familiar, or a life entirely unlike your own.',
+    title: 'Correspond',
+    context: 'A PRIVATE LETTER',
+    description: 'When something catches your attention, write privately to the person behind it.',
+    detail: 'You already have something to talk about.',
   },
   {
     number: '03',
-    title: 'Write to them',
-    description: 'Tell the person privately what caught your attention. No public performance.',
-  },
-  {
-    number: '04',
-    title: 'A quiet pace',
-    description: 'If they write back, a correspondence begins. A quiet week is just a quiet week.',
+    title: 'See where it leads',
+    context: 'THE LETTERBOX',
+    description: 'Some exchanges are brief.',
+    detail: 'Others grow into correspondence you look forward to.',
   },
 ]
 
+function Brand({ footer = false }: { footer?: boolean }) {
+  return (
+    <span className={footer ? styles.footerBrand : styles.brand}>
+      <TempaEmblem size={footer ? 27 : 34} priority={!footer} className={styles.emblem} />
+      <span>Tempa</span>
+    </span>
+  )
+}
+
 function FeaturedLetter() {
   return (
-    <div className={styles.letterShowcase} aria-label="Illustration of a letter left in The Board and a private reply">
-      <div className={styles.showcaseAura} aria-hidden="true" />
-      <article className={styles.featuredLetter}>
+    <div className={styles.letterShowcase}>
+      <span className={styles.letterBackdrop} aria-hidden="true" />
+      <article className={styles.featuredLetter} aria-labelledby="featured-letter-title">
         <div className={styles.letterTopline}>
-          <span className={styles.tinyDiamond} aria-hidden="true">✧</span>
-          <span>LETTER LEFT ON THE BOARD</span>
+          <span>AN OPEN LETTER</span>
+          <span className={styles.letterMark} aria-hidden="true">✳</span>
         </div>
-        <h2>The woman at the orange stand</h2>
-        <p>
-          All summer, a woman sold oranges from a small stand outside the corner shop on my way home.
-          I passed her almost every evening, but I never learned her name.
-        </p>
-        <p>Yesterday, she wasn’t there. I was surprised by how much I noticed.</p>
-        <div className={styles.letterSignature}>— Sandra <span>·</span> Toronto, Canada</div>
+        <h2 id="featured-letter-title">The offer I worked fifteen years for</h2>
+        <div className={styles.letterText}>
+          <p>Yesterday, they offered me the partnership I've been working towards for fifteen years.</p>
+          <p>I thanked everyone. Shook their hands. Let them open the champagne.</p>
+          <p>Then I went home and spent three hours looking at furniture-making courses.</p>
+          <p>I think I've spent half my life chasing an ambition that belonged to a younger version of me.</p>
+          <p>Has anyone else worked this hard for something they no longer want?</p>
+        </div>
+        <p className={styles.illustrativeLabel}>Illustrative open letter</p>
       </article>
-      <div className={styles.privateReply} aria-hidden="true">
-        <p className={styles.replyEyebrow}>A PRIVATE LETTER, IN REPLY</p>
-        <p className={styles.replySalutation}>Dear Sandra,</p>
-        <p>I think we all have someone like that. You’ve made me wonder if I know her name.</p>
-        <p className={styles.replySignoff}>Yours, a reader</p>
-      </div>
-      <p className={styles.illustrationNote}>A glimpse of how Tempa works · Illustrative letters</p>
     </div>
   )
 }
 
 export default function LandingPage() {
   return (
-    <main className={styles.page}>
+    <main className={styles.page} id="top">
       <header className={styles.nav}>
-        <a className={styles.wordmark} href="#top" aria-label="Tempa home">Tempa<span className={styles.wordmarkDot}>.</span></a>
+        <a href="#top" className={styles.brandLink} aria-label="Tempa home">
+          <Brand />
+        </a>
         <nav aria-label="Landing page navigation">
-          <a href="#read">How it works</a>
+          <a className={styles.howNav} href="#how-it-works">How it works</a>
           <Link href="/sign-in">Sign in</Link>
+          <Link className={styles.navJoin} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
         </nav>
       </header>
 
-      <section className={styles.hero} id="top">
+      <section className={styles.hero} aria-labelledby="hero-heading">
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}>A QUIETER WAY TO FIND SOMEONE</p>
-          <h1 className={styles.heroHeading}>People are easy to find.<br /><em>They are not easy to know.</em></h1>
-          <p className={styles.heroSecond}>Tempa is a place for private correspondence.</p>
-          <p className={styles.mechanism}>Write a letter. Read someone else’s.</p>
-          <p className={styles.heroPromise}>Know the person, not the profile.</p>
+          <p className={styles.eyebrow}>DISCOVER PEOPLE BEYOND YOUR EVERYDAY WORLD</p>
+          <h1 id="hero-heading">The world is full of conversations <em>you haven't had.</em></h1>
+          <div className={styles.heroDescription}>
+            <p>There are people you've never met with stories you'd love to hear, opinions you'd love to challenge, and experiences nothing like your own.</p>
+            <p>On Tempa, you discover them through open letters. Find something that catches your attention, write privately to the person behind it, or leave a letter of your own and see who responds.</p>
+          </div>
           <div className={styles.heroActions}>
             <Link className={styles.primaryButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
-            <a className={styles.secondaryLink} href="#read">See how it works <span aria-hidden="true">↓</span></a>
+            <a className={styles.secondaryLink} href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
           </div>
-          <p className={styles.pilotStatus}>Anyone can join Tempa. Start with a letter.</p>
         </div>
         <FeaturedLetter />
       </section>
 
-      <div className={styles.sectionRule} aria-hidden="true"><span>✧</span></div>
-
-      <section className={styles.howSection} id="read" aria-labelledby="how-heading">
-        <div className={styles.sectionIntro}>
-          <p className={styles.eyebrow}>HOW TEMPA WORKS</p>
-          <h2 id="how-heading">A letter can be <em>the beginning.</em></h2>
-          <p>Open letters are left on The Board for anyone to read. If one stays with you, write privately to the person behind it. No profile to perform. No audience to build.</p>
-        </div>
-        <ol className={styles.steps}>
-          {steps.map((step) => (
-            <li className={styles.step} key={step.number}>
-              <span className={styles.stepNumber}>{step.number}</span>
-              <h3>{step.title}</h3>
-              <p>{step.description}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className={styles.glimpsesSection} aria-labelledby="glimpses-heading">
-        <div className={styles.glimpsesInner}>
-          <div className={styles.glimpsesHeading}>
-            <div>
-              <p className={styles.eyebrow}>LETTERS LEFT HERE</p>
-              <h2 id="glimpses-heading">There is no such thing as <em>an ordinary life.</em></h2>
-            </div>
-            <p>No grand introductions required. Sometimes the smallest things stay with us.</p>
+      <section className={styles.discovery} aria-labelledby="discovery-heading">
+        <div className={styles.sectionInner}>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>A WORLD OF DIFFERENT VOICES</p>
+            <h2 id="discovery-heading">You never know what someone <em>might have to say.</em></h2>
+            <p className={styles.sectionLead}>A different perspective. An outrageous family story. A question you've never considered.</p>
+            <p className={styles.sectionLead}>Sometimes, the most interesting conversations begin with someone you'd never otherwise meet.</p>
           </div>
-          <div className={styles.glimpsesGrid}>
-            {letterGlimpses.map((letter) => (
-              <article className={styles.glimpseCard} key={letter.name}>
-                <span className={styles.glimpsePaperMark} aria-hidden="true">✳</span>
-                <p className={styles.glimpseTitle}>{letter.title}</p>
-                <blockquote>“{letter.excerpt}”</blockquote>
-                <p className={styles.glimpseAuthor}>— {letter.name} <span>·</span> {letter.place}</p>
+          <div className={styles.discoveryGrid}>
+            {discoveries.map((letter) => (
+              <article className={styles.discoveryCard} key={letter.number}>
+                <div className={styles.discoveryCardTop}>
+                  <span>{letter.genre}</span>
+                  <span aria-hidden="true" className={styles.discoveryStar}>✳</span>
+                </div>
+                <h3>{letter.title}</h3>
+                <div className={styles.discoveryText}>
+                  {letter.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                </div>
+                <p className={styles.exampleLabel}>Illustrative open letter</p>
               </article>
             ))}
           </div>
-          <p className={styles.exampleDisclaimer}>Illustrative excerpts, showing the kind of ordinary writing that belongs in The Board.</p>
         </div>
       </section>
 
-      <section className={styles.quietSection} aria-labelledby="quiet-heading">
-        <div className={styles.quietIcon} aria-hidden="true"><span>✉</span></div>
-        <div>
-          <p className={styles.eyebrow}>THE LETTERBOX</p>
-          <h2 id="quiet-heading">A quiet week is <em>still a good week.</em></h2>
-          <p>When someone writes back, take your time getting to know each other. A few real correspondences, at a pace that leaves room for life.</p>
+      <section className={styles.howSection} id="how-it-works" aria-labelledby="how-heading">
+        <div className={styles.sectionInner}>
+          <div className={styles.howIntro}>
+            <p className={styles.eyebrow}>HOW TEMPA WORKS</p>
+            <h2 id="how-heading">An interesting conversation <em>can begin anywhere.</em></h2>
+          </div>
+          <ol className={styles.steps}>
+            {steps.map((step) => (
+              <li className={styles.step} key={step.number}>
+                <span className={styles.stepNumber}>{step.number}</span>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+                <p>{step.detail}</p>
+                <span className={styles.stepContext}>{step.context}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className={styles.reassurance} aria-labelledby="reassurance-heading">
+        <div className={styles.reassuranceInner}>
+          <div>
+            <p className={styles.eyebrow}>YOUR VOICE IS ENOUGH</p>
+            <h2 id="reassurance-heading">You don't have to be a writer <em>to have something to say.</em></h2>
+          </div>
+          <div className={styles.reassuranceCopy}>
+            <p>Ask a question. Share an opinion. Tell a ridiculous story. Write about something you've been thinking about for days.</p>
+            <p>It doesn't have to be clever or beautifully written.</p>
+            <p>It just has to be something you want to talk about.</p>
+          </div>
         </div>
       </section>
 
       <section className={styles.closing} aria-labelledby="closing-heading">
-        <span className={styles.closingOrnament} aria-hidden="true">✧</span>
-        <p className={styles.eyebrow}>SOMEONE IS OUT THERE</p>
-        <h2 id="closing-heading">Find someone you want to <em>keep writing to.</em></h2>
-        <p>Every correspondence begins somewhere. Sometimes, it begins with an ordinary day.</p>
-        <Link className={styles.primaryButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
+        <div className={styles.closingInner}>
+          <span className={styles.closingMark} aria-hidden="true">✳</span>
+          <h2 id="closing-heading">Come see who <em>catches your attention.</em></h2>
+          <p>You don't have to know who you're looking for.</p>
+          <p>Start with a story, a question, or an opinion that interests you.</p>
+          <Link className={styles.closingButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
+        </div>
       </section>
 
       <footer className={styles.footer}>
-        <span className={styles.footerBrand}>Tempa<span>.</span></span>
-        <p>Letters left here. People found along the way.</p>
+        <Brand footer />
+        <p>Discover people through letters.</p>
         <nav aria-label="Legal links">
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
