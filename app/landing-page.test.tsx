@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import LandingPage from './landing-page'
 
 describe('Tempa people-discovery landing page', () => {
-  const html = renderToStaticMarkup(<LandingPage />)
+  const html = renderToStaticMarkup(<LandingPage />).replaceAll('&#x27;', "'")
 
   it('invites visitors to discover people through real conversation rather than abstract promises', () => {
     expect(html).toContain("The world is full of conversations")
