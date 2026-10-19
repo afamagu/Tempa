@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import LandingPage from './landing-page'
 
-describe('Ordinary letters landing page', () => {
+describe('Tempa correspondence landing page', () => {
   const html = renderToStaticMarkup(<LandingPage />)
 
-  it('leads with the ordinary-day promise and a join action for mobile and desktop', () => {
-    expect(html).toContain('Someone, somewhere, wrote down an')
-    expect(html).toContain('ordinary day.')
-    expect(html).toContain('If it sounds like yours, write them.')
-    expect(html).toContain('Letters left on The Board.')
+  it('leads with knowing people and a join action for mobile and desktop', () => {
+    expect(html).toContain('People are easy to find.')
+    expect(html).toContain('They are not easy to know.')
+    expect(html).toContain('Tempa is a place for private correspondence.')
+    expect(html).toContain('Write a letter. Read someone else’s.')
+    expect(html).toContain('Know the person, not the profile.')
+    expect(html).toContain('Open letters are left on The Board for anyone to read.')
+    expect(html).toContain('write privately to the person behind it.')
     expect(html).toContain('Anyone can join Tempa.')
     expect(html).not.toContain('invitation only')
     expect(html.match(/>Join Tempa/g)).toHaveLength(2)

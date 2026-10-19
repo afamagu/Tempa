@@ -89,9 +89,10 @@ export default function LandingPage() {
       <section className={styles.hero} id="top">
         <div className={styles.heroCopy}>
           <p className={styles.eyebrow}>A QUIETER WAY TO FIND SOMEONE</p>
-          <h1>Someone, somewhere, wrote down an <em>ordinary day.</em></h1>
-          <p className={styles.heroSecond}>If it sounds like yours, write them.</p>
-          <p className={styles.mechanism}>Letters left on The Board. If one stays with you, write the person.</p>
+          <h1 className={styles.heroHeading}>People are easy to find.<br /><em>They are not easy to know.</em></h1>
+          <p className={styles.heroSecond}>Tempa is a place for private correspondence.</p>
+          <p className={styles.mechanism}>Write a letter. Read someone else’s.</p>
+          <p className={styles.heroPromise}>Know the person, not the profile.</p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryButton} href={JOIN_HREF}>Join Tempa <span aria-hidden="true">↗</span></Link>
             <a className={styles.secondaryLink} href="#read">See how it works <span aria-hidden="true">↓</span></a>
@@ -107,7 +108,7 @@ export default function LandingPage() {
         <div className={styles.sectionIntro}>
           <p className={styles.eyebrow}>HOW TEMPA WORKS</p>
           <h2 id="how-heading">A letter can be <em>the beginning.</em></h2>
-          <p>Not a profile to perform. Not an audience to build. Just something someone wrote, and the possibility of writing back.</p>
+          <p>Open letters are left on The Board for anyone to read. If one stays with you, write privately to the person behind it. No profile to perform. No audience to build.</p>
         </div>
         <ol className={styles.steps}>
           {steps.map((step) => (
