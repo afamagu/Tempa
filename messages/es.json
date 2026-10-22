@@ -534,7 +534,7 @@
     "lead": "Antes de escribir tu propia carta, descubre un poco de la vida de otra persona.",
     "interestsHeading": "¿Qué te trae por aquí?",
     "interestsHelp": "Elige hasta tres respuestas, si quieres. También tendremos en cuenta tus idiomas.",
-    "selected": "{count} de 3 elegidas",
+    "selected": "{current} de 3 elegidas",
     "meetThem": "Conocer a mis corresponsales",
     "skipPreferences": "Omitir por ahora",
     "preferencesError": "No pudimos guardar tus preferencias. Inténtalo de nuevo u omite este paso.",
