@@ -39,7 +39,7 @@ export default function AutoMatchArrival({
   const t = useTranslations('AutoMatch')
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('preferences')
-  const [selected, setSelected] = useState<string[]>(initialIntent.filter(value => INTENTS.some(i => i[1] === value)))
+  const [selected, setSelected] = useState<string[]>(initialIntent.filter(value => INTENTS.some(i => i[1] === value)).slice(0, MAX_INTENTS))
   const [cards, setCards] = useState<IntroductionCard[]>([])
   const [index, setIndex] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -86,7 +86,7 @@ export default function AutoMatchArrival({
       setIndex(0)
       setPhase(result.length ? 'cards' : 'invitation')
     } catch {
-      setError(saveIntent ? t('loadingError') : t('loadingError'))
+      setError(t('loadingError'))
       setPhase('error')
     } finally {
       setBusy(false)
@@ -167,7 +167,6 @@ export default function AutoMatchArrival({
             <p className="text-[11px] font-semibold uppercase tracking-[.17em] text-[#94745f]">{t('introductionsHeading')}</p>
             <p className="mt-3 max-w-xl font-serif text-[20px] leading-relaxed text-foreground/80">{t('introductionsHelp')}</p>
             <p className={`mt-4 ${helperTextClass}`}>{t('openDeckHint')}</p>
-            <button type="button" className={`mt-6 ${primaryButtonClass}`} onClick={() => setPhase('invitation')}>{t('skipIntroductions')}</button>
           </div>
         )}
 
