@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
@@ -45,6 +45,12 @@ export default function AutoMatchArrival({
   const [index, setIndex] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Durable resume marker; do not restart introductions for returning members.
+    void createClient().from('profiles').update({ auto_match_started_at: new Date().toISOString() })
+      .eq('id', userId).is('auto_match_started_at', null)
+  }, [userId])
 
   const completeArrival = useCallback(async () => {
     const supabase = createClient()

@@ -3,6 +3,7 @@
 -- No open letter is generated or published by this change.
 BEGIN;
 ALTER TABLE public.question_answers ADD COLUMN IF NOT EXISTS profile_intro_visible boolean NOT NULL DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS auto_match_started_at timestamptz;
 INSERT INTO public.questions(prompt,slug,family,is_active,is_flagship)
 SELECT 'A few words about me','tempa-profile-introduction','introduction',true,false
 WHERE NOT EXISTS (SELECT 1 FROM public.questions WHERE slug='tempa-profile-introduction');

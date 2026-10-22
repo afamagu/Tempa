@@ -62,7 +62,7 @@ export default async function HomePage() {
     relationshipPeople,
     { data: ownBoardLetters, error: ownBoardLettersError },
   ] = await Promise.all([
-    supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
+    supabase.from('profiles').select('pseudonym, auto_match_started_at, auto_match_completed_at').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
     getWaitingLetterCount(supabase, user.id),
     getIncomingMailInTransit(supabase),
@@ -133,6 +133,9 @@ export default async function HomePage() {
           <div className="mx-auto w-full max-w-xl">
             <MemberNotices />
             <PublicMentions />
+            {profile?.auto_match_started_at && !profile.auto_match_completed_at && (
+              <Link href="/welcome/people" className="mt-3 block rounded-md border border-accent/30 bg-accent/[.04] p-4 text-[15px] underline underline-offset-4">Continue your introductions →</Link>
+            )}
 
             <section aria-labelledby="what-matters-heading" className="space-y-6">
               <div>

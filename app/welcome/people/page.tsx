@@ -15,7 +15,7 @@ export default async function FirstArrivalPeoplePage() {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('mark_id, first_arrival_seen_at, auto_match_completed_at, intent')
+    .select('mark_id, first_arrival_seen_at, auto_match_completed_at, auto_match_started_at, intent')
     .eq('id', user.id)
     .maybeSingle()
 
