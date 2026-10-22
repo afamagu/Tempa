@@ -22,7 +22,14 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: { getSession: async () => ({ data: { session: { access_token: 'test-token' } } }) },
     from: () => ({
       update: (fields: Record<string, unknown>) => ({
-        eq: async () => { state.updates.push(fields); return { error: null } },
+        eq: () => {
+          if (!('auto_match_started_at' in fields)) state.updates.push(fields)
+          const query = Promise.resolve({ error: null }) as Promise<{ error: null }> & {
+            is: (column: string, value: null) => Promise<{ error: null }>
+          }
+          query.is = async (_column: string, _value: null) => ({ error: null })
+          return query
+        },
       }),
     }),
   }),
