@@ -534,7 +534,7 @@
     "lead": "Avant d’écrire votre propre lettre, découvrez un peu de la vie de quelqu’un d’autre.",
     "interestsHeading": "Qu’est-ce qui vous amène ici ?",
     "interestsHelp": "Choisissez jusqu’à trois réponses, si vous le souhaitez. Nous tiendrons aussi compte de vos langues.",
-    "selected": "{count} sur 3 choisis",
+    "selected": "{current} sur 3 choisis",
     "meetThem": "Découvrir mes correspondants",
     "skipPreferences": "Passer cette étape",
     "preferencesError": "Impossible d’enregistrer vos préférences. Réessayez ou passez cette étape.",
