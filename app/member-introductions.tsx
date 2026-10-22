@@ -135,12 +135,18 @@ export function IntroductionDialog({
   onIndexChange,
   onClose,
   supabase,
+  autoMatch = false,
+  returnTo = '/home',
+  onLeave,
 }: {
   cards: IntroductionCard[]
   index: number
   onIndexChange: (next: number) => void
   onClose: () => void
   supabase: () => Supabase
+  autoMatch?: boolean
+  returnTo?: '/home' | '/board'
+  onLeave?: () => Promise<void>
 }) {
   const router = useRouter()
   const t = useTranslations('MemberIntroductions')
@@ -196,10 +202,13 @@ export function IntroductionDialog({
       if (!card || busyRef.current) return
       busyRef.current = true
       await consumeIntroduction(supabase(), card.candidateId, reason)
+      if (onLeave) {
+        try { await onLeave() } catch { /* Member can still reach the destination. */ }
+      }
       onClose()
       router.push(href)
     },
-    [card, onClose, router, supabase]
+    [card, onClose, onLeave, router, supabase]
   )
 
   useEffect(() => {
@@ -242,7 +251,7 @@ export function IntroductionDialog({
   }
 
   const titleId = `intro-name-${card.candidateId}`
-  const { profileHref, writeHref } = introductionDestinations(card.candidateId, card.answerId, card.sourceType)
+  const { profileHref, writeHref } = introductionDestinations(card.candidateId, card.answerId, card.sourceType, returnTo)
   const hasCommon = card.sharedLanguages.length > 0 || card.sharedIntents.length > 0
 
   const dialog = (
@@ -261,7 +270,7 @@ export function IntroductionDialog({
       >
         <header className="flex items-center justify-between gap-3 border-b border-foreground/10 py-2 pl-5 pr-2">
           <p className={helperTextClass} aria-live="polite">
-            {t('progress', { current: index + 1, total: cards.length })}
+            {t(autoMatch ? 'autoMatchProgress' : 'progress', { current: index + 1, total: cards.length })}
           </p>
           <button
             type="button"
