@@ -440,7 +440,8 @@
     "done": "Terminé",
     "next": "Suivant →",
     "writeTo": "Écrire à {name}",
-    "previousPerson": "Personne précédente"
+    "previousPerson": "Personne précédente",
+    "autoMatchProgress": "Vos présentations · {current} sur {total}"
   },
   "Introduction": {
     "title": "Faites entendre votre voix.",
@@ -492,7 +493,7 @@
     "homeHelp": "Ce qui compte pour vous au fil de vos rencontres.",
     "you": "Vous",
     "youHelp": "Votre profil et vos préférences, à votre rythme.",
-    "button": "Entrer sur le Tableau",
+    "button": "Rencontrer des correspondants",
     "replay": "Vous retrouverez cette présentation dans Vous → Guide Tempa."
   },
   "Board": {
@@ -526,5 +527,46 @@
     "saveError": "Impossible d’enregistrer ces informations. Réessayez.",
     "saving": "Enregistrement…",
     "continue": "Continuer"
+  },
+  "AutoMatch": {
+    "eyebrow": "PREMIÈRES RENCONTRES",
+    "heading": "Quelques personnes à découvrir.",
+    "lead": "Avant d’écrire votre propre lettre, découvrez un peu de la vie de quelqu’un d’autre.",
+    "interestsHeading": "Qu’est-ce qui vous amène ici ?",
+    "interestsHelp": "Choisissez jusqu’à trois réponses, si vous le souhaitez. Nous tiendrons aussi compte de vos langues.",
+    "selected": "{count} sur 3 choisis",
+    "meetThem": "Découvrir mes correspondants",
+    "skipPreferences": "Passer cette étape",
+    "preferencesError": "Impossible d’enregistrer vos préférences. Réessayez ou passez cette étape.",
+    "loading": "Nous cherchons des personnes dont les mots pourraient vous toucher…",
+    "loadingError": "Impossible de charger vos présentations.",
+    "introductionsHeading": "SIX RENCONTRES POSSIBLES",
+    "introductionsHelp": "Lisez ce que ces personnes ont partagé. Écrivez en privé si quelqu’un vous intéresse. Rien ne vous oblige à prendre contact.",
+    "openDeckHint": "Vous pouvez fermer ces présentations à tout moment.",
+    "skipIntroductions": "Passer les présentations",
+    "inviteHeading": "Laissez quelqu’un vous découvrir aussi.",
+    "inviteLead": "Parfois, quelques mots ordinaires suffisent pour qu’un correspondant vous trouve.",
+    "boardEyebrow": "LE TABLEAU",
+    "inviteTitle": "Laissez une lettre dans laquelle quelqu’un pourrait se reconnaître.",
+    "inviteBody": "Partagez une pensée, une petite histoire ou un moment de votre journée. Ailleurs, quelqu’un pourrait la lire et avoir envie de vous connaître. À vous de choisir quand écrire.",
+    "leaveLetter": "Laisser une lettre",
+    "maybeLater": "Explorer le Tableau",
+    "finishError": "Impossible d’enregistrer votre progression. Réessayez ou explorez directement le Tableau.",
+    "unable": "Les présentations sont indisponibles pour le moment. Le Tableau vous attend.",
+    "retry": "Réessayer",
+    "continue": "Continuer vers le Tableau",
+    "noPressure": "Aucune obligation d’écrire, de publier ou de répondre tout de suite.",
+    "interests": {
+      "friendship": "Une amitié sincère",
+      "correspondence": "Une correspondance durable",
+      "conversation": "Des conversations réfléchies",
+      "culture": "Des échanges culturels",
+      "everyday": "Partager le quotidien",
+      "language": "Pratiquer une langue",
+      "different": "Rencontrer des personnes différentes",
+      "similar": "Rencontrer des personnes comme moi",
+      "writing": "Écrire et m’exprimer",
+      "serendipity": "Laisser place au hasard"
+    }
   }
 }
