@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import AutoMatchArrival from './auto-match-arrival'
 
@@ -23,7 +24,7 @@ export default async function FirstArrivalPeoplePage() {
     return <main className="mx-auto max-w-xl px-6 py-20 text-center">
       <h1 className="font-serif text-3xl">Your letters are waiting.</h1>
       <p className="mt-4 text-foreground/70">Introductions are unavailable for now, but you can still explore The Board.</p>
-      <a className="mt-8 inline-flex min-h-12 items-center rounded-md bg-accent px-6 text-accent-foreground" href="/board">Explore The Board →</a>
+      <Link className="mt-8 inline-flex min-h-12 items-center rounded-md bg-accent px-6 text-accent-foreground" href="/board">Explore The Board →</Link>
     </main>
   }
   if (!profile) redirect('/profile')
