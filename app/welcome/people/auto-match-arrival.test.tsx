@@ -22,7 +22,14 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: { getSession: async () => ({ data: { session: { access_token: 'test-token' } } }) },
     from: () => ({
       update: (fields: Record<string, unknown>) => ({
-        eq: async () => { state.updates.push(fields); return { error: null } },
+        eq: () => {
+          if (!('auto_match_started_at' in fields)) state.updates.push(fields)
+          const query = Promise.resolve({ error: null }) as Promise<{ error: null }> & {
+            is: (column: string, value: null) => Promise<{ error: null }>
+          }
+          query.is = async (_column: string, _value: null) => ({ error: null })
+          return query
+        },
       }),
     }),
   }),
@@ -98,9 +105,9 @@ describe('First arrival Auto-Match interactions', () => {
     expect(document.querySelector('[role=dialog]')).toBeTruthy()
     await press('Close introductions')
     expect(screen()).toContain('Leave a letter someone might recognize.')
-    await press('Leave a letter')
+    await press('Help me start a letter')
     expect(state.updates.some(u => typeof u.auto_match_completed_at === 'string')).toBe(true)
-    expect(state.routes).toEqual(['/board/write'])
+    expect(state.routes).toEqual(['/board/write/guided'])
   })
 
   it('allows members to skip preference questions without erasing stored reasons', async () => {

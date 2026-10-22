@@ -41,6 +41,7 @@ import HomeFamiliarFaces from './familiar-faces-home'
 import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import FirstLetterHomeInvitation from './first-letter-home-invitation'
 
 const HOME_BOARD_COUNT = 3
 
@@ -59,8 +60,9 @@ export default async function HomePage() {
     activeAnnouncement,
     relationshipCapacity,
     relationshipPeople,
+    { data: ownBoardLetters, error: ownBoardLettersError },
   ] = await Promise.all([
-    supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
+    supabase.from('profiles').select('pseudonym, auto_match_started_at, auto_match_completed_at').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
     getWaitingLetterCount(supabase, user.id),
     getIncomingMailInTransit(supabase),
@@ -69,6 +71,7 @@ export default async function HomePage() {
     getActiveAnnouncement(supabase),
     getRelationshipCapacity(supabase),
     getRelationshipSurfacePeople(supabase, user.id),
+    supabase.from('dispatches').select('id').eq('author_id', user.id).eq('status', 'published').eq('moderation_status', 'visible').eq('published_as', 'member').limit(1),
   ])
 
   if (!profile) redirect('/profile')
@@ -130,6 +133,9 @@ export default async function HomePage() {
           <div className="mx-auto w-full max-w-xl">
             <MemberNotices />
             <PublicMentions />
+            {profile?.auto_match_started_at && !profile.auto_match_completed_at && (
+              <Link href="/welcome/people" className="mt-3 block rounded-md border border-accent/30 bg-accent/[.04] p-4 text-[15px] underline underline-offset-4">Continue your introductions →</Link>
+            )}
 
             <section aria-labelledby="what-matters-heading" className="space-y-6">
               <div>
@@ -228,6 +234,7 @@ export default async function HomePage() {
 
               {mailOnTheWay && <MailOnTheWay />}
               <HomeFamiliarFaces />
+              {!ownBoardLettersError && (ownBoardLetters?.length ?? 0) === 0 && <FirstLetterHomeInvitation userId={user.id} />}
 
               {capacitySummary && (
                 <div className="border-l-2 border-accent/35 pl-4">

@@ -105,6 +105,10 @@ export default async function PublicProfilePage({
   const languages: string[] = extraError ? [] : extra?.languages ?? []
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
+  const { data: introQuestion } = await supabase.from('questions').select('id').eq('slug', 'tempa-profile-introduction').maybeSingle()
+  const { data: introRow } = introQuestion ? await supabase.from('question_answers')
+    .select('id,body,profile_intro_visible,moderation_status').eq('user_id', userId).eq('question_id', introQuestion.id).maybeSingle()
+    : { data: null }
 
   const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle, withdrawnLettersResult] = await Promise.all([
     getMyAnswers(supabase, userId),
@@ -143,8 +147,9 @@ export default async function PublicProfilePage({
   // An explicit answer link must never silently open a different answer.
   const selectedAnswer = selectedAnswerId ? rawAnswers.find(answer => answer.id === selectedAnswerId) : null
   if (selectedAnswerId && !selectedAnswer) notFound()
-  const primaryAnswer = selectedAnswer ?? chooseProfileAnswer(rawAnswers)
-  const otherAnswers = rawAnswers
+  const ordinaryAnswers = rawAnswers.filter(answer => answer.questionId !== introQuestion?.id)
+  const primaryAnswer = (selectedAnswer?.questionId !== introQuestion?.id ? selectedAnswer : null) ?? chooseProfileAnswer(ordinaryAnswers)
+  const otherAnswers = ordinaryAnswers
     .filter((answer) => answer.id !== primaryAnswer?.id)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const { data: writableAnswerRows } = isSelf
@@ -184,6 +189,10 @@ export default async function PublicProfilePage({
     .join(' · ')
   const markUrl = profile.mark_id ? publicProfileMarkUrl(supabase, `${profile.mark_id}.png`) : null
   const profileReturnHref = profileReturn ?? `/room/${userId}`
+  const introWriteHref = !isSelf && introRow?.profile_intro_visible && introRow.moderation_status === 'visible'
+    && showWriteToMind && writableAnswerIds.has(introRow.id)
+    ? `/write/${userId}?a=${encodeURIComponent(introRow.id)}&source=room_profile&returnTo=${encodeURIComponent(profileReturnHref)}`
+    : null
   const primaryWriteHref =
     !isSelf && showWriteToMind && primaryWriteAnchor
       ? `/write/${profile.id}?a=${encodeURIComponent(primaryWriteAnchor.id)}&source=room_profile&returnTo=${encodeURIComponent(profileReturnHref)}`
@@ -220,6 +229,16 @@ export default async function PublicProfilePage({
               <EditorialByline title={editorialTitle} rule className="mt-1" />
             </div>
           </header>
+
+          {introRow && (isSelf || (introRow.profile_intro_visible && introRow.moderation_status === 'visible')) && (
+            <section className="space-y-4 rounded-xl border border-foreground/10 bg-surface-shell px-5 py-6" aria-label="Personal introduction">
+              <div className="flex flex-wrap items-center justify-between gap-3"><p className={sectionLabelClass}>A little about {isSelf ? 'you' : profile.pseudonym}</p>{isSelf && <Link href="/you/introduction" className={quietLinkClass}>Edit introduction</Link>}</div>
+              {isSelf && !introRow.profile_intro_visible && <p className={helperTextClass}>Only you can see this introduction.</p>}
+              <p className="whitespace-pre-wrap font-serif text-[19px] leading-relaxed">{introRow.body}</p>
+              {introWriteHref && <Link href={introWriteHref} className={primaryButtonClass}>Write to {profile.pseudonym} ↗</Link>}
+            </section>
+          )}
+          {isSelf && !introRow && <section className="border-l-2 border-accent/30 pl-4"><p className={helperTextClass}>Not ready to leave an open letter? A few words can still introduce you.</p><Link href="/you/introduction" className={quietLinkClass}>Write a short introduction</Link></section>}
 
           {pinnedDispatch && (
             <section className="space-y-3 border-t border-foreground/10 pt-6">

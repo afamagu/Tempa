@@ -83,6 +83,6 @@ describe('Discover People: intentional finite writer directory',()=>{
   })
   it('shows honest no-letter copy only when people without letters are explicitly included',async()=>{
     await mount({initialFilters:{letters:'all'},initialEntries:[person(1,false)],initialHasMore:false})
-    expect(host.textContent).toContain('No letter left yet')
+    expect(host.textContent).toContain('No public writing shared yet')
   })
 })
