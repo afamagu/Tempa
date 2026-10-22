@@ -534,7 +534,7 @@
     "lead": "Antes de escrever a sua própria carta, descubra um pouco da vida de outra pessoa.",
     "interestsHeading": "O que o traz ao Tempa?",
     "interestsHelp": "Escolha até três opções, se quiser. Também teremos em conta as suas línguas.",
-    "selected": "{count} de 3 escolhidas",
+    "selected": "{current} de 3 escolhidas",
     "meetThem": "Conhecer correspondentes",
     "skipPreferences": "Ignorar por agora",
     "preferencesError": "Não foi possível guardar as suas preferências. Tente novamente ou ignore esta etapa.",
