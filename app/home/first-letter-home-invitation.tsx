@@ -7,6 +7,7 @@ export default function FirstLetterHomeInvitation({ userId }: { userId: string }
   const [hidden, setHidden] = useState(true)
   const key = `tempa:first-board-letter-invitation:${userId}`
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     try { setHidden(window.localStorage.getItem(key) === 'dismissed') }
     catch { setHidden(false) }
   }, [key])

@@ -29,10 +29,8 @@ export default function GuidedLetterJourney({ userId }: { userId: string }) {
     setExistingDraft(Boolean(readDispatchDraft(userId)))
     try {
       const raw = window.localStorage.getItem(storageKey)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProgress(raw ? normalizeGuidedProgress(JSON.parse(raw)) : newGuidedProgress())
     } catch {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProgress(newGuidedProgress())
     }
   }, [storageKey, userId])
