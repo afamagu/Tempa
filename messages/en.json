@@ -440,7 +440,8 @@
     "done": "Done",
     "next": "Next →",
     "writeTo": "Write to {name}",
-    "previousPerson": "Previous person"
+    "previousPerson": "Previous person",
+    "autoMatchProgress": "Your introductions · {current} of {total}"
   },
   "Introduction": {
     "title": "Leave an answer if you like.",
@@ -492,7 +493,7 @@
     "homeHelp": "What matters to you as you get to know people.",
     "you": "You",
     "youHelp": "Your profile and preferences, whenever you want to make them your own.",
-    "button": "Enter The Board",
+    "button": "Meet some pen pals",
     "replay": "You can revisit this introduction from You → Tempa Guide."
   },
   "Board": {
@@ -526,5 +527,46 @@
     "saveError": "We could not save these details. Please try again.",
     "saving": "Saving…",
     "continue": "Continue"
+  },
+  "AutoMatch": {
+    "eyebrow": "FIRST INTRODUCTIONS",
+    "heading": "A few people worth meeting.",
+    "lead": "Before you write your own letter, discover a little of someone else’s life.",
+    "interestsHeading": "What brings you here?",
+    "interestsHelp": "Choose up to three, if you like. We’ll use them alongside your languages to find people you might enjoy writing to.",
+    "selected": "{count} of 3 chosen",
+    "meetThem": "Meet your pen pals",
+    "skipPreferences": "Skip for now",
+    "preferencesError": "We couldn’t save your preferences. Try again or skip this step.",
+    "loading": "Finding people whose words might interest you…",
+    "loadingError": "We couldn’t load your introductions.",
+    "introductionsHeading": "SIX POSSIBLE BEGINNINGS",
+    "introductionsHelp": "Read what these people have shared. Write privately if one interests you. There’s no obligation to contact anyone.",
+    "openDeckHint": "You can close these introductions whenever you like.",
+    "skipIntroductions": "Skip introductions",
+    "inviteHeading": "Let someone discover you, too.",
+    "inviteLead": "Sometimes your next pen pal finds you through a few ordinary words.",
+    "boardEyebrow": "THE BOARD",
+    "inviteTitle": "Leave a letter someone might recognize.",
+    "inviteBody": "Share a thought, a small story, or something about today. Someone elsewhere may read it and want to know you. It’s your choice when to leave a letter.",
+    "leaveLetter": "Leave a letter",
+    "maybeLater": "Explore The Board instead",
+    "finishError": "We couldn’t save your progress. Try again, or explore The Board directly.",
+    "unable": "Introductions aren’t available right now. The Board is still here for you.",
+    "retry": "Try again",
+    "continue": "Continue to The Board",
+    "noPressure": "No pressure to write, publish, or reply immediately.",
+    "interests": {
+      "friendship": "Meaningful friendship",
+      "correspondence": "Long-term correspondence",
+      "conversation": "Thoughtful conversation",
+      "culture": "Cultural exchange",
+      "everyday": "Sharing everyday life",
+      "language": "Practising a language",
+      "different": "Meeting people different from me",
+      "similar": "Meeting people who think like me",
+      "writing": "Writing and self-expression",
+      "serendipity": "A little serendipity"
+    }
   }
 }
