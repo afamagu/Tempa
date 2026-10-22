@@ -13,7 +13,7 @@ export type DirectoryFilters = {
   age?: string
   intent?: string
   interest?: string
-  /** A member without a letter is visible only when explicitly requested. */
+  /** Members with no shared writing appear when All Members is selected. */
   letters?: 'all'
 }
 
@@ -24,6 +24,7 @@ export type DirectoryPerson = {
   markUrl: string | null
   languages: string[]
   latestLetter: { id: string; title: string; excerpt: string } | null
+  introduction?: { id: string; excerpt: string } | null
 }
 
 export type DirectoryPage = {
@@ -41,6 +42,8 @@ type RpcPerson = {
   latest_letter_id?: string | null
   latest_letter_title?: string | null
   latest_letter_body?: string | null
+  introduction_answer_id?: string | null
+  introduction_body?: string | null
 }
 type RpcResult = { entries?: RpcPerson[]; has_more?: boolean }
 
@@ -49,7 +52,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /**
  * The server is responsible for the immutable six-person boundary.
  * The RPC independently checks account visibility, bilateral blocks,
- * moderated/published member writing and cursor order. No Question answers,
+ * moderated/published member writing and cursor order. Only the dedicated,
+ * explicitly visible profile-introduction Question answer is eligible; no other Question answers,
  * online status, matching scores, or popularity calculations.
  */
 export async function getRoomDirectoryPage(
@@ -94,6 +98,9 @@ export async function getRoomDirectoryPage(
       country: row.country ?? '',
       markUrl: row.mark_id ? publicProfileMarkUrl(supabase, `${row.mark_id}.png`) : null,
       languages: row.languages ?? [],
+      introduction: row.introduction_answer_id && row.introduction_body
+        ? { id: row.introduction_answer_id, excerpt: row.introduction_body.slice(0, 190) }
+        : null,
       latestLetter: row.latest_letter_id && row.latest_letter_title && row.latest_letter_body
         ? { id: row.latest_letter_id, title: row.latest_letter_title, excerpt: dispatchExcerpt(row.latest_letter_body).slice(0, 190) }
         : null,
