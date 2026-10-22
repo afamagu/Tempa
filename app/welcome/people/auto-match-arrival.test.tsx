@@ -98,9 +98,9 @@ describe('First arrival Auto-Match interactions', () => {
     expect(document.querySelector('[role=dialog]')).toBeTruthy()
     await press('Close introductions')
     expect(screen()).toContain('Leave a letter someone might recognize.')
-    await press('Leave a letter')
+    await press('Help me start a letter')
     expect(state.updates.some(u => typeof u.auto_match_completed_at === 'string')).toBe(true)
-    expect(state.routes).toEqual(['/board/write'])
+    expect(state.routes).toEqual(['/board/write/guided'])
   })
 
   it('allows members to skip preference questions without erasing stored reasons', async () => {
