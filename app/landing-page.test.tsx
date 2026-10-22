@@ -2,55 +2,57 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import LandingPage from './landing-page'
 
-describe('Tempa correspondence landing page', () => {
+describe('Tempa pen pals restored landing page', () => {
   const html = renderToStaticMarkup(<LandingPage />)
 
-  it('leads with knowing people and a join action for mobile and desktop', () => {
-    expect(html).toContain('People are easy to find.')
-    expect(html).toContain('They are not easy to know.')
-    expect(html).toContain('Tempa is a place for private correspondence.')
-    expect(html).toContain('Write a letter. Read someone else’s.')
-    expect(html).toContain('Know the person, not the profile.')
-    expect(html).toContain('Open letters are left on The Board for anyone to read.')
-    expect(html).toContain('write privately to the person behind it.')
-    expect(html).toContain('Anyone can join Tempa.')
+  it('leads with pen pals, ordinary days, and the promise of writing to a person', () => {
+    expect(html).toContain('Pen pals restored.')
+    expect(html).toContain('Write to someone about an ordinary day.')
+    expect(html).toContain('If something in it stays with you, write them.')
+    expect(html).toContain('You meet someone through what they wrote, not through a photo or a profile.')
+    expect(html).toContain('Tempa is a place for pen pals. Real letters, not messages that expect a reply tonight.')
+    expect(html).toContain('No followers. No feed to keep up with. Just letters.')
+    expect(html).not.toContain('People are easy to find.')
     expect(html).not.toContain('invitation only')
-    expect(html.match(/>Join Tempa/g)).toHaveLength(2)
-    expect(html.match(/href="\/sign-in\?intent=join"/g)).toHaveLength(2)
-    expect(html).toContain('href="#read"')
-    expect(html).toContain('id="read"')
   })
 
-  it('explains only the letter-to-correspondence path in four steps', () => {
-    for (const title of ['Letters left here', 'You read', 'Write to them', 'A quiet pace']) {
+  it('explains The Board and pen-pal correspondence in exactly three concise steps', () => {
+    for (const title of [
+      'Leave a letter or find one',
+      'Write when you have something to say',
+      'They write back, or they don’t',
+    ]) {
       expect(html).toContain(title)
     }
-    expect(html).toContain('If they write back, a correspondence begins.')
-    expect(html).toContain('A quiet week is just a quiet week.')
+    expect(html.match(/class="[^"]*stepNumber[^"]*"/g)).toHaveLength(3)
+    expect(html).toContain('Leave a letter on The Board.')
+    expect(html).toContain('Someone, somewhere, might find something in your words')
+    expect(html).toContain('Or look for someone by place or language')
+    expect(html).toContain('Write when you are ready. A quiet week is a pace, not a disappearance.')
+    expect(html).toContain('A reply begins the correspondence.')
+    expect(html).toContain('You can send a postcard with your letter if you want.')
+    expect(html).toContain('The letter is the main thing.')
+    expect(html).not.toContain('The Room')
   })
 
-  it('illustrates ordinary writing without pretending these are verified member testimonials', () => {
-    for (const text of ['Sunday lunch at two.', 'She knows which tea I buy.', 'My brother calls while I make dinner.']) {
-      expect(html).toContain(text)
-    }
-    expect(html).toContain('Illustrative excerpts')
+  it('preserves the clear closing invitation and the existing illustrative letter', () => {
+    expect(html).toContain('Someone, somewhere, wrote about an ordinary day.')
+    expect(html).toContain('LETTER LEFT ON THE BOARD')
     expect(html).toContain('Illustrative letters')
     expect(html).toContain('— Sandra')
     expect(html).toContain('Toronto, Canada')
     expect(html).toContain('Dear Sandra,')
-    expect(html).toContain('LETTER LEFT ON THE BOARD')
     expect(html).not.toContain('Adaeze')
-    expect(html).not.toContain('Nigeria')
-    expect(html).not.toContain('The Dangerous Myth of Finding Your Calling')
     expect(html).not.toContain('A DISPATCH')
-    expect(html).not.toContain('THIS WEEK’S QUESTION')
-    expect(html).not.toContain('Send one with a letter or a Dispatch.')
   })
 
-  it('preserves sign-in, accessible navigation, and legal links without fictional navigation controls', () => {
+  it('keeps public signup, navigation, legal routes and both join buttons intact', () => {
     expect(html).toContain('href="/sign-in"')
     expect(html).toContain('aria-label="Landing page navigation"')
-    expect(html).toContain('aria-label="Legal links"')
+    expect(html).toContain('href="#read"')
+    expect(html).toContain('id="read"')
+    expect(html.match(/>Enter Tempa/g)).toHaveLength(2)
+    expect(html.match(/href="\/sign-in\?intent=join"/g)).toHaveLength(2)
     expect(html).toContain('href="/privacy"')
     expect(html).toContain('href="/terms"')
     expect(html).not.toContain('href="/board"')

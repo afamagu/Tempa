@@ -13,3 +13,74 @@
   .hero h1.heroHeading{font-size:clamp(40px,9.3vw,44px)}
   .heroPromise{margin-bottom:23px}
 }
+
+
+/* Pen pals restored: concise editorial hierarchy, with the letter as visual proof. */
+.hero .heroHeading {
+  font-size: clamp(51px, 5.2vw, 78px);
+  line-height: 1.015;
+  letter-spacing: -.043em;
+  max-width: 580px;
+  margin-bottom: 28px;
+}
+.heroLead {
+  font-size: clamp(23px, 2.3vw, 32px);
+  line-height: 1.29;
+  font-weight: 400;
+  letter-spacing: -.017em;
+  max-width: 570px;
+  margin: 0 0 24px;
+}
+.heroThesis {
+  font: 500 16px/1.65 var(--font-geist-sans), Arial, sans-serif;
+  color: var(--plum);
+  max-width: 530px;
+  border-left: 2px solid #b68d85;
+  padding-left: 19px;
+  margin: 0 0 27px;
+}
+.heroBody {
+  max-width: 540px;
+  font: 400 15px/1.75 var(--font-geist-sans), Arial, sans-serif;
+  color: var(--soft);
+}
+.heroBody p { margin: 0 0 14px; }
+.hero .heroPromise {
+  max-width: 510px;
+  margin: 23px 0 27px;
+  font: 600 14px/1.6 var(--font-geist-sans), Arial, sans-serif;
+  color: var(--ink);
+}
+.howSection { padding-top: 84px; padding-bottom: 110px; }
+.sectionIntro { margin-bottom: 44px; }
+.sectionIntro h2 { margin-bottom: 0; }
+.steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(22px, 4vw, 55px); }
+.step { padding-top: 23px; }
+.step h3 { font-size: clamp(25px, 2.4vw, 33px); margin: 16px 0 20px; }
+.step p { font-size: 14px; line-height: 1.8; }
+.step p + p { margin-top: 13px; }
+.closing h2 { max-width: 810px; font-size: clamp(35px, 4.2vw, 60px); }
+.closing > p:not(.eyebrow) { max-width: 550px; font-size: 18px; }
+@media (max-width: 1050px) {
+  .hero .heroHeading { font-size: clamp(47px, 5.25vw, 62px); }
+  .heroLead { font-size: clamp(22px, 2.65vw, 29px); }
+  .heroThesis { font-size: 15px; }
+}
+@media (max-width: 760px) {
+  .hero .heroHeading { font-size: clamp(49px, 9vw, 64px); margin-bottom: 22px; }
+  .heroLead { font-size: clamp(24px, 4.9vw, 30px); }
+  .heroBody { font-size: 15px; }
+  .howSection { padding-top: 70px; padding-bottom: 80px; }
+  .sectionIntro { margin-bottom: 31px; }
+  .steps { grid-template-columns: 1fr; gap: 37px; }
+  .step { padding-top: 21px; }
+  .step h3 { font-size: 29px; margin: 12px 0 16px; }
+  .step p { max-width: 610px; }
+}
+@media (max-width: 440px) {
+  .hero .heroHeading { font-size: clamp(45px, 11vw, 53px); line-height: 1.045; }
+  .heroLead { font-size: 24px; }
+  .heroThesis { padding-left: 15px; margin-bottom: 23px; }
+  .hero .heroPromise { margin-bottom: 24px; }
+  .step h3 { font-size: 27px; }
+}
