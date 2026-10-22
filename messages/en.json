@@ -534,7 +534,7 @@
     "lead": "Before you write your own letter, discover a little of someone else’s life.",
     "interestsHeading": "What brings you here?",
     "interestsHelp": "Choose up to three, if you like. We’ll use them alongside your languages to find people you might enjoy writing to.",
-    "selected": "{count} of 3 chosen",
+    "selected": "{current} of 3 chosen",
     "meetThem": "Meet your pen pals",
     "skipPreferences": "Skip for now",
     "preferencesError": "We couldn’t save your preferences. Try again or skip this step.",
