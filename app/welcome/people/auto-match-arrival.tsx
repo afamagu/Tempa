@@ -145,7 +145,7 @@ export default function AutoMatchArrival({
                 )
               })}
             </div>
-            <p className="mt-4 text-[12px] text-foreground/55">{t('selected', { count: selected.length })}</p>
+            <p className="mt-4 text-[12px] text-foreground/55">{t('selected', { current: selected.length })}</p>
             <div className="mt-7 flex flex-wrap items-center gap-5">
               <button type="button" disabled={busy} onClick={() => void introductions(true)} className={primaryButtonClass}>
                 {t('meetThem')} <span aria-hidden="true">→</span>
