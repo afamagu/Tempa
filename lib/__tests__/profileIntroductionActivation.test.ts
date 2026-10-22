@@ -14,6 +14,9 @@ describe('Profile introductions: safety, visibility and first contact',()=>{
   expect(sql).toMatch(/can_evaluate_safety_context[\s\S]*?qa\.profile_intro_visible/)
   expect(sql).toMatch(/send_first_letter_core[\s\S]*?qa\.profile_intro_visible/)
   expect(sql).toContain('room_answer_can_start_letter')
+  expect(sql).toContain('discover_profile_people')
+  expect(sql).toContain('get_post_closure_recommendations')
+  expect(sql).toContain('room_invitation_eligible')
   expect(sql).toContain("q.slug='tempa-profile-introduction'")
  })
  it('keeps the existing safety-evaluated Question publication and first-letter composer',()=>{
