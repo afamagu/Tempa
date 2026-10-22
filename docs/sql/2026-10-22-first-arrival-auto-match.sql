@@ -216,7 +216,7 @@ begin
     pk.sort_key,
     pk.id;
 end;
-$function$
+$function$;
 
 REVOKE ALL ON FUNCTION public.get_first_arrival_auto_matches(integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_first_arrival_auto_matches(integer) TO authenticated;
