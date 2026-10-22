@@ -11,6 +11,7 @@ const steps = [
       'Leave a letter on The Board. Tell someone about your day, a thought, or something that has been on your mind.',
       'Someone, somewhere, might find something in your words that makes them want to know you.',
       'You can also explore letters others have left and write to anyone who interests you. Or look for someone by place or language if you already know the kind of person you want.',
+      'Or let Tempa introduce you to six potential pen pals based on what brings you here and what you have in common.',
     ],
   },
   {
