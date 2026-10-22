@@ -1566,4 +1566,24 @@ begin
 end;
 $function$
 ;
+-- Profile-introduction prompts are not questions in The Board library.
+CREATE OR REPLACE FUNCTION public.room_question_library(p_search text DEFAULT ''::text, p_offset integer DEFAULT 0, p_limit integer DEFAULT 6, p_from date DEFAULT NULL::date, p_to date DEFAULT NULL::date)
+ RETURNS TABLE(id uuid, prompt text, published_at timestamp with time zone, is_current boolean, is_flagship boolean)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+ select q.id,q.prompt,
+   (select min(a.created_at) from public.admin_audit_log a where a.target_type='question'
+     and a.target_id=q.id and a.action='room_question_made_current'),
+   q.is_active and q.current_position is not null and not q.is_flagship,q.is_flagship
+ from public.questions q where public.room_reading_allowed() and public.room_question_published(q.id)
+   and q.slug is distinct from 'tempa-profile-introduction'
+   and (nullif(btrim(p_search),'') is null or position(lower(btrim(p_search)) in lower(q.prompt))>0)
+   and (p_from is null or (select min(a.created_at) from public.admin_audit_log a where a.target_type='question' and a.target_id=q.id and a.action='room_question_made_current') >= p_from::timestamp at time zone 'UTC')
+   and (p_to is null or (select min(a.created_at) from public.admin_audit_log a where a.target_type='question' and a.target_id=q.id and a.action='room_question_made_current') < (p_to+1)::timestamp at time zone 'UTC')
+ order by 3 desc nulls last,q.id desc
+ limit least(greatest(coalesce(p_limit,6),1),24)+1 offset least(greatest(coalesce(p_offset,0),0),100000)
+$function$
+;
 COMMIT;
