@@ -95,7 +95,7 @@ export default function AutoMatchArrival({
     }
   }
 
-  async function finish(href: '/board' | '/board/write' | '/board/write/guided') {
+  async function finish(href: '/board' | '/board/write' | '/board/write/guided' | '/you/introduction') {
     if (busy) return
     setBusy(true)
     setError(null)
@@ -180,6 +180,7 @@ export default function AutoMatchArrival({
             <div className="mt-8 flex flex-wrap items-center gap-5">
               <button type="button" disabled={busy} onClick={() => void finish('/board/write/guided')} className={primaryButtonClass}>Help me start a letter <span aria-hidden="true">↗</span></button>
               <button type="button" disabled={busy} onClick={() => void finish('/board/write')} className={quietLinkClass}>Write my own</button>
+              <button type="button" disabled={busy} onClick={() => void finish('/you/introduction')} className={quietLinkClass}>Share a short introduction</button>
               <button type="button" disabled={busy} onClick={() => void finish('/board')} className={quietLinkClass}>{t('maybeLater')}</button>
             </div>
           </section>
