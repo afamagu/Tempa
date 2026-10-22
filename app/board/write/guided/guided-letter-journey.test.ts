@@ -15,7 +15,7 @@ describe('Guided Board letter launch and durability contract',()=>{
     expect(s).toContain('readDispatchDraft(userId)')
     expect(s).toContain('writeDispatchDraft(userId, assembled)')
     expect(s).toContain("router.push('/board/write')")
-    expect(s).toContain('Nothing is published until')
+    expect(s).toContain('Your letter stays private until you review and publish it.')
   })
   it('preserves first-arrival skip and private correspondence actions',()=>{
     const s=file('app/welcome/people/auto-match-arrival.tsx')

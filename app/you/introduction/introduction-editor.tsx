@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -17,15 +17,34 @@ export default function IntroductionEditor({userId,questionId,initialBody,initia
  const [second,setSecond]=useState(rest.join('\n\n'))
  const [visible,setVisible]=useState(initialVisible)
  const [published,setPublished]=useState(Boolean(initialBody))
+ const [dirty,setDirty]=useState(false)
  const [busy,setBusy]=useState(false)
  const [error,setError]=useState<string|null>(null)
  const [warning,setWarning]=useState<{id:string;copyKey?:string}|null>(null)
  const verified=useRef<string|null>(null)
  const router=useRouter()
  const body=makeBody(first,second)
+ const draftKey=`tempa-profile-intro-draft:${userId}`
+ useEffect(()=>{
+  try {
+   const raw=window.localStorage.getItem(draftKey)
+   if(!raw)return
+   const pending=JSON.parse(raw) as {first?:unknown;second?:unknown}
+   // eslint-disable-next-line react-hooks/set-state-in-effect
+   if(typeof pending.first==='string')setFirst(pending.first.slice(0,LIMIT))
+   // eslint-disable-next-line react-hooks/set-state-in-effect
+   if(typeof pending.second==='string')setSecond(pending.second.slice(0,LIMIT))
+   // eslint-disable-next-line react-hooks/set-state-in-effect
+   setDirty(true)
+  } catch { /* Keep the original saved introduction. */ }
+ },[draftKey])
  function edit(which:'first'|'second',value:string){
   if(which==='first')setFirst(value.slice(0,LIMIT));else setSecond(value.slice(0,LIMIT))
-  setPublished(false);setError(null);verified.current=null
+  setDirty(true);setError(null);verified.current=null
+  const pendingFirst=which==='first'?value.slice(0,LIMIT):first
+  const pendingSecond=which==='second'?value.slice(0,LIMIT):second
+  try{window.localStorage.setItem(draftKey,JSON.stringify({first:pendingFirst,second:pendingSecond}))}
+  catch{setError('Your browser cannot save this draft. Keep the page open until you finish.')}
  }
  async function evaluate(){
   if(!body||busy||moderated)return
@@ -47,7 +66,9 @@ export default function IntroductionEditor({userId,questionId,initialBody,initia
   const {error:visibleError}=await supabase.rpc('set_my_profile_intro_visibility',{p_visible:true})
   setBusy(false);setWarning(null)
   if(visibleError){setError('Saved privately, but publishing was not completed. Please retry.');return}
-  setPublished(true);setVisible(true);router.refresh()
+  setPublished(true);setVisible(true);setDirty(false)
+  try{window.localStorage.removeItem(draftKey)}catch{}
+  router.refresh()
  }
  async function toggle(show:boolean){
   setBusy(true);setError(null)
@@ -67,7 +88,7 @@ export default function IntroductionEditor({userId,questionId,initialBody,initia
     <label className="block space-y-3"><span className="block font-serif text-[22px]">What do you enjoy talking or writing about?</span><textarea rows={4} maxLength={LIMIT} value={second} onChange={e=>edit('second',e.target.value)} placeholder="I could talk about…" className="w-full resize-y rounded-md border border-foreground/20 bg-background p-4 font-serif text-[18px] leading-relaxed outline-none focus:border-accent"/></label>
     <p className={helperTextClass}>This appears on your profile, not The Board. Nothing is shared until you publish it.</p>
     {body&&<div className="space-y-3 border-t border-foreground/10 pt-6"><p className="text-[11px] uppercase tracking-[.17em] text-[#94745f]">YOUR WORDS</p><p className="whitespace-pre-wrap font-serif text-[19px] leading-relaxed">{body}</p></div>}
-    {published&&<p role="status" className={helperTextClass}>{visible?'Visible to other eligible members.':'Hidden from other members.'}</p>}
+    {published&&<p role="status" className={helperTextClass}>{dirty&&visible?'Your earlier published version remains visible until you publish these changes.':visible?'Visible to other eligible members.':'Hidden from other members.'}</p>}
     {error&&<p role="alert" className="text-[14px] text-red-700">{error}</p>}
     <div className="flex flex-wrap items-center gap-5">
      <button type="button" disabled={busy||!body} onClick={()=>void evaluate()} className={primaryButtonClass}>{busy?'Saving…':'Publish my introduction'} ↗</button>
