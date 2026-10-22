@@ -40,6 +40,7 @@ export default function AutoMatchArrival({
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('preferences')
   const [selected, setSelected] = useState<string[]>(initialIntent.filter(value => INTENTS.some(i => i[1] === value)).slice(0, MAX_INTENTS))
+  const [preferencesTouched, setPreferencesTouched] = useState(false)
   const [cards, setCards] = useState<IntroductionCard[]>([])
   const [index, setIndex] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -54,6 +55,7 @@ export default function AutoMatchArrival({
   }, [userId])
 
   function toggleIntent(value: string) {
+    setPreferencesTouched(true)
     setSelected(current => current.includes(value)
       ? current.filter(item => item !== value)
       : current.length < MAX_INTENTS ? [...current, value] : current)
@@ -66,7 +68,7 @@ export default function AutoMatchArrival({
     setError(null)
     try {
       const supabase = createClient()
-      if (saveIntent && selected.join('|') !== initialIntent.join('|')) {
+      if (saveIntent && preferencesTouched && selected.join('|') !== initialIntent.join('|')) {
         const { error: preferenceError } = await supabase.from('profiles')
           .update({ intent: selected })
           .eq('id', userId)
@@ -85,8 +87,8 @@ export default function AutoMatchArrival({
       setCards(result)
       setIndex(0)
       setPhase(result.length ? 'cards' : 'invitation')
-    } catch {
-      setError(t('loadingError'))
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message === t('preferencesError') ? t('preferencesError') : t('loadingError'))
       setPhase('error')
     } finally {
       setBusy(false)
