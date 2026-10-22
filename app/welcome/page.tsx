@@ -14,7 +14,7 @@ async function enterTheBoard() {
   if (!profile.mark_id) redirect('/you/mark')
   const { error } = await supabase.rpc('complete_my_first_arrival')
   if (error) throw new Error('We could not finish your welcome. Please try again.')
-  redirect('/board')
+  redirect('/welcome/people')
 }
 
 

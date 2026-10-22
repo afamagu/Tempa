@@ -440,7 +440,8 @@
     "done": "Listo",
     "next": "Siguiente →",
     "writeTo": "Escribir a {name}",
-    "previousPerson": "Persona anterior"
+    "previousPerson": "Persona anterior",
+    "autoMatchProgress": "Tus presentaciones · {current} de {total}"
   },
   "Introduction": {
     "title": "Deja que te conozcan por tus palabras.",
@@ -492,7 +493,7 @@
     "homeHelp": "Lo que importa mientras conoces a otras personas.",
     "you": "Tú",
     "youHelp": "Tu perfil y preferencias, cuando quieras personalizarlos.",
-    "button": "Entrar en el Tablón",
+    "button": "Conocer a tus corresponsales",
     "replay": "Puedes volver a esta presentación en Tú → Guía de Tempa."
   },
   "Board": {
@@ -526,5 +527,46 @@
     "saveError": "No pudimos guardar estos datos. Inténtalo de nuevo.",
     "saving": "Guardando…",
     "continue": "Continuar"
+  },
+  "AutoMatch": {
+    "eyebrow": "PRIMERAS PRESENTACIONES",
+    "heading": "Algunas personas que vale la pena conocer.",
+    "lead": "Antes de escribir tu propia carta, descubre un poco de la vida de otra persona.",
+    "interestsHeading": "¿Qué te trae por aquí?",
+    "interestsHelp": "Elige hasta tres respuestas, si quieres. También tendremos en cuenta tus idiomas.",
+    "selected": "{current} de 3 elegidas",
+    "meetThem": "Conocer a mis corresponsales",
+    "skipPreferences": "Omitir por ahora",
+    "preferencesError": "No pudimos guardar tus preferencias. Inténtalo de nuevo u omite este paso.",
+    "loading": "Buscamos personas cuyas palabras puedan interesarte…",
+    "loadingError": "No pudimos cargar tus presentaciones.",
+    "introductionsHeading": "POSIBLES COMIENZOS",
+    "introductionsHelp": "Lee lo que estas personas han compartido. Escríbeles en privado si te interesa alguien. No tienes obligación de contactar a nadie.",
+    "openDeckHint": "Puedes cerrar las presentaciones cuando quieras.",
+    "skipIntroductions": "Omitir presentaciones",
+    "inviteHeading": "Deja que alguien te descubra también.",
+    "inviteLead": "A veces, unas pocas palabras cotidianas bastan para que un corresponsal te encuentre.",
+    "boardEyebrow": "EL TABLÓN",
+    "inviteTitle": "Deja una carta con la que alguien pueda identificarse.",
+    "inviteBody": "Comparte un pensamiento, una pequeña historia o algo de tu día. Alguien en otro lugar podría leerlo y querer conocerte. Tú decides cuándo escribir.",
+    "leaveLetter": "Dejar una carta",
+    "maybeLater": "Explorar el Tablón",
+    "finishError": "No pudimos guardar tu progreso. Inténtalo de nuevo o explora el Tablón directamente.",
+    "unable": "Las presentaciones no están disponibles ahora. El Tablón sigue esperándote.",
+    "retry": "Reintentar",
+    "continue": "Continuar al Tablón",
+    "noPressure": "Sin presión para escribir, publicar ni responder enseguida.",
+    "interests": {
+      "friendship": "Amistad significativa",
+      "correspondence": "Correspondencia duradera",
+      "conversation": "Conversaciones reflexivas",
+      "culture": "Intercambio cultural",
+      "everyday": "Compartir la vida cotidiana",
+      "language": "Practicar un idioma",
+      "different": "Conocer gente diferente a mí",
+      "similar": "Conocer gente que piensa como yo",
+      "writing": "Escritura y expresión personal",
+      "serendipity": "Un poco de casualidad"
+    }
   }
 }

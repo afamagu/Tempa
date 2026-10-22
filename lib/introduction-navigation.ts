@@ -13,12 +13,14 @@ export function introductionReturnPath(value: string | null | undefined): string
     || /^\/board\/[0-9a-f-]+$/i.test(url.pathname)) return path
   return null
 }
-export function introductionDestinations(candidateId: string, answerId: string, sourceType?: 'board_letter' | 'question_answer') {
+export function introductionDestinations(candidateId: string, answerId: string, sourceType?: 'board_letter' | 'question_answer', returnTo = '/home') {
   const id = encodeURIComponent(candidateId)
+  const safeReturn = returnTo === '/board' ? '/board' : '/home'
+  const encodedReturn = encodeURIComponent(safeReturn)
   return {
-    profileHref: `/board/people/${id}?returnTo=${encodeURIComponent('/home')}`,
+    profileHref: `/board/people/${id}?returnTo=${encodedReturn}`,
     writeHref: sourceType === 'board_letter'
-      ? `/write/${id}?d=${encodeURIComponent(answerId)}&source=room_letter&returnTo=${encodeURIComponent('/home')}`
+      ? `/write/${id}?d=${encodeURIComponent(answerId)}&source=room_letter&returnTo=${encodedReturn}`
       : `/write/${id}?a=${encodeURIComponent(answerId)}&source=member_introduction&returnTo=${encodeURIComponent('/home')}`,
   }
 }

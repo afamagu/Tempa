@@ -440,7 +440,8 @@
     "done": "Concluído",
     "next": "Seguinte →",
     "writeTo": "Escrever a {name}",
-    "previousPerson": "Pessoa anterior"
+    "previousPerson": "Pessoa anterior",
+    "autoMatchProgress": "As suas apresentações · {current} de {total}"
   },
   "Introduction": {
     "title": "Deixe que conheçam a sua voz.",
@@ -492,7 +493,7 @@
     "homeHelp": "O que importa enquanto conhece outras pessoas.",
     "you": "Você",
     "youHelp": "O seu perfil e preferências, quando quiser personalizar.",
-    "button": "Entrar no Mural",
+    "button": "Conhecer correspondentes",
     "replay": "Pode rever esta apresentação em Você → Guia do Tempa."
   },
   "Board": {
@@ -526,5 +527,46 @@
     "saveError": "Não foi possível guardar estes dados. Tente novamente.",
     "saving": "A guardar…",
     "continue": "Continuar"
+  },
+  "AutoMatch": {
+    "eyebrow": "PRIMEIRAS APRESENTAÇÕES",
+    "heading": "Algumas pessoas que vale a pena conhecer.",
+    "lead": "Antes de escrever a sua própria carta, descubra um pouco da vida de outra pessoa.",
+    "interestsHeading": "O que o traz ao Tempa?",
+    "interestsHelp": "Escolha até três opções, se quiser. Também teremos em conta as suas línguas.",
+    "selected": "{current} de 3 escolhidas",
+    "meetThem": "Conhecer correspondentes",
+    "skipPreferences": "Ignorar por agora",
+    "preferencesError": "Não foi possível guardar as suas preferências. Tente novamente ou ignore esta etapa.",
+    "loading": "A procurar pessoas cujas palavras lhe possam interessar…",
+    "loadingError": "Não foi possível carregar as apresentações.",
+    "introductionsHeading": "POSSÍVEIS COMEÇOS",
+    "introductionsHelp": "Leia o que estas pessoas partilharam. Escreva em privado se alguém lhe interessar. Não há obrigação de contactar ninguém.",
+    "openDeckHint": "Pode fechar estas apresentações quando quiser.",
+    "skipIntroductions": "Ignorar apresentações",
+    "inviteHeading": "Deixe que alguém também o descubra.",
+    "inviteLead": "Às vezes, algumas palavras do quotidiano bastam para que um correspondente o encontre.",
+    "boardEyebrow": "O MURAL",
+    "inviteTitle": "Deixe uma carta em que alguém se possa rever.",
+    "inviteBody": "Partilhe um pensamento, uma pequena história ou algo do seu dia. Alguém noutro lugar poderá lê-la e querer conhecê-lo. Você decide quando escrever.",
+    "leaveLetter": "Deixar uma carta",
+    "maybeLater": "Explorar o Mural",
+    "finishError": "Não foi possível guardar o progresso. Tente novamente ou explore o Mural diretamente.",
+    "unable": "As apresentações não estão disponíveis neste momento. O Mural continua à sua espera.",
+    "retry": "Tentar novamente",
+    "continue": "Continuar para o Mural",
+    "noPressure": "Sem pressão para escrever, publicar ou responder imediatamente.",
+    "interests": {
+      "friendship": "Amizade significativa",
+      "correspondence": "Correspondência duradoura",
+      "conversation": "Conversas com significado",
+      "culture": "Intercâmbio cultural",
+      "everyday": "Partilhar o quotidiano",
+      "language": "Praticar uma língua",
+      "different": "Conhecer pessoas diferentes de mim",
+      "similar": "Conhecer pessoas que pensam como eu",
+      "writing": "Escrita e expressão pessoal",
+      "serendipity": "Um pouco de acaso"
+    }
   }
 }
