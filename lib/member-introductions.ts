@@ -11,6 +11,7 @@ import { getMemberWritingStyles } from '@/lib/writing-style-data'
 // once-per-visit suppression.
 
 export const MAX_INTRODUCTIONS = 7
+export const FIRST_ARRIVAL_MATCH_LIMIT = 6
 
 export type IntroductionConsumeReason = 'advanced' | 'write' | 'profile'
 
@@ -50,7 +51,7 @@ type IntroductionRow = {
   source_type?: 'board_letter' | 'question_answer'
 }
 
-export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId: string) => string): IntroductionCard[] {
+export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId: string) => string, limit = MAX_INTRODUCTIONS): IntroductionCard[] {
   const seen = new Set<string>()
   const cards: IntroductionCard[] = []
   for (const row of rows) {
@@ -70,7 +71,7 @@ export function toIntroductionCards(rows: IntroductionRow[], markUrlFor: (markId
       prompt: row.prompt ?? '',
       body: row.body,
     })
-    if (cards.length === MAX_INTRODUCTIONS) break
+    if (cards.length === limit) break
   }
   return cards
 }
@@ -87,6 +88,30 @@ export async function loadMemberIntroductions(supabase: SupabaseClient, newcomer
     return cards.map((c) => ({ ...c, writingStyleId: styles.get(c.candidateId) ?? null }))
   } catch {
     return []
+  }
+}
+
+/**
+ * Separate first-arrival selection: the existing sign-in introductions RPC and
+ * its seven-card/newcomer policy stay untouched. Only public discoverable
+ * writing is returned. SQL ranks compatible reasons, then shared languages.
+ */
+export async function loadFirstArrivalMatches(supabase: SupabaseClient): Promise<IntroductionCard[]> {
+  const { data, error } = await supabase.rpc('get_first_arrival_auto_matches', {
+    p_limit: FIRST_ARRIVAL_MATCH_LIMIT,
+  })
+  if (error) throw new Error('Could not load your introductions.')
+  if (!Array.isArray(data)) throw new Error('Unexpected introductions response.')
+  const cards = toIntroductionCards(
+    data as IntroductionRow[],
+    (markId) => publicProfileMarkUrl(supabase, `${markId}.png`),
+    FIRST_ARRIVAL_MATCH_LIMIT
+  )
+  try {
+    const styles = await getMemberWritingStyles(supabase, cards.map(c => c.candidateId))
+    return cards.map(c => ({ ...c, writingStyleId: styles.get(c.candidateId) ?? null }))
+  } catch {
+    return cards
   }
 }
 
