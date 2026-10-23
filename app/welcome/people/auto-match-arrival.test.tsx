@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   claimCount: 0,
   candidateCount: 1,
   failLoading: false,
+  failPreferenceUpdate: false,
+  failCompletionUpdate: false,
 }))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: (url: string) => state.routes.push(url), refresh: () => {} }),
@@ -22,7 +24,12 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: { getSession: async () => ({ data: { session: { access_token: 'test-token' } } }) },
     from: () => ({
       update: (fields: Record<string, unknown>) => ({
-        eq: async () => { state.updates.push(fields); return { error: null } },
+        eq: async () => {
+          state.updates.push(fields)
+          const error = ('intent' in fields && state.failPreferenceUpdate) || ('auto_match_completed_at' in fields && state.failCompletionUpdate)
+            ? { message: 'permission denied' } : null
+          return { error }
+        },
       }),
     }),
   }),
@@ -80,6 +87,8 @@ beforeEach(() => {
   state.claimCount = 0
   state.candidateCount = 1
   state.failLoading = false
+  state.failPreferenceUpdate = false
+  state.failCompletionUpdate = false
 })
 afterEach(async () => {
   if (root) await act(async () => { root.unmount() })
@@ -92,7 +101,7 @@ describe('First arrival Auto-Match interactions', () => {
     await render()
     expect(screen()).toContain('What brings you here?')
     await press('Cultural exchange')
-    await press('Meet your pen pals')
+    await press('See my introductions')
     expect(state.updates).toContainEqual({ intent: ['Cultural exchange'] })
     expect(state.claimCount).toBe(1)
     expect(document.querySelector('[role=dialog]')).toBeTruthy()
@@ -105,7 +114,7 @@ describe('First arrival Auto-Match interactions', () => {
 
   it('allows members to skip preference questions without erasing stored reasons', async () => {
     await render(['Meaningful friendship', 'Cultural exchange', 'Thoughtful conversation', 'Practising a language'])
-    await press('Meet your pen pals')
+    await press('See my introductions')
     expect(state.updates).toEqual([])
     expect(document.querySelector('[role=dialog]')).toBeTruthy()
     await press('Close introductions')
@@ -121,12 +130,34 @@ describe('First arrival Auto-Match interactions', () => {
     expect(screen()).toContain('Leave a letter someone might recognize.')
   })
 
+  it('keeps introductions accessible when saving optional preferences fails', async () => {
+    state.failPreferenceUpdate = true
+    await render()
+    await press('Cultural exchange')
+    await press('See my introductions')
+    expect(document.querySelector('[role=dialog]')).toBeTruthy()
+    await press('Close introductions')
+    expect(screen()).not.toContain('couldn’t save your preferences')
+    await press('Help me start a letter')
+    expect(state.routes).toEqual(['/board/guided'])
+  })
+
+  it('never traps members even when completion-marker storage fails', async () => {
+    state.failCompletionUpdate = true
+    await render()
+    await press('Skip for now')
+    await press('Close introductions')
+    await press('Write my own')
+    expect(state.routes).toEqual(['/board/write'])
+    expect(screen()).not.toContain('couldn’t save your progress')
+  })
+
   it('offers retry and an alternative route if the matching query fails', async () => {
     state.failLoading = true
     await render()
     await press('Skip for now')
     expect(screen()).toContain('Introductions aren’t available right now.')
     await press('Continue to The Board')
-    expect(screen()).toContain('Leave a letter someone might recognize.')
+    expect(state.routes).toEqual(['/board'])
   })
 })

@@ -530,8 +530,8 @@
   },
   "AutoMatch": {
     "eyebrow": "FIRST INTRODUCTIONS",
-    "heading": "A few people worth meeting.",
-    "lead": "Before you write your own letter, discover a little of someone else’s life.",
+    "heading": "Let’s find people you might like to know.",
+    "lead": "First, tell us what brings you here. Then discover people through what they’ve written.",
     "interestsHeading": "What brings you here?",
     "interestsHelp": "Choose up to three, if you like. We’ll use them alongside your languages to find people you might enjoy writing to.",
     "selected": "{current} of 3 chosen",
@@ -545,7 +545,7 @@
     "openDeckHint": "You can close these introductions whenever you like.",
     "skipIntroductions": "Skip introductions",
     "inviteHeading": "Let someone discover you, too.",
-    "inviteLead": "Sometimes your next pen pal finds you through a few ordinary words.",
+    "inviteLead": "A letter gives someone else a way to recognize something in your words.",
     "boardEyebrow": "THE BOARD",
     "inviteTitle": "Leave a letter someone might recognize.",
     "inviteBody": "Share a thought, a small story, or something about today. Someone elsewhere may read it and want to know you. It’s your choice when to leave a letter.",
@@ -569,7 +569,13 @@
       "serendipity": "A little serendipity"
     },
     "helpStart": "Help me start a letter",
-    "writeOwn": "Write my own"
+    "writeOwn": "Write my own",
+    "cardsHeading": "A few people you might like to know.",
+    "cardsLead": "Meet them through their words. Write if you wish, or simply keep looking.",
+    "showIntroductions": "See my introductions",
+    "preferencesWarning": "Your choices weren’t saved, but you can still explore these introductions.",
+    "emptyHeading": "No introductions just yet.",
+    "emptyLead": "There's still plenty to read on The Board. Or leave something of your own for someone to discover."
   },
   "FirstLetterHome": {
     "heading": "Let someone discover you through your words.",

@@ -530,8 +530,8 @@
   },
   "AutoMatch": {
     "eyebrow": "PRIMERAS PRESENTACIONES",
-    "heading": "Algunas personas que vale la pena conocer.",
-    "lead": "Antes de escribir tu propia carta, descubre un poco de la vida de otra persona.",
+    "heading": "Busquemos personas que te gustaría conocer.",
+    "lead": "Primero cuéntanos qué te trae aquí. Después descubre a otras personas a través de sus palabras.",
     "interestsHeading": "¿Qué te trae por aquí?",
     "interestsHelp": "Elige hasta tres respuestas, si quieres. También tendremos en cuenta tus idiomas.",
     "selected": "{current} de 3 elegidas",
@@ -545,7 +545,7 @@
     "openDeckHint": "Puedes cerrar las presentaciones cuando quieras.",
     "skipIntroductions": "Omitir presentaciones",
     "inviteHeading": "Deja que alguien te descubra también.",
-    "inviteLead": "A veces, unas pocas palabras cotidianas bastan para que un corresponsal te encuentre.",
+    "inviteLead": "Una carta permite que alguien encuentre algo familiar en tus palabras.",
     "boardEyebrow": "EL TABLÓN",
     "inviteTitle": "Deja una carta con la que alguien pueda identificarse.",
     "inviteBody": "Comparte un pensamiento, una pequeña historia o algo de tu día. Alguien en otro lugar podría leerlo y querer conocerte. Tú decides cuándo escribir.",
@@ -569,7 +569,13 @@
       "serendipity": "Un poco de casualidad"
     },
     "helpStart": "Ayúdame a empezar una carta",
-    "writeOwn": "Escribir por mi cuenta"
+    "writeOwn": "Escribir por mi cuenta",
+    "cardsHeading": "Algunas personas que quizá quieras conocer.",
+    "cardsLead": "Conócelas a través de sus palabras. Escríbeles si quieres o sigue explorando.",
+    "showIntroductions": "Ver mis presentaciones",
+    "preferencesWarning": "Tus elecciones no se guardaron, pero puedes seguir con las presentaciones.",
+    "emptyHeading": "Todavía no hay presentaciones.",
+    "emptyLead": "Puedes leer en el Tablón o dejar algunas palabras para que alguien te descubra."
   },
   "FirstLetterHome": {
     "heading": "Deja que te descubran a través de tus palabras.",
