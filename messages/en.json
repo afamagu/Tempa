@@ -567,6 +567,73 @@
       "similar": "Meeting people who think like me",
       "writing": "Writing and self-expression",
       "serendipity": "A little serendipity"
+    },
+    "helpStart": "Help me start a letter",
+    "writeOwn": "Write my own"
+  },
+  "FirstLetterHome": {
+    "heading": "Let someone discover you through your words.",
+    "lead": "A little of your day may be the start of a correspondence.",
+    "cta": "Help me start a letter",
+    "dismiss": "Not now"
+  },
+  "GuidedWriting": {
+    "eyebrow": "YOUR FIRST OPEN LETTER",
+    "heading": "Start with something small.",
+    "lead": "It doesn't have to be extraordinary. A few words about an ordinary moment are enough.",
+    "chooseTheme": "What comes to mind?",
+    "loading": "Preparing your writing space…",
+    "progress": "A LITTLE AT A TIME · {current} OF {total}",
+    "yourAnswer": "Your answer",
+    "placeholder": "Write what comes to mind…",
+    "viewDraft": "See my draft",
+    "continue": "Continue",
+    "back": "Back",
+    "skipQuestion": "Skip question",
+    "writeFreely": "I'd rather write freely",
+    "review": "Your words, your letter",
+    "minAnswer": "Write at least one thought of twenty characters to begin.",
+    "existing": "You already have an unfinished open letter. We won't replace it.",
+    "continueExisting": "Continue existing letter",
+    "keepAnswers": "Keep these answers",
+    "editComposer": "Edit in letter composer",
+    "changeAnswers": "Change my answers",
+    "privacy": "Nothing is published until you deliberately publish your letter from its preview.",
+    "storageWarning": "Your browser could not save progress. Keep this page open until you finish.",
+    "saveError": "Could not save the draft. Your answers are still here.",
+    "starters": {
+      "ordinary-day": {
+        "title": "An ordinary day",
+        "opening": "Something small happened recently that I keep thinking about…",
+        "suggestedTitle": "A small moment from my day",
+        "q1": "What happened?",
+        "q2": "Why did it stay with you?",
+        "q3": "What would you like someone else to tell you about?"
+      },
+      "someone-i-remember": {
+        "title": "Someone I remember",
+        "opening": "There's someone I remember more often than they probably realize…",
+        "suggestedTitle": "Someone I still remember",
+        "q1": "Who comes to mind? You can leave out their name.",
+        "q2": "What small thing about them do you still remember?",
+        "q3": "Does this remind you of someone in your life, too?"
+      },
+      "a-place": {
+        "title": "A place I carry with me",
+        "opening": "There's a place I haven't been to in years, but I still remember…",
+        "suggestedTitle": "A place I carry with me",
+        "q1": "Which place are you thinking of?",
+        "q2": "What detail makes it feel vivid to you?",
+        "q3": "Is there a place you still carry with you?"
+      },
+      "something-i-wonder": {
+        "title": "Something I've been wondering",
+        "opening": "I wonder whether other people ever feel this way…",
+        "suggestedTitle": "Something I've been wondering",
+        "q1": "What have you been wondering about lately?",
+        "q2": "What made you start thinking about it?",
+        "q3": "What would you like someone else's perspective on?"
+      }
     }
   }
 }

@@ -567,6 +567,73 @@
       "similar": "Conocer gente que piensa como yo",
       "writing": "Escritura y expresión personal",
       "serendipity": "Un poco de casualidad"
+    },
+    "helpStart": "Ayúdame a empezar una carta",
+    "writeOwn": "Escribir por mi cuenta"
+  },
+  "FirstLetterHome": {
+    "heading": "Deja que te descubran a través de tus palabras.",
+    "lead": "Un pequeño momento de tu día puede comenzar una correspondencia.",
+    "cta": "Empezar una carta",
+    "dismiss": "Ahora no"
+  },
+  "GuidedWriting": {
+    "eyebrow": "TU PRIMERA CARTA ABIERTA",
+    "heading": "Empieza con algo pequeño.",
+    "lead": "No tiene que ser extraordinario. Bastan unas palabras sobre un momento cotidiano.",
+    "chooseTheme": "¿Qué te viene a la mente?",
+    "loading": "Preparando tu espacio para escribir…",
+    "progress": "POCO A POCO · {current} DE {total}",
+    "yourAnswer": "Tu respuesta",
+    "placeholder": "Escribe lo que te venga a la mente…",
+    "viewDraft": "Ver mi borrador",
+    "continue": "Continuar",
+    "back": "Atrás",
+    "skipQuestion": "Omitir pregunta",
+    "writeFreely": "Prefiero escribir libremente",
+    "review": "Tus palabras, tu carta",
+    "minAnswer": "Escribe al menos un pensamiento de veinte caracteres.",
+    "existing": "Ya tienes una carta sin terminar. No la reemplazaremos.",
+    "continueExisting": "Continuar la carta existente",
+    "keepAnswers": "Guardar estas respuestas",
+    "editComposer": "Editar en el editor",
+    "changeAnswers": "Cambiar mis respuestas",
+    "privacy": "Nada se publica hasta que decidas publicar desde la vista previa.",
+    "storageWarning": "El navegador no pudo guardar el progreso. Mantén esta página abierta.",
+    "saveError": "No se pudo guardar el borrador. Tus respuestas siguen aquí.",
+    "starters": {
+      "ordinary-day": {
+        "title": "Un día cualquiera",
+        "opening": "Hace poco pasó algo pequeño en lo que sigo pensando…",
+        "suggestedTitle": "Un pequeño momento de mi día",
+        "q1": "¿Qué pasó?",
+        "q2": "¿Por qué se quedó contigo?",
+        "q3": "¿Qué te gustaría que te contara otra persona?"
+      },
+      "someone-i-remember": {
+        "title": "Alguien que recuerdo",
+        "opening": "Hay alguien en quien pienso más de lo que imagina…",
+        "suggestedTitle": "Alguien que sigo recordando",
+        "q1": "¿En quién piensas? No hace falta decir su nombre.",
+        "q2": "¿Qué pequeño detalle recuerdas?",
+        "q3": "¿Te recuerda a alguien de tu vida?"
+      },
+      "a-place": {
+        "title": "Un lugar que llevo conmigo",
+        "opening": "Hay un lugar al que no he vuelto en años…",
+        "suggestedTitle": "Un lugar que llevo conmigo",
+        "q1": "¿En qué lugar piensas?",
+        "q2": "¿Qué detalle lo hace tan vívido?",
+        "q3": "¿Qué lugar sigues llevando contigo?"
+      },
+      "something-i-wonder": {
+        "title": "Algo que me pregunto",
+        "opening": "Me pregunto si otras personas sienten algo parecido…",
+        "suggestedTitle": "Algo que me pregunto",
+        "q1": "¿En qué has estado pensando últimamente?",
+        "q2": "¿Qué te hizo pensarlo?",
+        "q3": "¿Qué opinión te gustaría escuchar?"
+      }
     }
   }
 }
