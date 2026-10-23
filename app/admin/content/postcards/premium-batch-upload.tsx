@@ -18,6 +18,7 @@ async function sha256(blob: Blob) {
 export default function PremiumBatchUpload() {
   const [files, setFiles] = useState<File[]>([])
   const [status, setStatus] = useState('')
+  const selectedCount = files.length
   const [busy, setBusy] = useState(false)
   const running = useRef(false)
   async function upload() {
@@ -29,7 +30,8 @@ export default function PremiumBatchUpload() {
       const { data: admin, error } = await supabase.rpc('is_staff', { p_min_role: 'admin' })
       if (error || admin !== true) throw new Error('Sign in as a Tempa admin to upload this batch.')
       const byName = new Map(files.map((file) => [file.name, file]))
-      if (byName.size !== files.length) throw new Error('Duplicate filenames were selected.')
+      if (byName.size !== files.length) throw new Error('Duplicate filenames were selected. Combine the five archives into one clean folder.')
+      if (files.length !== assets.length) throw new Error(`Choose exactly ${assets.length} prepared files; selected ${files.length}. Do not include old versions or the held cards.`)
       // Validate the entire batch before the first write.
       for (const asset of assets) {
         setStatus(`Checking ${asset.name}`)
@@ -61,9 +63,12 @@ export default function PremiumBatchUpload() {
   }
   return <section aria-labelledby="premium-upload-title" className="space-y-3 rounded-lg border border-foreground/10 p-4">
     <h2 id="premium-upload-title" className="text-lg font-semibold">Premium postcards — Batch 1</h2>
-    <p className={helperTextClass}>47 reviewed designs, with a still and motion for each. Guest Room 13 is withheld. Select the 94 prepared JPG/MP4 files.</p>
-    <input type="file" multiple accept="image/jpeg,video/mp4" aria-label="Prepared premium postcard files" disabled={busy} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
-    <button type="button" disabled={busy || files.length === 0} className={primaryButtonClass} onClick={upload}>{busy ? 'Uploading…' : 'Upload reviewed premium batch'}</button>
+    <p className={helperTextClass}>46 reviewed designs: six complimentary, 40 premium. Each has a still and a motion. Lady Larkspur is removed; Guest Room 13 is withheld. Extract all five prepared archives into one folder and choose that folder (92 JPG/MP4 files).</p>
+    <label className="block text-sm font-medium">Prepared postcard folder
+      <input type="file" multiple accept="image/jpeg,video/mp4" aria-label="Prepared premium postcard folder" disabled={busy} onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setStatus('') }} {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)} />
+    </label>
+    <p className={helperTextClass}>{selectedCount} of {assets.length} reviewed files selected. Uploads never overwrite existing artwork; safe retries verify identical bytes.</p>
+    <button type="button" disabled={busy || files.length !== assets.length} className={primaryButtonClass} onClick={upload}>{busy ? 'Uploading…' : 'Upload reviewed premium batch'}</button>
     <p role="status" aria-live="polite" className={helperTextClass}>{status}</p>
   </section>
 }
