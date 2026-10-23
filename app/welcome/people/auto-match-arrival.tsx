@@ -45,6 +45,7 @@ export default function AutoMatchArrival({
   const [index, setIndex] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [noMatches, setNoMatches] = useState(false)
 
   const completeArrival = useCallback(async () => {
     const supabase = createClient()
@@ -68,11 +69,12 @@ export default function AutoMatchArrival({
     setError(null)
     try {
       const supabase = createClient()
+      let preferencesNotSaved = false
       if (saveIntent && preferencesTouched && selected.join('|') !== initialIntent.join('|')) {
         const { error: preferenceError } = await supabase.from('profiles')
           .update({ intent: selected })
           .eq('id', userId)
-        if (preferenceError) throw new Error(t('preferencesError'))
+        if (preferenceError) preferencesNotSaved = true
       }
       // Claim the normal introduction visit for this auth session. Otherwise
       // opening Board after this deck would trigger a second stranger overlay.
@@ -86,9 +88,12 @@ export default function AutoMatchArrival({
       const result = await loadFirstArrivalMatches(supabase)
       setCards(result)
       setIndex(0)
+      setNoMatches(result.length === 0)
+      // Optional preferences must not prevent reading introductions.
+      setError(preferencesNotSaved && result.length > 0 ? t('preferencesWarning') : null)
       setPhase(result.length ? 'cards' : 'invitation')
-    } catch (caught) {
-      setError(caught instanceof Error && caught.message === t('preferencesError') ? t('preferencesError') : t('loadingError'))
+    } catch {
+      setError(t('loadingError'))
       setPhase('error')
     } finally {
       setBusy(false)
@@ -101,12 +106,12 @@ export default function AutoMatchArrival({
     setError(null)
     try {
       await completeArrival()
-      router.replace(href)
-      router.refresh()
     } catch {
-      setError(t('finishError'))
-      setBusy(false)
+      // Failing to persist a completion marker must never trap a member.
     }
+    router.replace(href)
+    router.refresh()
+    setBusy(false)
   }
 
   const supabase = () => createClient()
@@ -116,12 +121,12 @@ export default function AutoMatchArrival({
       <div className="mx-auto w-full max-w-3xl">
         <header className="max-w-2xl">
           <p className="font-serif text-xl italic text-foreground/75">Tempa<span className="text-[#a36a4d]">.</span></p>
-          <p className="mt-10 text-[11px] font-semibold uppercase tracking-[.22em] text-[#94745f]">{t('eyebrow')}</p>
+          <p className="mt-10 text-[11px] font-semibold uppercase tracking-[.22em] text-[#94745f]">{phase === 'invitation' ? t('boardEyebrow') : t('eyebrow')}</p>
           <h1 className="mt-4 font-serif text-[clamp(2.4rem,6vw,4.3rem)] font-normal leading-[1.08] tracking-[-.035em] text-foreground">
-            {phase === 'invitation' ? t('inviteHeading') : t('heading')}
+            {phase === 'invitation' ? (noMatches ? t('emptyHeading') : t('inviteHeading')) : phase === 'cards' ? t('cardsHeading') : t('heading')}
           </h1>
           <p className="mt-5 max-w-xl font-serif text-[21px] leading-[1.5] text-foreground/80">
-            {phase === 'invitation' ? t('inviteLead') : t('lead')}
+            {phase === 'invitation' ? (noMatches ? t('emptyLead') : t('inviteLead')) : phase === 'cards' ? t('cardsLead') : t('lead')}
           </p>
         </header>
 
@@ -148,7 +153,7 @@ export default function AutoMatchArrival({
             <p className="mt-4 text-[12px] text-foreground/55">{t('selected', { current: selected.length })}</p>
             <div className="mt-7 flex flex-wrap items-center gap-5">
               <button type="button" disabled={busy} onClick={() => void introductions(true)} className={primaryButtonClass}>
-                {t('meetThem')} <span aria-hidden="true">→</span>
+                {t('showIntroductions')} <span aria-hidden="true">→</span>
               </button>
               <button type="button" disabled={busy} onClick={() => void introductions(false)} className={quietLinkClass}>
                 {t('skipPreferences')}
@@ -190,7 +195,7 @@ export default function AutoMatchArrival({
             <p className="max-w-lg text-[15px] leading-relaxed text-foreground/75">{t('unable')}</p>
             <div className="flex flex-wrap items-center gap-5">
               <button type="button" disabled={busy} onClick={() => void introductions(false)} className={primaryButtonClass}>{t('retry')}</button>
-              <button type="button" onClick={() => setPhase('invitation')} className={quietLinkClass}>{t('continue')}</button>
+              <button type="button" disabled={busy} onClick={() => void finish('/board')} className={quietLinkClass}>{t('continue')}</button>
             </div>
           </section>
         )}
@@ -204,7 +209,7 @@ export default function AutoMatchArrival({
           cards={cards}
           index={index}
           onIndexChange={setIndex}
-          onClose={() => setPhase('invitation')}
+          onClose={() => { setError(null); setPhase('invitation') }}
           supabase={supabase}
           returnTo="/board"
           autoMatch

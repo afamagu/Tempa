@@ -530,8 +530,8 @@
   },
   "AutoMatch": {
     "eyebrow": "PREMIÈRES RENCONTRES",
-    "heading": "Quelques personnes à découvrir.",
-    "lead": "Avant d’écrire votre propre lettre, découvrez un peu de la vie de quelqu’un d’autre.",
+    "heading": "Trouvons des personnes que vous aimeriez connaître.",
+    "lead": "Dites-nous d’abord ce qui vous amène ici, puis découvrez des personnes à travers leurs mots.",
     "interestsHeading": "Qu’est-ce qui vous amène ici ?",
     "interestsHelp": "Choisissez jusqu’à trois réponses, si vous le souhaitez. Nous tiendrons aussi compte de vos langues.",
     "selected": "{current} sur 3 choisis",
@@ -545,7 +545,7 @@
     "openDeckHint": "Vous pouvez fermer ces présentations à tout moment.",
     "skipIntroductions": "Passer les présentations",
     "inviteHeading": "Laissez quelqu’un vous découvrir aussi.",
-    "inviteLead": "Parfois, quelques mots ordinaires suffisent pour qu’un correspondant vous trouve.",
+    "inviteLead": "Une lettre permet à quelqu’un de se reconnaître dans vos mots.",
     "boardEyebrow": "LE TABLEAU",
     "inviteTitle": "Laissez une lettre dans laquelle quelqu’un pourrait se reconnaître.",
     "inviteBody": "Partagez une pensée, une petite histoire ou un moment de votre journée. Ailleurs, quelqu’un pourrait la lire et avoir envie de vous connaître. À vous de choisir quand écrire.",
@@ -569,7 +569,13 @@
       "serendipity": "Laisser place au hasard"
     },
     "helpStart": "Aidez-moi à commencer une lettre",
-    "writeOwn": "Écrire librement"
+    "writeOwn": "Écrire librement",
+    "cardsHeading": "Quelques personnes à découvrir.",
+    "cardsLead": "Découvrez-les à travers leurs mots. Écrivez si vous le souhaitez, ou poursuivez votre exploration.",
+    "showIntroductions": "Voir mes présentations",
+    "preferencesWarning": "Vos choix n’ont pas été enregistrés, mais vous pouvez continuer les présentations.",
+    "emptyHeading": "Pas encore de présentations.",
+    "emptyLead": "Vous pouvez lire sur le Tableau ou laisser quelques mots pour être découvert."
   },
   "FirstLetterHome": {
     "heading": "Laissez quelqu’un vous découvrir à travers vos mots.",

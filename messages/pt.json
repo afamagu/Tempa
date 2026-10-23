@@ -530,8 +530,8 @@
   },
   "AutoMatch": {
     "eyebrow": "PRIMEIRAS APRESENTAÇÕES",
-    "heading": "Algumas pessoas que vale a pena conhecer.",
-    "lead": "Antes de escrever a sua própria carta, descubra um pouco da vida de outra pessoa.",
+    "heading": "Vamos encontrar pessoas que gostaria de conhecer.",
+    "lead": "Primeiro, conte-nos o que o traz aqui. Depois, descubra pessoas através das suas palavras.",
     "interestsHeading": "O que o traz ao Tempa?",
     "interestsHelp": "Escolha até três opções, se quiser. Também teremos em conta as suas línguas.",
     "selected": "{current} de 3 escolhidas",
@@ -545,7 +545,7 @@
     "openDeckHint": "Pode fechar estas apresentações quando quiser.",
     "skipIntroductions": "Ignorar apresentações",
     "inviteHeading": "Deixe que alguém também o descubra.",
-    "inviteLead": "Às vezes, algumas palavras do quotidiano bastam para que um correspondente o encontre.",
+    "inviteLead": "Uma carta permite que alguém se reconheça nas suas palavras.",
     "boardEyebrow": "O MURAL",
     "inviteTitle": "Deixe uma carta em que alguém se possa rever.",
     "inviteBody": "Partilhe um pensamento, uma pequena história ou algo do seu dia. Alguém noutro lugar poderá lê-la e querer conhecê-lo. Você decide quando escrever.",
@@ -569,7 +569,13 @@
       "serendipity": "Um pouco de acaso"
     },
     "helpStart": "Ajude-me a começar uma carta",
-    "writeOwn": "Escrever sem ajuda"
+    "writeOwn": "Escrever sem ajuda",
+    "cardsHeading": "Algumas pessoas que talvez queira conhecer.",
+    "cardsLead": "Conheça-as através das suas palavras. Escreva se quiser ou continue a explorar.",
+    "showIntroductions": "Ver as minhas apresentações",
+    "preferencesWarning": "As suas escolhas não foram guardadas, mas pode continuar as apresentações.",
+    "emptyHeading": "Ainda não há apresentações.",
+    "emptyLead": "Pode ler no Mural ou deixar algumas palavras para que alguém o descubra."
   },
   "FirstLetterHome": {
     "heading": "Deixe que alguém o descubra pelas suas palavras.",
