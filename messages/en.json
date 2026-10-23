@@ -493,7 +493,7 @@
     "homeHelp": "What matters to you as you get to know people.",
     "you": "You",
     "youHelp": "Your profile and preferences, whenever you want to make them your own.",
-    "button": "Meet some pen pals",
+    "button": "Enter Tempa",
     "replay": "You can revisit this introduction from You → Tempa Guide."
   },
   "Board": {
@@ -575,7 +575,10 @@
     "showIntroductions": "See my introductions",
     "preferencesWarning": "Your choices weren’t saved, but you can still explore these introductions.",
     "emptyHeading": "No introductions just yet.",
-    "emptyLead": "There's still plenty to read on The Board. Or leave something of your own for someone to discover."
+    "emptyLead": "There's still plenty to read on The Board. Or leave something of your own for someone to discover.",
+    "afterMatchHeading": "A few introductions. A world of letters.",
+    "afterMatchLead": "You've seen what others have shared. Now explore Tempa at your own pace.",
+    "afterMatchBody": "Your Board and Letterbox are ready."
   },
   "FirstLetterHome": {
     "heading": "Let someone discover you through your words.",
@@ -640,6 +643,17 @@
         "q2": "What made you start thinking about it?",
         "q3": "What would you like someone else's perspective on?"
       }
-    }
+    },
+    "returnToInvitation": "Back to writing invitation"
+  },
+  "FirstLetterArrival": {
+    "eyebrow": "A PLACE TO BE KNOWN",
+    "heading": "Give someone a reason to discover you.",
+    "lead": "You can leave a few words about an ordinary moment. Someone elsewhere might recognize something in them.",
+    "body": "Not sure what to write? Choose a subject and we'll help you begin. Your words remain yours, and nothing is published without your say.",
+    "helpStart": "Help me start a letter",
+    "writeMyOwn": "Write my own",
+    "skipAndMeet": "Maybe later — introduce me to people",
+    "noPressure": "Writing is optional. You'll meet potential pen pals either way."
   }
 }

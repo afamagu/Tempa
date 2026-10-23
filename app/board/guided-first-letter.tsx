@@ -7,10 +7,11 @@ import { sendGuidedDraftToBoard } from '@/lib/guided-letter-handoff'
 import { primaryButtonClass,quietLinkClass,helperTextClass } from '@/app/profile/ui'
 
 type Saved = { starterId:StarterId|null; answers:[string,string,string]; step:number }
-export default function GuidedFirstLetter({userId}:{userId:string}) {
+export default function GuidedFirstLetter({userId,firstArrival=false}:{userId:string;firstArrival?:boolean}) {
   const t=useTranslations('GuidedWriting')
   const router=useRouter()
   const key=`tempa-guided-first-letter:${userId}`
+  const composerHref=firstArrival ? '/board/write?firstArrival=1' : '/board/write'
   const [starterId,setStarterId]=useState<StarterId|null>(null)
   const [answers,setAnswers]=useState<[string,string,string]>(['','',''])
   const [step,setStep]=useState(0)
@@ -59,7 +60,7 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
     if(status==='existing-draft'){setHasExistingDraft(true);return}
     if(status!=='saved'){setError(t('saveError'));return}
     try{window.localStorage.removeItem(key)}catch{}
-    router.push('/board/write')
+    router.push(composerHref)
   }
   if(!loaded)return <main className="mx-auto max-w-2xl p-8" role="status">{t('loading')}</main>
   return <main className="mx-auto w-full max-w-2xl px-5 pb-24 pt-8 sm:px-8 sm:pt-14">
@@ -77,7 +78,7 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
           <span className="mt-3 block text-sm leading-relaxed text-foreground/65">{t(`starters.${item.id}.opening`)}</span>
         </button>)}
       </div>
-      <button type="button" className={`mt-6 ${quietLinkClass}`} onClick={()=>router.push('/board/write')}>{t('writeFreely')} →</button>
+      <button type="button" className={`mt-6 ${quietLinkClass}`} onClick={()=>router.push(composerHref)}>{t('writeFreely')} →</button>
     </section>}
 
     {starter&&step<3&&<section className="mt-10" aria-labelledby="prompt-heading">
@@ -105,7 +106,7 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
       {!ready&&<p className="mt-5 text-sm text-foreground/70">{t('minAnswer')}</p>}
       {hasExistingDraft&&<div className="mt-6 space-y-4 rounded-xl border border-accent/40 p-5" role="alert">
         <p className="text-sm leading-relaxed">{t('existing')}</p>
-        <button type="button" className={primaryButtonClass} onClick={()=>router.push('/board/write')}>{t('continueExisting')}</button>
+        <button type="button" className={primaryButtonClass} onClick={()=>router.push(composerHref)}>{t('continueExisting')}</button>
         <button type="button" className={quietLinkClass} onClick={()=>setHasExistingDraft(false)}>{t('keepAnswers')}</button>
       </div>}
       {error&&<p role="alert" className="mt-5 text-sm text-red-700">{error}</p>}
@@ -115,6 +116,7 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
       </div>
       <p className={`mt-5 ${helperTextClass}`}>{t('privacy')}</p>
     </section>}
+    {firstArrival && <button type="button" className={`mt-8 ${quietLinkClass}`} onClick={()=>router.push('/welcome/letter')}>{t('returnToInvitation')}</button>}
     {saveFailed&&<p role="status" className="mt-7 text-sm text-amber-800">{t('storageWarning')}</p>}
   </main>
 }

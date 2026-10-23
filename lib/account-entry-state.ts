@@ -37,7 +37,7 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
       .eq('user_id', userId)
       .maybeSingle(),
     supabase.rpc('current_pilot_access'),
-    supabase.from('profiles').select('first_arrival_seen_at, mark_id').eq('id', userId).maybeSingle(),
+    supabase.from('profiles').select('first_arrival_seen_at, mark_id, first_arrival_journey_version, first_letter_invitation_done_at, auto_match_completed_at').eq('id', userId).maybeSingle(),
   ])
 
   const { data, error } = entryResult
@@ -57,6 +57,11 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
     ? undefined
     : firstArrivalResult.data.first_arrival_seen_at === null
 
+  const newJourney = !firstArrivalResult.error && firstArrivalResult.data?.first_arrival_journey_version === 2
+  const entered = Boolean(firstArrivalResult.data?.first_arrival_seen_at)
+  const firstLetterPending = newJourney && entered && !firstArrivalResult.data?.first_letter_invitation_done_at
+  const firstAutoMatchPending = newJourney && entered && !!firstArrivalResult.data?.first_letter_invitation_done_at && !firstArrivalResult.data?.auto_match_completed_at
+
   if (!error && row) {
     return {
       accountStatus: row.account_status ?? 'active',
@@ -72,12 +77,14 @@ export async function readProxyAccountEntry(supabase: SupabaseClient, userId: st
         onboardingStage: (row.onboarding_stage as OnboardingStage | null) ?? null,
         needsWritingStyle: row.has_writing_style === false,
         firstArrivalPending,
+        firstLetterPending,
+        firstAutoMatchPending,
         needsMark: firstArrivalResult.error || !firstArrivalResult.data ? undefined : firstArrivalResult.data.mark_id === null,
       },
     }
   }
 
-  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale, pilotAccess, firstArrivalPending)
+  return readLegacyProxyAccountEntry(supabase, userId, languageConfirmed, interfaceLocale, pilotAccess, firstArrivalPending, firstLetterPending, firstAutoMatchPending)
 }
 
 async function readLegacyProxyAccountEntry(
@@ -86,7 +93,9 @@ async function readLegacyProxyAccountEntry(
   languageConfirmed: boolean | undefined,
   interfaceLocale: InterfaceLocale | undefined,
   pilotAccess: boolean | undefined,
-  firstArrivalPending: boolean | undefined
+  firstArrivalPending: boolean | undefined,
+  firstLetterPending: boolean,
+  firstAutoMatchPending: boolean
 ): Promise<ProxyAccountEntry> {
   const [{ data: accountStatus }, { data: profile }, { data: eligibility }, { data: legalRows }] = await Promise.all([
     supabase.rpc('current_account_status'),
@@ -113,6 +122,8 @@ async function readLegacyProxyAccountEntry(
       hasProfile: Boolean(profile),
       onboardingStage: (profile?.onboarding_stage as OnboardingStage | undefined) ?? null,
       firstArrivalPending,
+      firstLetterPending,
+      firstAutoMatchPending,
       needsMark: profile?.mark_id === null,
     },
   }

@@ -123,6 +123,7 @@ export default function DispatchComposer({
   publication,
   webChoiceAvailable = false,
   writingStyleId = null,
+  afterFirstArrival = false,
 }: {
   publication?: { publishedAs: OfficialPublishedAs; initialSponsor?: SponsorFields | null }
   authorId: string
@@ -137,6 +138,7 @@ export default function DispatchComposer({
    * database snapshots the real value at Publish). Ignored for
    * official/sponsored Dispatches, which speak in Tempa's own voice. */
   writingStyleId?: string | null
+  afterFirstArrival?: boolean
 }) {
   const isEdit = mode === 'edit' && Boolean(existingDispatch)
   const official = publication ?? null
@@ -596,7 +598,7 @@ export default function DispatchComposer({
       }
       mentions.clear()
       setPendingWarning(null)
-      router.push(official ? `/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}` : `/board/letters/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
+      router.push(afterFirstArrival && !isEdit && !official ? '/welcome/letter?published=1' : official ? `/board/${isEdit && existingDispatch ? existingDispatch.id : data.id}` : `/board/letters/${isEdit && existingDispatch ? existingDispatch.id : data.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error(isEdit ? '[board] edit threw' : '[board] publish threw', { message })
@@ -633,7 +635,7 @@ export default function DispatchComposer({
     ? `/board/letters/${existingDispatch.id}`
     : official
       ? `/admin/content/${official.publishedAs === 'tempa' ? 'dispatches' : 'sponsored'}`
-      : '/room'
+      : afterFirstArrival ? '/welcome/letter' : '/room'
 
   return (
     <main ref={composerRootRef} className="min-h-screen flex items-start justify-center p-4 sm:items-center sm:p-6">

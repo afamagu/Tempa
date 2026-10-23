@@ -11,6 +11,8 @@ export type OnboardingState = {
   needsWritingStyle?: boolean
   /** New members see an enduring one-time welcome after their identity is created. */
   firstArrivalPending?: boolean
+  firstLetterPending?: boolean
+  firstAutoMatchPending?: boolean
   /** True for an existing profile without its required generated Mark. */
   needsMark?: boolean
 }
@@ -73,5 +75,11 @@ export function resolveOnboardingDestination(
       !requestedDestination.startsWith('/admin')) {
     return '/welcome'
   }
+  if (state.firstLetterPending === true &&
+      !['/welcome/letter', '/board/guided', '/board/write', '/you/account'].some(p => pathname === p || pathname.startsWith(`${p}/`)) &&
+      !requestedDestination.startsWith('/admin')) return '/welcome/letter'
+  // Resume matching from Home, but never trap someone on the introductions
+  // page if their completion save or network connection fails.
+  if (state.firstAutoMatchPending === true && (pathname === '/home' || pathname === '/welcome')) return '/welcome/people'
   return requestedDestination
 }
