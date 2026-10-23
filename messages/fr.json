@@ -567,6 +567,73 @@
       "similar": "Rencontrer des personnes comme moi",
       "writing": "Écrire et m’exprimer",
       "serendipity": "Laisser place au hasard"
+    },
+    "helpStart": "Aidez-moi à commencer une lettre",
+    "writeOwn": "Écrire librement"
+  },
+  "FirstLetterHome": {
+    "heading": "Laissez quelqu’un vous découvrir à travers vos mots.",
+    "lead": "Un petit moment de votre journée pourrait ouvrir une correspondance.",
+    "cta": "Commencer une lettre",
+    "dismiss": "Pas maintenant"
+  },
+  "GuidedWriting": {
+    "eyebrow": "VOTRE PREMIÈRE LETTRE OUVERTE",
+    "heading": "Commencez par quelque chose de simple.",
+    "lead": "Rien d’extraordinaire n’est nécessaire. Quelques mots suffisent.",
+    "chooseTheme": "Qu’avez-vous en tête ?",
+    "loading": "Préparation de votre espace d’écriture…",
+    "progress": "PETIT À PETIT · {current} SUR {total}",
+    "yourAnswer": "Votre réponse",
+    "placeholder": "Écrivez ce qui vous vient à l’esprit…",
+    "viewDraft": "Voir mon brouillon",
+    "continue": "Continuer",
+    "back": "Retour",
+    "skipQuestion": "Passer la question",
+    "writeFreely": "Écrire sans guide",
+    "review": "Vos mots, votre lettre",
+    "minAnswer": "Écrivez au moins une pensée de vingt caractères.",
+    "existing": "Vous avez déjà une lettre inachevée. Elle ne sera pas remplacée.",
+    "continueExisting": "Reprendre ma lettre",
+    "keepAnswers": "Garder ces réponses",
+    "editComposer": "Modifier dans l’éditeur",
+    "changeAnswers": "Modifier mes réponses",
+    "privacy": "Rien n’est publié sans votre décision explicite depuis l’aperçu.",
+    "storageWarning": "Le navigateur n’a pas enregistré la progression. Gardez cette page ouverte.",
+    "saveError": "Impossible d’enregistrer le brouillon. Vos réponses sont toujours ici.",
+    "starters": {
+      "ordinary-day": {
+        "title": "Une journée ordinaire",
+        "opening": "Un petit événement récent me revient souvent…",
+        "suggestedTitle": "Un petit moment de ma journée",
+        "q1": "Que s’est-il passé ?",
+        "q2": "Pourquoi cela vous a-t-il marqué ?",
+        "q3": "Que voudriez-vous demander à quelqu’un d’autre ?"
+      },
+      "someone-i-remember": {
+        "title": "Quelqu’un dont je me souviens",
+        "opening": "Il y a quelqu’un à qui je pense encore souvent…",
+        "suggestedTitle": "Une personne dont je me souviens",
+        "q1": "À qui pensez-vous ? Vous pouvez omettre son nom.",
+        "q2": "Quel petit détail vous reste en mémoire ?",
+        "q3": "Cela vous rappelle-t-il quelqu’un dans votre vie ?"
+      },
+      "a-place": {
+        "title": "Un lieu qui me suit",
+        "opening": "Il y a un endroit que je n’ai pas revu depuis longtemps…",
+        "suggestedTitle": "Un lieu qui m’accompagne",
+        "q1": "À quel lieu pensez-vous ?",
+        "q2": "Quel détail vous le rend si vivant ?",
+        "q3": "Quel endroit portez-vous encore en vous ?"
+      },
+      "something-i-wonder": {
+        "title": "Une question qui me traverse",
+        "opening": "Je me demande si d’autres ressentent parfois la même chose…",
+        "suggestedTitle": "Une question que je me pose",
+        "q1": "À quoi réfléchissez-vous ces derniers temps ?",
+        "q2": "Qu’est-ce qui a déclenché cette pensée ?",
+        "q3": "Quel avis aimeriez-vous entendre ?"
+      }
     }
   }
 }

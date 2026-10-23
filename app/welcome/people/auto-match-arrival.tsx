@@ -95,7 +95,7 @@ export default function AutoMatchArrival({
     }
   }
 
-  async function finish(href: '/board' | '/board/write') {
+  async function finish(href: '/board' | '/board/write' | '/board/guided') {
     if (busy) return
     setBusy(true)
     setError(null)
@@ -178,7 +178,8 @@ export default function AutoMatchArrival({
             <h2 className="mt-3 max-w-xl font-serif text-[30px] leading-[1.2]">{t('inviteTitle')}</h2>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-foreground/75">{t('inviteBody')}</p>
             <div className="mt-8 flex flex-wrap items-center gap-5">
-              <button type="button" disabled={busy} onClick={() => void finish('/board/write')} className={primaryButtonClass}>{t('leaveLetter')} <span aria-hidden="true">↗</span></button>
+              <button type="button" disabled={busy} onClick={() => void finish('/board/guided')} className={primaryButtonClass}>{t('helpStart')} <span aria-hidden="true">↗</span></button>
+              <button type="button" disabled={busy} onClick={() => void finish('/board/write')} className={quietLinkClass}>{t('writeOwn')}</button>
               <button type="button" disabled={busy} onClick={() => void finish('/board')} className={quietLinkClass}>{t('maybeLater')}</button>
             </div>
           </section>
