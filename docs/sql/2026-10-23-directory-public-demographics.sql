@@ -113,5 +113,5 @@ BEGIN
   ) INTO v_result;
   RETURN v_result;
 END;
-$function$
+$function$;
 COMMIT;
