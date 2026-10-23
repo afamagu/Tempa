@@ -40,6 +40,18 @@ describe('resolveOnboardingDestination', () => {
       )
     ).toBe('/you/responses?tab=new')
   })
+  it('routes only opted-in new arrivals through writing then Auto-Match, with safe editing exemptions', () => {
+    const state = {authenticated:true,hasProfile:true,onboardingStage:'complete' as const,firstLetterPending:true}
+    expect(resolveOnboardingDestination(state,'/home')).toBe('/welcome/letter')
+    expect(resolveOnboardingDestination(state,'/welcome/people')).toBe('/welcome/letter')
+    expect(resolveOnboardingDestination(state,'/welcome/letter?published=1')).toBe('/welcome/letter?published=1')
+    expect(resolveOnboardingDestination(state,'/board/guided?firstArrival=1')).toBe('/board/guided?firstArrival=1')
+    expect(resolveOnboardingDestination(state,'/board/write?firstArrival=1')).toBe('/board/write?firstArrival=1')
+    expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:true},'/home')).toBe('/welcome/people')
+    expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:true},'/welcome/people')).toBe('/welcome/people')
+    expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:false},'/home')).toBe('/home')
+  })
+
   it('never loops between welcome and Mark during first arrival, even when mark lookup is unavailable', () => {
     const markless = {
       authenticated: true,

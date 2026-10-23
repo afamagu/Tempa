@@ -493,7 +493,7 @@
     "homeHelp": "Ce qui compte pour vous au fil de vos rencontres.",
     "you": "Vous",
     "youHelp": "Votre profil et vos préférences, à votre rythme.",
-    "button": "Rencontrer des correspondants",
+    "button": "Entrer sur Tempa",
     "replay": "Vous retrouverez cette présentation dans Vous → Guide Tempa."
   },
   "Board": {
@@ -575,7 +575,10 @@
     "showIntroductions": "Voir mes présentations",
     "preferencesWarning": "Vos choix n’ont pas été enregistrés, mais vous pouvez continuer les présentations.",
     "emptyHeading": "Pas encore de présentations.",
-    "emptyLead": "Vous pouvez lire sur le Tableau ou laisser quelques mots pour être découvert."
+    "emptyLead": "Vous pouvez lire sur le Tableau ou laisser quelques mots pour être découvert.",
+    "afterMatchHeading": "Des rencontres, et tout un monde de lettres.",
+    "afterMatchLead": "Vous avez découvert les mots d'autres personnes. Explorez Tempa à votre rythme.",
+    "afterMatchBody": "Votre Tableau et votre boîte aux lettres vous attendent."
   },
   "FirstLetterHome": {
     "heading": "Laissez quelqu’un vous découvrir à travers vos mots.",
@@ -640,6 +643,17 @@
         "q2": "Qu’est-ce qui a déclenché cette pensée ?",
         "q3": "Quel avis aimeriez-vous entendre ?"
       }
-    }
+    },
+    "returnToInvitation": "Retour à l'invitation"
+  },
+  "FirstLetterArrival": {
+    "eyebrow": "UN LIEU POUR ÊTRE CONNU",
+    "heading": "Donnez à quelqu'un une raison de vous découvrir.",
+    "lead": "Quelques mots sur un moment ordinaire peuvent toucher quelqu'un ailleurs.",
+    "body": "Vous ne savez pas quoi écrire ? Choisissez un sujet et nous vous aiderons à commencer. Rien ne sera publié sans votre accord.",
+    "helpStart": "Aidez-moi à commencer une lettre",
+    "writeMyOwn": "Écrire ma propre lettre",
+    "skipAndMeet": "Plus tard — découvrir des personnes",
+    "noPressure": "Écrire est facultatif. Vous pourrez rencontrer des correspondants dans tous les cas."
   }
 }

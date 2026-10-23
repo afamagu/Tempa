@@ -64,13 +64,13 @@ import AutoMatchArrival from './auto-match-arrival'
 
 let node: HTMLDivElement
 let root: Root
-async function render(initialIntent: string[] = []) {
+async function render(initialIntent: string[] = [], writingFirst = false) {
   node = document.createElement('div')
   document.body.appendChild(node)
   root = createRoot(node)
   await act(async () => { root.render(
     <NextIntlClientProvider locale="en" messages={en}>
-      <AutoMatchArrival userId="viewer" initialIntent={initialIntent} />
+      <AutoMatchArrival userId="viewer" initialIntent={initialIntent} writingFirst={writingFirst} />
     </NextIntlClientProvider>
   ) })
 }
@@ -97,6 +97,16 @@ afterEach(async () => {
 })
 
 describe('First arrival Auto-Match interactions', () => {
+  it('shows the post-writing conclusion without asking new arrivals to write again', async () => {
+    await render([], true)
+    await press('Skip for now')
+    await press('Close introductions')
+    expect(screen()).toContain('Your Board and Letterbox are ready.')
+    expect(screen()).not.toContain('Leave a letter someone might recognize.')
+    await press('Continue to The Board')
+    expect(state.routes).toEqual(['/board'])
+  })
+
   it('collects optional reasons, introduces public writers, then offers The Board letter or skip', async () => {
     await render()
     expect(screen()).toContain('What brings you here?')

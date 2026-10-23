@@ -493,7 +493,7 @@
     "homeHelp": "Lo que importa mientras conoces a otras personas.",
     "you": "Tú",
     "youHelp": "Tu perfil y preferencias, cuando quieras personalizarlos.",
-    "button": "Conocer a tus corresponsales",
+    "button": "Entrar en Tempa",
     "replay": "Puedes volver a esta presentación en Tú → Guía de Tempa."
   },
   "Board": {
@@ -575,7 +575,10 @@
     "showIntroductions": "Ver mis presentaciones",
     "preferencesWarning": "Tus elecciones no se guardaron, pero puedes seguir con las presentaciones.",
     "emptyHeading": "Todavía no hay presentaciones.",
-    "emptyLead": "Puedes leer en el Tablón o dejar algunas palabras para que alguien te descubra."
+    "emptyLead": "Puedes leer en el Tablón o dejar algunas palabras para que alguien te descubra.",
+    "afterMatchHeading": "Algunas presentaciones. Un mundo de cartas.",
+    "afterMatchLead": "Has conocido algo de otras personas. Explora Tempa a tu ritmo.",
+    "afterMatchBody": "Tu Tablón y tu buzón te esperan."
   },
   "FirstLetterHome": {
     "heading": "Deja que te descubran a través de tus palabras.",
@@ -640,6 +643,17 @@
         "q2": "¿Qué te hizo pensarlo?",
         "q3": "¿Qué opinión te gustaría escuchar?"
       }
-    }
+    },
+    "returnToInvitation": "Volver a la invitación"
+  },
+  "FirstLetterArrival": {
+    "eyebrow": "UN LUGAR PARA DARSE A CONOCER",
+    "heading": "Dale a alguien una razón para descubrirte.",
+    "lead": "Unas palabras sobre un momento cotidiano pueden resonar en otra persona.",
+    "body": "¿No sabes qué escribir? Elige un tema y te ayudaremos a empezar. Nada se publica sin tu consentimiento.",
+    "helpStart": "Ayúdame a empezar una carta",
+    "writeMyOwn": "Escribir mi propia carta",
+    "skipAndMeet": "Quizá más tarde — conocer personas",
+    "noPressure": "Escribir es opcional. Podrás conocer corresponsales de todos modos."
   }
 }
