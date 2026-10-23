@@ -21,6 +21,9 @@ export type DirectoryPerson = {
   userId: string
   pseudonym: string
   country: string
+  gender: string | null
+  genderCustom: string | null
+  ageRange: string | null
   markUrl: string | null
   languages: string[]
   latestLetter: { id: string; title: string; excerpt: string } | null
@@ -36,6 +39,9 @@ type RpcPerson = {
   user_id: string
   pseudonym: string
   country?: string | null
+  gender?: string | null
+  gender_custom?: string | null
+  age_range?: string | null
   mark_id?: string | null
   languages?: string[] | null
   latest_letter_id?: string | null
@@ -92,6 +98,9 @@ export async function getRoomDirectoryPage(
       userId: row.user_id,
       pseudonym: row.pseudonym,
       country: row.country ?? '',
+      gender: typeof row.gender === 'string' ? row.gender : null,
+      genderCustom: typeof row.gender_custom === 'string' ? row.gender_custom : null,
+      ageRange: typeof row.age_range === 'string' ? row.age_range : null,
       markUrl: row.mark_id ? publicProfileMarkUrl(supabase, `${row.mark_id}.png`) : null,
       languages: row.languages ?? [],
       latestLetter: row.latest_letter_id && row.latest_letter_title && row.latest_letter_body

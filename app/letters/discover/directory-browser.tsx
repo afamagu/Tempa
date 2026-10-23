@@ -120,15 +120,28 @@ export default function DirectoryBrowser({
     <section aria-label="Discover people" aria-busy={pending} aria-live="polite">
       {entries.length>0 && <div className="space-y-3">
         {entries.map((person)=>{
+          const details = [
+            person.country,
+            person.gender === 'Prefer not to say' ? null
+              : person.gender === 'Self-describe' ? person.genderCustom : person.gender,
+            person.ageRange?.replace(/-/g, '–'),
+          ].filter((detail): detail is string => Boolean(detail && detail.trim()))
           const target=`/board/people/${person.userId}?returnTo=${encodeURIComponent(directoryUrl(filters,true))}`
           return <article key={person.userId} className="min-w-0 rounded-[5px] border border-[#ded3c3] bg-[#fffdf8] shadow-[0_7px_22px_rgba(65,49,34,.035)]">
             <Link href={target} onClick={saveReturn} className="flex min-w-0 items-start gap-4 rounded-[5px] px-5 py-5 transition-colors hover:bg-[#faf6ee] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7 sm:py-6">
               <ProfileIdentityMark identifier={person.userId} markUrl={person.markUrl} label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined} size="lg"/>
               <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <h2 className="font-serif text-[23px] leading-tight text-[#302b25]">{person.pseudonym}</h2>
-                  {person.country && <span className="text-[12px] text-[#786f63]">· {person.country}</span>}
-                </div>
+                <h2 className="break-words font-serif text-[23px] leading-tight text-[#302b25]">{person.pseudonym}</h2>
+                {details.length > 0 && (
+                  <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] leading-5 text-[#786f63]">
+                    {details.map((detail, index) => (
+                      <span key={index} className="break-words">
+                        {index > 0 && <span aria-hidden="true" className="mr-2 text-[#b8a899]">·</span>}
+                        {detail}
+                      </span>
+                    ))}
+                  </p>
+                )}
                 {person.latestLetter ? <>
                   <p className="mt-2 text-[10px] font-medium uppercase tracking-[.14em] text-[#9b7b66]">From a letter</p>
                   <p className="mt-1 line-clamp-2 text-[15px] leading-[1.7] text-[#51483d]">{person.latestLetter.excerpt || person.latestLetter.title}</p>
