@@ -30,8 +30,8 @@ export default async function FirstOpenLetterInvitation() {
   ])
   if (error) return <main className="mx-auto max-w-xl px-6 py-20">
     <h1 className="font-serif text-3xl">Your letters are waiting.</h1>
-    <p className="mt-3 text-foreground/70">Your introduction is unavailable. You can still explore Tempa.</p>
-    <Link href="/board" className={`mt-7 inline-flex ${primaryButtonClass}`}>Explore The Board →</Link>
+    <p className="mt-3 text-foreground/70">This step couldn't load. Please refresh to try again.</p>
+    <Link href="/welcome/letter" className={`mt-7 inline-flex ${primaryButtonClass}`}>Try again →</Link>
   </main>
   if (!profile) redirect('/profile')
   if (!profile.mark_id) redirect('/you/mark')

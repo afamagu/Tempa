@@ -49,6 +49,7 @@ describe('resolveOnboardingDestination', () => {
     expect(resolveOnboardingDestination(state,'/board/write?firstArrival=1')).toBe('/board/write?firstArrival=1')
     expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:true},'/home')).toBe('/welcome/people')
     expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:true},'/welcome/people')).toBe('/welcome/people')
+    expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:true},'/board')).toBe('/board')
     expect(resolveOnboardingDestination({...state,firstLetterPending:false,firstAutoMatchPending:false},'/home')).toBe('/home')
   })
 

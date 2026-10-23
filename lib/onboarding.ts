@@ -78,7 +78,8 @@ export function resolveOnboardingDestination(
   if (state.firstLetterPending === true &&
       !['/welcome/letter', '/board/guided', '/board/write', '/you/account'].some(p => pathname === p || pathname.startsWith(`${p}/`)) &&
       !requestedDestination.startsWith('/admin')) return '/welcome/letter'
-  if (state.firstAutoMatchPending === true && pathname !== '/welcome/people' &&
-      !requestedDestination.startsWith('/you/account') && !requestedDestination.startsWith('/admin')) return '/welcome/people'
+  // Resume matching from Home, but never trap someone on the introductions
+  // page if their completion save or network connection fails.
+  if (state.firstAutoMatchPending === true && (pathname === '/home' || pathname === '/welcome')) return '/welcome/people'
   return requestedDestination
 }
