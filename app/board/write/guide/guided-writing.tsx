@@ -73,7 +73,11 @@ export default function GuidedWriting({ authorId }: { authorId: string }) {
     setStep('answer')
   }
   function setAnswer(value: string) {
-    setAnswers(current => current.map((part, i) => i === promptIndex ? value : part) as GuidedAnswers)
+    setAnswers(current => [
+      promptIndex === 0 ? value : current[0],
+      promptIndex === 1 ? value : current[1],
+      promptIndex === 2 ? value : current[2],
+    ] as GuidedAnswers)
   }
   function next() {
     if (promptIndex < 2) { setPromptIndex(i => i + 1); return }
