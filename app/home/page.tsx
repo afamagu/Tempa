@@ -41,6 +41,7 @@ import HomeFamiliarFaces from './familiar-faces-home'
 import BoardShelfCard from './board-shelf-card'
 import AnnouncementTeaser from './announcement-teaser'
 import ProfileIdentityMark from '@/app/profile-identity-mark'
+import HomeWritingInvitation from './home-writing-invitation'
 
 const HOME_BOARD_COUNT = 3
 
@@ -59,6 +60,7 @@ export default async function HomePage() {
     activeAnnouncement,
     relationshipCapacity,
     relationshipPeople,
+    existingBoardLetter,
   ] = await Promise.all([
     supabase.from('profiles').select('pseudonym').eq('id', user.id).maybeSingle(),
     getMyLetters(supabase, user.id),
@@ -69,6 +71,10 @@ export default async function HomePage() {
     getActiveAnnouncement(supabase),
     getRelationshipCapacity(supabase),
     getRelationshipSurfacePeople(supabase, user.id),
+    supabase.from('dispatches').select('id')
+      .eq('author_id', user.id).eq('status', 'published')
+      .eq('moderation_status', 'visible').eq('published_as', 'member')
+      .limit(1),
   ])
 
   if (!profile) redirect('/profile')
@@ -130,6 +136,7 @@ export default async function HomePage() {
           <div className="mx-auto w-full max-w-xl">
             <MemberNotices />
             <PublicMentions />
+            {!existingBoardLetter.error && (existingBoardLetter.data?.length ?? 0) === 0 && <HomeWritingInvitation memberId={user.id} />}
 
             <section aria-labelledby="what-matters-heading" className="space-y-6">
               <div>

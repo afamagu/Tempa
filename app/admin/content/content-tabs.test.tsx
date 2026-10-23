@@ -10,7 +10,7 @@ const { default: ContentTabs, CONTENT_TABS, activeContentTab } = await import('.
 
 describe('Admin Content tabs', () => {
   it('Questions / Announcements / Postcards / Dispatches / Sponsored, in that order', () => {
-    expect(CONTENT_TABS.map((t) => t.label)).toEqual(['Questions', 'Announcements', 'Postcards', 'Dispatches', 'Sponsored'])
+    expect(CONTENT_TABS.map((t) => t.label)).toEqual(['Questions', 'Announcements', 'Postcards', 'Introductions', 'Dispatches', 'Sponsored'])
     expect(CONTENT_TABS.map((t) => t.label)).not.toContain('Ads')
   })
 

@@ -544,12 +544,12 @@
     "introductionsHelp": "Leia o que estas pessoas partilharam. Escreva em privado se alguém lhe interessar. Não há obrigação de contactar ninguém.",
     "openDeckHint": "Pode fechar estas apresentações quando quiser.",
     "skipIntroductions": "Ignorar apresentações",
-    "inviteHeading": "Deixe que alguém também o descubra.",
-    "inviteLead": "Às vezes, algumas palavras do quotidiano bastam para que um correspondente o encontre.",
+    "inviteHeading": "Deixe que as suas palavras o apresentem.",
+    "inviteLead": "Conheceu pessoas através das palavras delas. Deixe que alguém também o descubra.",
     "boardEyebrow": "O MURAL",
-    "inviteTitle": "Deixe uma carta em que alguém se possa rever.",
-    "inviteBody": "Partilhe um pensamento, uma pequena história ou algo do seu dia. Alguém noutro lugar poderá lê-la e querer conhecê-lo. Você decide quando escrever.",
-    "leaveLetter": "Deixar uma carta",
+    "inviteTitle": "A sua primeira carta aberta",
+    "inviteBody": "Algumas palavras do quotidiano podem iniciar uma correspondência. Vamos ajudá-lo a encontrá-las.",
+    "leaveLetter": "Ajudem-me a começar uma carta",
     "maybeLater": "Explorar o Mural",
     "finishError": "Não foi possível guardar o progresso. Tente novamente ou explore o Mural diretamente.",
     "unable": "As apresentações não estão disponíveis neste momento. O Mural continua à sua espera.",
@@ -567,6 +567,8 @@
       "similar": "Conhecer pessoas que pensam como eu",
       "writing": "Escrita e expressão pessoal",
       "serendipity": "Um pouco de acaso"
-    }
+    },
+    "writeMyOwn": "Escrever livremente",
+    "shortIntroduction": "Partilhar uma breve apresentação"
   }
 }

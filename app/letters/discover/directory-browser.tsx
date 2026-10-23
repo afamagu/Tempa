@@ -130,7 +130,7 @@ export default function DirectoryBrowser({
                   {person.country && <span className="text-[12px] text-[#786f63]">· {person.country}</span>}
                 </div>
                 {person.latestLetter ? <>
-                  <p className="mt-2 text-[10px] font-medium uppercase tracking-[.14em] text-[#9b7b66]">From a letter</p>
+                  <p className="mt-2 text-[10px] font-medium uppercase tracking-[.14em] text-[#9b7b66]">{person.latestLetter.kind === 'introduction' ? 'From their introduction' : 'From a letter'}</p>
                   <p className="mt-1 line-clamp-2 text-[15px] leading-[1.7] text-[#51483d]">{person.latestLetter.excerpt || person.latestLetter.title}</p>
                 </> : <p className="mt-2 text-[13px] text-[#8b8072]">No letter left yet</p>}
                 <span className="mt-3 inline-block text-[12px] font-medium text-[#606052]">Read profile <span aria-hidden="true">→</span></span>
