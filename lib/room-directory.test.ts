@@ -7,7 +7,7 @@ import { DIRECTORY_PAGE_SIZE, getRoomDirectoryPage } from './room-directory'
 
 const authorId = (num:number)=>`11111111-2222-4333-8444-${String(num).padStart(12,'0')}`
 const row = (num:number, letter=true)=>({
-  user_id:authorId(num),pseudonym:`Member ${num}`,country:'Japan',mark_id:null,languages:['English'],
+  user_id:authorId(num),pseudonym:`Member ${num}`,country:'Japan',gender:'Woman',gender_custom:null,age_range:'35-44',mark_id:null,languages:['English'],
   latest_letter_id:letter?authorId(num+100):null,
   latest_letter_title:letter?'Sunday tea':null,
   latest_letter_body:letter?'She knows which tea I buy.':null,
@@ -31,7 +31,13 @@ describe('Room writer directory contract',()=>{
     expect(calls[0].args.p_limit).toBe(DIRECTORY_PAGE_SIZE)
     expect(page.entries.map(e=>e.pseudonym)).toEqual(['Member 1','Member 2'])
     expect(page.entries[0].latestLetter?.excerpt).toContain('She knows')
+    expect(page.entries[0]).toMatchObject({ country:'Japan', gender:'Woman', ageRange:'35-44' })
     expect(page.hasMore).toBe(true)
+  })
+  it('does not invent missing demographic information',async()=>{
+    const {client}=clientFor([{...row(8),gender:null,gender_custom:null,age_range:null}])
+    const page=await getRoomDirectoryPage(client,{},'seed')
+    expect(page.entries[0]).toMatchObject({gender:null,genderCustom:null,ageRange:null})
   })
   it('supports deliberate inclusion of people without public letters, without inventing a bio',async()=>{
     const {client,calls}=clientFor([row(3,false)])

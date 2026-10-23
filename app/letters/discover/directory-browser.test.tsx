@@ -19,7 +19,7 @@ vi.mock('next/link',()=>({
 
 const id=(n:number)=>`11111111-2222-4333-8444-${String(n).padStart(12,'0')}`
 const person=(n:number,letter=true):DirectoryPerson=>({
-  userId:id(n),pseudonym:`Writer ${n}`,country:'Japan',markUrl:null,languages:['English'],
+  userId:id(n),pseudonym:`Writer ${n}`,country:'Japan',gender:'Woman',genderCustom:null,ageRange:'35-44',markUrl:null,languages:['English'],
   latestLetter:letter?{id:id(n+100),title:'Sunday',excerpt:'She knows which tea I buy.'}:null,
 })
 let host:HTMLDivElement
@@ -58,9 +58,26 @@ describe('Discover People: intentional finite writer directory',()=>{
     await mount()
     expect(host.querySelectorAll('section[aria-label="Discover people"] article')).toHaveLength(6)
     expect(host.textContent).toContain('She knows which tea I buy.')
+    expect(host.textContent).toContain('Woman')
+    expect(host.textContent).toContain('35–44')
     expect(host.textContent).toContain('Keep looking')
     expect(host.textContent).not.toContain('compatible')
     expect(host.textContent).not.toContain('followers')
+  })
+  it('uses opt-in public identity fields and respects hidden or self-described gender',async()=>{
+    await mount({initialEntries:[
+      {...person(1),gender:'Prefer not to say',ageRange:null},
+      {...person(2),gender:'Self-describe',genderCustom:'Genderqueer',ageRange:'25-34'},
+      {...person(3),gender:null,genderCustom:null,ageRange:null},
+    ],initialHasMore:false})
+    const [hidden,custom,missing]=Array.from(host.querySelectorAll('section[aria-label="Discover people"] article'))
+    expect(hidden.textContent).toContain('Japan')
+    expect(hidden.textContent).not.toContain('Prefer not to say')
+    expect(hidden.textContent).not.toContain('35–44')
+    expect(custom.textContent).toContain('Genderqueer')
+    expect(custom.textContent).toContain('25–34')
+    expect(custom.textContent).not.toContain('Self-describe')
+    expect(missing.textContent).not.toContain('undefined')
   })
   it('fetches only when Keep looking is activated and appends the next six without duplicating an author',async()=>{
     vi.mocked(loadDirectoryPeople).mockResolvedValue({entries:[person(6),person(7)],hasMore:false,error:null})
