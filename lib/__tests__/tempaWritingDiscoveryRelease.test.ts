@@ -11,7 +11,9 @@ describe('Tempa open-letter activation and profile-introduction release safety',
    expect(guide).toContain('readDispatchDraft(authorId)')
    expect(guide).toContain('existingDraft && !replaceConfirmed')
    expect(guide).not.toContain('publishDispatch(')
-   expect(guide).toContain('Nothing has been published.')
+   expect(guide).toContain('copy.nothingPublished')
+   const copy=at('lib/guided-writing-copy.ts')
+   expect(copy).toContain('Nothing has been published.')
  })
  it('keeps Board publishing opt-in and an actual composer operation',()=>{
    const guide=at('app/board/write/guide/guided-writing.tsx')
