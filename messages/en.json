@@ -544,12 +544,12 @@
     "introductionsHelp": "Read what these people have shared. Write privately if one interests you. There’s no obligation to contact anyone.",
     "openDeckHint": "You can close these introductions whenever you like.",
     "skipIntroductions": "Skip introductions",
-    "inviteHeading": "Let someone discover you, too.",
-    "inviteLead": "Sometimes your next pen pal finds you through a few ordinary words.",
+    "inviteHeading": "Let your words find someone, too.",
+    "inviteLead": "You’ve met people through their writing. Give someone a chance to discover you.",
     "boardEyebrow": "THE BOARD",
-    "inviteTitle": "Leave a letter someone might recognize.",
-    "inviteBody": "Share a thought, a small story, or something about today. Someone elsewhere may read it and want to know you. It’s your choice when to leave a letter.",
-    "leaveLetter": "Leave a letter",
+    "inviteTitle": "Your first open letter",
+    "inviteBody": "A few ordinary words can begin a correspondence. We’ll help you find them.",
+    "leaveLetter": "Help me start a letter",
     "maybeLater": "Explore The Board instead",
     "finishError": "We couldn’t save your progress. Try again, or explore The Board directly.",
     "unable": "Introductions aren’t available right now. The Board is still here for you.",
@@ -567,6 +567,8 @@
       "similar": "Meeting people who think like me",
       "writing": "Writing and self-expression",
       "serendipity": "A little serendipity"
-    }
+    },
+    "writeMyOwn": "Write my own",
+    "shortIntroduction": "Share a shorter introduction"
   }
 }

@@ -20,7 +20,7 @@ vi.mock('next/link',()=>({
 const id=(n:number)=>`11111111-2222-4333-8444-${String(n).padStart(12,'0')}`
 const person=(n:number,letter=true):DirectoryPerson=>({
   userId:id(n),pseudonym:`Writer ${n}`,country:'Japan',markUrl:null,languages:['English'],
-  latestLetter:letter?{id:id(n+100),title:'Sunday',excerpt:'She knows which tea I buy.'}:null,
+  latestLetter:letter?{id:id(n+100),title:'Sunday',excerpt:'She knows which tea I buy.',kind:'letter'}:null,
 })
 let host:HTMLDivElement
 let root:ReturnType<typeof createRoot>

@@ -23,7 +23,7 @@ export type DirectoryPerson = {
   country: string
   markUrl: string | null
   languages: string[]
-  latestLetter: { id: string; title: string; excerpt: string } | null
+  latestLetter: { id: string; title: string; excerpt: string; kind: 'letter' | 'introduction' } | null
 }
 
 export type DirectoryPage = {
@@ -41,6 +41,7 @@ type RpcPerson = {
   latest_letter_id?: string | null
   latest_letter_title?: string | null
   latest_letter_body?: string | null
+  latest_writing_kind?: string | null
 }
 type RpcResult = { entries?: RpcPerson[]; has_more?: boolean }
 
@@ -95,7 +96,7 @@ export async function getRoomDirectoryPage(
       markUrl: row.mark_id ? publicProfileMarkUrl(supabase, `${row.mark_id}.png`) : null,
       languages: row.languages ?? [],
       latestLetter: row.latest_letter_id && row.latest_letter_title && row.latest_letter_body
-        ? { id: row.latest_letter_id, title: row.latest_letter_title, excerpt: dispatchExcerpt(row.latest_letter_body).slice(0, 190) }
+        ? { id: row.latest_letter_id, title: row.latest_letter_title, excerpt: dispatchExcerpt(row.latest_letter_body).slice(0, 190), kind: row.latest_writing_kind === 'introduction' ? 'introduction' : 'letter' }
         : null,
     })
   }

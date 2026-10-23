@@ -544,12 +544,12 @@
     "introductionsHelp": "Lisez ce que ces personnes ont partagé. Écrivez en privé si quelqu’un vous intéresse. Rien ne vous oblige à prendre contact.",
     "openDeckHint": "Vous pouvez fermer ces présentations à tout moment.",
     "skipIntroductions": "Passer les présentations",
-    "inviteHeading": "Laissez quelqu’un vous découvrir aussi.",
-    "inviteLead": "Parfois, quelques mots ordinaires suffisent pour qu’un correspondant vous trouve.",
+    "inviteHeading": "Laissez vos mots vous faire découvrir.",
+    "inviteLead": "Vous avez rencontré des personnes grâce à leurs mots. À votre tour de vous laisser découvrir.",
     "boardEyebrow": "LE TABLEAU",
-    "inviteTitle": "Laissez une lettre dans laquelle quelqu’un pourrait se reconnaître.",
-    "inviteBody": "Partagez une pensée, une petite histoire ou un moment de votre journée. Ailleurs, quelqu’un pourrait la lire et avoir envie de vous connaître. À vous de choisir quand écrire.",
-    "leaveLetter": "Laisser une lettre",
+    "inviteTitle": "Votre première lettre ouverte",
+    "inviteBody": "Quelques mots ordinaires peuvent commencer une correspondance. Nous vous aiderons à les trouver.",
+    "leaveLetter": "Aidez-moi à commencer une lettre",
     "maybeLater": "Explorer le Tableau",
     "finishError": "Impossible d’enregistrer votre progression. Réessayez ou explorez directement le Tableau.",
     "unable": "Les présentations sont indisponibles pour le moment. Le Tableau vous attend.",
@@ -567,6 +567,8 @@
       "similar": "Rencontrer des personnes comme moi",
       "writing": "Écrire et m’exprimer",
       "serendipity": "Laisser place au hasard"
-    }
+    },
+    "writeMyOwn": "Écrire librement",
+    "shortIntroduction": "Partager une brève présentation"
   }
 }

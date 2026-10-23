@@ -106,7 +106,7 @@ export default async function PublicProfilePage({
   const intent: string[] = extraError ? [] : extra?.intent ?? []
   const isSelf = viewer.id === userId
 
-  const [rawAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle, withdrawnLettersResult] = await Promise.all([
+  const [allAnswers, activePartnerIds, contactedAnswerIds, allDispatches, pinnedDispatch, blockScope, writingStyles, editorialBylines, firstContact, relationshipCapacity, publicCorrespondenceState, lifecycle, withdrawnLettersResult] = await Promise.all([
     getMyAnswers(supabase, userId),
     isSelf ? Promise.resolve(new Set<string>()) : getActiveCorrespondencePartnerIds(supabase, viewer.id),
     isSelf ? Promise.resolve(new Set<string>()) : getContactedAnswerIds(supabase, viewer.id),
@@ -135,6 +135,17 @@ export default async function PublicProfilePage({
     isSelf ? supabase.rpc('my_unpublished_question_suggestions') : Promise.resolve({ data: [] }),
     isSelf ? Promise.resolve(null) : getFirstContact(supabase, userId, viewer.id),
   ])
+  // Approved public introductions reuse the safe Question-answer first-contact route.
+  const { data: profileIntro } = await supabase.from('profile_introductions')
+    .select('answer_id,is_published,approved_at').eq('owner_id',userId).maybeSingle()
+  const { data: profileIntroAnswer } = profileIntro
+    ? await supabase.from('question_answers').select('body,moderation_status')
+      .eq('id',profileIntro.answer_id).eq('user_id',userId).maybeSingle()
+    : { data: null }
+  const showProfileIntro = Boolean(profileIntroAnswer && (isSelf ||
+    (profileIntro?.is_published && profileIntro.approved_at &&
+      profileIntroAnswer.moderation_status === 'visible')))
+  const rawAnswers = allAnswers.filter(a => a.id !== profileIntro?.answer_id)
   const writingStyleId = writingStyles.get(userId) ?? null
   const editorialTitle = editorialTitleFor(editorialBylines, profile.pseudonym)
 
@@ -221,6 +232,26 @@ export default async function PublicProfilePage({
             </div>
           </header>
 
+          {showProfileIntro && profileIntroAnswer && (
+            <section className="space-y-3 rounded-xl border border-foreground/10 bg-surface-shell p-5" aria-labelledby="profile-personal-introduction">
+              <p id="profile-personal-introduction" className={sectionLabelClass}>A little about {isSelf ? 'you' : profile.pseudonym}</p>
+              <p className="whitespace-pre-wrap font-serif text-[18px] leading-relaxed">{profileIntroAnswer.body}</p>
+              {isSelf ? (
+                <div className="space-y-2">
+                  <Link href="/you/introduction" className={quietLinkClass}>Edit or hide your introduction →</Link>
+                  {!profileIntro?.approved_at && <p className={helperTextClass}>This introduction is not visible to others yet.</p>}
+                </div>
+              ) : (
+                !alreadyCorresponding && !pausedCorrespondence && !hasPendingEpisode &&
+                !blockScope && canBeginNewCorrespondence && profileIntro &&
+                writableAnswerIds.has(profileIntro.answer_id) &&
+                firstContact === null && (
+                  <Link href={`/write/${userId}?a=${encodeURIComponent(profileIntro.answer_id)}&source=profile_intro&returnTo=${encodeURIComponent(profileReturnHref)}`}
+                    className={primaryButtonClass}>Write to {profile.pseudonym} ↗</Link>
+                )
+              )}
+            </section>
+          )}
           {pinnedDispatch && (
             <section className="space-y-3 border-t border-foreground/10 pt-6">
               <p className={sectionLabelClass}>Pinned letter</p>

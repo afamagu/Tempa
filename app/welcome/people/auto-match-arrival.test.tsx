@@ -97,10 +97,10 @@ describe('First arrival Auto-Match interactions', () => {
     expect(state.claimCount).toBe(1)
     expect(document.querySelector('[role=dialog]')).toBeTruthy()
     await press('Close introductions')
-    expect(screen()).toContain('Leave a letter someone might recognize.')
-    await press('Leave a letter')
+    expect(screen()).toContain('Your first open letter')
+    await press('Help me start a letter')
     expect(state.updates.some(u => typeof u.auto_match_completed_at === 'string')).toBe(true)
-    expect(state.routes).toEqual(['/board/write'])
+    expect(state.routes).toEqual(['/board/write/guide'])
   })
 
   it('allows members to skip preference questions without erasing stored reasons', async () => {
@@ -118,7 +118,7 @@ describe('First arrival Auto-Match interactions', () => {
     await render()
     await press('Skip for now')
     expect(document.querySelector('[role=dialog]')).toBeNull()
-    expect(screen()).toContain('Leave a letter someone might recognize.')
+    expect(screen()).toContain('Your first open letter')
   })
 
   it('offers retry and an alternative route if the matching query fails', async () => {
@@ -127,6 +127,6 @@ describe('First arrival Auto-Match interactions', () => {
     await press('Skip for now')
     expect(screen()).toContain('Introductions aren’t available right now.')
     await press('Continue to The Board')
-    expect(screen()).toContain('Leave a letter someone might recognize.')
+    expect(screen()).toContain('Your first open letter')
   })
 })

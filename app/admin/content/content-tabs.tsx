@@ -7,6 +7,7 @@ export const CONTENT_TABS = [
   { href: '/admin/content/questions', label: 'Questions' },
   { href: '/admin/content/announcements', label: 'Announcements' },
   { href: '/admin/content/postcards', label: 'Postcards' },
+  { href: '/admin/content/profile-introductions', label: 'Introductions' },
   // Official Tempa Dispatches and Sponsored Dispatches
   // (docs/sql/2026-10-15-official-sponsored-dispatches.sql).
   { href: '/admin/content/dispatches', label: 'Dispatches' },

@@ -544,12 +544,12 @@
     "introductionsHelp": "Lee lo que estas personas han compartido. Escríbeles en privado si te interesa alguien. No tienes obligación de contactar a nadie.",
     "openDeckHint": "Puedes cerrar las presentaciones cuando quieras.",
     "skipIntroductions": "Omitir presentaciones",
-    "inviteHeading": "Deja que alguien te descubra también.",
-    "inviteLead": "A veces, unas pocas palabras cotidianas bastan para que un corresponsal te encuentre.",
+    "inviteHeading": "Deja que tus palabras te presenten.",
+    "inviteLead": "Has conocido a personas a través de sus palabras. Deja que alguien te descubra también.",
     "boardEyebrow": "EL TABLÓN",
-    "inviteTitle": "Deja una carta con la que alguien pueda identificarse.",
-    "inviteBody": "Comparte un pensamiento, una pequeña historia o algo de tu día. Alguien en otro lugar podría leerlo y querer conocerte. Tú decides cuándo escribir.",
-    "leaveLetter": "Dejar una carta",
+    "inviteTitle": "Tu primera carta abierta",
+    "inviteBody": "Unas palabras cotidianas pueden iniciar una correspondencia. Te ayudaremos a encontrarlas.",
+    "leaveLetter": "Ayúdame a empezar una carta",
     "maybeLater": "Explorar el Tablón",
     "finishError": "No pudimos guardar tu progreso. Inténtalo de nuevo o explora el Tablón directamente.",
     "unable": "Las presentaciones no están disponibles ahora. El Tablón sigue esperándote.",
@@ -567,6 +567,8 @@
       "similar": "Conocer gente que piensa como yo",
       "writing": "Escritura y expresión personal",
       "serendipity": "Un poco de casualidad"
-    }
+    },
+    "writeMyOwn": "Escribir libremente",
+    "shortIntroduction": "Compartir una breve presentación"
   }
 }

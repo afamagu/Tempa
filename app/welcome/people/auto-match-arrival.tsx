@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
@@ -54,6 +54,15 @@ export default function AutoMatchArrival({
     if (updateError) throw new Error('Could not save your introduction progress.')
   }, [userId])
 
+  // An interrupted introduction should still offer a route to public writing.
+  useEffect(() => {
+    if (phase !== 'invitation') return
+    const supabase = createClient()
+    void supabase.from('profiles')
+      .update({ first_letter_offer_seen_at: new Date().toISOString() })
+      .eq('id',userId)
+  }, [phase,userId])
+
   function toggleIntent(value: string) {
     setPreferencesTouched(true)
     setSelected(current => current.includes(value)
@@ -95,7 +104,7 @@ export default function AutoMatchArrival({
     }
   }
 
-  async function finish(href: '/board' | '/board/write') {
+  async function finish(href: '/board' | '/board/write' | '/board/write/guide' | '/you/introduction') {
     if (busy) return
     setBusy(true)
     setError(null)
@@ -178,7 +187,9 @@ export default function AutoMatchArrival({
             <h2 className="mt-3 max-w-xl font-serif text-[30px] leading-[1.2]">{t('inviteTitle')}</h2>
             <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-foreground/75">{t('inviteBody')}</p>
             <div className="mt-8 flex flex-wrap items-center gap-5">
-              <button type="button" disabled={busy} onClick={() => void finish('/board/write')} className={primaryButtonClass}>{t('leaveLetter')} <span aria-hidden="true">↗</span></button>
+              <button type="button" disabled={busy} onClick={() => void finish('/board/write/guide')} className={primaryButtonClass}>{t('leaveLetter')} <span aria-hidden="true">↗</span></button>
+              <button type="button" disabled={busy} onClick={() => void finish('/board/write')} className={quietLinkClass}>{t('writeMyOwn')}</button>
+              <button type="button" disabled={busy} onClick={() => void finish('/you/introduction')} className={quietLinkClass}>{t('shortIntroduction')}</button>
               <button type="button" disabled={busy} onClick={() => void finish('/board')} className={quietLinkClass}>{t('maybeLater')}</button>
             </div>
           </section>
