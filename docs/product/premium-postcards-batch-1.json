@@ -3,7 +3,11 @@
   "held": [
     {
       "slug": "guest-room-13",
-      "reason": "Motion leaves printed postcard layout; owner-directed hold."
+      "reason": "Motion loses its printed border and typography during the sequence; do not publish."
+    },
+    {
+      "slug": "lady-larkspur",
+      "reason": "Owner removed this design; exclude from catalogue and all collections."
     }
   ],
   "postcards": [
@@ -18,15 +22,15 @@
         "reassurance"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "057cba91-691a-4ba8-8f9b-78361e01d9b3.png",
       "sourceMotion": "generated_video (1).mp4",
       "sourceMotionSha256": "593bd81c1253c7c07bb5490888cb78772371e109879d4c40ca89467ca25cdcbb",
-      "imagePath": "premium-batch-1/premium_across_any_distance/a9e5e8f1041c3226c80a.jpg",
-      "motionPath": "premium-batch-1/premium_across_any_distance/fcad61125399df26050d.mp4",
+      "imagePath": "premium-batch-1/premium_across_any_distance/ed9e060051865e49ad22.jpg",
+      "motionPath": "premium-batch-1/premium_across_any_distance/593bd81c1253c7c07bb5.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "a9e5e8f1041c3226c80a1d7d84f9d8a9807ab9a857462a8cface7b04726f3e4c",
-      "motionSha256": "fcad61125399df26050dc0636fc917363f87ad88581e331e5d1ee374eb8fb246",
+      "imageSha256": "ed9e060051865e49ad221d08a7f3aa314a17400688a7215c0adb95fb2e595e7e",
+      "motionSha256": "593bd81c1253c7c07bb5490888cb78772371e109879d4c40ca89467ca25cdcbb",
       "facets": [
         {
           "facet": "mood",
@@ -44,15 +48,15 @@
         "affection"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "0bda2fc2-0e1c-410e-a64d-df5007596bbf.png",
       "sourceMotion": "Dangerously fond.mp4",
       "sourceMotionSha256": "4285996986f717e77971e12ffb7f6f8b20a0e07522f4b81e9e844bd7d37270f1",
-      "imagePath": "premium-batch-1/premium_dangerously_fond/d65fe9ad92a97a68b922.jpg",
-      "motionPath": "premium-batch-1/premium_dangerously_fond/5ce1ffbda66e29137a57.mp4",
+      "imagePath": "premium-batch-1/premium_dangerously_fond/e1591ebd3bd247ece0e9.jpg",
+      "motionPath": "premium-batch-1/premium_dangerously_fond/4285996986f717e77971.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "d65fe9ad92a97a68b9226706c41c8062149e1d547dc7c28baebaf3435666ed06",
-      "motionSha256": "5ce1ffbda66e29137a57ebcc7bad6f08aaba964c9491e0d39ea4956371d90230",
+      "imageSha256": "e1591ebd3bd247ece0e9c0c76aae0a9ff76a326cfb4c60462ebdd72d79129e5e",
+      "motionSha256": "4285996986f717e77971e12ffb7f6f8b20a0e07522f4b81e9e844bd7d37270f1",
       "facets": [
         {
           "facet": "mood",
@@ -71,15 +75,15 @@
         "fantasy"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "0c64ed88-dc9a-414f-806f-ca9724cd2da5.png",
       "sourceMotion": "The Wolf Moon.mp4",
       "sourceMotionSha256": "67f92ad3e55a3228a38f5e4aa403b4c9d96696146e9af06660b169f5782c704e",
-      "imagePath": "premium-batch-1/premium_the_wolf_moon/2a336afc7d851dd7f0f1.jpg",
-      "motionPath": "premium-batch-1/premium_the_wolf_moon/c8cc860d9aa0fd71896a.mp4",
+      "imagePath": "premium-batch-1/premium_the_wolf_moon/e9b915a559283a829959.jpg",
+      "motionPath": "premium-batch-1/premium_the_wolf_moon/67f92ad3e55a3228a38f.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "2a336afc7d851dd7f0f1deda330453c0c6f566d131f756b968000d4351e80fe4",
-      "motionSha256": "c8cc860d9aa0fd71896aad95656d7d01d5d09dca39879437b446075c52f08167",
+      "imageSha256": "e9b915a559283a82995922056becb26fdcc53d0790f51cb33c11c8df3fe2b3cb",
+      "motionSha256": "67f92ad3e55a3228a38f5e4aa403b4c9d96696146e9af06660b169f5782c704e",
       "facets": [
         {
           "facet": "world",
@@ -98,15 +102,15 @@
         "encouragement"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "1424a225-d90d-4527-aa7f-9c1c568b7e7d.png",
       "sourceMotion": "generated_video (8).mp4",
       "sourceMotionSha256": "8321e15a4dfd5bd12cba0e1cea30e548f0e10f66d6299cb5a16369e352f6ad69",
-      "imagePath": "premium-batch-1/premium_hero_rooftop_signal/ae79a3f4de5063679695.jpg",
-      "motionPath": "premium-batch-1/premium_hero_rooftop_signal/d8e93f40e1a90fda98d2.mp4",
+      "imagePath": "premium-batch-1/premium_hero_rooftop_signal/1c4c74a4498971010ebd.jpg",
+      "motionPath": "premium-batch-1/premium_hero_rooftop_signal/8321e15a4dfd5bd12cba.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "ae79a3f4de506367969519eba14406093cc9864db6a59f152de95f88a2c77cb8",
-      "motionSha256": "d8e93f40e1a90fda98d2ac70bd7740533a909e744b12c34cf94e725e418419c9",
+      "imageSha256": "1c4c74a4498971010ebd143f78f04b30f8c93c44cfed84a2520915b686d9d030",
+      "motionSha256": "8321e15a4dfd5bd12cba0e1cea30e548f0e10f66d6299cb5a16369e352f6ad69",
       "facets": []
     },
     {
@@ -120,15 +124,15 @@
         "gift"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "16c67db4-2ac6-47d0-ba1c-37122053e134.png",
       "sourceMotion": "The Parcel - Happy Birthday.mp4",
       "sourceMotionSha256": "86119f5ec043c745cf4c53b033f71199e40f29434b11e58d16fa4093f5f84c8d",
-      "imagePath": "premium-batch-1/premium_the_parcel/4f7b9104d219afd71cfa.jpg",
-      "motionPath": "premium-batch-1/premium_the_parcel/a5693d9327a44c8d873d.mp4",
+      "imagePath": "premium-batch-1/premium_the_parcel/a6c11048152d708cd355.jpg",
+      "motionPath": "premium-batch-1/premium_the_parcel/86119f5ec043c745cf4c.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "4f7b9104d219afd71cfa36ed68e82f2458f79730b13b2a2566de9d839e86e1f8",
-      "motionSha256": "a5693d9327a44c8d873da3625d750769e4f4420e7aad9da7e5c70971d4bd48e8",
+      "imageSha256": "a6c11048152d708cd3554c768011c043179338e51948e8ed0630f7653491a01e",
+      "motionSha256": "86119f5ec043c745cf4c53b033f71199e40f29434b11e58d16fa4093f5f84c8d",
       "facets": [
         {
           "facet": "occasion",
@@ -147,15 +151,15 @@
         "humour"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "1abeb1d8-28ee-4e20-a5a5-abb7be3d2645.png",
       "sourceMotion": "generated_video (13).mp4",
       "sourceMotionSha256": "c9d88c1db0966e1755b16003b506366cb3a7fd1519f7d752b50a55cc340080c7",
-      "imagePath": "premium-batch-1/premium_missed_your_letters/fcbb0528c8222bf8db09.jpg",
-      "motionPath": "premium-batch-1/premium_missed_your_letters/57b45f48ada460f09564.mp4",
+      "imagePath": "premium-batch-1/premium_missed_your_letters/586fa0ffd41fbf05974d.jpg",
+      "motionPath": "premium-batch-1/premium_missed_your_letters/c9d88c1db0966e1755b1.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "fcbb0528c8222bf8db090e2967f60d0b2064257913fee0a585c5c99b7cc23a08",
-      "motionSha256": "57b45f48ada460f09564ee207cad803451bfd394a0e43675a0fdef47815aa9a0",
+      "imageSha256": "586fa0ffd41fbf05974dc1812c7b6b9cb5aacfa3be380215484ec1f7a8c59fec",
+      "motionSha256": "c9d88c1db0966e1755b16003b506366cb3a7fd1519f7d752b50a55cc340080c7",
       "facets": [
         {
           "facet": "mood",
@@ -174,15 +178,15 @@
         "imagined place"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "2047cd01-fc14-4bdd-b728-10b5751ae0be.png",
       "sourceMotion": "midnight correspondence.mp4",
       "sourceMotionSha256": "89cd592bb63065034653ed1baeb6d61a45c6ab0e8d70f0348071334b57fa9cdd",
-      "imagePath": "premium-batch-1/premium_midnight_correspondence_transylvania/5b64a9ec37f25b6b81f0.jpg",
-      "motionPath": "premium-batch-1/premium_midnight_correspondence_transylvania/d770450f5a48ac86136e.mp4",
+      "imagePath": "premium-batch-1/premium_midnight_correspondence_transylvania/db874af1bf2db2196f15.jpg",
+      "motionPath": "premium-batch-1/premium_midnight_correspondence_transylvania/89cd592bb63065034653.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "5b64a9ec37f25b6b81f0093d1b4d4eb71815b4e630569ccb178e51dfa7747aee",
-      "motionSha256": "d770450f5a48ac86136ef1fc2b0799007476526b10af26cf9f4d5bd17781141e",
+      "imageSha256": "db874af1bf2db2196f15ad6ddc3a260fb6c46cf2718bf13efdd97cf5b5207bde",
+      "motionSha256": "89cd592bb63065034653ed1baeb6d61a45c6ab0e8d70f0348071334b57fa9cdd",
       "facets": [
         {
           "facet": "world",
@@ -201,15 +205,15 @@
         "encouragement"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "2185399c-42a8-4876-9822-2a138cf507dc.png",
       "sourceMotion": "The Heavenly messanger.mp4",
       "sourceMotionSha256": "b56e5cc5b152e0381735a884f1c82c252855535494a018197353a3570359e1a4",
-      "imagePath": "premium-batch-1/premium_the_messenger/be7c883b2a751d95d441.jpg",
-      "motionPath": "premium-batch-1/premium_the_messenger/5355e9dfa2af167e701a.mp4",
+      "imagePath": "premium-batch-1/premium_the_messenger/2f2a15caa56d0ddd8b26.jpg",
+      "motionPath": "premium-batch-1/premium_the_messenger/b56e5cc5b152e0381735.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "be7c883b2a751d95d441164f7ec6a73a7a38e27e62d3daf3dbed7c5478183a20",
-      "motionSha256": "5355e9dfa2af167e701a02d2da2783f7c55c04790063e18eafe11c1c17583549",
+      "imageSha256": "2f2a15caa56d0ddd8b26752e0b2300188ccbf16e82bf2e5fc0be66af62f01306",
+      "motionSha256": "b56e5cc5b152e0381735a884f1c82c252855535494a018197353a3570359e1a4",
       "facets": [
         {
           "facet": "world",
@@ -228,15 +232,15 @@
         "fantasy"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "241b035b-82f5-4157-a060-02b10c1a2777.png",
       "sourceMotion": "generated_video (15).mp4",
       "sourceMotionSha256": "329b8760e0fe5e1d69b5d9254814f427c8df3332d2d277c0ec090a58adee0a3d",
-      "imagePath": "premium-batch-1/premium_north_pole_night_shift/dd9df8ea4f019254f215.jpg",
-      "motionPath": "premium-batch-1/premium_north_pole_night_shift/e0d5bc14effefb504f0b.mp4",
+      "imagePath": "premium-batch-1/premium_north_pole_night_shift/2251e412c40b9b3b1ef4.jpg",
+      "motionPath": "premium-batch-1/premium_north_pole_night_shift/329b8760e0fe5e1d69b5.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "dd9df8ea4f019254f2152a83340dfc660bd72cbb185e410bd6c2f9e2b2aefa5b",
-      "motionSha256": "e0d5bc14effefb504f0bff3b110c4d7f013d911e29f7415c06b0985c8c6eb915",
+      "imageSha256": "2251e412c40b9b3b1ef4a6647802da624ddbd1aa9dfbfccefdf2fabf4b0644e3",
+      "motionSha256": "329b8760e0fe5e1d69b5d9254814f427c8df3332d2d277c0ec090a58adee0a3d",
       "facets": [
         {
           "facet": "occasion",
@@ -255,15 +259,15 @@
         "care"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "30866001-be44-4b13-9090-3223df7b854e.png",
       "sourceMotion": "After the rescue.mp4",
       "sourceMotionSha256": "d5ea1952ca222f052f3b699273362a77dde4b071a2dde916a2b336a0dc5404a2",
-      "imagePath": "premium-batch-1/premium_after_the_rescue/1b706541f96381d004ac.jpg",
-      "motionPath": "premium-batch-1/premium_after_the_rescue/91d99af9e42b1f135d6f.mp4",
+      "imagePath": "premium-batch-1/premium_after_the_rescue/c7a266999e7f38151fe6.jpg",
+      "motionPath": "premium-batch-1/premium_after_the_rescue/d5ea1952ca222f052f3b.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "1b706541f96381d004acf4a4790c984e3b5fa039b8545690f4da126be784e003",
-      "motionSha256": "91d99af9e42b1f135d6fd678a395495f2674ef76374d7a24c3165d4169c50016",
+      "imageSha256": "c7a266999e7f38151fe62abd64d5130f8df5f85c8759a0277a3ee9a6ab03f429",
+      "motionSha256": "d5ea1952ca222f052f3b699273362a77dde4b071a2dde916a2b336a0dc5404a2",
       "facets": []
     },
     {
@@ -277,15 +281,15 @@
         "quiet"
       ],
       "priceCredits": 0,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "3d6a017f-fa5b-4bae-a916-29754b0f937f.png",
       "sourceMotion": "generated_video (2).mp4",
       "sourceMotionSha256": "120e5ffb7492f9682f0f10abfe04cd1840ddc1e93cfd54df9c1e5494a3286c34",
-      "imagePath": "premium-batch-1/premium_for_the_good_company/9bbf3c200c36bddc8a30.jpg",
-      "motionPath": "premium-batch-1/premium_for_the_good_company/2648175d1fb5a9f8007f.mp4",
+      "imagePath": "premium-batch-1/premium_for_the_good_company/901a77ed2af969b3a179.jpg",
+      "motionPath": "premium-batch-1/premium_for_the_good_company/120e5ffb7492f9682f0f.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "9bbf3c200c36bddc8a30382ceb7ff71baa6f4818bd5263d406afe2f3d44963ee",
-      "motionSha256": "2648175d1fb5a9f8007f72b7bea2eab15af78bad90215f39f65b38462d48ec7c",
+      "imageSha256": "901a77ed2af969b3a179b78deb9ed3ba171c22de804e4d79dc3d7c8ed315a818",
+      "motionSha256": "120e5ffb7492f9682f0f10abfe04cd1840ddc1e93cfd54df9c1e5494a3286c34",
       "facets": [
         {
           "facet": "mood",
@@ -304,15 +308,15 @@
         "confession"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "4003cb66-413b-475b-83d6-f32c801abf19.png",
       "sourceMotion": "Almost Said it.mp4",
       "sourceMotionSha256": "19300d85a596d54cc531819671d7cbf012fd5b7db9fc0641637b5a87764d1001",
-      "imagePath": "premium-batch-1/premium_almost_said_it/0a4c735bd3ee7e32f612.jpg",
-      "motionPath": "premium-batch-1/premium_almost_said_it/d7edc2a560bd70c5f2f8.mp4",
+      "imagePath": "premium-batch-1/premium_almost_said_it/96b49235fd607c00aac6.jpg",
+      "motionPath": "premium-batch-1/premium_almost_said_it/19300d85a596d54cc531.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "0a4c735bd3ee7e32f6126abb5d19d30a0af96915b7ffab1ffbefca714a917b1b",
-      "motionSha256": "d7edc2a560bd70c5f2f85ec73a0f27f8de8a49378d89b938c3a58bde2c573a06",
+      "imageSha256": "96b49235fd607c00aac6777acfbbd66c6ddb8bb8b1cf63d242684222c3d6c129",
+      "motionSha256": "19300d85a596d54cc531819671d7cbf012fd5b7db9fc0641637b5a87764d1001",
       "facets": [
         {
           "facet": "mood",
@@ -331,15 +335,15 @@
         "belonging"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "4760adad-e90f-4472-a343-41f34976a5f5.png",
       "sourceMotion": "home is a person.mp4",
       "sourceMotionSha256": "69d42b29df899c04696dca27ccc05597d9bedbbed640a6b1f8505ba45ee978c3",
-      "imagePath": "premium-batch-1/premium_home_is_a_person/cb5028e3bd1fd2c61abf.jpg",
-      "motionPath": "premium-batch-1/premium_home_is_a_person/0238d299bb44604dd374.mp4",
+      "imagePath": "premium-batch-1/premium_home_is_a_person/6c513ab0c215cd39686e.jpg",
+      "motionPath": "premium-batch-1/premium_home_is_a_person/69d42b29df899c04696d.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "cb5028e3bd1fd2c61abf719b0545d17f65e116344cc08d170582ddbcfc8e9588",
-      "motionSha256": "0238d299bb44604dd374b8e644a6bdddf6b0e886f0c3a66760bea1881e6bb835",
+      "imageSha256": "6c513ab0c215cd39686e5e826bca3de78223183217345968e1fb924f528055d2",
+      "motionSha256": "69d42b29df899c04696dca27ccc05597d9bedbbed640a6b1f8505ba45ee978c3",
       "facets": [
         {
           "facet": "mood",
@@ -358,15 +362,15 @@
         "occasion"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "47733cb4-c112-4921-910e-654f95cae140.png",
       "sourceMotion": "Reserved for You.mp4",
       "sourceMotionSha256": "42563951ff594cf05e7f703af7a5631fc0b101bba878cd98dc155c7f0e568f19",
-      "imagePath": "premium-batch-1/premium_reserved_for_you/95a8c5364b17537ccd0e.jpg",
-      "motionPath": "premium-batch-1/premium_reserved_for_you/9d17bc46dc9fabf5edba.mp4",
+      "imagePath": "premium-batch-1/premium_reserved_for_you/71731d70679f28284454.jpg",
+      "motionPath": "premium-batch-1/premium_reserved_for_you/42563951ff594cf05e7f.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "95a8c5364b17537ccd0e572b1a69bc8e590726aacf20cb0270884bd57bca5d94",
-      "motionSha256": "9d17bc46dc9fabf5edba685392ec9ec97fd0bebbcd32e4bae25024721c170c48",
+      "imageSha256": "71731d70679f282844547097679c3613b53b30b88d554993f9eddab15d20774f",
+      "motionSha256": "42563951ff594cf05e7f703af7a5631fc0b101bba878cd98dc155c7f0e568f19",
       "facets": [
         {
           "facet": "mood",
@@ -385,15 +389,15 @@
         "friendship"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "49deede9-477e-4017-a562-a39f574b82f8.png",
       "sourceMotion": "Buried in Corespondence.mp4",
       "sourceMotionSha256": "aea0a20a931e64b923e5b1cea5e8d163867844be7c7555f5f969870f8d64e352",
-      "imagePath": "premium-batch-1/premium_buried_in_correspondence/9061346439e8cde15501.jpg",
-      "motionPath": "premium-batch-1/premium_buried_in_correspondence/9e53c4544ded5c35d3a9.mp4",
+      "imagePath": "premium-batch-1/premium_buried_in_correspondence/225c758b92e3713b7c63.jpg",
+      "motionPath": "premium-batch-1/premium_buried_in_correspondence/aea0a20a931e64b923e5.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "9061346439e8cde15501b1d20bf102bfe7f951d63f94b96066dc64d210a9025b",
-      "motionSha256": "9e53c4544ded5c35d3a9db569866acae862071079a7e22156af14cf09d22b749",
+      "imageSha256": "225c758b92e3713b7c63dd4174217dca51bbefddf0de21d2c53d2f20b8d15dcf",
+      "motionSha256": "aea0a20a931e64b923e5b1cea5e8d163867844be7c7555f5f969870f8d64e352",
       "facets": [
         {
           "facet": "mood",
@@ -412,15 +416,15 @@
         "playfulness"
       ],
       "priceCredits": 0,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "4ec3ef04-21ab-438a-9601-d8bcc7ba2148.png",
       "sourceMotion": "generated_video.mp4",
       "sourceMotionSha256": "deaba1468c6e0744f2df93a995ce5beb7a57d910187795a717edb3414c5d0fca",
-      "imagePath": "premium-batch-1/premium_same_nonsense_different_day/2fd75770749b59d5a525.jpg",
-      "motionPath": "premium-batch-1/premium_same_nonsense_different_day/63e8ddb33f87fe28ec82.mp4",
+      "imagePath": "premium-batch-1/premium_same_nonsense_different_day/c42c105bbd5c66c26cca.jpg",
+      "motionPath": "premium-batch-1/premium_same_nonsense_different_day/deaba1468c6e0744f2df.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "2fd75770749b59d5a5256c2092b417871ff5744123d02bf945c76bcbdf94995d",
-      "motionSha256": "63e8ddb33f87fe28ec82136b4374ae07f52750911be480acc5f656885ce4afc6",
+      "imageSha256": "c42c105bbd5c66c26cca28e0953c350468faf3392257e58bb82316e622548943",
+      "motionSha256": "deaba1468c6e0744f2df93a995ce5beb7a57d910187795a717edb3414c5d0fca",
       "facets": [
         {
           "facet": "mood",
@@ -439,15 +443,15 @@
         "quiet"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "5d82b2b1-9876-4723-b6aa-836c7039c4d4.png",
       "sourceMotion": "campfie dispatch.mp4",
       "sourceMotionSha256": "4eea5a1df2492bdeda113a72dd225ab5b900d97da822caf6bfbe36af39ac8799",
-      "imagePath": "premium-batch-1/premium_campfire_dispatch/64da89e2dad4332b5c69.jpg",
-      "motionPath": "premium-batch-1/premium_campfire_dispatch/24064e080006b0a0742e.mp4",
+      "imagePath": "premium-batch-1/premium_campfire_dispatch/9e64569c11baf6646b36.jpg",
+      "motionPath": "premium-batch-1/premium_campfire_dispatch/4eea5a1df2492bdeda11.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "64da89e2dad4332b5c6972651e32c003b4169020102d1c791091d56da553f974",
-      "motionSha256": "24064e080006b0a0742e298605bd04fc5623be246f8249a50a0393b87e0cc624",
+      "imageSha256": "9e64569c11baf6646b363c976a1026168e008410a221f909661838c756f05fd0",
+      "motionSha256": "4eea5a1df2492bdeda113a72dd225ab5b900d97da822caf6bfbe36af39ac8799",
       "facets": []
     },
     {
@@ -461,15 +465,15 @@
         "romance"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "7640050a-9415-4100-aceb-9fa81351828a.png",
       "sourceMotion": "A Seat Saved — For a good conversation.mp4",
       "sourceMotionSha256": "be8df83949064b5d87fb3b2aef96d04a47dc0734a099f5191c1a061d09b562fe",
-      "imagePath": "premium-batch-1/premium_a_seat_saved/75a0b97740a662025da9.jpg",
-      "motionPath": "premium-batch-1/premium_a_seat_saved/4ac6d6fc6b4e0cf40ee7.mp4",
+      "imagePath": "premium-batch-1/premium_a_seat_saved/d98d76ec4be41d707af0.jpg",
+      "motionPath": "premium-batch-1/premium_a_seat_saved/be8df83949064b5d87fb.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "75a0b97740a662025da97015da8719601fa20e40b750e15493c218cc622f71df",
-      "motionSha256": "4ac6d6fc6b4e0cf40ee7800d30ee60511cf180cec3c3a618a26367ffc71ad729",
+      "imageSha256": "d98d76ec4be41d707af071bf077d57c5df097e18a388ac4d48eab66768d9bed9",
+      "motionSha256": "be8df83949064b5d87fb3b2aef96d04a47dc0734a099f5191c1a061d09b562fe",
       "facets": [
         {
           "facet": "mood",
@@ -488,15 +492,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "79716aed-34c1-452f-8a9f-7a5373e24853.png",
       "sourceMotion": "generated_video (6).mp4",
       "sourceMotionSha256": "8f3110a6b166977c73d31d6f7f10842becd0e3dda6d47295b6e7f36a2ff6a08d",
-      "imagePath": "premium-batch-1/premium_the_fairy_post_office/8e05fd48f32bcff8e985.jpg",
-      "motionPath": "premium-batch-1/premium_the_fairy_post_office/69831813243678a49e8d.mp4",
+      "imagePath": "premium-batch-1/premium_the_fairy_post_office/3954d254725d16e81723.jpg",
+      "motionPath": "premium-batch-1/premium_the_fairy_post_office/8f3110a6b166977c73d3.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "8e05fd48f32bcff8e9853727a28adc21f774d12838bc7db23b90dfb4c25b171a",
-      "motionSha256": "69831813243678a49e8db599f8138f71cfc092960a24d0264a562288198307c8",
+      "imageSha256": "3954d254725d16e81723317b0e2532984301e7efb075386dd853c2d76490e45d",
+      "motionSha256": "8f3110a6b166977c73d31d6f7f10842becd0e3dda6d47295b6e7f36a2ff6a08d",
       "facets": [
         {
           "facet": "world",
@@ -515,15 +519,15 @@
         "reassurance"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "7a1f229f-7847-41eb-8010-09577179ef98.png",
       "sourceMotion": "You Already Know.mp4",
       "sourceMotionSha256": "2d29bbeb39555271b599a3015322b87ef6af55dda24c1fc972e4f43971cf1dbe",
-      "imagePath": "premium-batch-1/premium_you_already_know/9904d1643ed2996559b2.jpg",
-      "motionPath": "premium-batch-1/premium_you_already_know/1fa9b93278b3550e5142.mp4",
+      "imagePath": "premium-batch-1/premium_you_already_know/2154775ec65782f9eeca.jpg",
+      "motionPath": "premium-batch-1/premium_you_already_know/2d29bbeb39555271b599.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "9904d1643ed2996559b27abe54778c1c71c4cda78b606206f2c8be37e82f8226",
-      "motionSha256": "1fa9b93278b3550e51424bce1b973eed6a61c4af3b194b543686ebcb2b403660",
+      "imageSha256": "2154775ec65782f9eeca16fbc050f9883647747a29537b20741f6130fb711b9c",
+      "motionSha256": "2d29bbeb39555271b599a3015322b87ef6af55dda24c1fc972e4f43971cf1dbe",
       "facets": [
         {
           "facet": "mood",
@@ -542,15 +546,15 @@
         "disappointment"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "7c4480f6-1dc5-4b2e-87e5-f8350adff553.png",
       "sourceMotion": "generated_video (14).mp4",
       "sourceMotionSha256": "886d4f7f1330cc24c4b2d75431087920a3c6f66e70abc3a08f5b50e243c1fefd",
-      "imagePath": "premium-batch-1/premium_returned_to_sender/e060a2dbac174a64b769.jpg",
-      "motionPath": "premium-batch-1/premium_returned_to_sender/ea753a38ae15ebd0a3fd.mp4",
+      "imagePath": "premium-batch-1/premium_returned_to_sender/d759c10a785b3a868463.jpg",
+      "motionPath": "premium-batch-1/premium_returned_to_sender/886d4f7f1330cc24c4b2.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "e060a2dbac174a64b7691d85883d4f0ccc1aa873450e75e6140185fad36282c9",
-      "motionSha256": "ea753a38ae15ebd0a3fdda11e50c801656612b48f685f624d4187664f4d1580a",
+      "imageSha256": "d759c10a785b3a86846373edb367ecd00d9d867418c316d75eceef0053d74073",
+      "motionSha256": "886d4f7f1330cc24c4b2d75431087920a3c6f66e70abc3a08f5b50e243c1fefd",
       "facets": [
         {
           "facet": "mood",
@@ -569,15 +573,15 @@
         "fantasy"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "812372b5-f493-4293-9d47-021d71f83ee3.png",
       "sourceMotion": "generated_video (10).mp4",
       "sourceMotionSha256": "ff1f6703a1fb9b76fb33e897797dded8c36e0e155bf8d224aebc66b667e9367c",
-      "imagePath": "premium-batch-1/premium_the_house_that_writes_back/2faa4468bd7dd494ce7c.jpg",
-      "motionPath": "premium-batch-1/premium_the_house_that_writes_back/004a7b48f36950d53a40.mp4",
+      "imagePath": "premium-batch-1/premium_the_house_that_writes_back/ed38c2d780ffc98f8c91.jpg",
+      "motionPath": "premium-batch-1/premium_the_house_that_writes_back/ff1f6703a1fb9b76fb33.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "2faa4468bd7dd494ce7cc1243020a1fef148070dc66bc612c13bd7ad09baabff",
-      "motionSha256": "004a7b48f36950d53a40ca478bb941dcf30a9eac8e5f95d13cf6ae5627a76f09",
+      "imageSha256": "ed38c2d780ffc98f8c91fa3559fd617697530d622b00764b4a1aac37e73a59ec",
+      "motionSha256": "ff1f6703a1fb9b76fb33e897797dded8c36e0e155bf8d224aebc66b667e9367c",
       "facets": [
         {
           "facet": "world",
@@ -596,15 +600,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "87274173-e16c-4075-bf94-a7c419aeaecb.png",
       "sourceMotion": "Sky Courier.mp4",
       "sourceMotionSha256": "e43e90ec96e6b5a476711cfcc3cd7495241af668eac3c54705805f1a4313701e",
-      "imagePath": "premium-batch-1/premium_sky_courier/722c0238a8a79d44f8c2.jpg",
-      "motionPath": "premium-batch-1/premium_sky_courier/4d57fb21cf4d296073a0.mp4",
+      "imagePath": "premium-batch-1/premium_sky_courier/bb10032100543cfd0175.jpg",
+      "motionPath": "premium-batch-1/premium_sky_courier/e43e90ec96e6b5a47671.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "722c0238a8a79d44f8c2a8b714b0bfac0b6c3107954f574f6d76624ed96dacda",
-      "motionSha256": "4d57fb21cf4d296073a042008cccb407fa77bf645f575886859523f8573bb343",
+      "imageSha256": "bb10032100543cfd017578f092f4fd3e9e3d4993a202318f4a30aa550726ef52",
+      "motionSha256": "e43e90ec96e6b5a476711cfcc3cd7495241af668eac3c54705805f1a4313701e",
       "facets": [
         {
           "facet": "world",
@@ -623,15 +627,15 @@
         "place mood"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "887ba5d6-ca23-4c6f-91a2-f81c18bcb454.png",
       "sourceMotion": "Good company.mp4",
       "sourceMotionSha256": "bcca48bd8abc6cf26dc789f072e55010f07dd036079387b6be74d3fb29842f95",
-      "imagePath": "premium-batch-1/premium_good_company/6bab05bf8f43a02b2fd8.jpg",
-      "motionPath": "premium-batch-1/premium_good_company/7e2af470f0d2061359b4.mp4",
+      "imagePath": "premium-batch-1/premium_good_company/57dc415c19f76e7c62ff.jpg",
+      "motionPath": "premium-batch-1/premium_good_company/bcca48bd8abc6cf26dc7.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "6bab05bf8f43a02b2fd8ecf2811ee38207b1ee4e767d2081bdd1ef74bb2e6d30",
-      "motionSha256": "7e2af470f0d2061359b4bce3aa5c3f1e687985fbffbffe27884cb5755b920c96",
+      "imageSha256": "57dc415c19f76e7c62ffb08bc57baa68ae01eef31b78fc3437cff08c85a37ddc",
+      "motionSha256": "bcca48bd8abc6cf26dc789f072e55010f07dd036079387b6be74d3fb29842f95",
       "facets": [
         {
           "facet": "mood",
@@ -650,15 +654,15 @@
         "humour"
       ],
       "priceCredits": 0,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "8c17ab3d-2d74-43f3-a678-317eefe412a6.png",
       "sourceMotion": "Another one please.mp4",
       "sourceMotionSha256": "5a110d57223c9c24fad825f314342e28f620371e438891266eea6391459a6cde",
-      "imagePath": "premium-batch-1/premium_another_one_please/f232b7b07163591a6b05.jpg",
-      "motionPath": "premium-batch-1/premium_another_one_please/8c113c75634132dbcec5.mp4",
+      "imagePath": "premium-batch-1/premium_another_one_please/ff6d75563f8941ae2c4c.jpg",
+      "motionPath": "premium-batch-1/premium_another_one_please/5a110d57223c9c24fad8.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "f232b7b07163591a6b05900fa48054b386cb5fbaeaf39b8ce51377915e5ba344",
-      "motionSha256": "8c113c75634132dbcec5fd46da330830afaee8ec50fde15bd8fe53f230080111",
+      "imageSha256": "ff6d75563f8941ae2c4c01321d206cb59ade858b4064150e556a6e8f1acdcc9a",
+      "motionSha256": "5a110d57223c9c24fad825f314342e28f620371e438891266eea6391459a6cde",
       "facets": [
         {
           "facet": "mood",
@@ -677,15 +681,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "8fbff602-210e-428f-abf1-4eb9251bdfa9.png",
       "sourceMotion": "The celectial archive.mp4",
       "sourceMotionSha256": "455825faf6fcfb74d0080f374fa1df2fbad4fc40cea8b58d4a58070aac781003",
-      "imagePath": "premium-batch-1/premium_the_celestial_archive/f1bd535940f80334329b.jpg",
-      "motionPath": "premium-batch-1/premium_the_celestial_archive/52fa81789ee95836c85f.mp4",
+      "imagePath": "premium-batch-1/premium_the_celestial_archive/d883b151119723d2e628.jpg",
+      "motionPath": "premium-batch-1/premium_the_celestial_archive/455825faf6fcfb74d008.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "f1bd535940f80334329b8d0da5fa7508f70e74755870b03257284d298fdaa453",
-      "motionSha256": "52fa81789ee95836c85fa344f0587d2cea0d77b4265570b58706345281c3dc81",
+      "imageSha256": "d883b151119723d2e628f317ddb4c67842ed4ac8de0550ca6d569b7191df05ba",
+      "motionSha256": "455825faf6fcfb74d0080f374fa1df2fbad4fc40cea8b58d4a58070aac781003",
       "facets": [
         {
           "facet": "world",
@@ -704,15 +708,15 @@
         "calm"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "96fd2ab7-25f1-4f79-8bac-db07358692cc.png",
       "sourceMotion": "Above the Weather.mp4",
       "sourceMotionSha256": "333e663c0d554530f358d8e2f2d78feb22c05a6e18611f4d7e788026c3c07992",
-      "imagePath": "premium-batch-1/premium_above_the_weather/9337ff4ee79e07ba99b7.jpg",
-      "motionPath": "premium-batch-1/premium_above_the_weather/38ec5f1016734b141e52.mp4",
+      "imagePath": "premium-batch-1/premium_above_the_weather/3cdca76f96d29d45b928.jpg",
+      "motionPath": "premium-batch-1/premium_above_the_weather/333e663c0d554530f358.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "9337ff4ee79e07ba99b70996c7ec74bc790b56965ca6513af1b919dff31913e7",
-      "motionSha256": "38ec5f1016734b141e521a8046be84276bf945c9db087d09f522ac0912bb3e55",
+      "imageSha256": "3cdca76f96d29d45b928ec7dfdff5b7931a2b528135485407ff27668f327a8db",
+      "motionSha256": "333e663c0d554530f358d8e2f2d78feb22c05a6e18611f4d7e788026c3c07992",
       "facets": [
         {
           "facet": "mood",
@@ -731,15 +735,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "97382f47-853d-4cd9-9d5c-705d6a2631d1.png",
       "sourceMotion": "Dead reckoning.mp4",
       "sourceMotionSha256": "9bc98888cf3a3316b7eb154883d7b0397d11365df9c1c3dc6e35611991e4624c",
-      "imagePath": "premium-batch-1/premium_dead_reckoning/651a3cfb060b157854f8.jpg",
-      "motionPath": "premium-batch-1/premium_dead_reckoning/165563186fb53ead810c.mp4",
+      "imagePath": "premium-batch-1/premium_dead_reckoning/6f7fef317ac1a8df2a83.jpg",
+      "motionPath": "premium-batch-1/premium_dead_reckoning/9bc98888cf3a3316b7eb.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "651a3cfb060b157854f883d0e65125a2a4be460a47c78e3a056f953b240c5dde",
-      "motionSha256": "165563186fb53ead810ca7b78aa8268b6845576778523731496d5e8cfe1372fa",
+      "imageSha256": "6f7fef317ac1a8df2a835c4cc9111b39f1fb58e5ad5657a02016c8b0aa069b39",
+      "motionSha256": "9bc98888cf3a3316b7eb154883d7b0397d11365df9c1c3dc6e35611991e4624c",
       "facets": []
     },
     {
@@ -753,15 +757,15 @@
         "hope"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "9881db59-4481-49c6-a08e-6c068c7b91a3.png",
       "sourceMotion": "Message in a bottle.mp4",
       "sourceMotionSha256": "026d816ffca5307a5048a1f25e48ce38f715f0d7d2b6ffa8b23569eb002d154f",
-      "imagePath": "premium-batch-1/premium_message_in_a_bottle/feb75a5861c54fe21c92.jpg",
-      "motionPath": "premium-batch-1/premium_message_in_a_bottle/04122ddfb4680f072888.mp4",
+      "imagePath": "premium-batch-1/premium_message_in_a_bottle/5039ad2de7af16ffac17.jpg",
+      "motionPath": "premium-batch-1/premium_message_in_a_bottle/026d816ffca5307a5048.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "feb75a5861c54fe21c92ca8ef71695d40fdd8e97c9c9734a52bc59f7c0ae2232",
-      "motionSha256": "04122ddfb4680f072888fed24b61242635b56502ca5e0fb9a71349b888a84ac1",
+      "imageSha256": "5039ad2de7af16ffac17f3dda944faa812cb1ea55393550843bf0a9deed31704",
+      "motionSha256": "026d816ffca5307a5048a1f25e48ce38f715f0d7d2b6ffa8b23569eb002d154f",
       "facets": []
     },
     {
@@ -775,15 +779,15 @@
         "imagined place"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "9ad6af22-dae0-47d4-aca6-c9ca5846c7e3.png",
       "sourceMotion": "last train to transylvania.mp4",
       "sourceMotionSha256": "746027ebbff4bf663d49e6c985368592ebf4265a68287256ac67286143d32f6f",
-      "imagePath": "premium-batch-1/premium_last_train_to_transylvania/b08ccccad96ee98277da.jpg",
-      "motionPath": "premium-batch-1/premium_last_train_to_transylvania/7b74b397e468455a134e.mp4",
+      "imagePath": "premium-batch-1/premium_last_train_to_transylvania/2808e080d86a646e9683.jpg",
+      "motionPath": "premium-batch-1/premium_last_train_to_transylvania/746027ebbff4bf663d49.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "b08ccccad96ee98277da39af0084210aa37ed1451075c766af5bbf7df728fe28",
-      "motionSha256": "7b74b397e468455a134ed982b7a92eae2a29e6ee17220a8285f5e5b36e4041e4",
+      "imageSha256": "2808e080d86a646e9683af2d647daf2cbb79d16ca253d78e7f187cd7cc6dbe7e",
+      "motionSha256": "746027ebbff4bf663d49e6c985368592ebf4265a68287256ac67286143d32f6f",
       "facets": [
         {
           "facet": "world",
@@ -802,15 +806,15 @@
         "distance"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "9ca21568-7faf-4be4-9192-3fcd86f10712.png",
       "sourceMotion": "generated_video (7).mp4",
       "sourceMotionSha256": "f578d183b285589cab1b20fb60f874284156d207b5fa110866d76529b7895625",
-      "imagePath": "premium-batch-1/premium_last_letter_before_the_frontier/3b320e3c183e097091e7.jpg",
-      "motionPath": "premium-batch-1/premium_last_letter_before_the_frontier/254d3ccc397fc95f2f72.mp4",
+      "imagePath": "premium-batch-1/premium_last_letter_before_the_frontier/6d638174787d3b286824.jpg",
+      "motionPath": "premium-batch-1/premium_last_letter_before_the_frontier/f578d183b285589cab1b.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "3b320e3c183e097091e7aa3f26fbf091d3f1217360180a06cd984b00c3afa55a",
-      "motionSha256": "254d3ccc397fc95f2f7286e94e7b591ac50bf9775e5b4e0b765c334b492d9581",
+      "imageSha256": "6d638174787d3b286824197d8db0b9276d65f606562a03ff12d881e118f3c27d",
+      "motionSha256": "f578d183b285589cab1b20fb60f874284156d207b5fa110866d76529b7895625",
       "facets": []
     },
     {
@@ -824,15 +828,15 @@
         "affection"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "a01eb607-0618-4078-ae57-f74107dc1748.png",
       "sourceMotion": "generated_video (3).mp4",
       "sourceMotionSha256": "81de533c720163b457005410d749b9edf75de3c8bb3f5779dfb0cad6529c0362",
-      "imagePath": "premium-batch-1/premium_something_worth_keeping/6e6bafd72fec88339a92.jpg",
-      "motionPath": "premium-batch-1/premium_something_worth_keeping/d3d81bf57fea5d058cb4.mp4",
+      "imagePath": "premium-batch-1/premium_something_worth_keeping/c01ffc09fd0e64a8b750.jpg",
+      "motionPath": "premium-batch-1/premium_something_worth_keeping/81de533c720163b45700.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "6e6bafd72fec88339a92799588d3ec8cebd1f9746874f54e04236ebf9480a5d7",
-      "motionSha256": "d3d81bf57fea5d058cb40ecd0aa56bd54885c2727c04d3aa7d876235d8486cb4",
+      "imageSha256": "c01ffc09fd0e64a8b750ec32d5795db5ab079acc8227cd059d61089b7e867355",
+      "motionSha256": "81de533c720163b457005410d749b9edf75de3c8bb3f5779dfb0cad6529c0362",
       "facets": []
     },
     {
@@ -846,15 +850,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "a03c4bd0-d4e0-46c9-82e0-372be585da43.png",
       "sourceMotion": "sundown mail.mp4",
       "sourceMotionSha256": "cf9aa5b3710901b8036e107792ff642c51da9108d24f42f4e3800a9c8819fc8d",
-      "imagePath": "premium-batch-1/premium_sundown_mail/921f457590591ead4ac6.jpg",
-      "motionPath": "premium-batch-1/premium_sundown_mail/6fedf97a91c02a76a349.mp4",
+      "imagePath": "premium-batch-1/premium_sundown_mail/ecce266fdba5892bdd3b.jpg",
+      "motionPath": "premium-batch-1/premium_sundown_mail/cf9aa5b3710901b8036e.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "921f457590591ead4ac6595cff2bdedce37d7f005d58c5207ac0214fa1d75326",
-      "motionSha256": "6fedf97a91c02a76a3495c540e2af23fed0a346a9d175349e638ee706c498dc9",
+      "imageSha256": "ecce266fdba5892bdd3b7f569601683dff4fbc8a24960b369fccc29f8e11b619",
+      "motionSha256": "cf9aa5b3710901b8036e107792ff642c51da9108d24f42f4e3800a9c8819fc8d",
       "facets": []
     },
     {
@@ -869,15 +873,15 @@
         "Bethlehem"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "aa360059-26a3-4d9f-be51-c00721d59cc1.png",
       "sourceMotion": "generated_video (16).mp4",
       "sourceMotionSha256": "ce2fe9d0f1f6d22046e3d1195040ed818c26789518ced91eeb2c499a9918ae6a",
-      "imagePath": "premium-batch-1/premium_the_star/cf378ced853975511856.jpg",
-      "motionPath": "premium-batch-1/premium_the_star/fc8275deca4f5b5d5cef.mp4",
+      "imagePath": "premium-batch-1/premium_the_star/a43690b9a46fc2265df0.jpg",
+      "motionPath": "premium-batch-1/premium_the_star/ce2fe9d0f1f6d22046e3.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "cf378ced85397551185650fad54db307268c40dc5e2be2a389da43f02818165e",
-      "motionSha256": "fc8275deca4f5b5d5cefc2145ec3ce1871af93a94820a2209e870565d6610131",
+      "imageSha256": "a43690b9a46fc2265df0c7ee538d5c33b9baf232769a0a457b753e0619c8007a",
+      "motionSha256": "ce2fe9d0f1f6d22046e3d1195040ed818c26789518ced91eeb2c499a9918ae6a",
       "facets": [
         {
           "facet": "occasion",
@@ -896,15 +900,15 @@
         "family"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "beef60cf-eb54-4500-8da2-e89ee11e7e2f.png",
       "sourceMotion": "Christmas Morning.mp4",
       "sourceMotionSha256": "96ccd052fe79623b2ad8078af254643abddec077a69c41a19eeea76f839295f6",
-      "imagePath": "premium-batch-1/premium_christmas_morning/6055ae60c0d75b57451e.jpg",
-      "motionPath": "premium-batch-1/premium_christmas_morning/044120d21f432ff93fe8.mp4",
+      "imagePath": "premium-batch-1/premium_christmas_morning/5af8fc92f5be1500f5b1.jpg",
+      "motionPath": "premium-batch-1/premium_christmas_morning/96ccd052fe79623b2ad8.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "6055ae60c0d75b57451ed72deb7d553101a30a1cdf48007163ca94538af040c7",
-      "motionSha256": "044120d21f432ff93fe8c11fba34538b89e19130b6fddd1286cfa5fc99f12a5f",
+      "imageSha256": "5af8fc92f5be1500f5b1a0a5ddc5e1e60438a7620b303e33df8b8259cdf75048",
+      "motionSha256": "96ccd052fe79623b2ad8078af254643abddec077a69c41a19eeea76f839295f6",
       "facets": [
         {
           "facet": "occasion",
@@ -923,15 +927,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "c177cb41-7b6f-4ff3-8534-6b35adad6b40.png",
       "sourceMotion": "Still You.mp4",
       "sourceMotionSha256": "640c279821139e58a8ca2809d0c4c750a113f4fc077ce472ae79ff5bd712f8c0",
-      "imagePath": "premium-batch-1/premium_halfway_to_trouble/e2de7e423f6cf65b688c.jpg",
-      "motionPath": "premium-batch-1/premium_halfway_to_trouble/235853438dea6f7c2822.mp4",
+      "imagePath": "premium-batch-1/premium_halfway_to_trouble/c4ee3e50371d6ec5a63c.jpg",
+      "motionPath": "premium-batch-1/premium_halfway_to_trouble/640c279821139e58a8ca.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "e2de7e423f6cf65b688cd6df4803ce7f855c4c0ef2be0225298846d32982e5c1",
-      "motionSha256": "235853438dea6f7c28220ffbbda44c79ca814f016248374c305a90899b709242",
+      "imageSha256": "c4ee3e50371d6ec5a63c1fe56f7fe04223e2098ef390357edf9ba87c3b730913",
+      "motionSha256": "640c279821139e58a8ca2809d0c4c750a113f4fc077ce472ae79ff5bd712f8c0",
       "facets": [
         {
           "facet": "mood",
@@ -950,15 +954,15 @@
         "longing"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "c4a29601-4b4b-487b-b851-db68f6962f48.png",
       "sourceMotion": "Some goodbyes are only temprtary.mp4",
       "sourceMotionSha256": "e56b18cfee95391eb454c13630a6a775e938c025f98c032ad5f0018de7fbbeb8",
-      "imagePath": "premium-batch-1/premium_last_train_home/a1facd32d8941a87d135.jpg",
-      "motionPath": "premium-batch-1/premium_last_train_home/2a9f04c2b333256a6323.mp4",
+      "imagePath": "premium-batch-1/premium_last_train_home/5dfb0ab62639ce66c3f7.jpg",
+      "motionPath": "premium-batch-1/premium_last_train_home/e56b18cfee95391eb454.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "a1facd32d8941a87d13526bc708e0e44d0a8eed6fe80ab67e59e1f245e77b3c7",
-      "motionSha256": "2a9f04c2b333256a6323ac7bf59deb4e1685593f4d74f5c60661f2dbae8b5197",
+      "imageSha256": "5dfb0ab62639ce66c3f79511602d2090f95d5dda6988ae7f24fa40c1f2aceb12",
+      "motionSha256": "e56b18cfee95391eb454c13630a6a775e938c025f98c032ad5f0018de7fbbeb8",
       "facets": []
     },
     {
@@ -972,15 +976,15 @@
         "celebration"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "cca56db4-d93c-4832-a569-c58fd8e3f436.png",
       "sourceMotion": "generated_video (19).mp4",
       "sourceMotionSha256": "a9abd539ab1d13565c9065b595f500c1ce27331c65ea37af860006d9934c59fb",
-      "imagePath": "premium-batch-1/premium_the_dance_continues/53d0de2494cdddb79b9f.jpg",
-      "motionPath": "premium-batch-1/premium_the_dance_continues/91764e0df8b36b78aa50.mp4",
+      "imagePath": "premium-batch-1/premium_the_dance_continues/e6749d22e64a36bbd747.jpg",
+      "motionPath": "premium-batch-1/premium_the_dance_continues/a9abd539ab1d13565c90.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "53d0de2494cdddb79b9f3bc2a868507e0e1486ff5a7f606af3aa45ea6e15d137",
-      "motionSha256": "91764e0df8b36b78aa50fd69ec355b34258c192af44e98b0082e696aec2906b2",
+      "imageSha256": "e6749d22e64a36bbd747ab23e1330c3befaebd530a5d185e19c3e2e456ac5cef",
+      "motionSha256": "a9abd539ab1d13565c9065b595f500c1ce27331c65ea37af860006d9934c59fb",
       "facets": [
         {
           "facet": "occasion",
@@ -999,15 +1003,15 @@
         "everyday"
       ],
       "priceCredits": 0,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "d36f1608-e567-4ab1-9b31-7dfae1fbfdd5.png",
       "sourceMotion": "The conversation continues.mp4",
       "sourceMotionSha256": "df2fc808e95af132fd05bdf634f79c489d917baaef09f9dd2a7dfef48f3a172a",
-      "imagePath": "premium-batch-1/premium_the_conversation_continues/0424c6d558a7fcaaaae2.jpg",
-      "motionPath": "premium-batch-1/premium_the_conversation_continues/3e1d640a601fae860d3a.mp4",
+      "imagePath": "premium-batch-1/premium_the_conversation_continues/8af2ee0fa222720a90e1.jpg",
+      "motionPath": "premium-batch-1/premium_the_conversation_continues/df2fc808e95af132fd05.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "0424c6d558a7fcaaaae229d53afbfc74b3b97cff4d9bc5d1bd91f7c5652fcaf0",
-      "motionSha256": "3e1d640a601fae860d3affd841145f6b4c59efd23468ab578d0e2d6dae355953",
+      "imageSha256": "8af2ee0fa222720a90e16a892947f01fa2f733001a19cc948f4be6e6b66ba627",
+      "motionSha256": "df2fc808e95af132fd05bdf634f79c489d917baaef09f9dd2a7dfef48f3a172a",
       "facets": [
         {
           "facet": "mood",
@@ -1026,15 +1030,15 @@
         "anticipation"
       ],
       "priceCredits": 0,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "f14d2d8f-94bd-4e42-83a3-722f4a1e40b5.png",
       "sourceMotion": "generated_video (18).mp4",
       "sourceMotionSha256": "21f0fce91310e9ff4bdfcd22c81541e0a512f9236b2aedc123e76f3a75beadb4",
-      "imagePath": "premium-batch-1/premium_just_before/941fa1b66645a62f77dc.jpg",
-      "motionPath": "premium-batch-1/premium_just_before/7dcd472b8a14c2e04cc2.mp4",
+      "imagePath": "premium-batch-1/premium_just_before/cb03d2679d28d593e286.jpg",
+      "motionPath": "premium-batch-1/premium_just_before/21f0fce91310e9ff4bdf.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "941fa1b66645a62f77dc09a83a4e481f575011dabba1871de62c18c7eb9d9d5e",
-      "motionSha256": "7dcd472b8a14c2e04cc2a4c06c2dcf664cbb30843c4aee00b2b343ff3545080f",
+      "imageSha256": "cb03d2679d28d593e286699faaf77be88e227f0191c1cd75c38093b085f9ec20",
+      "motionSha256": "21f0fce91310e9ff4bdfcd22c81541e0a512f9236b2aedc123e76f3a75beadb4",
       "facets": [
         {
           "facet": "mood",
@@ -1053,15 +1057,15 @@
         "correspondence"
       ],
       "priceCredits": 0,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "f43d5aab-5e25-42fc-8388-0a1aa35d6d31.png",
       "sourceMotion": "Some letters stay with you.mp4",
       "sourceMotionSha256": "08ca873d9b47c3ecad1e9dfb846d8579d9483490906bbb680779f065b5cfebf0",
-      "imagePath": "premium-batch-1/premium_kept/9467f3257696b3298b92.jpg",
-      "motionPath": "premium-batch-1/premium_kept/291d300947a736d51a41.mp4",
+      "imagePath": "premium-batch-1/premium_kept/41be1eba21996949f1f8.jpg",
+      "motionPath": "premium-batch-1/premium_kept/08ca873d9b47c3ecad1e.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "9467f3257696b3298b921c80c8760c7ef33bd3ae186d8565b28c4bcf206d994b",
-      "motionSha256": "291d300947a736d51a41a544c10794e701406d61f8ceed5ae14583beabd12095",
+      "imageSha256": "41be1eba21996949f1f886c17888f130a2342702ed1ec746b22ece7b2830f11e",
+      "motionSha256": "08ca873d9b47c3ecad1e9dfb846d8579d9483490906bbb680779f065b5cfebf0",
       "facets": [
         {
           "facet": "mood",
@@ -1080,46 +1084,19 @@
         "dark humour"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "fe2031cc-93e2-43ab-800b-e15b40cb22d4.png",
       "sourceMotion": "generated_video (12).mp4",
       "sourceMotionSha256": "612d1410dcb4381a356763b35a6c0bff4bf6cdd4276ec5e3bb9767b2f55fe12e",
-      "imagePath": "premium-batch-1/premium_midnight_correspondence_the_count/24f70e274fba07d2bd8f.jpg",
-      "motionPath": "premium-batch-1/premium_midnight_correspondence_the_count/c83999861f7a2c60ea31.mp4",
+      "imagePath": "premium-batch-1/premium_midnight_correspondence_the_count/0fe5646a3771c2e457ed.jpg",
+      "motionPath": "premium-batch-1/premium_midnight_correspondence_the_count/612d1410dcb4381a3567.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "24f70e274fba07d2bd8fc10c9778cb7282fd669f502bd5143e5c0114809ce4c5",
-      "motionSha256": "c83999861f7a2c60ea31eefcefada85c6d39d9515714dc46ed82f56ea49c89d5",
+      "imageSha256": "0fe5646a3771c2e457ed6699391728a06e3dec51b09da6406a57f3ad8cec9b39",
+      "motionSha256": "612d1410dcb4381a356763b35a6c0bff4bf6cdd4276ec5e3bb9767b2f55fe12e",
       "facets": [
         {
           "facet": "world",
           "label": "After Dark"
-        }
-      ]
-    },
-    {
-      "key": "premium_lady_larkspur",
-      "slug": "lady-larkspur",
-      "title": "Lady Larkspur",
-      "description": "Motion-only artwork; extract poster from video after approval",
-      "tags": [
-        "Romance",
-        "character",
-        "intrigue"
-      ],
-      "priceCredits": 100,
-      "posterOrigin": "opening_frame_from_supplied_motion",
-      "sourceStill": null,
-      "sourceMotion": "Lady Larkspur.mp4",
-      "sourceMotionSha256": "77eb08658ad06583cabb9c928a46a1908190ad82f7faa2121aebc957e40d0788",
-      "imagePath": "premium-batch-1/premium_lady_larkspur/c17420b0a7b8c8a12273.jpg",
-      "motionPath": "premium-batch-1/premium_lady_larkspur/57d83069c921310bbb70.mp4",
-      "durationSeconds": 10.041667,
-      "imageSha256": "c17420b0a7b8c8a12273e0c12b496bf90beb5f63f92564e16c14ad9737cb07af",
-      "motionSha256": "57d83069c921310bbb7038f09b0b455bb564a5e8fbd96826ee570f6955919a10",
-      "facets": [
-        {
-          "facet": "world",
-          "label": "Enchanted Worlds"
         }
       ]
     },
@@ -1134,15 +1111,15 @@
         "story"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "91bec116-2b44-4717-b967-febf7b12181a.png",
       "sourceMotion": "The Misnight Ring.mp4",
       "sourceMotionSha256": "03bf41a83a41be39bb346bb623119fa4166bca064c7dcf0735c2094bbb8d7e3e",
-      "imagePath": "premium-batch-1/premium_the_midnight_ring/6ab8f64a65381833e03a.jpg",
-      "motionPath": "premium-batch-1/premium_the_midnight_ring/377ecc4963600e738642.mp4",
+      "imagePath": "premium-batch-1/premium_the_midnight_ring/f9eb84cbbdd63d820530.jpg",
+      "motionPath": "premium-batch-1/premium_the_midnight_ring/03bf41a83a41be39bb34.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "6ab8f64a65381833e03abd771ffa09ce9c169c47908b99ff97a6cc4423ee1674",
-      "motionSha256": "377ecc4963600e738642625fa0395ff68cc902b5050e4f4456d4f01af0c3f200",
+      "imageSha256": "f9eb84cbbdd63d820530615ec59313ac87243d90c69e64bd9493dd165468abf6",
+      "motionSha256": "03bf41a83a41be39bb346bb623119fa4166bca064c7dcf0735c2094bbb8d7e3e",
       "facets": [
         {
           "facet": "world",
@@ -1160,15 +1137,15 @@
         "celebration"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "72125ea6-5674-42cc-ae00-6ccdb3da2bbc.png",
       "sourceMotion": "generated_video (17).mp4",
       "sourceMotionSha256": "b0dc79cd9b5e9cce64172fd85bbd93f1fb6c5f8fca5a1e32cd3b94023a0c6a61",
-      "imagePath": "premium-batch-1/premium_midnight_cake/390c6626f24b99978c6e.jpg",
-      "motionPath": "premium-batch-1/premium_midnight_cake/47fb7cd966c2869ebcf4.mp4",
+      "imagePath": "premium-batch-1/premium_midnight_cake/bd773ca6e9060bc1a17d.jpg",
+      "motionPath": "premium-batch-1/premium_midnight_cake/b0dc79cd9b5e9cce6417.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "390c6626f24b99978c6e21df12a8c217992c46124d2685033b7248c25536b1bb",
-      "motionSha256": "47fb7cd966c2869ebcf4a4c2b66478c93bb4a26cca03c409e6308e801fea633b",
+      "imageSha256": "bd773ca6e9060bc1a17da2d7434cfa9f1071b29346572d98611d071b167ab281",
+      "motionSha256": "b0dc79cd9b5e9cce64172fd85bbd93f1fb6c5f8fca5a1e32cd3b94023a0c6a61",
       "facets": [
         {
           "facet": "occasion",
@@ -1186,15 +1163,15 @@
         "identity"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "d2a00141-a9c0-4c17-a894-717723101491.png",
       "sourceMotion": "generated_video (9).mp4",
       "sourceMotionSha256": "e9a2613ea62f3608b4ee6aceed30ad86470221769178780c2a3952d7127af62b",
-      "imagePath": "premium-batch-1/premium_secret_identity/14b1e7371a62a49d60ee.jpg",
-      "motionPath": "premium-batch-1/premium_secret_identity/512dfc5fe495c8bf5087.mp4",
+      "imagePath": "premium-batch-1/premium_secret_identity/291dda0adc48d9d320df.jpg",
+      "motionPath": "premium-batch-1/premium_secret_identity/e9a2613ea62f3608b4ee.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "14b1e7371a62a49d60ee02a3b4052036b6c10b8b9a4638711453f2de0296a6a8",
-      "motionSha256": "512dfc5fe495c8bf5087d56d39a07846ecec8b452b660ec3baea45a052727334",
+      "imageSha256": "291dda0adc48d9d320dfd02142e618f54e434bc7d09b56f2737ae14ad3ad47d7",
+      "motionSha256": "e9a2613ea62f3608b4ee6aceed30ad86470221769178780c2a3952d7127af62b",
       "facets": [
         {
           "facet": "world",
@@ -1212,15 +1189,15 @@
         "affection"
       ],
       "priceCredits": 100,
-      "posterOrigin": "source_png",
+      "posterOrigin": "reviewed_source_png_jpeg_91",
       "sourceStill": "da0e58f5-9aa5-4c57-ba91-bcebe7a8fa9f.png",
       "sourceMotion": "Perfect love aim.mp4",
       "sourceMotionSha256": "bf5209f9b5835b8a4e9929ce54caf17c60c71348dc3ce0be5d4ce0a8007bc943",
-      "imagePath": "premium-batch-1/premium_perfect_aim/68ee939ecd83e38d932d.jpg",
-      "motionPath": "premium-batch-1/premium_perfect_aim/d823399488b3fb443c9b.mp4",
+      "imagePath": "premium-batch-1/premium_perfect_aim/07049d16d2c9b3db3ede.jpg",
+      "motionPath": "premium-batch-1/premium_perfect_aim/bf5209f9b5835b8a4e99.mp4",
       "durationSeconds": 10.041667,
-      "imageSha256": "68ee939ecd83e38d932d0425533546efebb78253256457a1480dda29b371e65e",
-      "motionSha256": "d823399488b3fb443c9b7bcc7c241126318ba0318ac910063c7f080db0421799",
+      "imageSha256": "07049d16d2c9b3db3ededa4fab29b5193016cc29bef21f5d541f79b041b65491",
+      "motionSha256": "bf5209f9b5835b8a4e9929ce54caf17c60c71348dc3ce0be5d4ce0a8007bc943",
       "facets": [
         {
           "facet": "mood",
@@ -1295,7 +1272,7 @@
       "priceCredits": 500,
       "slugs": [
         "the-fairy-post-office",
-        "lady-larkspur",
+        "sundown-mail",
         "the-midnight-ring",
         "the-celestial-archive",
         "sky-courier",
