@@ -9,12 +9,12 @@ async function enterTheBoard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
-  const { data: profile, error: profileError } = await supabase.from('profiles').select('mark_id').eq('id', user.id).maybeSingle()
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('mark_id, first_arrival_journey_version').eq('id', user.id).maybeSingle()
   if (profileError || !profile) throw new Error('We could not verify your profile. Please try again.')
   if (!profile.mark_id) redirect('/you/mark')
   const { error } = await supabase.rpc('complete_my_first_arrival')
   if (error) throw new Error('We could not finish your welcome. Please try again.')
-  redirect('/welcome/people')
+  redirect(profile.first_arrival_journey_version === 2 ? '/welcome/letter' : '/welcome/people')
 }
 
 
@@ -28,10 +28,16 @@ export default async function WelcomePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/sign-in')
   const { data: profile } = await supabase.from('profiles')
-    .select('id, mark_id, first_arrival_seen_at').eq('id', user.id).maybeSingle()
+    .select('id, mark_id, first_arrival_seen_at, first_arrival_journey_version, first_letter_invitation_done_at, auto_match_completed_at').eq('id', user.id).maybeSingle()
   if (!profile) redirect('/profile')
   if (!profile.mark_id) redirect('/you/mark')
-  if (profile.first_arrival_seen_at) redirect('/board')
+  if (profile.first_arrival_seen_at) {
+    if (profile.first_arrival_journey_version === 2) {
+      if (!profile.first_letter_invitation_done_at) redirect('/welcome/letter')
+      if (!profile.auto_match_completed_at) redirect('/welcome/people')
+    }
+    redirect('/board')
+  }
 
   const destinations = [
     { title: t('board'), body: t('boardHelp') },

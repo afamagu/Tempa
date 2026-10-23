@@ -15,7 +15,7 @@ export default async function FirstArrivalPeoplePage() {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('mark_id, first_arrival_seen_at, auto_match_completed_at, intent')
+    .select('mark_id, first_arrival_seen_at, first_arrival_journey_version, first_letter_invitation_done_at, auto_match_completed_at, intent')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -30,7 +30,8 @@ export default async function FirstArrivalPeoplePage() {
   if (!profile) redirect('/profile')
   if (!profile.mark_id) redirect('/you/mark')
   if (!profile.first_arrival_seen_at) redirect('/welcome')
+  if (profile.first_arrival_journey_version === 2 && !profile.first_letter_invitation_done_at) redirect('/welcome/letter')
   if (profile.auto_match_completed_at) redirect('/board')
 
-  return <AutoMatchArrival userId={user.id} initialIntent={profile.intent ?? []} />
+  return <AutoMatchArrival userId={user.id} initialIntent={profile.intent ?? []} writingFirst={profile.first_arrival_journey_version === 2} />
 }

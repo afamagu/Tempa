@@ -32,9 +32,11 @@ const MAX_INTENTS = 3
 export default function AutoMatchArrival({
   userId,
   initialIntent,
+  writingFirst = false,
 }: {
   userId: string
   initialIntent: string[]
+  writingFirst?: boolean
 }) {
   const t = useTranslations('AutoMatch')
   const router = useRouter()
@@ -123,10 +125,10 @@ export default function AutoMatchArrival({
           <p className="font-serif text-xl italic text-foreground/75">Tempa<span className="text-[#a36a4d]">.</span></p>
           <p className="mt-10 text-[11px] font-semibold uppercase tracking-[.22em] text-[#94745f]">{phase === 'invitation' ? t('boardEyebrow') : t('eyebrow')}</p>
           <h1 className="mt-4 font-serif text-[clamp(2.4rem,6vw,4.3rem)] font-normal leading-[1.08] tracking-[-.035em] text-foreground">
-            {phase === 'invitation' ? (noMatches ? t('emptyHeading') : t('inviteHeading')) : phase === 'cards' ? t('cardsHeading') : t('heading')}
+            {phase === 'invitation' ? (writingFirst ? t('afterMatchHeading') : noMatches ? t('emptyHeading') : t('inviteHeading')) : phase === 'cards' ? t('cardsHeading') : t('heading')}
           </h1>
           <p className="mt-5 max-w-xl font-serif text-[21px] leading-[1.5] text-foreground/80">
-            {phase === 'invitation' ? (noMatches ? t('emptyLead') : t('inviteLead')) : phase === 'cards' ? t('cardsLead') : t('lead')}
+            {phase === 'invitation' ? (writingFirst ? t('afterMatchLead') : noMatches ? t('emptyLead') : t('inviteLead')) : phase === 'cards' ? t('cardsLead') : t('lead')}
           </p>
         </header>
 
@@ -177,7 +179,7 @@ export default function AutoMatchArrival({
           </div>
         )}
 
-        {phase === 'invitation' && (
+        {phase === 'invitation' && !writingFirst && (
           <section className="mt-10 rounded-xl border border-accent/25 bg-surface-shell p-6 shadow-sm sm:p-9">
             <p className="text-[11px] font-semibold uppercase tracking-[.2em] text-[#94745f]">{t('boardEyebrow')}</p>
             <h2 className="mt-3 max-w-xl font-serif text-[30px] leading-[1.2]">{t('inviteTitle')}</h2>
@@ -190,6 +192,12 @@ export default function AutoMatchArrival({
           </section>
         )}
 
+        {phase === 'invitation' && writingFirst && (
+          <section className="mt-9 border-t border-foreground/10 pt-7">
+            <p className="font-serif text-xl text-foreground/80">{t('afterMatchBody')}</p>
+            <button type="button" disabled={busy} onClick={() => void finish('/board')} className={`mt-6 ${primaryButtonClass}`}>{t('continue')} →</button>
+          </section>
+        )}
         {phase === 'error' && (
           <section className="mt-10 space-y-5 border-t border-foreground/10 pt-8">
             <p className="max-w-lg text-[15px] leading-relaxed text-foreground/75">{t('unable')}</p>
