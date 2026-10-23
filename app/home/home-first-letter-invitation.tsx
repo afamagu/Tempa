@@ -8,7 +8,12 @@ export default function HomeFirstLetterInvitation({userId}:{userId:string}){
   const key=`tempa.first-letter.invitation.dismissed:${userId}`
   const [visible,setVisible]=useState(false)
   useEffect(()=>{
-    try{setVisible(window.localStorage.getItem(key)!=='1')}catch{setVisible(true)}
+    let cancelled=false
+    queueMicrotask(()=>{
+      if(cancelled)return
+      try{setVisible(window.localStorage.getItem(key)!=='1')}catch{setVisible(true)}
+    })
+    return ()=>{cancelled=true}
   },[key])
   if(!visible)return null
   return <section className="rounded-xl border border-accent/25 bg-surface-shell p-5 sm:p-6" aria-label={t('heading')}>

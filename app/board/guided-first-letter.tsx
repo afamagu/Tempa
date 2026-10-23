@@ -19,6 +19,9 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
   const [hasExistingDraft,setHasExistingDraft]=useState(false)
   const [saveFailed,setSaveFailed]=useState(false)
   useEffect(()=>{
+    let cancelled=false
+    queueMicrotask(()=>{
+    if(cancelled)return
     try {
       const json=window.localStorage.getItem(key)
       if(json){
@@ -33,11 +36,18 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
       }
     } catch {/* Private mode may disable storage: writing still works. */}
     setLoaded(true)
+    })
+    return ()=>{cancelled=true}
   },[key])
   useEffect(()=>{
     if(!loaded)return
-    try{window.localStorage.setItem(key,JSON.stringify({starterId,answers,step}))}
-    catch{setSaveFailed(true)}
+    let cancelled=false
+    queueMicrotask(()=>{
+      if(cancelled)return
+      try{window.localStorage.setItem(key,JSON.stringify({starterId,answers,step}))}
+      catch{setSaveFailed(true)}
+    })
+    return ()=>{cancelled=true}
   },[loaded,key,starterId,answers,step])
   const starter=WRITING_STARTERS.find(s=>s.id===starterId)
   const ready=canContinueGuidedWriting(answers)
@@ -72,7 +82,7 @@ export default function GuidedFirstLetter({userId}:{userId:string}) {
 
     {starter&&step<3&&<section className="mt-10" aria-labelledby="prompt-heading">
       <p className="text-xs tracking-widest text-foreground/55">{t('progress',{current:step+1,total:3})}</p>
-      <h2 id="prompt-heading" className="mt-4 font-serif text-3xl leading-snug">{t(`starters.${starter.id}.q${step+1}`)}</h2>
+      <h2 id="prompt-heading" className="mt-4 font-serif text-3xl leading-snug">{t(`starters.${starter.id}.${(['q1','q2','q3'] as const)[step] ?? 'q1'}`)}</h2>
       <label className="mt-6 block">
         <span className="sr-only">{t('yourAnswer')}</span>
         <textarea rows={5} maxLength={2800} value={answers[step]} onChange={e=>setAnswers(current=>current.map((x,i)=>i===step?e.target.value:x) as [string,string,string])}
