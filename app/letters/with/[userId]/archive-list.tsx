@@ -133,7 +133,7 @@ export default function ArchiveList({
       aria-label={`Letters with ${otherPseudonym}`}
       className="overflow-hidden rounded-lg border border-foreground/10 bg-background"
     >
-      <div className="flex min-h-12 items-center gap-3 border-b border-foreground/10 px-3 sm:px-4">
+      <div className="flex min-h-14 items-center gap-3 border-b border-[#d6c8b3] bg-[#eae1d3] px-3 sm:px-4">
         <input
           type="checkbox"
           aria-label="Select all letters"
@@ -148,10 +148,16 @@ export default function ArchiveList({
           }}
           className="h-4 w-4 accent-[var(--accent)]"
         />
-        <span className="flex-1 text-[12px] text-muted">
-          {selected.size > 0
-            ? `${selected.size} selected`
-            : `${entries.length} ${entries.length === 1 ? 'item' : 'items'} · newest first`}
+        <span className="flex-1 text-[12px] text-[#736654]">
+          {selected.size > 0 ? (
+            <span className="font-semibold text-[#4d4030]">{selected.size} selected</span>
+          ) : (
+            <>
+              <span className="font-semibold text-[#4d4030]">{entries.length} {entries.length === 1 ? 'item' : 'items'}</span>
+              <span className="mx-2 text-[#aa9b85]" aria-hidden="true">·</span>
+              <span>Newest first</span>
+            </>
+          )}
         </span>
         <ArchiveActions
           selectionCount={selected.size}
