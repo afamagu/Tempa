@@ -196,9 +196,7 @@ export default async function LetterArchiveWithUserPage({
               </div>
             )}
 
-            {(lifecycle && otherProfile || activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile) && (
-              <div className="grid items-start gap-3 sm:grid-cols-2">
-            )}
+            <div className="grid items-start gap-3 sm:grid-cols-2">
             {lifecycle && otherProfile && (
               <CorrespondenceLifecycleControl
                 lifecycle={lifecycle}
@@ -220,7 +218,7 @@ export default async function LetterArchiveWithUserPage({
                 />
               </section>
             )}
-            {(lifecycle && otherProfile || activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile) && </div>}
+            </div>
 
             {lifecycle?.establishedAt && (
               <PrivateMemoryControl
