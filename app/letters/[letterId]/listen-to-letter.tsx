@@ -4,96 +4,152 @@ import { useEffect, useRef, useState } from 'react'
 import { stripRichBodyMarker } from '@/lib/letter-editor-doc'
 
 const SPEEDS = [0.85, 1, 1.15, 1.3] as const
+const MAX_CHUNK = 180
 
-/**
- * Private, device-native narration. No audio or letter content is sent to
- * Tempa or a third-party TTS API. The browser chooses its installed voice.
- */
+/** Split long letters at natural boundaries; some mobile engines silently stop long utterances. */
+export function splitNarration(text: string): string[] {
+  const chunks: string[] = []
+  const paragraphs = text.split(/\n\s*\n/)
+  for (const paragraph of paragraphs) {
+    const sentences = paragraph.match(/[^.!?\n]+(?:[.!?]+|$)/g) ?? [paragraph]
+    let current = ''
+    for (const sentence of sentences) {
+      const words = sentence.trim().split(/\s+/).filter(Boolean)
+      for (const word of words) {
+        if (current && current.length + word.length + 1 > MAX_CHUNK) {
+          chunks.push(current)
+          current = ''
+        }
+        // Long unbroken tokens are still bounded for speech engines.
+        if (word.length > MAX_CHUNK) {
+          for (let i = 0; i < word.length; i += MAX_CHUNK) chunks.push(word.slice(i, i + MAX_CHUNK))
+        } else current += (current ? ' ' : '') + word
+      }
+    }
+    if (current) chunks.push(current)
+  }
+  return chunks
+}
+
 export default function ListenToLetter({ body }: { body: string }) {
   const [supported, setSupported] = useState(false)
-  const [state, setState] = useState<'idle' | 'playing' | 'paused'>('idle')
-  const [speed, setSpeed] = useState<number>(1)
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
-  const sessionRef = useRef(0)
-  const [voiceName, setVoiceName] = useState('')
+  const [status, setStatus] = useState<'idle' | 'playing' | 'paused'>('idle')
+  const [speed, setSpeed] = useState(1)
+  const [voiceUri, setVoiceUri] = useState('')
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const generation = useRef(0)
+  const chunksRef = useRef<string[]>([])
+  const indexRef = useRef(0)
+  const currentRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const statusRef = useRef<'idle' | 'playing' | 'paused'>('idle')
+
+  function updateStatus(next: 'idle' | 'playing' | 'paused') {
+    statusRef.current = next
+    setStatus(next)
+  }
 
   useEffect(() => {
-    setSupported(typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)
-    const updateVoices = () => setVoices(window.speechSynthesis?.getVoices() ?? [])
+    if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return
+    setSupported(true)
+    const updateVoices = () => setVoices(window.speechSynthesis.getVoices())
     updateVoices()
-    window.speechSynthesis?.addEventListener?.('voiceschanged', updateVoices)
+    window.speechSynthesis.addEventListener?.('voiceschanged', updateVoices)
     return () => {
-      window.speechSynthesis?.removeEventListener?.('voiceschanged', updateVoices)
-      sessionRef.current += 1
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
-      utteranceRef.current = null
+      generation.current++
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.removeEventListener?.('voiceschanged', updateVoices)
     }
   }, [])
 
-  if (!supported) return null
-
   function stop() {
-    sessionRef.current += 1
+    generation.current++
     window.speechSynthesis.cancel()
-    utteranceRef.current = null
-    setState('idle')
+    currentRef.current = null
+    chunksRef.current = []
+    indexRef.current = 0
+    updateStatus('idle')
   }
 
-  function play() {
-    const synth = window.speechSynthesis
-    if (state === 'playing') {
-      synth.pause()
-      setState('paused')
+  function speakNext(token: number) {
+    if (generation.current !== token || statusRef.current !== 'playing') return
+    const chunk = chunksRef.current[indexRef.current]
+    if (!chunk) {
+      currentRef.current = null
+      updateStatus('idle')
       return
     }
-    if (state === 'paused' && synth.paused) {
-      synth.resume()
-      setState('playing')
-      return
-    }
-    synth.cancel()
-    const clean = stripRichBodyMarker(body).body
-    const text = clean.replace(/\*\*/g, '').replace(/\\([*_\\])/g, '$1').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim()
-    if (!text) return
-    const utterance = new SpeechSynthesisUtterance(text)
-    const chosen = voices.find((voice) => voice.voiceURI === voiceName)
-    if (chosen) utterance.voice = chosen
+    const utterance = new SpeechSynthesisUtterance(chunk)
+    const voice = voices.find((candidate) => candidate.voiceURI === voiceUri)
+    if (voice) utterance.voice = voice
+    utterance.lang = voice?.lang || document.documentElement.lang || navigator.language || 'en'
     utterance.rate = speed
-    utterance.lang = document.documentElement.lang || navigator.language || 'en'
     utterance.onend = () => {
-      if (utteranceRef.current === utterance) {
-        utteranceRef.current = null
-        setState('idle')
-      }
+      if (generation.current !== token || currentRef.current !== utterance) return
+      indexRef.current++
+      if (statusRef.current === 'playing') speakNext(token)
     }
     utterance.onerror = () => {
-      if (utteranceRef.current === utterance) {
-        utteranceRef.current = null
-        setState('idle')
-      }
+      if (generation.current !== token || currentRef.current !== utterance) return
+      // Fail closed: don't skip text silently on an engine error.
+      currentRef.current = null
+      updateStatus('idle')
     }
-    utteranceRef.current = utterance
-    synth.speak(utterance)
-    setState('playing')
+    currentRef.current = utterance
+    window.speechSynthesis.speak(utterance)
   }
+
+  function toggle() {
+    const synth = window.speechSynthesis
+    if (status === 'playing') {
+      synth.pause()
+      updateStatus('paused')
+      return
+    }
+    if (status === 'paused') {
+      if (synth.paused) {
+        updateStatus('playing')
+        synth.resume()
+        // A chunk may have finished just as pause was requested.
+        if (!synth.speaking && !synth.pending) speakNext(generation.current)
+      } else {
+        // Engine abandoned playback during pause; restart current chunk.
+        updateStatus('playing')
+        speakNext(generation.current)
+      }
+      return
+    }
+
+    const { isRich, body: clean } = stripRichBodyMarker(body)
+    // The stored body is plain text with a small opt-in bold/italic markup subset.
+    const spoken = isRich ? clean.replace(/\\([*_\\])/g, '$1').replace(/\*\*/g, '').replace(/(^|\s)_(?=\S)|_(?=\s|$)/g, '$1') : clean
+    const chunks = splitNarration(spoken)
+    if (!chunks.length) return
+    generation.current++
+    synth.cancel()
+    chunksRef.current = chunks
+    indexRef.current = 0
+    updateStatus('playing')
+    speakNext(generation.current)
+  }
+
+  if (!supported) return null
 
   return (
     <div aria-label="Letter audio controls" className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-foreground/10 bg-background px-3 py-2 text-[13px]">
-      <button type="button" onClick={play} aria-label={state === 'playing' ? 'Pause reading' : state === 'paused' ? 'Resume reading' : 'Listen to letter'} className="rounded-md px-2 py-1 font-medium text-foreground hover:bg-foreground/5">
-        {state === 'playing' ? 'Pause' : state === 'paused' ? 'Continue listening' : '♫ Listen to letter'}
+      <button type="button" onClick={toggle} className="rounded-md px-2 py-1 font-medium text-foreground hover:bg-foreground/5" aria-label={status === 'playing' ? 'Pause reading' : status === 'paused' ? 'Resume reading' : 'Listen to letter'}>
+        {status === 'playing' ? 'Pause' : status === 'paused' ? 'Continue listening' : 'Listen to letter'}
       </button>
-      {state !== 'idle' && (
-        <button type="button" onClick={stop} className="rounded-md px-2 py-1 text-muted hover:bg-foreground/5">Stop</button>
+      {status !== 'idle' && <button type="button" onClick={stop} className="rounded-md px-2 py-1 text-muted hover:bg-foreground/5">Stop</button>}
+      {voices.length > 0 && (
+        <label className="flex items-center gap-2 text-muted">Voice
+          <select aria-label="Reading voice" className="max-w-36 rounded border border-foreground/15 bg-background px-2 py-1 text-foreground" value={voiceUri} onChange={(event) => { if (status !== 'idle') stop(); setVoiceUri(event.target.value) }}>
+            <option value="">Device default</option>
+            {voices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang})</option>)}
+          </select>
+        </label>
       )}
-      {voices.length > 0 && <label className="flex items-center gap-2 text-muted">Voice <select aria-label="Reading voice" className="max-w-36 rounded border border-foreground/15 bg-background px-2 py-1 text-foreground" value={voiceName} onChange={(e) => { setVoiceName(e.target.value); if (state !== 'idle') stop() }}><option value="">Device default</option>{voices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang})</option>)}</select></label>}
-      <label className="ml-auto flex items-center gap-2 text-muted">
-        Speed
-        <select aria-label="Reading speed" value={speed} onChange={(event) => {
-          const next = Number(event.target.value)
-          setSpeed(next)
-          if (state !== 'idle') stop()
-        }} className="rounded border border-foreground/15 bg-background px-2 py-1 text-foreground">
+      <label className="ml-auto flex items-center gap-2 text-muted">Speed
+        <select aria-label="Reading speed" value={speed} onChange={(event) => { if (status !== 'idle') stop(); setSpeed(Number(event.target.value)) }} className="rounded border border-foreground/15 bg-background px-2 py-1 text-foreground">
           {SPEEDS.map((rate) => <option key={rate} value={rate}>{rate}×</option>)}
         </select>
       </label>
