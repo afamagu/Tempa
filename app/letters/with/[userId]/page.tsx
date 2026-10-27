@@ -24,7 +24,6 @@ import ProfileIdentityMark from '@/app/profile-identity-mark'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
 import MailOnTheWay from '@/app/mail-on-the-way'
 import ArchiveList from './archive-list'
-import ReturnCardHistory from './return-card-history'
 import WriteQuillButton from './write-quill-button'
 import CorrespondenceRhythmControl from './correspondence-rhythm-control'
 import CorrespondenceLifecycleControl from './correspondence-lifecycle-control'
@@ -228,18 +227,13 @@ export default async function LetterArchiveWithUserPage({
             )}
           </div>
 
-          <ReturnCardHistory
-            cards={returnCards}
-            viewerId={user.id}
-            otherPseudonym={otherPseudonym}
-          />
-
           <ArchiveList
             letters={letters}
             viewerId={user.id}
             otherUserId={otherUserId}
             otherPseudonym={otherPseudonym}
             viewerPseudonym={viewerPseudonym}
+            returnCards={returnCards}
           />
 
         </div>

@@ -15,6 +15,8 @@ import {
 } from '@/lib/letters'
 import FormattedText from '@/app/letters/formatted-text'
 import ArchiveActions from './archive-actions'
+import LetterheadPostcard from '@/app/letters/letterhead-postcard'
+import { returnCardVersionToBaseContent, type ReturnCard } from '@/lib/return-cards'
 
 function PhotoIcon() {
   return (
@@ -56,12 +58,14 @@ export default function ArchiveList({
   otherUserId,
   otherPseudonym,
   viewerPseudonym,
+  returnCards = [],
 }: {
   letters: ArchiveLetter[]
   viewerId: string
   otherUserId: string
   otherPseudonym: string
   viewerPseudonym: string
+  returnCards?: ReturnCard[]
 }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -77,8 +81,12 @@ export default function ArchiveList({
     [otherPseudonym, otherUserId, viewerId, viewerPseudonym]
   )
   const allSelected = letters.length > 0 && selected.size === letters.length
+  const entries = useMemo(() => [
+    ...letters.map((letter) => ({ kind: 'letter' as const, id: letter.id, at: letter.mailboxAt ?? letter.createdAt, letter })),
+    ...returnCards.map((card) => ({ kind: 'card' as const, id: card.id, at: card.sentAt, card })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()), [letters, returnCards])
 
-  if (letters.length === 0)
+  if (entries.length === 0)
     return <p className={helperTextClass}>No visible letters with {otherPseudonym} yet.</p>
 
   function toggle(id: string) {
@@ -143,7 +151,7 @@ export default function ArchiveList({
         <span className="flex-1 text-[12px] text-muted">
           {selected.size > 0
             ? `${selected.size} selected`
-            : `${letters.length} ${letters.length === 1 ? 'letter' : 'letters'} · newest first`}
+            : `${entries.length} ${entries.length === 1 ? 'item' : 'items'} · newest first`}
         </span>
         <ArchiveActions
           selectionCount={selected.size}
@@ -194,7 +202,30 @@ export default function ArchiveList({
       )}
 
       <ol className="divide-y divide-foreground/10">
-        {letters.map((letter) => {
+        {entries.map((entry) => {
+          if (entry.kind === 'card') {
+            const card = entry.card
+            const senderLabel = card.senderId === viewerId ? 'You' : card.senderPseudonymSnapshot || otherPseudonym
+            return (
+              <li key={`return-card:${card.id}`} className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-foreground/[.025] sm:px-4">
+                <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[8rem_minmax(0,1fr)_auto]">
+                  <span className="truncate text-[13px] font-medium text-foreground/75">{senderLabel}</span>
+                  <span className="col-span-2 min-w-0 truncate font-serif text-[14px] text-foreground/70 sm:col-span-1">
+                    Return Card · {card.version.title}{card.message ? ` — ${card.message}` : ''}
+                  </span>
+                  <span className="row-start-1 flex shrink-0 items-center gap-1.5 text-[11px] text-muted sm:col-start-3">
+                    <span role="img" aria-label="Return Card"><PostcardIcon /></span>
+                    {formatDateTimeCompact(card.sentAt)}
+                  </span>
+                </div>
+                <div className="shrink-0 [&_button]:!h-9 [&_button]:!w-7 [&_img]:!h-9 [&_img]:!w-7">
+                  <LetterheadPostcard base={returnCardVersionToBaseContent(card.version)} revealLine="" backMessage={card.message ?? ''} senderPseudonym={card.senderPseudonymSnapshot} />
+                </div>
+              </li>
+            )
+          }
+          const letter = entry.letter
           const { senderName } = resolveLetterDirection(letter, pseudonymById)
           const senderLabel = letter.senderId === viewerId ? 'You' : senderName
           return (
