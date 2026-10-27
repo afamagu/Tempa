@@ -13,6 +13,7 @@ import { findScrollRoot, getCurrentReadingAnchor, scrollToAnchor } from '@/app/r
 import type { Moment } from '@/lib/moments'
 import type { PhotoConsentStatus } from '@/lib/letters'
 import LetterBody from './letter-body'
+import ListenToLetter from './listen-to-letter'
 
 const PROGRESS_SAVE_INTERVAL_MS = 4000
 
@@ -199,6 +200,7 @@ export default function LetterReader({
 
   return (
     <div ref={containerRef}>
+      <ListenToLetter body={body} />
       <LetterBody
         body={body}
         moments={moments}
