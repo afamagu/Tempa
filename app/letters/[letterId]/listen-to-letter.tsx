@@ -32,7 +32,6 @@ export function splitNarration(text: string): string[] {
 }
 
 export default function ListenToLetter({ body }: { body: string }) {
-  const [supported, setSupported] = useState(false)
   const [status, setStatus] = useState<'idle' | 'playing' | 'paused'>('idle')
   const [speed, setSpeed] = useState(1)
   const [voiceUri, setVoiceUri] = useState('')
@@ -50,12 +49,13 @@ export default function ListenToLetter({ body }: { body: string }) {
 
   useEffect(() => {
     if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return
-    setSupported(true)
     const updateVoices = () => setVoices(window.speechSynthesis.getVoices())
-    updateVoices()
+    const initialVoicesTimer = window.setTimeout(updateVoices, 0)
     window.speechSynthesis.addEventListener?.('voiceschanged', updateVoices)
+    const activeGeneration = generation
     return () => {
-      generation.current++
+      window.clearTimeout(initialVoicesTimer)
+      activeGeneration.current++
       window.speechSynthesis.cancel()
       window.speechSynthesis.removeEventListener?.('voiceschanged', updateVoices)
     }
@@ -132,7 +132,7 @@ export default function ListenToLetter({ body }: { body: string }) {
     speakNext(generation.current)
   }
 
-  if (!supported) return null
+  if (typeof window === 'undefined' || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return null
 
   return (
     <div aria-label="Letter audio controls" className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-foreground/10 bg-background px-3 py-2 text-[13px]">
