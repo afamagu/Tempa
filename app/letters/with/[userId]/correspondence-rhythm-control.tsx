@@ -68,7 +68,7 @@ export default function CorrespondenceRhythmControl({
           <p className={helperTextClass}>{counterpartPseudonym} usually writes: {counterpartLabel}.</p>
         )}
         {viewerLabel && (
-          <p className={helperTextClass}>
+          <p className="font-serif text-[17px] leading-relaxed text-[#4c4235]">
             Your rhythm here: {viewerLabel}{usesOverride ? ' · just for this correspondence' : ''}.
           </p>
         )}
