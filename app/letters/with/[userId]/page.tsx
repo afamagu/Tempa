@@ -196,6 +196,9 @@ export default async function LetterArchiveWithUserPage({
               </div>
             )}
 
+            {(lifecycle && otherProfile || activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile) && (
+              <div className="grid items-start gap-3 sm:grid-cols-2">
+            )}
             {lifecycle && otherProfile && (
               <CorrespondenceLifecycleControl
                 lifecycle={lifecycle}
@@ -205,7 +208,8 @@ export default async function LetterArchiveWithUserPage({
             )}
 
             {activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile && (
-              <div className="rounded-md border border-foreground/10 px-4 py-3">
+              <section aria-label="Writing rhythm" className="min-w-0 rounded-2xl border border-[#e4d8c6] bg-[#f4eee3] px-4 py-4 shadow-[0_2px_12px_rgba(65,49,27,0.035)] sm:h-full">
+                <div className="mb-3 flex items-center gap-2 text-[#77634b]"><span aria-hidden="true" className="text-lg">◷</span><h2 className="text-[12px] font-semibold uppercase tracking-[0.13em]">Writing rhythm</h2></div>
                 <CorrespondenceRhythmControl
                   correspondenceId={activeCorrespondence.id}
                   counterpartPseudonym={otherProfile.pseudonym}
@@ -214,8 +218,9 @@ export default async function LetterArchiveWithUserPage({
                   initialUsesOverride={correspondenceRhythm.viewerUsesOverride}
                   counterpartRhythm={correspondenceRhythm.counterpartRhythm}
                 />
-              </div>
+              </section>
             )}
+            {(lifecycle && otherProfile || activeCorrespondence && establishedForViewer && correspondenceRhythm && otherProfile) && </div>}
 
             {lifecycle?.establishedAt && (
               <PrivateMemoryControl
