@@ -14,10 +14,18 @@ export default function ListenToLetter({ body }: { body: string }) {
   const [state, setState] = useState<'idle' | 'playing' | 'paused'>('idle')
   const [speed, setSpeed] = useState<number>(1)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const sessionRef = useRef(0)
+  const [voiceName, setVoiceName] = useState('')
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
 
   useEffect(() => {
     setSupported(typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window)
+    const updateVoices = () => setVoices(window.speechSynthesis?.getVoices() ?? [])
+    updateVoices()
+    window.speechSynthesis?.addEventListener?.('voiceschanged', updateVoices)
     return () => {
+      window.speechSynthesis?.removeEventListener?.('voiceschanged', updateVoices)
+      sessionRef.current += 1
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
       utteranceRef.current = null
     }
@@ -26,6 +34,7 @@ export default function ListenToLetter({ body }: { body: string }) {
   if (!supported) return null
 
   function stop() {
+    sessionRef.current += 1
     window.speechSynthesis.cancel()
     utteranceRef.current = null
     setState('idle')
@@ -45,9 +54,11 @@ export default function ListenToLetter({ body }: { body: string }) {
     }
     synth.cancel()
     const clean = stripRichBodyMarker(body).body
-    const text = clean.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+    const text = clean.replace(/\*\*/g, '').replace(/\\([*_\\])/g, '$1').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim()
     if (!text) return
     const utterance = new SpeechSynthesisUtterance(text)
+    const chosen = voices.find((voice) => voice.voiceURI === voiceName)
+    if (chosen) utterance.voice = chosen
     utterance.rate = speed
     utterance.lang = document.documentElement.lang || navigator.language || 'en'
     utterance.onend = () => {
@@ -75,6 +86,7 @@ export default function ListenToLetter({ body }: { body: string }) {
       {state !== 'idle' && (
         <button type="button" onClick={stop} className="rounded-md px-2 py-1 text-muted hover:bg-foreground/5">Stop</button>
       )}
+      {voices.length > 0 && <label className="flex items-center gap-2 text-muted">Voice <select aria-label="Reading voice" className="max-w-36 rounded border border-foreground/15 bg-background px-2 py-1 text-foreground" value={voiceName} onChange={(e) => { setVoiceName(e.target.value); if (state !== 'idle') stop() }}><option value="">Device default</option>{voices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang})</option>)}</select></label>}
       <label className="ml-auto flex items-center gap-2 text-muted">
         Speed
         <select aria-label="Reading speed" value={speed} onChange={(event) => {
