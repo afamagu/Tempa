@@ -75,8 +75,8 @@ export default function CorrespondenceLifecycleControl({
   if (lifecycle.status === 'closed') {
     if (!lifecycle.endedBy) return null
     return (
-      <section className="rounded-md border border-foreground/10 px-4 py-3">
-        <p className="text-[15px] text-foreground">This correspondence has ended.</p>
+      <section className="min-w-0 rounded-2xl border border-[#d8e1d1] bg-[#eaf0e5] px-4 py-4 shadow-[0_2px_12px_rgba(52,75,45,0.04)] sm:h-full">
+        <p className="text-[15px] text-foreground">Correspondence ended</p>
         <p className={helperTextClass}>Your letters remain here as part of your history together.</p>
       </section>
     )
@@ -84,22 +84,22 @@ export default function CorrespondenceLifecycleControl({
 
   if (lifecycle.status === 'active') {
     return (
-      <section className="space-y-3 rounded-md border border-foreground/10 px-4 py-3">
+      <section className="min-w-0 space-y-3 rounded-2xl border border-[#d8e1d1] bg-[#eaf0e5] px-4 py-4 shadow-[0_2px_12px_rgba(52,75,45,0.04)] sm:h-full">
         <div>
-          <p className="text-[15px] text-foreground">This correspondence is active.</p>
+          <p className="text-[15px] font-semibold text-[#344b35]"><span aria-hidden="true" className="mr-2 inline-block h-2 w-2 rounded-full bg-[#71896a]" />Correspondence active</p>
           <p className={helperTextClass}>
-            If you need space, you can pause it without losing the letters you have already exchanged.
+            Your letters remain safe if you decide to pause.
           </p>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className={secondaryButtonClass}
+            className="rounded-lg border border-[#b9cbb2] bg-white/65 px-3 py-2 text-[13px] font-medium text-[#344b35] transition-colors hover:bg-white disabled:opacity-50"
             disabled={working !== null}
             onClick={() => run('pause')}
           >
-            {working === 'pause' ? 'Pausing…' : 'Pause this correspondence'}
+            {working === 'pause' ? 'Pausing…' : 'Pause correspondence'}
           </button>
           <button
             type="button"
@@ -122,7 +122,7 @@ export default function CorrespondenceLifecycleControl({
     lifecycle.resumeRequestedBy !== null && lifecycle.resumeRequestedBy !== viewerId
 
   return (
-    <section className="space-y-3 rounded-md border border-foreground/10 px-4 py-3">
+    <section className="min-w-0 space-y-3 rounded-2xl border border-[#d8e1d1] bg-[#eaf0e5] px-4 py-4 shadow-[0_2px_12px_rgba(52,75,45,0.04)] sm:h-full">
       <div>
         <p className="text-[15px] text-foreground">
           {pausedByMe
