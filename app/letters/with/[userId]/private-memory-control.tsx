@@ -84,13 +84,13 @@ export default function PrivateMemoryControl({
   return (
     <section
       aria-label="Private Memory"
-      className="space-y-3 border-t border-foreground/10 pt-4"
+      className="space-y-4 rounded-2xl border border-[#e1d2bb] bg-[#f8f1e5] p-4 shadow-[0_3px_18px_rgba(75,54,27,0.045)] sm:p-5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <p className="text-[15px] font-medium text-foreground">Private Memory</p>
+          <p className="font-serif text-[20px] font-medium text-[#493e30]"><span aria-hidden="true" className="mr-2 text-[16px]">✧</span>Private Memory</p>
           <p className={helperTextClass}>
-            A note for yourself about this correspondence. {counterpartPseudonym} cannot see it.
+            Your personal notebook for this correspondence.
           </p>
         </div>
         {!open && (
@@ -110,7 +110,7 @@ export default function PrivateMemoryControl({
       {open && (
         <div className="space-y-3">
           {latestLetterContext && (
-            <div className="rounded-md bg-foreground/[.025] px-3 py-2.5">
+            <div className="rounded-xl border border-[#e6dbc9] bg-[#fffaf2] px-4 py-3 shadow-[0_1px_5px_rgba(75,54,27,0.03)]">
               <p className={helperTextClass}>Recent letter · {latestLetterContext.senderLabel}</p>
               <p className="mt-1 line-clamp-2 font-serif text-[14px] leading-relaxed text-foreground/70">
                 {latestLetterContext.excerpt}
@@ -132,7 +132,7 @@ export default function PrivateMemoryControl({
               maxLength={MAX_NOTE_LENGTH}
               rows={5}
               placeholder="Anything you want to remember for the next letter…"
-              className="w-full resize-y rounded-md border border-foreground/15 bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25"
+              className="w-full resize-y rounded-xl border border-[#d9c9af] bg-[#fffcf6] px-4 py-3 font-serif text-[16px] leading-[1.8] text-foreground outline-none placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/25"
             />
           </label>
 
