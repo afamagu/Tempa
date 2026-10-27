@@ -90,7 +90,7 @@ export default function PrivateMemoryControl({
         <div>
           <p className="font-serif text-[20px] font-medium text-[#493e30]"><span aria-hidden="true" className="mr-2 text-[16px]">✧</span>Private Memory</p>
           <p className={helperTextClass}>
-            Your personal notebook for this correspondence.
+            A note for yourself about this correspondence. {counterpartPseudonym} cannot see it.
           </p>
         </div>
         {!open && (
