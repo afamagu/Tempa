@@ -1,6 +1,6 @@
 # Tempa installed-web-app acceptance gate — iOS first
 
-Status: **manual device verification pending**. This checklist is a release gate, not a claim that physical-device tests have passed.
+Status: **partial manual iOS verification** — the owner reports that the installed iPhone Home Screen app launched successfully without requesting sign-in again (2026-10-31). This is a positive observation for this device/session, **not** proof that fresh installs, expired sessions, email-link authentication, or other iPhones behave identically. Remaining manual verification pending. This checklist is a release gate, not a claim that physical-device tests have passed.
 
 ## Scope and guardrails
 - Do not change production authentication, navigation, draft storage, letter sending, service workers, or caching in this phase.
