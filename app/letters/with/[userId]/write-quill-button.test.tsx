@@ -113,14 +113,17 @@ describe('WriteQuillButton — contextual visible label', () => {
     expect(pill.className).toContain('max-w-[16rem]')
     expect(quill.className).toMatch(/\bshrink-0\b/)
     expect(link.className).toContain('max-w-[calc(100vw-2rem)]')
+    expect(link.className).toContain('active:scale-[0.98]')
   })
 
   it('keeps the existing circular quill and its bottom-right placement above the mobile nav', () => {
     const link = mount({ otherUserId: MIA, otherPseudonym: 'Mia' })
-    for (const c of ['fixed', 'bottom-20', 'right-4', 'z-40', 'sm:bottom-8', 'sm:right-8']) {
+    for (const c of ['fixed', 'bottom-[calc(6.5rem+env(safe-area-inset-bottom))]', 'right-4', 'z-40', 'sm:bottom-8', 'sm:right-8']) {
       expect(link.className.split(' ')).toContain(c)
     }
+    expect(link.className).toContain('bottom-[calc(6.5rem+env(safe-area-inset-bottom))]')
     const quill = link.children[1]
+    expect(quill.className).toContain('group-active:scale-95')
     for (const c of ['h-14', 'w-14', 'rounded-full', 'bg-accent', 'text-accent-foreground', 'shadow-lg']) {
       expect(quill.className.split(' ')).toContain(c)
     }
