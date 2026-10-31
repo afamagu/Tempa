@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ArchiveList from './archive-list'
 import type { ArchiveLetter } from '@/lib/letters'
+import type { ReturnCard } from '@/lib/return-cards'
 
 function letter(overrides: Partial<ArchiveLetter> = {}): ArchiveLetter {
   return {
@@ -106,5 +107,30 @@ describe('ArchiveList — Postcard indicator', () => {
   it('never treats the OLD momentCounts.postcard (historical inline Moment Postcards) as the new letter-level Postcard', () => {
     const html = renderCard({ momentCounts: { photo: 0, postcard: 3 }, hasLetterPostcard: false })
     expect(html).not.toContain('Contains a Postcard')
+  })
+})
+
+describe('ArchiveList — Return Cards in unified archive', () => {
+  const card: ReturnCard = {
+    id: 'card-1', correspondenceId: 'corr-1', sourceLetterId: 'letter-1',
+    senderId: 'user-a', recipientId: 'user-b', postcardKey: 'test',
+    message: 'Still thinking of you', senderPseudonymSnapshot: 'Evening Quill',
+    sentAt: '2026-09-08T12:00:00Z',
+    version: { title: 'A Seat Saved', location: '', collection: '', postmarkText: '',
+      footerText: '', frontImagePath: '/postcards/essaouira.jpg', motionSrc: null,
+      durationSeconds: null, revealLineAlignment: null },
+  }
+  it('renders selectable Return Cards alongside letters and an accessible open control', () => {
+    const html = renderToStaticMarkup(<ArchiveList
+      letters={[letter()]} returnCards={[card]}
+      viewerId="user-b" otherUserId="user-a"
+      otherPseudonym="Evening Quill" viewerPseudonym="You"
+    />)
+    expect(html).toContain('Select all correspondence items')
+    expect(html).toContain('Select Return Card from Evening Quill')
+    expect(html).toContain('Select letter from Evening Quill')
+    expect(html).toContain('Open Return Card')
+    expect(html).toContain('2 items')
+    expect(html).toContain('A Seat Saved')
   })
 })
