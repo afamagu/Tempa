@@ -20,9 +20,10 @@ const stateFor=(pool:BoardFeedItem[],cursor:BoardFeedCursor|null,viewerId:string
 }
 
 export default function RoomBrowser({
-  viewerId,startedAt,seed,initialPool,initialCursor,restore,
+  viewerId,startedAt,seed,initialPool,initialCursor,restore,authorDetails,
 }:{
   viewerId:string
+  authorDetails?: Record<string, { gender: string | null; genderCustom: string | null; ageRange: string | null }>
   startedAt:string
   seed:string
   initialPool:BoardFeedItem[]
@@ -118,6 +119,7 @@ export default function RoomBrowser({
           <div key={letter.id} onClickCapture={saveReturn} className={index===0?'md:col-span-2':''}>
             <RoomLetterCard
               letter={letter}
+              authorDetails={authorDetails?.[letter.authorId]}
               featured={index===0}
               returnTo={returnTo}
             />
