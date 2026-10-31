@@ -43,10 +43,10 @@ export default function DirectoryFilters({
 
   const advancedCount = ['age','gender','intent','interest'].filter(key => Boolean(values[key as keyof DirectoryFilterValues])).length
   const selectedCount = ['country','language','search','age','gender','intent','interest'].filter(key => Boolean(values[key as keyof DirectoryFilterValues])).length
-    + (values.letters === 'all' ? 1 : 0)
+    + (values.letters === 'only' ? 1 : 0)
   return <details className="group rounded-[5px] border border-[#dfd3c2] bg-[#fffdf8]">
     <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[14px] font-medium text-foreground marker:hidden [&::-webkit-details-marker]:hidden">
-      <span>Filter people <span className="ml-2 font-normal text-foreground/55">{values.letters === 'all' ? 'All members' : 'Letters only'}</span>{selectedCount ? <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">{selectedCount} selected</span> : null}</span>
+      <span>Filter people <span className="ml-2 font-normal text-foreground/55">{values.letters === 'only' ? 'Letters only' : 'All members'}</span>{selectedCount ? <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">{selectedCount} selected</span> : null}</span>
       <span aria-hidden="true" className="text-lg text-foreground/60 transition-transform group-open:rotate-45">+</span>
     </summary>
     <div className="space-y-5 border-t border-[#e8ded1] px-5 pb-6 pt-5">
@@ -64,8 +64,8 @@ export default function DirectoryFilters({
       </div>
       <label className="flex cursor-pointer items-center gap-3 border-t border-foreground/10 pt-5 text-[14px]">
         <input type="checkbox" className="h-[17px] w-[17px] accent-[#455d4b]"
-          checked={values.letters !== 'all'}
-          onChange={(e)=>onChange({ ...values, letters: e.target.checked ? undefined : 'all' })} />
+          checked={values.letters === 'only'}
+          onChange={(e)=>onChange({ ...values, letters: e.target.checked ? 'only' : undefined })} />
         <span>
           <span className="block font-medium">Has left a letter</span>
           <span className="block text-[12px] text-foreground/60">Show people whose writing you can already read.</span>
