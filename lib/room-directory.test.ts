@@ -22,7 +22,7 @@ function clientFor(rows:unknown[],hasMore=false) {
 }
 
 describe('Room writer directory contract',()=>{
-  it('enforces has-left-letter ON by default, six at a time', async()=>{
+  it('enforces has-left-letter ON by default, fifteen at a time', async()=>{
     const {client,calls}=clientFor([row(1),row(2)],true)
     const page=await getRoomDirectoryPage(client,{},'known-seed')
     expect(calls).toHaveLength(1)
@@ -50,11 +50,11 @@ describe('Room writer directory contract',()=>{
     await getRoomDirectoryPage(client,{search:'quiet'},'seed',authorId(10))
     expect(calls[0].args).toMatchObject({p_after_user_id:authorId(10),p_search:'quiet'})
   })
-  it('cannot leak more than six entries even with malformed repeated backend rows',async()=>{
-    const {client}=clientFor([...Array.from({length:9},(_,i)=>row(i)),row(2)])
+  it('cannot leak more than fifteen entries even with malformed repeated backend rows',async()=>{
+    const {client}=clientFor([...Array.from({length:19},(_,i)=>row(i)),row(2)])
     const page=await getRoomDirectoryPage(client,{},'seed')
-    expect(page.entries).toHaveLength(6)
-    expect(new Set(page.entries.map(e=>e.userId)).size).toBe(6)
+    expect(page.entries).toHaveLength(15)
+    expect(new Set(page.entries.map(e=>e.userId)).size).toBe(15)
   })
   it('fails closed before RPC for malicious cursor/seed',async()=>{
     const {client,calls}=clientFor([])
