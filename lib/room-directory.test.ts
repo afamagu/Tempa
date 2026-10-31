@@ -39,10 +39,10 @@ describe('Room writer directory contract',()=>{
     const page=await getRoomDirectoryPage(client,{},'seed')
     expect(page.entries[0]).toMatchObject({gender:null,genderCustom:null,ageRange:null})
   })
-  it('supports deliberate inclusion of people without public letters, without inventing a bio',async()=>{
+  it('includes people without public letters by default, without inventing a bio',async()=>{
     const {client,calls}=clientFor([row(3,false)])
-    const page=await getRoomDirectoryPage(client,{country:'Japan',language:'English',letters:'all'},'seed')
-    expect(calls[0].args).toMatchObject({p_country:'Japan',p_language:'English',p_has_letter:false})
+    const page=await getRoomDirectoryPage(client,{country:'Japan',language:'English',letters:'only'},'seed')
+    expect(calls[0].args).toMatchObject({p_country:'Japan',p_language:'English',p_has_letter:true})
     expect(page.entries[0].latestLetter).toBeNull()
   })
   it('sends the stable last-user cursor while respecting server-side filtering',async()=>{
