@@ -40,6 +40,7 @@ export default function LetterheadPostcard({
   backMessage,
   senderPseudonym,
   onEditRequest,
+  compact = false,
 }: {
   /** Admin Phase 2A-2 — the fully-resolved presentation content this
    * Postcard renders, ALWAYS supplied by the caller, from wherever it
@@ -73,6 +74,7 @@ export default function LetterheadPostcard({
    * delivered reader never passes this, so its own tap-to-view behavior
    * is completely unchanged. */
   onEditRequest?: () => void
+  compact?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [hasOpened, setHasOpened] = useState(false)
@@ -141,12 +143,14 @@ export default function LetterheadPostcard({
   return (
     <>
       <div className="flex justify-end">
-        <PostcardThumbnail
+        {compact ? (
+          <button type="button" onClick={handleOpen} aria-label="Open Return Card" className="flex h-11 min-w-11 items-center justify-center rounded-md border border-foreground/15 bg-background px-2 text-xs font-medium text-foreground/75 shadow-sm hover:bg-foreground/[.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">View card</button>
+        ) : <PostcardThumbnail
           frontImagePath={postcard.frontImagePath}
           onOpen={handleOpen}
           ariaLabel={onEditRequest ? 'Edit this postcard' : 'Open postcard'}
           showFirstUseHint={!onEditRequest && !hasOpened}
-        />
+        />}
       </div>
 
       {/* Mounted only while open — closing genuinely UNMOUNTS
