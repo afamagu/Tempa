@@ -118,7 +118,7 @@ export default function DirectoryBrowser({
   return <div className="space-y-7">
     <DirectoryFilters values={filters} onChange={change} />
     <section aria-label="Discover people" aria-busy={pending} aria-live="polite">
-      {entries.length>0 && <div className="space-y-3">
+      {entries.length>0 && <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {entries.map((person)=>{
           const details = [
             person.country,
@@ -127,27 +127,15 @@ export default function DirectoryBrowser({
             person.ageRange?.replace(/-/g, '–'),
           ].filter((detail): detail is string => Boolean(detail && detail.trim()))
           const target=`/board/people/${person.userId}?returnTo=${encodeURIComponent(directoryUrl(filters,true))}`
-          return <article key={person.userId} className="min-w-0 rounded-[5px] border border-[#ded3c3] bg-[#fffdf8] shadow-[0_7px_22px_rgba(65,49,34,.035)]">
-            <Link href={target} onClick={saveReturn} className="flex min-w-0 items-start gap-4 rounded-[5px] px-5 py-5 transition-colors hover:bg-[#faf6ee] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-7 sm:py-6">
-              <ProfileIdentityMark identifier={person.userId} markUrl={person.markUrl} label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined} size="lg"/>
-              <div className="min-w-0 flex-1">
-                <h2 className="break-words font-serif text-[23px] leading-tight text-[#302b25]">{person.pseudonym}</h2>
-                {details.length > 0 && (
-                  <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px] leading-5 text-[#786f63]">
-                    {details.map((detail, index) => (
-                      <span key={index} className="break-words">
-                        {index > 0 && <span aria-hidden="true" className="mr-2 text-[#b8a899]">·</span>}
-                        {detail}
-                      </span>
-                    ))}
-                  </p>
-                )}
-                {person.latestLetter ? <>
-                  <p className="mt-2 text-[10px] font-medium uppercase tracking-[.14em] text-[#9b7b66]">From a letter</p>
-                  <p className="mt-1 line-clamp-2 text-[15px] leading-[1.7] text-[#51483d]">{person.latestLetter.excerpt || person.latestLetter.title}</p>
-                </> : <p className="mt-2 text-[13px] text-[#8b8072]">No letter left yet</p>}
-                <span className="mt-3 inline-block text-[12px] font-medium text-[#606052]">Read profile <span aria-hidden="true">→</span></span>
+          return <article key={person.userId} className="min-w-0 rounded-[7px] border border-[#ded3c3] bg-[#fffdf8] shadow-[0_7px_22px_rgba(65,49,34,.035)]">
+            <Link href={target} onClick={saveReturn} aria-label={`View ${person.pseudonym}'s profile`} className="flex h-full min-w-0 flex-col items-center rounded-[7px] px-3 pb-5 pt-6 text-center transition-[background-color,transform] duration-150 hover:bg-[#faf6ee] active:scale-[.985] active:bg-[#f4eddf] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent sm:px-5">
+              <div className="mb-5 flex h-28 w-full items-center justify-center">
+                <ProfileIdentityMark identifier={person.userId} markUrl={person.markUrl} label={person.markUrl ? `${person.pseudonym}'s Mark` : undefined} size="xl" className="!h-24 !w-24 sm:!h-28 sm:!w-28"/>
               </div>
+              <h2 className="w-full break-words font-serif text-[21px] leading-tight text-[#302b25]">{person.pseudonym}</h2>
+              {details.length > 0 && <p className="mt-3 flex flex-col items-center gap-1 text-[12px] leading-5 text-[#786f63]">
+                {details.map((detail, index) => <span key={index} className="break-words">{detail}</span>)}
+              </p>}
             </Link>
           </article>
         })}
@@ -172,8 +160,8 @@ export default function DirectoryBrowser({
            {hasApplied && <button type="button" className="text-[13px] underline underline-offset-4" onClick={()=>change({})}>Clear filters</button>}
            <p><Link href="/board/write" className="text-[13px] underline underline-offset-4">Leave a letter</Link></p>
          </div> :
-         hasMore ? <button type="button" onClick={()=>void load(filters,false)} className="min-h-11 rounded-md border border-foreground/20 px-7 py-3 text-[14px] font-medium hover:bg-foreground/[.035]">Keep looking <span aria-hidden="true">→</span></button> :
-         <p className="text-[13px] text-foreground/55">That’s everyone here for now.</p>}
+         hasMore ? <button type="button" onClick={()=>void load(filters,false)} disabled={pending} className="min-h-11 rounded-md border border-foreground/20 px-7 py-3 text-[14px] font-medium hover:bg-foreground/[.035]">Keep looking <span aria-hidden="true">→</span></button> :
+         <p className="text-[13px] text-foreground/55">A few introductions at a time.</p>}
       </div>
     </section>
   </div>
