@@ -33,6 +33,7 @@ export default function RoomBrowser({
   const [state,setState]=useState<State>(()=>stateFor(initialPool,initialCursor,viewerId))
   const stateRef=useRef(state)
   const [pending,setPending]=useState(false)
+  const [loadedAuthorDetails,setLoadedAuthorDetails]=useState(authorDetails ?? {})
   const [error,setError]=useState<string|null>(null)
   const busy=useRef(false)
   const alive=useRef(true)
@@ -96,6 +97,7 @@ export default function RoomBrowser({
         if(!alive.current)return
         if(page.error){setError(page.error);return}
         cursor=page.nextCursor
+        if('authorDetails' in page && page.authorDetails) setLoadedAuthorDetails(previous=>({...previous,...page.authorDetails}))
         pool=[...pool,...page.items.filter(x=>!previousIds.has(x.id)&&!pool.some(y=>y.id===x.id))]
         requests++
       }
@@ -119,7 +121,7 @@ export default function RoomBrowser({
           <div key={letter.id} onClickCapture={saveReturn} className={index===0?'md:col-span-2':''}>
             <RoomLetterCard
               letter={letter}
-              authorDetails={authorDetails?.[letter.authorId]}
+              authorDetails={loadedAuthorDetails[letter.authorId]}
               featured={index===0}
               returnTo={returnTo}
             />
