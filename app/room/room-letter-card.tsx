@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import ProfileIdentityMark from '@/app/profile-identity-mark'
 import FormattedText from '@/app/letters/formatted-text'
 import AuthoredProse from '@/app/authored-prose'
 import { dispatchExcerpt, dispatchIsRich, type BoardFeedItem } from '@/lib/dispatches'
@@ -12,10 +13,12 @@ export default function RoomLetterCard({
   letter,
   featured = false,
   returnTo,
+  authorDetails,
 }: {
   letter: BoardFeedItem
   featured?: boolean
   returnTo?: string
+  authorDetails?: { gender: string | null; genderCustom: string | null; ageRange: string | null }
 }) {
   const destination = `${roomLetterPath(letter.id)}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`
   return (
@@ -39,11 +42,16 @@ export default function RoomLetterCard({
           Read letter <span aria-hidden="true">→</span>
         </span>
       </Link>
-      <div className="mt-7 flex min-w-0 items-center gap-2 border-t border-[#eae2d6] pt-4 text-[13px] text-[#686155]">
-        <Link href={`/minds/${letter.authorId}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`} className="min-w-0 truncate font-medium underline-offset-4 hover:underline">
-          {letter.authorPseudonym}
-        </Link>
-        {letter.authorCountry && <span className="min-w-0 truncate">· {letter.authorCountry}</span>}
+      <div className="mt-7 flex min-w-0 items-center justify-between gap-4 border-t border-[#eae2d6] pt-4 text-[13px] text-[#686155]">
+        <div className="min-w-0 space-y-1">
+          <Link href={`/minds/${letter.authorId}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`} className="block truncate font-medium underline-offset-4 hover:underline">
+            {letter.authorPseudonym}
+          </Link>
+          <p className="text-[12px] leading-relaxed text-[#786f63]">
+            {[letter.authorCountry, authorDetails?.gender === 'Prefer not to say' ? null : authorDetails?.gender === 'Self-describe' ? authorDetails.genderCustom : authorDetails?.gender, authorDetails?.ageRange?.replace(/-/g, '–')].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+        <ProfileIdentityMark identifier={letter.authorId} markUrl={letter.authorMarkUrl ?? null} label={letter.authorMarkUrl ? `${letter.authorPseudonym}'s Mark` : undefined} size="xl" className="!h-[76px] !w-[76px] sm:!h-[88px] sm:!w-[88px]"/>
       </div>
     </article>
   )

@@ -47,6 +47,13 @@ export default async function BoardOpenLettersPage({
     getBoardFeedPage(supabase, { sessionStartedAt: session, seed, cursor: null, limit: CANDIDATE_WINDOW }),
     getEditorialBylines(supabase),
   ])
+  const authorIds = [...new Set(result.items.filter(item => item.publishedAs === 'member').map(item => item.authorId))]
+  const { data: authorRows } = authorIds.length
+    ? await supabase.from('public_profiles').select('id, gender, gender_custom, age_range').in('id', authorIds)
+    : { data: [] }
+  const authorDetails = Object.fromEntries((authorRows ?? []).map(row => [row.id, {
+    gender: row.gender, genderCustom: row.gender_custom, ageRange: row.age_range,
+  }]))
   return (
     <AppShell active="board" waitingLetterCount={waiting}>
       <main className="mx-auto min-h-screen max-w-6xl px-5 pb-20 pt-9 sm:px-8 sm:pt-14 lg:px-12">
@@ -64,6 +71,7 @@ export default async function BoardOpenLettersPage({
         <BoardTabs active="letters" />
         <RoomBrowser
           viewerId={user.id}
+          authorDetails={authorDetails}
           startedAt={session}
           seed={seed}
           initialPool={result.items.filter(item => item.publishedAs === 'member' && !editorialTitleFor(editorialBylines, item.authorPseudonym))}

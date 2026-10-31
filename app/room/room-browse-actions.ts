@@ -31,7 +31,15 @@ export async function loadRoomLetterWindow(args:{
     // The service already applies RLS, but the member-authored condition is
     // repeated here so no official/sponsored content enters the new Room UI.
     const houseBylines=await getEditorialBylines(supabase)
-    return {items:items.filter(x=>x.publishedAs==='member'&&x.authorId!==user.id&&!editorialTitleFor(houseBylines,x.authorPseudonym)),nextCursor,error:null}
+    const visible=items.filter(x=>x.publishedAs==='member'&&x.authorId!==user.id&&!editorialTitleFor(houseBylines,x.authorPseudonym))
+    const ids=[...new Set(visible.map(item=>item.authorId))]
+    const profiles=ids.length
+      ? await supabase.from('public_profiles').select('id, gender, gender_custom, age_range').in('id',ids)
+      : {data:[]}
+    const authorDetails=Object.fromEntries((profiles.data??[]).map(profile=>[profile.id,{
+      gender:profile.gender,genderCustom:profile.gender_custom,ageRange:profile.age_range,
+    }]))
+    return {items:visible,nextCursor,error:null,authorDetails}
   }catch(error){
     console.error('[room] next window failed',error)
     return {items:[],nextCursor:null,error:'Could not find more letters. Please try again.'}

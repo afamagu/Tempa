@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { dispatchExcerpt } from './dispatches'
 import { publicProfileMarkUrl } from './profile-marks'
 
-export const DIRECTORY_PAGE_SIZE = 6
+export const DIRECTORY_PAGE_SIZE = 15
 
 export type DirectoryFilters = {
   country?: string
@@ -53,7 +53,7 @@ type RpcResult = { entries?: RpcPerson[]; has_more?: boolean }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
- * The server is responsible for the immutable six-person boundary.
+ * The server is responsible for the immutable fifteen-person boundary.
  * The RPC independently checks account visibility, bilateral blocks,
  * moderated/published member writing and cursor order. No Question answers,
  * online status, matching scores, or popularity calculations.
