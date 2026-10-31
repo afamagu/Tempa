@@ -42,7 +42,7 @@ describe('ArchiveList — chronological row archive', () => {
         viewerPseudonym="You"
       />
     )
-    expect(html).toContain('Select all letters')
+    expect(html).toContain('Select all correspondence items')
     expect(html).toContain('Select letter from Evening Quill')
     expect(html).toContain('A short letter excerpt')
     expect(html).not.toContain('aspect-[3/4]')
