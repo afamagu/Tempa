@@ -54,10 +54,11 @@ async function mount(options:Partial<React.ComponentProps<typeof DirectoryBrowse
 }
 
 describe('Discover People: intentional finite writer directory',()=>{
-  it('shows six letter-linked authors without dating-style or popularity UI',async()=>{
+  it('shows identity-first cards without letter excerpts or popularity UI',async()=>{
     await mount()
     expect(host.querySelectorAll('section[aria-label="Discover people"] article')).toHaveLength(6)
-    expect(host.textContent).toContain('She knows which tea I buy.')
+    expect(host.textContent).not.toContain('She knows which tea I buy.')
+    expect(host.querySelector('.grid.grid-cols-2')).toBeTruthy()
     expect(host.textContent).toContain('Woman')
     expect(host.textContent).toContain('35–44')
     expect(host.textContent).toContain('Keep looking')
@@ -79,7 +80,7 @@ describe('Discover People: intentional finite writer directory',()=>{
     expect(custom.textContent).not.toContain('Self-describe')
     expect(missing.textContent).not.toContain('undefined')
   })
-  it('fetches only when Keep looking is activated and appends the next six without duplicating an author',async()=>{
+  it('fetches only when Keep looking is activated and appends the next page without duplicating an author',async()=>{
     vi.mocked(loadDirectoryPeople).mockResolvedValue({entries:[person(6),person(7)],hasMore:false,error:null})
     await mount()
     expect(loadDirectoryPeople).not.toHaveBeenCalled()
@@ -98,8 +99,9 @@ describe('Discover People: intentional finite writer directory',()=>{
     expect(href).toContain('/board/people/')
     expect(decodeURIComponent(href ?? '')).toContain('/board/people?country=Japan&restore=1')
   })
-  it('shows honest no-letter copy only when people without letters are explicitly included',async()=>{
+  it('shows a member without a public letter without implying one exists',async()=>{
     await mount({initialFilters:{letters:'all'},initialEntries:[person(1,false)],initialHasMore:false})
-    expect(host.textContent).toContain('No letter left yet')
+    expect(host.textContent).toContain('Writer 1')
+    expect(host.textContent).not.toContain('No letter left yet')
   })
 })
