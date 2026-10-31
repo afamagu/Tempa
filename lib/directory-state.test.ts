@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { directoryUrl, parseDirectoryFilters } from './directory-state'
 
 describe('Discover People URL contract', () => {
-  it('defaults to writers who left a Board letter', () => {
+  it('defaults to all eligible members', () => {
     expect(parseDirectoryFilters({})).toEqual({})
     expect(directoryUrl(parseDirectoryFilters({}))).toBe('/board/people')
   })
 
-  it('makes profiles without letters an explicit opt-in', () => {
-    expect(parseDirectoryFilters({ letters: 'all' }).letters).toBe('all')
-    expect(directoryUrl({ country:'Japan',letters:'all' })).toBe('/board/people?country=Japan&letters=all')
+  it('makes the letters-only filter an explicit opt-in', () => {
+    expect(parseDirectoryFilters({ letters: 'only' }).letters).toBe('only')
+    expect(directoryUrl({ country:'Japan',letters:'only' })).toBe('/board/people?country=Japan&letters=only')
     expect(parseDirectoryFilters({ letters: 'on' }).letters).toBeUndefined()
   })
 
