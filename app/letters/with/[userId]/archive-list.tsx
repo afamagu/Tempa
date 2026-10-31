@@ -16,7 +16,7 @@ import {
 import FormattedText from '@/app/letters/formatted-text'
 import ArchiveActions from './archive-actions'
 import LetterheadPostcard from '@/app/letters/letterhead-postcard'
-import { returnCardVersionToBaseContent, type ReturnCard } from '@/lib/return-cards'
+import { returnCardVersionToBaseContent, removeReturnCardsFromMyArchive, type ReturnCard } from '@/lib/return-cards'
 
 function PhotoIcon() {
   return (
@@ -80,7 +80,7 @@ export default function ArchiveList({
       ]),
     [otherPseudonym, otherUserId, viewerId, viewerPseudonym]
   )
-  const allSelected = letters.length > 0 && selected.size === letters.length
+  const allSelected = letters.length + returnCards.length > 0 && selected.size === letters.length + returnCards.length
   const entries = useMemo(() => [
     ...letters.map((letter) => ({ kind: 'letter' as const, id: letter.id, at: letter.mailboxAt ?? letter.createdAt, letter })),
     ...returnCards.map((card) => ({ kind: 'card' as const, id: card.id, at: card.sentAt, card })),
@@ -103,11 +103,18 @@ export default function ArchiveList({
   async function removeSelected() {
     if (selected.size === 0) return
 
-    const removingAllVisibleLetters = selected.size === letters.length
+    const removingAllVisibleLetters = letters.length > 0 && letters.every((letter) => selected.has(`letter:${letter.id}`)) && returnCards.every((card) => selected.has(`card:${card.id}`))
     setRemoving(true)
     setRemoveError(null)
 
-    const result = await removeLettersFromMyArchive(createClient(), [...selected])
+    const client = createClient()
+    const letterIds = [...selected].filter((id) => id.startsWith('letter:')).map((id) => id.slice(7))
+    const cardIds = [...selected].filter((id) => id.startsWith('card:')).map((id) => id.slice(5))
+    const result = letterIds.length ? await removeLettersFromMyArchive(client, letterIds) : { error: null }
+    if (!result.error && cardIds.length) {
+      const cardsResult = await removeReturnCardsFromMyArchive(client, cardIds)
+      if (cardsResult.error) result.error = cardsResult.error
+    }
 
     if (result.error) {
       setRemoving(false)
@@ -136,7 +143,7 @@ export default function ArchiveList({
       <div className="flex min-h-14 items-center gap-3 border-b border-[#d6c8b3] bg-[#eae1d3] px-3 sm:px-4">
         <input
           type="checkbox"
-          aria-label="Select all letters"
+          aria-label="Select all correspondence items"
           checked={allSelected}
           ref={(node) => {
             if (node) node.indeterminate = selected.size > 0 && !allSelected
@@ -144,7 +151,7 @@ export default function ArchiveList({
           onChange={() => {
             setConfirmingRemoval(false)
             setRemoveError(null)
-            setSelected(allSelected ? new Set() : new Set(letters.map((letter) => letter.id)))
+            setSelected(allSelected ? new Set() : new Set(entries.map((entry) => `${entry.kind}:${entry.id}`)))
           }}
           className="h-4 w-4 accent-[var(--accent)]"
         />
@@ -173,8 +180,8 @@ export default function ArchiveList({
           <div className="space-y-1">
             <p className="text-[15px] font-medium text-foreground">
               {selected.size === 1
-                ? 'Remove this letter from your Letterbox?'
-                : `Remove these ${selected.size} letters from your Letterbox?`}
+                ? 'Remove this item from your Letterbox?'
+                : `Remove these ${selected.size} items from your Letterbox?`}
             </p>
             <p className={helperTextClass}>
               This changes only your Letterbox. Nothing is deleted for {otherPseudonym}.
@@ -214,7 +221,7 @@ export default function ArchiveList({
             const senderLabel = card.senderId === viewerId ? 'You' : card.senderPseudonymSnapshot || otherPseudonym
             return (
               <li key={`return-card:${card.id}`} className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-foreground/[.025] sm:px-4">
-                <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <input type="checkbox" aria-label={`Select Return Card from ${senderLabel}`} checked={selected.has(`card:${card.id}`)} onChange={() => toggle(`card:${card.id}`)} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
                 <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[8rem_minmax(0,1fr)_auto]">
                   <span className="truncate text-[13px] font-medium text-foreground/75">{senderLabel}</span>
                   <span className="col-span-2 min-w-0 truncate font-serif text-[14px] text-foreground/70 sm:col-span-1">
@@ -225,8 +232,8 @@ export default function ArchiveList({
                     {formatDateTimeCompact(card.sentAt)}
                   </span>
                 </div>
-                <div className="shrink-0 [&_button]:!h-9 [&_button]:!w-7 [&_img]:!h-9 [&_img]:!w-7">
-                  <LetterheadPostcard base={returnCardVersionToBaseContent(card.version)} revealLine="" backMessage={card.message ?? ''} senderPseudonym={card.senderPseudonymSnapshot} />
+                <div className="shrink-0">
+                  <LetterheadPostcard base={returnCardVersionToBaseContent(card.version)} revealLine="" backMessage={card.message ?? ''} senderPseudonym={card.senderPseudonymSnapshot} compact />
                 </div>
               </li>
             )
@@ -242,8 +249,8 @@ export default function ArchiveList({
               <input
                 type="checkbox"
                 aria-label={`Select letter from ${senderLabel}`}
-                checked={selected.has(letter.id)}
-                onChange={() => toggle(letter.id)}
+                checked={selected.has(`letter:${letter.id}`)}
+                onChange={() => toggle(`letter:${letter.id}`)}
                 className="h-4 w-4 shrink-0 accent-[var(--accent)]"
               />
               <Link
