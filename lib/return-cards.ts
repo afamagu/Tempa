@@ -177,6 +177,11 @@ export async function getReturnCardPostcards(
   return postcards.filter((postcard) => keys.has(postcard.key))
 }
 
+export async function removeReturnCardsFromMyArchive(supabase: SupabaseClient, cardIds: string[]): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('remove_my_archive_return_cards', { p_card_ids: cardIds })
+  return { error: error?.message ?? null }
+}
+
 export async function getReturnCardsForCorrespondences(
   supabase: SupabaseClient,
   correspondenceIds: string[]
@@ -202,5 +207,13 @@ export async function getReturnCardsForCorrespondences(
     return []
   }
 
-  return mapReturnCardRows((data ?? []) as unknown as ReturnCardRow[])
+  const mapped = mapReturnCardRows((data ?? []) as unknown as ReturnCardRow[])
+  if (mapped.length === 0) return []
+  const { data: removals, error: removalError } = await supabase.from('return_card_archive_removals').select('return_card_id').in('return_card_id', mapped.map((card) => card.id))
+  if (removalError) {
+    console.error('[return-cards] archive removal read failed', { code: removalError.code, message: removalError.message })
+    return mapped
+  }
+  const hidden = new Set((removals ?? []).map((row) => row.return_card_id))
+  return mapped.filter((card) => !hidden.has(card.id))
 }
