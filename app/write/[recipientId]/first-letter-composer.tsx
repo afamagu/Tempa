@@ -268,7 +268,7 @@ export default function FirstLetterComposer({
       <main className="min-h-screen flex items-start justify-center p-4 sm:items-center sm:p-6">
         <div className="w-full max-w-md space-y-6 py-10 text-center">
           <p className={sectionLabelClass}>Sent</p>
-          <p className="text-lg leading-relaxed">
+          <p role="status" className="text-lg leading-relaxed">
             {isFollowUp
               ? `Your follow-up to ${recipientPseudonym} has been sent.`
               : `Your letter to ${recipientPseudonym} has been sent.`}
@@ -326,7 +326,7 @@ export default function FirstLetterComposer({
             </p>
           )}
           {draftStorageFailed && <DraftPersistenceWarning />}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
           <div className="flex flex-wrap gap-3">
             <Link href={backHref} className={secondaryButtonClass}>
@@ -336,6 +336,7 @@ export default function FirstLetterComposer({
               type="button"
               onClick={handleSend}
               disabled={!canSend}
+              aria-busy={sending}
               className={primaryButtonClass}
             >
               {sending ? 'Sending…' : isFollowUp ? 'Send follow-up' : 'Send letter'}
