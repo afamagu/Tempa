@@ -1149,7 +1149,7 @@ export default function MomentsComposer({
         <TempaNote>Photo sharing isn&apos;t available in this correspondence right now.</TempaNote>
       )}
       {draftStorageFailed && <DraftPersistenceWarning />}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
         <Link href={cancelHref} className={secondaryButtonClass}>
@@ -1171,6 +1171,7 @@ export default function MomentsComposer({
           type="button"
           onClick={handleOpenPreview}
           disabled={!canSend || preparingPreview}
+          aria-busy={preparingPreview}
           className={primaryButtonClass}
         >
           {preparingPreview ? 'Preparing…' : 'Preview letter'}
