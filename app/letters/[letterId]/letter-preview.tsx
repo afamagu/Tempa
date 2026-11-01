@@ -149,7 +149,7 @@ export default function LetterPreview({
       </div>
 
       <div className="border-t border-foreground/10 px-4 py-4 sm:px-6">
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}
         {!error && sendBlockedReason && (
           <div className="mb-3 space-y-1">
             <p className={helperTextClass}>{sendBlockedReason}</p>
@@ -168,6 +168,7 @@ export default function LetterPreview({
             type="button"
             onClick={onSend}
             disabled={sending || Boolean(sendBlockedReason)}
+            aria-busy={sending}
             className={primaryButtonClass}
           >
             {/* Send-feedback audit (2026-09-13): the disable/label-swap
