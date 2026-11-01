@@ -117,20 +117,21 @@ export default function ShareDispatchButton({
         type="button"
         onClick={handleShare}
         disabled={busy}
+        aria-busy={busy}
         aria-label="Share this Dispatch"
         className="flex flex-col items-center gap-0.5 rounded-md px-2 py-1.5 text-foreground/40 transition-colors hover:text-foreground/70"
       >
         <ShareIcon />
-        <span className={`text-[11px] ${helperTextClass}`}>Share</span>
+        <span className={`text-[11px] ${helperTextClass}`}>{busy ? 'Sharing…' : 'Share'}</span>
       </button>
 
-      {copied && <span className={helperTextClass}>Link copied</span>}
+      {copied && <span role="status" className={helperTextClass}>Link copied</span>}
       {shareUrl && (
         <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent underline underline-offset-4">
           Open public sharing link
         </a>
       )}
-      {error && <span className="text-[11px] text-red-600">{error}</span>}
+      {error && <span role="alert" className="text-[11px] text-red-600">{error}</span>}
     </div>
   )
 }
