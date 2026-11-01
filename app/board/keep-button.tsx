@@ -74,13 +74,15 @@ export default function KeepButton({
       type="button"
       onClick={toggle}
       disabled={busy}
+      aria-busy={busy}
       aria-pressed={kept}
       aria-label={kept ? `Kept ${keptPseudonym} — tap to remove` : `Keep ${keptPseudonym}`}
-      className={`flex shrink-0 flex-col items-center gap-0.5 rounded-md px-2 py-1.5 transition-colors ${
+      className={`flex shrink-0 flex-col items-center gap-0.5 rounded-md px-2 py-1.5 transition-colors active:bg-foreground/[.08] disabled:opacity-65 ${
         kept ? 'text-accent' : 'text-foreground/40 hover:text-foreground/70'
       }`}
     >
       <BookmarkRibbonIcon filled={kept} />
+      <span className="sr-only" aria-live="polite">{busy ? 'Saving your choice…' : ''}</span>
       <span className="grid text-[11px]">
         <span className={`col-start-1 row-start-1 whitespace-nowrap ${kept ? '' : 'invisible'}`}>Kept</span>
         <span className={`col-start-1 row-start-1 whitespace-nowrap ${kept ? 'invisible' : helperTextClass}`}>
