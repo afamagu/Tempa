@@ -55,6 +55,7 @@ export default function WorthReadingButton({
       type="button"
       onClick={toggle}
       disabled={busy}
+      aria-busy={busy}
       aria-pressed={marked}
       aria-label={marked ? 'Worth reading — tap to undo' : 'Mark this Dispatch worth reading'}
       className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[13px] font-medium tracking-wide transition-colors ${focusRingClass} ${
@@ -68,6 +69,7 @@ export default function WorthReadingButton({
         className={`h-1.5 w-1.5 shrink-0 rounded-full ${marked ? 'bg-verdigris' : 'border border-verdigris/40'}`}
       />
       WORTH READING
+      <span className="sr-only" role="status">{busy ? 'Saving your choice…' : ''}</span>
     </button>
   )
 }
