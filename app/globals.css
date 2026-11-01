@@ -316,3 +316,35 @@ body {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   padding-left: calc(1rem + env(safe-area-inset-left));
 }
+
+/* Interaction feedback: a quiet, immediate response to a deliberate tap.
+   Visual only: never intercept events, submit forms, or alter navigation.
+   Pending/duplicate prevention remains the responsibility of each async action. */
+@media (hover: hover) {
+  button:not(:disabled):hover,
+  [role="button"]:not([aria-disabled="true"]):hover {
+    filter: brightness(0.985);
+  }
+}
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+a[href]:active {
+  opacity: 0.82;
+}
+button:disabled,
+button[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+button:focus-visible,
+a[href]:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    transition: opacity 120ms ease, filter 120ms ease;
+  }
+}
