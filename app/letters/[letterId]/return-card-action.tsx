@@ -169,6 +169,7 @@ export default function ReturnCardAction({
                 type="button"
                 onClick={send}
                 disabled={!selected || sending}
+                aria-busy={sending}
                 className={primaryButtonClass}
               >
                 {sending ? 'Sending…' : 'Send Return Card'}
