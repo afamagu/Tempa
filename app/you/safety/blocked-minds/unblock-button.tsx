@@ -59,16 +59,16 @@ export default function UnblockButton({ blockedId, scope }: { blockedId: string;
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" onClick={handleUnblock} disabled={busy} className={secondaryButtonClass}>
-          {busy ? 'Working…' : scope === 'letters' ? 'Restore letters' : 'Unblock'}
+        <button type="button" onClick={handleUnblock} disabled={busy} aria-busy={busy} className={secondaryButtonClass}>
+          {busy ? 'Updating…' : scope === 'letters' ? 'Restore letters' : 'Unblock'}
         </button>
         {scope === 'letters' && (
-          <button type="button" onClick={handleBlockEverywhere} disabled={busy} className={destructiveButtonClass}>
-            Block everywhere
+          <button type="button" onClick={handleBlockEverywhere} disabled={busy} aria-busy={busy} className={destructiveButtonClass}>
+            {busy ? 'Updating…' : 'Block everywhere'}
           </button>
         )}
       </div>
-      {error && <p className="text-[13px] text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-[13px] text-red-600">{error}</p>}
     </div>
   )
 }

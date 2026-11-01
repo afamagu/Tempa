@@ -157,8 +157,8 @@ export default function BlockButton({
     return (
       <div className="space-y-1">
         <p className={helperTextClass}>{blockedPseudonym} is blocked everywhere.</p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="button" onClick={handleUnblock} disabled={busy} className={secondaryButtonClass}>
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        <button type="button" onClick={handleUnblock} disabled={busy} aria-busy={busy} className={secondaryButtonClass}>
           {busy ? 'Unblocking…' : 'Unblock'}
         </button>
       </div>
@@ -173,7 +173,7 @@ export default function BlockButton({
         <p className={helperTextClass}>Letters are stopped with {blockedPseudonym}.</p>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleUnblock} disabled={busy} className={secondaryButtonClass}>
+          <button type="button" onClick={handleUnblock} disabled={busy} aria-busy={busy} className={secondaryButtonClass}>
             Restore letters
           </button>
           <button

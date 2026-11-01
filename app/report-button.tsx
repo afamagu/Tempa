@@ -85,7 +85,7 @@ export default function ReportButton({
   if (submitted) {
     return (
       <div className={panelClassName}>
-        <p className={helperTextClass}>Report received. Thank you for letting us know.</p>
+        <p role="status" className={helperTextClass}>Report received. Thank you for letting us know.</p>
       </div>
     )
   }
@@ -137,13 +137,13 @@ export default function ReportButton({
         />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={reset} disabled={busy} className={secondaryButtonClass}>
           Cancel
         </button>
-        <button type="button" onClick={handleSubmit} disabled={busy || !reason} className={destructiveButtonClass}>
+        <button type="button" onClick={handleSubmit} disabled={busy || !reason} aria-busy={busy} className={destructiveButtonClass}>
           {busy ? 'Sending…' : 'Submit report'}
         </button>
       </div>
