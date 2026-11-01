@@ -14,7 +14,7 @@ export type DirectoryFilters = {
   intent?: string
   interest?: string
   /** A member without a letter is visible only when explicitly requested. */
-  letters?: 'all'
+  letters?: 'only' | 'all'
 }
 
 export type DirectoryPerson = {
@@ -75,7 +75,7 @@ export async function getRoomDirectoryPage(
     p_age_range: filters.age?.slice(0, 20) || null,
     p_intent: filters.intent?.slice(0, 100) || null,
     p_interest: filters.interest?.slice(0, 100) || null,
-    p_has_letter: filters.letters !== 'all',
+    p_has_letter: filters.letters === 'only',
     p_seed: seed,
     p_after_user_id: afterUserId,
     p_limit: DIRECTORY_PAGE_SIZE,

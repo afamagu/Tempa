@@ -114,7 +114,7 @@ export default function DirectoryBrowser({
     } catch { /* Session storage is optional. */ }
   }
 
-  const hasApplied=Object.entries(filters).some(([key,value])=>Boolean(value)&&!(key==='letters'&&value!=='all'))
+  const hasApplied=Object.entries(filters).some(([key,value])=>Boolean(value)&&!(key==='letters'&&value!=='only'))
   return <div className="space-y-7">
     <DirectoryFilters values={filters} onChange={change} />
     <section aria-label="Discover people" aria-busy={pending} aria-live="polite">

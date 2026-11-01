@@ -22,12 +22,12 @@ function clientFor(rows:unknown[],hasMore=false) {
 }
 
 describe('Room writer directory contract',()=>{
-  it('enforces has-left-letter ON by default, fifteen at a time', async()=>{
+  it('shows all eligible people by default, fifteen at a time', async()=>{
     const {client,calls}=clientFor([row(1),row(2)],true)
     const page=await getRoomDirectoryPage(client,{},'known-seed')
     expect(calls).toHaveLength(1)
     expect(calls[0].fn).toBe('discover_room_writers')
-    expect(calls[0].args.p_has_letter).toBe(true)
+    expect(calls[0].args.p_has_letter).toBe(false)
     expect(calls[0].args.p_limit).toBe(DIRECTORY_PAGE_SIZE)
     expect(page.entries.map(e=>e.pseudonym)).toEqual(['Member 1','Member 2'])
     expect(page.entries[0].latestLetter?.excerpt).toContain('She knows')
@@ -39,10 +39,10 @@ describe('Room writer directory contract',()=>{
     const page=await getRoomDirectoryPage(client,{},'seed')
     expect(page.entries[0]).toMatchObject({gender:null,genderCustom:null,ageRange:null})
   })
-  it('supports deliberate inclusion of people without public letters, without inventing a bio',async()=>{
+  it('includes people without public letters by default, without inventing a bio',async()=>{
     const {client,calls}=clientFor([row(3,false)])
-    const page=await getRoomDirectoryPage(client,{country:'Japan',language:'English',letters:'all'},'seed')
-    expect(calls[0].args).toMatchObject({p_country:'Japan',p_language:'English',p_has_letter:false})
+    const page=await getRoomDirectoryPage(client,{country:'Japan',language:'English',letters:'only'},'seed')
+    expect(calls[0].args).toMatchObject({p_country:'Japan',p_language:'English',p_has_letter:true})
     expect(page.entries[0].latestLetter).toBeNull()
   })
   it('sends the stable last-user cursor while respecting server-side filtering',async()=>{

@@ -8,7 +8,7 @@ export function parseDirectoryFilters(raw: Record<string, string | string[] | un
     const value = raw[key]
     if(typeof value === 'string' && value.trim()) filters[key] = value.trim().slice(0, key === 'search' ? 80 : 100)
   }
-  if(raw.letters === 'all') filters.letters = 'all'
+  if(raw.letters === 'only') filters.letters = 'only'
   return filters
 }
 
@@ -18,7 +18,7 @@ export function directoryUrl(filters: DirectoryFilters, restore=false): string {
     const value = filters[key]
     if(value) params.set(key,value)
   }
-  if(filters.letters === 'all') params.set('letters','all')
+  if(filters.letters === 'only') params.set('letters','only')
   if(restore) params.set('restore','1')
   return `/board/people${params.size ? `?${params}` : ''}`
 }

@@ -141,9 +141,9 @@ export default function RoomBrowser({
         <button type="button" onClick={()=>void keepLooking()} className="text-sm underline underline-offset-4">Try again</button>
       </div> : canContinue ? <button type="button" disabled={pending}
           onClick={()=>void keepLooking()}
-          className="min-h-11 rounded-md border border-foreground/20 px-7 py-3 text-[14px] font-medium hover:bg-foreground/[.035] disabled:opacity-60">
+          className="min-h-11 rounded-md border border-foreground/20 px-7 py-3 text-[14px] font-medium transition-colors hover:bg-foreground/[.035] active:bg-foreground/10 disabled:opacity-60">
           {pending?'Looking a little further…':'Keep looking →'}
-        </button> : state.shown.length > 0 ? <p className="text-sm text-foreground/60">That’s everyone here for now.</p> : null}
+        </button> : state.shown.length > 0 ? <p className="text-sm text-foreground/60">You’ve reached the end of this selection of letters.</p> : null}
     </div>
   </section>
 }
