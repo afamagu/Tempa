@@ -33,10 +33,10 @@ export const helperTextClass = 'text-[13px] text-muted'
 export const fieldLabelClass = 'block text-[15px] font-medium text-foreground'
 
 export const primaryButtonClass =
-  'inline-flex min-h-11 items-center justify-center rounded-md bg-accent text-accent-foreground px-4 py-3 text-[15px] font-medium transition-colors hover:bg-accent/90 disabled:opacity-50 sm:min-h-0'
+  'inline-flex min-h-11 items-center justify-center rounded-md bg-accent text-accent-foreground px-4 py-3 text-[15px] font-medium transition-colors hover:bg-accent/90 active:bg-accent/80 active:scale-[.99] disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0'
 
 export const secondaryButtonClass =
-  'inline-flex min-h-11 items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03] sm:min-h-0'
+  'inline-flex min-h-11 items-center justify-center rounded-md border border-foreground/15 px-4 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-foreground/[.03] active:bg-foreground/[.08] active:scale-[.99] sm:min-h-0'
 
 // Release Polish Pass — the fourth rung of the button hierarchy
 // (primary / secondary / tertiary / destructive): no border, no fill,
@@ -45,7 +45,7 @@ export const secondaryButtonClass =
 // a genuinely destructive one (e.g. removing an unsent Postcard draft,
 // which the sender can simply re-attach).
 export const tertiaryButtonClass =
-  'inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2.5 text-[15px] font-medium text-foreground/60 transition-colors hover:bg-foreground/[.05] hover:text-foreground sm:min-h-0'
+  'inline-flex min-h-11 items-center justify-center rounded-md px-4 py-2.5 text-[15px] font-medium text-foreground/60 transition-colors hover:bg-foreground/[.05] hover:text-foreground active:bg-foreground/[.10] sm:min-h-0'
 
 // A quiet text action — for a link-weight action that shouldn't compete
 // visually with a bordered or filled button (e.g. "Read the complete
