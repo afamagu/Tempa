@@ -34,6 +34,7 @@ export default function RemoveFromLetterbox({
   const [error, setError] = useState<string | null>(null)
 
   async function handleConfirm() {
+    if (removing) return
     setRemoving(true)
     setError(null)
 
@@ -96,7 +97,7 @@ export default function RemoveFromLetterbox({
               </p>
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
             <div className="flex justify-end gap-2">
               <button
@@ -111,6 +112,7 @@ export default function RemoveFromLetterbox({
                 type="button"
                 onClick={handleConfirm}
                 disabled={removing}
+                aria-busy={removing}
                 className={primaryButtonClass}
               >
                 {removing ? 'Removing…' : 'Remove'}
