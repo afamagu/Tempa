@@ -54,13 +54,14 @@ export default function CreditPackList({ offers }: { offers: CreditPackOffer[] }
                 <p className="text-[15px] font-medium text-foreground">{offer.credits} Credits</p>
                 <p className={helperTextClass}>{formatMoney(offer.amountMinor, offer.currency)}</p>
               </div>
-              <button type="button" onClick={() => buy(offer)} disabled={busy !== null} className={secondaryButtonClass}>
+              <button type="button" onClick={() => buy(offer)} disabled={busy !== null} aria-busy={busy === intent} className={secondaryButtonClass}>
                 {busy === intent ? 'Opening checkout…' : 'Get'}
               </button>
             </li>
           )
         })}
       </ul>
+      <span className="sr-only" role="status">{busy ? 'Opening secure checkout…' : ''}</span>
       {error && (
         <p role="alert" className="text-[13px] text-red-700">
           {error}
