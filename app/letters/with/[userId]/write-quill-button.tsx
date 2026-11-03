@@ -5,7 +5,7 @@ import QuillIcon from '@/app/quill-icon'
  * The restrained, always-reachable "write to this person" affordance
  * on their archive — a small floating circular action, not a large
  * text button, positioned to stay clear of the archive grid and the
- * mobile bottom nav (fixed inset-x-0 bottom-0 z-40 in app-shell.tsx).
+ * mobile bottom nav (fixed inset-x-0 bottom-0 z-40 in app-shell.tsx; its mobile height includes the Home indicator safe area).
  *
  * A quiet text pill sits immediately to the quill's left and names the
  * action, persistently on every viewport (never hover/tooltip-only).
@@ -37,12 +37,12 @@ export default function WriteQuillButton({
     <Link
       href={href}
       aria-label={label}
-      className="group fixed bottom-20 right-4 z-40 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full sm:bottom-8 sm:right-8"
+      className="group fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full transition-transform duration-150 active:scale-[0.98] sm:bottom-8 sm:right-8"
     >
-      <span className="min-w-0 max-w-[16rem] truncate rounded-full border border-foreground/15 bg-background px-3 py-1.5 text-[13px] text-foreground/70 shadow-sm transition-colors group-hover:border-foreground/30 group-hover:text-foreground group-active:text-foreground">
+      <span className="min-w-0 max-w-[16rem] truncate rounded-full border border-foreground/15 bg-background px-3 py-1.5 text-[13px] text-foreground/70 shadow-sm transition-colors group-hover:border-foreground/30 group-hover:text-foreground group-active:border-accent/40 group-active:bg-accent/10 group-active:text-foreground">
         {label}
       </span>
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-transform group-hover:scale-105 group-active:scale-100">
+      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-[transform,filter] duration-150 group-hover:scale-105 group-active:scale-95 group-active:brightness-90">
         <QuillIcon />
       </span>
     </Link>
