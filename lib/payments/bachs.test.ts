@@ -21,9 +21,9 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('Bachs sandbox configuration', () => {
   it('rejects absent and live keys', () => {
-    expect(bachsSandboxConfig({} as NodeJS.ProcessEnv).ok).toBe(false)
-    expect(bachsSandboxConfig({ BACHS_SANDBOX_SECRET_KEY: 'sk_live_abc' } as NodeJS.ProcessEnv).ok).toBe(false)
-    expect(bachsSandboxConfig({ BACHS_SANDBOX_SECRET_KEY: 'sk_sandbox_abc' } as NodeJS.ProcessEnv).ok).toBe(true)
+    expect(bachsSandboxConfig({} as unknown as NodeJS.ProcessEnv).ok).toBe(false)
+    expect(bachsSandboxConfig({ BACHS_SANDBOX_SECRET_KEY: 'sk_live_abc' } as unknown as NodeJS.ProcessEnv).ok).toBe(false)
+    expect(bachsSandboxConfig({ BACHS_SANDBOX_SECRET_KEY: 'sk_sandbox_abc' } as unknown as NodeJS.ProcessEnv).ok).toBe(true)
   })
 })
 
