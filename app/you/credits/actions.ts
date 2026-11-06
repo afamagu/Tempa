@@ -65,7 +65,7 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
     if (!bachs.ok || order.provider !== 'bachs') return unavailable()
     const init = await createBachsSandboxCheckout(bachs.secretKey, {
       reference: order.reference, amountMinor: Number(order.amount_minor), currency: order.currency,
-      email: user.email, successUrl: `${origin}/you/credits/return?tx_ref=${encodeURIComponent(order.reference)}`,
+      email: user.email, successUrl: `${origin}/you/credits/return`,
       cancelUrl: `${origin}/you/credits`,
     })
     if (!init.ok) return { status: 'error', message: 'We couldn’t open the payment page. Please try again.' }
