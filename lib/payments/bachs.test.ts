@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
 import { createHmac } from 'node:crypto'
-import { bachsSandboxConfig, createBachsSandboxCheckout, verifyBachsWebhook } from './bachs'
+import { bachsSandboxConfig, createBachsSandboxCheckout, retrieveBachsSandboxCheckout, verifyBachsWebhook } from './bachs'
 
 const secret = 'whsec_test'
 const timestamp = '1793872800'
@@ -70,5 +70,35 @@ describe('Bachs checkout adapter', () => {
       json: async () => ({ checkout_id: 'chk_123', checkout_url: 'https://evil.example/steal' }),
     }))
     expect((await createBachsSandboxCheckout('sk_sandbox_test', input)).ok).toBe(false)
+  })
+})
+
+describe('Bachs independent checkout verification', () => {
+  it('accepts only a completed checkout with succeeded payment and provider charge ID', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      checkout_id: 'chk_123', reference: input.reference, status: 'completed',
+      payment_status: 'succeeded', currency: 'USD', amount: '12.00',
+      charge: { status: 'succeeded', payment_id: 'pay_abc123' },
+    }) }))
+    expect(await retrieveBachsSandboxCheckout('sk_sandbox_test', 'chk_123')).toEqual({
+      checkoutId: 'chk_123', reference: input.reference, status: 'successful',
+      transactionId: 'pay_abc123', amountMinor: 1200, currency: 'USD',
+    })
+  })
+  it('does not infer success from completed checkout alone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      checkout_id: 'chk_123', reference: input.reference, status: 'completed',
+      payment_status: 'processing', currency: 'USD', amount: '12.00', charge: null,
+    }) }))
+    const result = await retrieveBachsSandboxCheckout('sk_sandbox_test', 'chk_123')
+    expect(result?.status).toBe('pending')
+  })
+  it('rejects mismatched checkout identifiers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      checkout_id: 'chk_other', reference: input.reference, status: 'completed',
+      payment_status: 'succeeded', currency: 'USD', amount: '12.00',
+      charge: { status: 'succeeded', payment_id: 'pay_abc123' },
+    }) }))
+    expect(await retrieveBachsSandboxCheckout('sk_sandbox_test', 'chk_123')).toBeNull()
   })
 })
