@@ -114,8 +114,10 @@ export async function retrieveBachsSandboxCheckout(secretKey: string, checkoutId
     const status = successful ? 'successful' : lifecycle === 'cancelled' ? 'cancelled'
       : lifecycle === 'expired' || payment === 'failed' ? 'failed' : 'pending'
     // The charge must agree with the checkout's base amount/currency, not only its status.
-    const chargeMatches = !!charge && charge.currency === x.currency &&
-      majorToMinor(charge.amount, x.currency as string) === majorToMinor(x.amount, x.currency as string)
+    const sessionAmount = majorToMinor(x.amount, x.currency as string)
+    const chargeAmount = majorToMinor(charge?.amount, x.currency as string)
+    const chargeMatches = !!charge && sessionAmount !== null && chargeAmount !== null &&
+      charge.currency === x.currency && chargeAmount === sessionAmount
     const transactionId = successful && chargeMatches && typeof charge?.payment_id === 'string' && /^pay_[A-Za-z0-9_-]+$/.test(charge.payment_id)
       ? charge.payment_id : null
     if (successful && !transactionId) return null
