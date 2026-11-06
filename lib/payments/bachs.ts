@@ -87,3 +87,37 @@ export async function createBachsSandboxCheckout(secretKey: string, input: Bachs
     return { ok: false, reason: 'network_error' }
   }
 }
+
+/** Provider-side verification: never settle from a redirect or webhook payload alone. */
+export async function retrieveBachsSandboxCheckout(secretKey: string, checkoutId: string): Promise<{
+  checkoutId: string; reference: string; status: 'successful' | 'failed' | 'cancelled' | 'pending';
+  transactionId: string | null; amountMinor: number | null; currency: string
+} | null> {
+  if (!secretKey.startsWith('sk_sandbox_') || !/^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) return null
+  try {
+    const res = await fetch(API + '/checkout-sessions/' + encodeURIComponent(checkoutId), {
+      headers: { Authorization: 'Bearer ' + secretKey },
+      cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!res.ok) return null
+    const d: unknown = await res.json()
+    if (!d || typeof d !== 'object') return null
+    const x = d as Record<string, unknown>
+    if (x.checkout_id !== checkoutId || typeof x.reference !== 'string' ||
+        typeof x.currency !== 'string' || !/^[A-Z]{3}$/.test(x.currency)) return null
+    const charge = x.charge && typeof x.charge === 'object' ? x.charge as Record<string, unknown> : null
+    const lifecycle = String(x.status ?? '').toLowerCase()
+    const payment = String(x.payment_status ?? '').toLowerCase()
+    const chargeStatus = String(charge?.status ?? '').toLowerCase()
+    // Require all success indicators and a provider payment ID; otherwise fail closed.
+    const successful = lifecycle === 'completed' && payment === 'succeeded' && chargeStatus === 'succeeded'
+    const status = successful ? 'successful' : lifecycle === 'cancelled' ? 'cancelled'
+      : lifecycle === 'expired' || payment === 'failed' ? 'failed' : 'pending'
+    const transactionId = successful && typeof charge?.payment_id === 'string' && /^pay_[A-Za-z0-9_-]+$/.test(charge.payment_id)
+      ? charge.payment_id : null
+    if (successful && !transactionId) return null
+    const { majorToMinor } = await import('@/lib/money')
+    return { checkoutId, reference: x.reference, status, transactionId,
+      amountMinor: majorToMinor(x.amount, x.currency), currency: x.currency }
+  } catch { return null }
+}
