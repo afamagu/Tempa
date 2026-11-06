@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getMyOrder, type MyOrder } from '@/lib/commerce'
 import { verifyAndSettle } from '@/lib/payments/settlement'
@@ -26,7 +27,7 @@ export default async function CreditsReturnPage({
 }: {
   searchParams: Promise<{ tx_ref?: string; transaction_id?: string; checkout_id?: string }>
 }) {
-  const { tx_ref: reference, transaction_id: transactionId, checkout_id: checkoutId } = await searchParams
+  const { tx_ref: queryReference, transaction_id: transactionId, checkout_id: checkoutId } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -35,6 +36,14 @@ export default async function CreditsReturnPage({
     redirect('/sign-in?next=%2Fyou%2Fcredits')
   }
 
+  // Bachs appends ?checkout_id to the clean success URL. Resolve the reference
+  // privately, then require the signed-in member to own the order.
+  let reference = queryReference
+  if (checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
+    const { data: binding } = await createServiceClient().from('commerce_bachs_checkouts')
+      .select('reference').eq('checkout_id', checkoutId).maybeSingle()
+    reference = binding?.reference === queryReference || !queryReference ? binding?.reference : undefined
+  }
   let order: MyOrder | null = reference && REFERENCE.test(reference) ? await getMyOrder(supabase, reference) : null
   if (order && order.state !== 'paid' && reference) {
     if (checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
