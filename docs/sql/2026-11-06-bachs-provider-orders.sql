@@ -27,7 +27,7 @@ begin
   if v_uid is null then
     raise exception 'Authentication required.' using errcode = '42501';
   end if;
-  if v_provider not in ('bachs', v_provider) then
+  if v_provider not in ('bachs', 'flutterwave') then
     perform tempa_private.commerce_raise('invalid_request');
   end if;
   v_key := tempa_private.commerce_valid_key(p_idempotency_key);
