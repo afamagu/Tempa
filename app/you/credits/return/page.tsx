@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getMyOrder, type MyOrder } from '@/lib/commerce'
 import { verifyAndSettle } from '@/lib/payments/settlement'
+import { verifyAndSettleBachs } from '@/lib/payments/bachs-settlement'
 import { quietLinkClass, secondaryButtonClass, sectionLabelClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 
@@ -23,9 +24,9 @@ const TRANSACTION = /^\d{1,20}$/
 export default async function CreditsReturnPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tx_ref?: string; transaction_id?: string }>
+  searchParams: Promise<{ tx_ref?: string; transaction_id?: string; checkout_id?: string }>
 }) {
-  const { tx_ref: reference, transaction_id: transactionId } = await searchParams
+  const { tx_ref: reference, transaction_id: transactionId, checkout_id: checkoutId } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -36,12 +37,16 @@ export default async function CreditsReturnPage({
 
   let order: MyOrder | null = reference && REFERENCE.test(reference) ? await getMyOrder(supabase, reference) : null
   if (order && order.state !== 'paid' && reference) {
-    await verifyAndSettle({
-      transactionId: transactionId && TRANSACTION.test(transactionId) ? transactionId : null,
-      expectedReference: reference,
-      source: 'return',
-      eventType: 'checkout.return',
-    }).catch(() => null)
+    if (checkoutId) {
+      await verifyAndSettleBachs({ checkoutId, expectedReference: reference,
+        eventId: `return:${checkoutId}`, eventType: 'checkout.return' }).catch(() => null)
+    } else {
+      await verifyAndSettle({
+        transactionId: transactionId && TRANSACTION.test(transactionId) ? transactionId : null,
+        expectedReference: reference,
+        source: 'return', eventType: 'checkout.return',
+      }).catch(() => null)
+    }
     order = await getMyOrder(supabase, reference)
   }
 
