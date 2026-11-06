@@ -6,7 +6,7 @@ values ('bachs', 'Bachs', false, false)
 on conflict (code) do nothing;
 
 -- Explicit provider parameter prevents ambiguous routing; replay cannot switch providers.
-create or replace function public.commerce_create_credit_order(p_product_id uuid, p_currency text, p_idempotency_key text, p_provider text)
+create or replace function public.commerce_create_credit_order_for_provider(p_product_id uuid, p_currency text, p_idempotency_key text, p_provider text)
 returns jsonb
 language plpgsql
 security definer
@@ -84,7 +84,7 @@ begin
 
   if v_order.id is null then
     -- A concurrent request with the same key won; resolve to its order.
-    return public.commerce_create_credit_order(p_product_id, p_currency, p_idempotency_key, p_provider);
+    return public.commerce_create_credit_order_for_provider(p_product_id, p_currency, p_idempotency_key, p_provider);
   end if;
 
   insert into public.commerce_payment_attempts (order_id, provider, provider_reference, expected_amount_minor, expected_currency)
@@ -97,6 +97,6 @@ begin
 end;
 $function$;
 
-revoke all on function public.commerce_create_credit_order(uuid,text,text,text) from public, anon;
-grant execute on function public.commerce_create_credit_order(uuid,text,text,text) to authenticated;
+revoke all on function public.commerce_create_credit_order_for_provider(uuid,text,text,text) from public, anon;
+grant execute on function public.commerce_create_credit_order_for_provider(uuid,text,text,text) to authenticated;
 commit;
