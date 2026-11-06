@@ -78,7 +78,7 @@ describe('Bachs independent checkout verification', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       checkout_id: 'chk_123', reference: input.reference, status: 'completed',
       payment_status: 'succeeded', currency: 'USD', amount: '12.00',
-      charge: { status: 'succeeded', payment_id: 'pay_abc123' },
+      charge: { status: 'succeeded', payment_id: 'pay_abc123', amount: '12.00', currency: 'USD' },
     }) }))
     expect(await retrieveBachsSandboxCheckout('sk_sandbox_test', 'chk_123')).toEqual({
       checkoutId: 'chk_123', reference: input.reference, status: 'successful',
@@ -97,7 +97,7 @@ describe('Bachs independent checkout verification', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       checkout_id: 'chk_other', reference: input.reference, status: 'completed',
       payment_status: 'succeeded', currency: 'USD', amount: '12.00',
-      charge: { status: 'succeeded', payment_id: 'pay_abc123' },
+      charge: { status: 'succeeded', payment_id: 'pay_abc123', amount: '12.00', currency: 'USD' },
     }) }))
     expect(await retrieveBachsSandboxCheckout('sk_sandbox_test', 'chk_123')).toBeNull()
   })
