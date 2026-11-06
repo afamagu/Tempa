@@ -37,11 +37,14 @@ export default async function CreditsReturnPage({
 
   let order: MyOrder | null = reference && REFERENCE.test(reference) ? await getMyOrder(supabase, reference) : null
   if (order && order.state !== 'paid' && reference) {
-    if (checkoutId) {
+    if (checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
       await verifyAndSettleBachs({ checkoutId, expectedReference: reference,
         eventId: `return:${checkoutId}`, eventType: 'checkout.return' }).catch(() => null)
-    } else {
-      await verifyAndSettle({
+    } else if (!checkoutId) {
+      // A Bachs return without a checkout ID must not be sent to Flutterwave.
+      const { data: bachsOrder } = await supabase.from('commerce_orders')
+        .select('provider').eq('tempa_reference', reference).eq('user_id', user.id).maybeSingle()
+      if (bachsOrder?.provider !== 'bachs') await verifyAndSettle({
         transactionId: transactionId && TRANSACTION.test(transactionId) ? transactionId : null,
         expectedReference: reference,
         source: 'return', eventType: 'checkout.return',
