@@ -1,6 +1,6 @@
 import 'server-only'
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { minorToMajorString } from '@/lib/money'
+import { minorToMajorString, majorToMinor } from '@/lib/money'
 
 /**
  * Bachs sandbox-only adapter. Deliberately not wired into member checkout:
@@ -113,10 +113,12 @@ export async function retrieveBachsSandboxCheckout(secretKey: string, checkoutId
     const successful = lifecycle === 'completed' && payment === 'succeeded' && chargeStatus === 'succeeded'
     const status = successful ? 'successful' : lifecycle === 'cancelled' ? 'cancelled'
       : lifecycle === 'expired' || payment === 'failed' ? 'failed' : 'pending'
-    const transactionId = successful && typeof charge?.payment_id === 'string' && /^pay_[A-Za-z0-9_-]+$/.test(charge.payment_id)
+    // The charge must agree with the checkout's base amount/currency, not only its status.
+    const chargeMatches = !!charge && charge.currency === x.currency &&
+      majorToMinor(charge.amount, x.currency as string) === majorToMinor(x.amount, x.currency as string)
+    const transactionId = successful && chargeMatches && typeof charge?.payment_id === 'string' && /^pay_[A-Za-z0-9_-]+$/.test(charge.payment_id)
       ? charge.payment_id : null
     if (successful && !transactionId) return null
-    const { majorToMinor } = await import('@/lib/money')
     return { checkoutId, reference: x.reference, status, transactionId,
       amountMinor: majorToMinor(x.amount, x.currency), currency: x.currency }
   } catch { return null }
