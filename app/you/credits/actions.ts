@@ -72,8 +72,12 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
       checkout_id: init.checkoutId, order_id: order.order_id, reference: order.reference,
     })
     if (bindError) {
-      console.error('[payments] Bachs checkout binding failed', { reference: order.reference, code: bindError.code })
-      return { status: 'error', message: 'We couldn’t prepare checkout securely. Please try again.' }
+      const { data: existing } = await service.from('commerce_bachs_checkouts')
+        .select('order_id,reference').eq('checkout_id', init.checkoutId).maybeSingle()
+      if (existing?.order_id !== order.order_id || existing?.reference !== order.reference) {
+        console.error('[payments] Bachs checkout binding failed', { reference: order.reference, code: bindError.code })
+        return { status: 'error', message: 'We couldn’t prepare checkout securely. Please try again.' }
+      }
     }
     return { status: 'redirect', url: init.checkoutUrl }
   }
