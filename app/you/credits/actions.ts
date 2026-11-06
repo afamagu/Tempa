@@ -47,12 +47,13 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
   } = await supabase.auth.getUser()
   if (!user?.email) return { status: 'error', message: COMMERCE_ERROR_COPY.not_authorized }
 
-  const { data, error } = await supabase.rpc(useBachs ? 'commerce_create_credit_order_for_provider' : 'commerce_create_credit_order', {
-    p_product_id: productId,
-    p_currency: currency,
-    p_idempotency_key: idempotencyKey,
-    ...(useBachs ? { p_provider: 'bachs' } : {}),
-  })
+  const { data, error } = useBachs
+    ? await supabase.rpc('commerce_create_credit_order_for_provider', {
+        p_product_id: productId, p_currency: currency, p_idempotency_key: idempotencyKey, p_provider: 'bachs',
+      })
+    : await supabase.rpc('commerce_create_credit_order', {
+        p_product_id: productId, p_currency: currency, p_idempotency_key: idempotencyKey,
+      })
   if (error || !data) return { status: 'error', message: commerceError(error).message }
 
   const order = data as { order_id: string; reference: string; state: string; amount_minor: number | string; currency: string; product: string; mode: string; provider?: string }
