@@ -29,9 +29,9 @@ export default async function CreditsPage() {
     redirect('/sign-in?next=%2Fyou%2Fcredits')
   }
 
-  const [waitingCount, offers, balance] = await Promise.all([
+  const isBachsPreview = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_GIT_COMMIT_REF === 'feat/bachs-sandbox-foundation'\n  const [waitingCount, offers, balance] = await Promise.all([
     getWaitingLetterCount(supabase, user.id),
-    getCreditPackOffers(supabase),
+    getCreditPackOffers(supabase, isBachsPreview ? 'bachs' : 'flutterwave'),
     getCreditBalance(supabase),
   ])
 
@@ -54,7 +54,7 @@ export default async function CreditsPage() {
             <>
               {offers.mode === 'test' && (
                 <p className="rounded-md border border-foreground/15 px-3 py-2 text-[13px] text-muted" data-testid="test-mode-notice">
-                  Test mode — payments use Flutterwave&apos;s test environment. No real money is charged.
+                  Test mode — payments use {isBachsPreview ? 'Bachs' : 'Flutterwave'}&apos;s sandbox environment. No real money is charged.
                 </p>
               )}
               {offers.offers.length === 0 ? (
