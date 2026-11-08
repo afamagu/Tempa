@@ -202,7 +202,9 @@ export type CreditPackOffers =
   | { available: false; reason: CommerceError; offers: [] }
 
 export async function getCreditPackOffers(supabase: SupabaseClient, provider: 'bachs' | 'flutterwave' = 'flutterwave'): Promise<CreditPackOffers> {
-  const { data, error } = provider === 'bachs'\n    ? await supabase.rpc('commerce_credit_pack_offers_for_provider', { p_provider: 'bachs' })\n    : await supabase.rpc('commerce_credit_pack_offers')
+  const { data, error } = provider === 'bachs'
+    ? await supabase.rpc('commerce_credit_pack_offers_for_provider', { p_provider: 'bachs' })
+    : await supabase.rpc('commerce_credit_pack_offers')
   const raw = data as {
     available?: boolean
     reason?: string | null
