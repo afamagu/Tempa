@@ -37,7 +37,8 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
   const bachs = bachsSandboxConfig()
   const service = createServiceClient()
   const { data: bachsProvider } = await service.from('commerce_payment_providers').select('checkout_enabled,live_mode_enabled').eq('code', 'bachs').maybeSingle()
-  const useBachs = bachs.ok && bachsProvider?.checkout_enabled === true && bachsProvider.live_mode_enabled === false
+  const isBachsPreview = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_GIT_COMMIT_REF === 'feat/bachs-sandbox-foundation'
+  const useBachs = isBachsPreview && bachs.ok && bachsProvider?.checkout_enabled === true && bachsProvider.live_mode_enabled === false
   const cfg = flutterwaveApiConfig()
   if (!useBachs && !cfg.ok) return unavailable()
 
