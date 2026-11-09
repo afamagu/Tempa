@@ -59,7 +59,10 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
     : await supabase.rpc('commerce_create_credit_order', {
         p_product_id: productId, p_currency: currency, p_idempotency_key: idempotencyKey,
       })
-  if (error || !data) return { status: 'error', message: commerceError(error).message }
+  if (error || !data) {
+    console.error('[payments] order creation failed', { provider: useBachs ? 'bachs' : 'flutterwave', code: error?.code ?? null, message: error?.message ?? null })
+    return { status: 'error', message: commerceError(error).message }
+  }
 
   const order = data as { order_id: string; reference: string; state: string; amount_minor: number | string; currency: string; product: string; mode: string; provider?: string }
   if (order.state === 'paid') return { status: 'already_paid', reference: order.reference }
@@ -73,7 +76,10 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
       email: user.email, successUrl: `${origin}/you/credits/return`,
       cancelUrl: `${origin}/you/credits`,
     })
-    if (!init.ok) return { status: 'error', message: 'We couldn’t open the payment page. Please try again.' }
+    if (!init.ok) {
+      console.error('[payments] Bachs checkout initialization failed', { reason: init.reason, httpStatus: init.httpStatus ?? null, currency: order.currency })
+      return { status: 'error', message: 'We couldn’t open the payment page. Please try again.' }
+    }
     const { error: bindError } = await service.from('commerce_bachs_checkouts').insert({
       checkout_id: init.checkoutId, order_id: order.order_id, reference: order.reference,
     })
