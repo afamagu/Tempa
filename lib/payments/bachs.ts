@@ -83,7 +83,7 @@ export async function createBachsSandboxCheckout(secretKey: string, input: Bachs
     }
     const url = new URL(checkoutUrl)
     if (url.protocol !== 'https:' || url.hostname !== 'checkout.bachs.io') {
-      return { ok: false, reason: 'invalid_response', diagnostic: 'unexpected_checkout_host' }
+      return { ok: false, reason: 'invalid_response', diagnostic: `unexpected_checkout_host:${url.hostname.toLowerCase()}` }
     }
     return { ok: true, checkoutId, checkoutUrl }
   } catch {
