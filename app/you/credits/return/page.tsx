@@ -36,24 +36,30 @@ export default async function CreditsReturnPage({
     redirect('/sign-in?next=%2Fyou%2Fcredits')
   }
 
-  // Bachs appends ?checkout_id to the clean success URL. Resolve the reference
-  // privately, then require the signed-in member to own the order.
-  let reference = queryReference
-  if (checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
-    const { data: binding } = await createServiceClient().from('commerce_bachs_checkouts')
+  // Bachs' hosted checkout URL uses a public slug, which is NOT the
+  // chk_ identifier returned by its API. Never interpret that slug as our
+  // internal checkout ID. Resolve by the server-issued Tempa reference and
+  // only after confirming ownership of the order.
+  let reference = queryReference && REFERENCE.test(queryReference) ? queryReference : undefined
+  const service = createServiceClient()
+  if (!reference && checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
+    const { data: binding } = await service.from('commerce_bachs_checkouts')
       .select('reference').eq('checkout_id', checkoutId).maybeSingle()
-    reference = binding?.reference === queryReference || !queryReference ? binding?.reference : undefined
+    reference = binding?.reference
   }
-  let order: MyOrder | null = reference && REFERENCE.test(reference) ? await getMyOrder(supabase, reference) : null
+  let order: MyOrder | null = reference ? await getMyOrder(supabase, reference) : null
   if (order && order.state !== 'paid' && reference) {
-    if (checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
-      await verifyAndSettleBachs({ checkoutId, expectedReference: reference,
-        eventId: `return:${checkoutId}`, eventType: 'checkout.return' }).catch(() => null)
+    const { data: providerOrder } = await supabase.from('commerce_orders')
+      .select('provider').eq('tempa_reference', reference).eq('user_id', user.id).maybeSingle()
+    if (providerOrder?.provider === 'bachs') {
+      const { data: binding } = await service.from('commerce_bachs_checkouts')
+        .select('checkout_id').eq('reference', reference).maybeSingle()
+      if (binding?.checkout_id && /^chk_[A-Za-z0-9_-]+$/.test(binding.checkout_id)) {
+        await verifyAndSettleBachs({ checkoutId: binding.checkout_id, expectedReference: reference,
+          eventId: `return:${binding.checkout_id}`, eventType: 'checkout.return' }).catch(() => null)
+      }
     } else if (!checkoutId) {
-      // A Bachs return without a checkout ID must not be sent to Flutterwave.
-      const { data: bachsOrder } = await supabase.from('commerce_orders')
-        .select('provider').eq('tempa_reference', reference).eq('user_id', user.id).maybeSingle()
-      if (bachsOrder?.provider !== 'bachs') await verifyAndSettle({
+      await verifyAndSettle({
         transactionId: transactionId && TRANSACTION.test(transactionId) ? transactionId : null,
         expectedReference: reference,
         source: 'return', eventType: 'checkout.return',
