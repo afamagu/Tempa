@@ -77,7 +77,7 @@ export async function startCreditCheckout(productId: unknown, currency: unknown,
       cancelUrl: `${origin}/you/credits`,
     })
     if (!init.ok) {
-      console.error('[payments] Bachs checkout initialization failed', { reason: init.reason, httpStatus: init.httpStatus ?? null, currency: order.currency })
+      console.error('[payments] Bachs checkout initialization failed', { reason: init.reason, httpStatus: init.httpStatus ?? null, diagnostic: init.diagnostic ?? null, currency: order.currency })
       return { status: 'error', message: 'We couldn’t open the payment page. Please try again.' }
     }
     const { error: bindError } = await service.from('commerce_bachs_checkouts').insert({
