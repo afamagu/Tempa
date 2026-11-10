@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { getWaitingLetterCount } from '@/lib/letters'
 import { getMyOrder, type MyOrder } from '@/lib/commerce'
 import { verifyAndSettle } from '@/lib/payments/settlement'
+import { verifyAndSettleBachs } from '@/lib/payments/bachs-settlement'
 import { quietLinkClass, secondaryButtonClass, sectionLabelClass, sectionTitleClass } from '@/app/profile/ui'
 import AppShell from '@/app/app-shell'
 
@@ -23,9 +25,9 @@ const TRANSACTION = /^\d{1,20}$/
 export default async function CreditsReturnPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tx_ref?: string; transaction_id?: string }>
+  searchParams: Promise<{ tx_ref?: string; transaction_id?: string; checkout_id?: string }>
 }) {
-  const { tx_ref: reference, transaction_id: transactionId } = await searchParams
+  const { tx_ref: queryReference, transaction_id: transactionId, checkout_id: checkoutId } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -34,14 +36,35 @@ export default async function CreditsReturnPage({
     redirect('/sign-in?next=%2Fyou%2Fcredits')
   }
 
-  let order: MyOrder | null = reference && REFERENCE.test(reference) ? await getMyOrder(supabase, reference) : null
+  // Bachs' hosted checkout URL uses a public slug, which is NOT the
+  // chk_ identifier returned by its API. Never interpret that slug as our
+  // internal checkout ID. Resolve by the server-issued Tempa reference and
+  // only after confirming ownership of the order.
+  let reference = queryReference && REFERENCE.test(queryReference) ? queryReference : undefined
+  const service = createServiceClient()
+  if (!reference && checkoutId && /^chk_[A-Za-z0-9_-]+$/.test(checkoutId)) {
+    const { data: binding } = await service.from('commerce_bachs_checkouts')
+      .select('reference').eq('checkout_id', checkoutId).maybeSingle()
+    reference = binding?.reference
+  }
+  let order: MyOrder | null = reference ? await getMyOrder(supabase, reference) : null
   if (order && order.state !== 'paid' && reference) {
-    await verifyAndSettle({
-      transactionId: transactionId && TRANSACTION.test(transactionId) ? transactionId : null,
-      expectedReference: reference,
-      source: 'return',
-      eventType: 'checkout.return',
-    }).catch(() => null)
+    const { data: providerOrder } = await supabase.from('commerce_orders')
+      .select('provider').eq('tempa_reference', reference).eq('user_id', user.id).maybeSingle()
+    if (providerOrder?.provider === 'bachs') {
+      const { data: binding } = await service.from('commerce_bachs_checkouts')
+        .select('checkout_id').eq('reference', reference).maybeSingle()
+      if (binding?.checkout_id && /^chk_[A-Za-z0-9_-]+$/.test(binding.checkout_id)) {
+        await verifyAndSettleBachs({ checkoutId: binding.checkout_id, expectedReference: reference,
+          eventId: `return:${binding.checkout_id}`, eventType: 'checkout.return' }).catch(() => null)
+      }
+    } else if (!checkoutId) {
+      await verifyAndSettle({
+        transactionId: transactionId && TRANSACTION.test(transactionId) ? transactionId : null,
+        expectedReference: reference,
+        source: 'return', eventType: 'checkout.return',
+      }).catch(() => null)
+    }
     order = await getMyOrder(supabase, reference)
   }
 
