@@ -48,7 +48,7 @@ export type BachsCheckoutInput = {
 
 export type BachsCheckoutResult =
   | { ok: true; checkoutId: string; checkoutUrl: string }
-  | { ok: false; reason: 'invalid_input' | 'provider_rejected' | 'network_error' | 'invalid_response'; httpStatus?: number }
+  | { ok: false; reason: 'invalid_input' | 'provider_rejected' | 'network_error' | 'invalid_response'; httpStatus?: number; diagnostic?: string }
 
 export async function createBachsSandboxCheckout(secretKey: string, input: BachsCheckoutInput): Promise<BachsCheckoutResult> {
   const amount = minorToMajorString(input.amountMinor, input.currency)
@@ -73,14 +73,17 @@ export async function createBachsSandboxCheckout(secretKey: string, input: Bachs
     })
     if (!response.ok) return { ok: false, reason: 'provider_rejected', httpStatus: response.status }
     const data: unknown = await response.json().catch(() => null)
-    if (!data || typeof data !== 'object') return { ok: false, reason: 'invalid_response' }
+    if (!data || typeof data !== 'object') return { ok: false, reason: 'invalid_response', diagnostic: 'non_object_json' }
     const { checkout_id: checkoutId, checkout_url: checkoutUrl } =
       data as { checkout_id?: unknown; checkout_url?: unknown }
     if (typeof checkoutId !== 'string' || !/^chk_[\w-]+$/.test(checkoutId) ||
-        typeof checkoutUrl !== 'string') return { ok: false, reason: 'invalid_response' }
+        typeof checkoutUrl !== 'string') {
+      const rootKeys = Object.keys(data).filter(k => /^[a-zA-Z_]{1,40}$/.test(k)).slice(0, 20)
+      return { ok: false, reason: 'invalid_response', diagnostic: `unexpected_fields:${rootKeys.join(',')};id_type:${typeof checkoutId};url_type:${typeof checkoutUrl}` }
+    }
     const url = new URL(checkoutUrl)
     if (url.protocol !== 'https:' || url.hostname !== 'checkout.bachs.io') {
-      return { ok: false, reason: 'invalid_response' }
+      return { ok: false, reason: 'invalid_response', diagnostic: 'unexpected_checkout_host' }
     }
     return { ok: true, checkoutId, checkoutUrl }
   } catch {
