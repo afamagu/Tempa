@@ -82,7 +82,7 @@ export async function createBachsSandboxCheckout(secretKey: string, input: Bachs
       return { ok: false, reason: 'invalid_response', diagnostic: `unexpected_fields:${rootKeys.join(',')};id_type:${typeof checkoutId};url_type:${typeof checkoutUrl}` }
     }
     const url = new URL(checkoutUrl)
-    if (url.protocol !== 'https:' || url.hostname !== 'checkout.bachs.io') {
+    if (url.protocol !== 'https:' || !(url.hostname.toLowerCase() === 'bachs.io' || url.hostname.toLowerCase().endsWith('.bachs.io'))) {
       return { ok: false, reason: 'invalid_response', diagnostic: `unexpected_checkout_host:${url.hostname.toLowerCase()}` }
     }
     return { ok: true, checkoutId, checkoutUrl }
