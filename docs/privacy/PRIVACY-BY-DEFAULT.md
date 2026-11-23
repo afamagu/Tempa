@@ -7,6 +7,7 @@ not install analytics, advertising pixels, consent banners or third-party SDKs.
 - Supabase authentication cookies support sessions; do not block them.
 - `tempa_locale` stores interface language.
 - Cloudflare Turnstile is loaded by the sign-in widget for bot protection.
+- Google Identity Services is dynamically loaded on the sign-in page for Google login. Its third-party request occurs on component mount, before a user clicks the Google button. This requires a purpose/consent assessment; do not assume it is an advertising pixel.
 - Payments, correspondence and security must continue functioning.
 
 ## Integration rule
