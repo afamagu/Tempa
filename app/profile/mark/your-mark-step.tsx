@@ -36,8 +36,6 @@ export default function YourMarkStep({
   const revealHeadingRef = useRef<HTMLHeadingElement | null>(null)
 
   async function loadReservation() {
-    setError(null)
-    setPhase('loading')
     try {
       const supabase = createClient()
       const next = await reserveProfileMark(supabase)
@@ -57,7 +55,7 @@ export default function YourMarkStep({
   }
 
   useEffect(() => {
-    void loadReservation()
+    void Promise.resolve().then(loadReservation)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -182,7 +180,11 @@ export default function YourMarkStep({
             <label htmlFor="your-mark-photograph" aria-disabled={busy} className={`${primaryButtonClass} ${busy ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}>
               {t('choosePhoto')}
             </label>
-            {error && <button type="button" onClick={() => void loadReservation()} className={secondaryButtonClass}>{t('tryAgain')}</button>}
+            {error && <button type="button" onClick={() => {
+              setError(null)
+              setPhase('loading')
+              void loadReservation()
+            }} className={secondaryButtonClass}>{t('tryAgain')}</button>}
           </div>
         )}
 

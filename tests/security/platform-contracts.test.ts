@@ -73,11 +73,16 @@ describe('crawl and disclosure files (F-09)', () => {
   it('robots allows only the public pages, public Dispatch articles and their render assets; disallows everything else', () => {
     const r = robots()
     const rules = Array.isArray(r.rules) ? r.rules : [r.rules]
-    expect(rules).toHaveLength(1)
+    expect(rules).toHaveLength(2)
     expect(rules[0]).toMatchObject({ userAgent: '*', disallow: '/' })
     expect(rules[0].allow).toEqual([...PUBLIC_INDEXABLE_PATHS, '/dispatches/', '/_next/'])
     // share links (/d/…), the member app, /api, /auth and /admin are never allowed
     for (const p of rules[0].allow as string[]) expect(p).not.toMatch(/^\/(d|api|auth|admin|board|letters|minds|you|profile)(\/|$)/)
+    expect(rules[1]).toEqual({
+      userAgent: ['Twitterbot', 'facebookexternalhit', 'Facebot'],
+      disallow: '/',
+      allow: [...PUBLIC_INDEXABLE_PATHS, '/dispatches/', '/d/', '/_next/'],
+    })
     expect(r.sitemap).toBe(`${SITE_URL}/sitemap.xml`)
   })
 
@@ -128,7 +133,11 @@ describe('database authorization contracts (docs/sql)', () => {
       'public.shared_dispatch_writing_style(uuid)', 'public.public_dispatch_writing_style(text)',
       // + 2026-09-30: house-account disclosure ("Tempa House Columnist") shown
       // on those same public pages — canonical pseudonym key + title only.
-      'public.editorial_bylines()'])
+      'public.editorial_bylines()',
+      // Each public discovery or Mark RPC filters through dispatch_is_web_public.
+      'public.list_public_dispatch_previews(integer, text)',
+      'public.list_related_public_dispatches(text, text[], integer)',
+      'public.list_public_dispatch_topics()', 'public.get_public_dispatch_mark(text)'])
     let anonGrants = 0
     for (const f of migrations) {
       const sql = stripComments(readFileSync(path.join(sqlDir, f), 'utf8'))
