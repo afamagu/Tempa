@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ArchiveList from './archive-list'
 import type { ArchiveLetter } from '@/lib/letters'
 import type { ReturnCard } from '@/lib/return-cards'
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }))
 
 function letter(overrides: Partial<ArchiveLetter> = {}): ArchiveLetter {
   return {

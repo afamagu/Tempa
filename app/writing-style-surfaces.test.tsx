@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import AuthoredProse from '@/app/authored-prose'
@@ -225,7 +227,9 @@ describe('WritingStyleChooser — six equal choices over the member’s own word
   it('shows all six styles as one native radio group, each carrying the member’s own words', () => {
     const d = dom(
       renderToStaticMarkup(
-        <WritingStyleChooser mode="onboarding" heading="Give your words a shape." intro="Choose how your writing appears when it reaches someone." sample={OWN} sampleIsOwn destination="/minds" />
+        <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
+          <WritingStyleChooser mode="onboarding" heading="Give your words a shape." intro="Choose how your writing appears when it reaches someone." sample={OWN} sampleIsOwn destination="/minds" />
+        </NextIntlClientProvider>
       )
     )
     const radios = [...d.querySelectorAll('input[type="radio"]')]
@@ -248,7 +252,9 @@ describe('WritingStyleChooser — six equal choices over the member’s own word
   it('settings mode starts from the current style and offers Save', () => {
     const d = dom(
       renderToStaticMarkup(
-        <WritingStyleChooser mode="settings" heading="Your writing style" intro="…" sample={OWN} sampleIsOwn initialStyleId="literary" />
+        <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
+          <WritingStyleChooser mode="settings" heading="Your writing style" intro="…" sample={OWN} sampleIsOwn initialStyleId="literary" />
+        </NextIntlClientProvider>
       )
     )
     expect(d.querySelector('input[value="literary"]')!.hasAttribute('checked')).toBe(true)

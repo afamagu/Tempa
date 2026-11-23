@@ -35,6 +35,7 @@ function extractFunctionBody(qualifiedName: string): string {
 }
 
 const codeOnly = stripLineComments(sql)
+const normalizedSql = codeOnly.replace(/\s+/g, ' ')
 
 describe('Phase 1 relationship-health measurement migration', () => {
   it('is one forward transaction and is explicitly review-before-production', () => {
@@ -99,10 +100,10 @@ describe('Phase 1 relationship-health measurement migration', () => {
     expect(codeOnly).toContain(
       'alter table public.relationship_establishment_snapshots enable row level security;'
     )
-    expect(codeOnly).toContain(
+    expect(normalizedSql).toContain(
       'revoke all on table public.relationship_establishment_snapshots from public, anon, authenticated;'
     )
-    expect(codeOnly).toContain(
+    expect(normalizedSql).toContain(
       'grant select on table public.relationship_establishment_snapshots to service_role;'
     )
   })
@@ -124,7 +125,7 @@ describe('Phase 1 relationship-health measurement migration', () => {
     )
 
     // There must be no general INSERT...SELECT backfill into snapshots.
-    const snapshotInsertSelect = /insert\s+into\s+public\.relationship_establishment_snapshots[\s\S]*?select\s+/i
+    const snapshotInsertSelect = /insert\s+into\s+public\.relationship_establishment_snapshots\b[^;]*?select\s+/i
     expect(codeOnly).not.toMatch(snapshotInsertSelect)
   })
 
@@ -152,16 +153,16 @@ describe('Phase 1 relationship-health measurement migration', () => {
   })
 
   it('keeps pilot metric reports service-only', () => {
-    expect(codeOnly).toContain(
+    expect(normalizedSql).toContain(
       'revoke all on function public.get_relationship_pilot_metrics() from public, anon, authenticated;'
     )
-    expect(codeOnly).toContain(
+    expect(normalizedSql).toContain(
       'grant execute on function public.get_relationship_pilot_metrics() to service_role;'
     )
-    expect(codeOnly).toContain(
+    expect(normalizedSql).toContain(
       'revoke all on function public.get_relationship_first_contact_funnel(timestamptz) from public, anon, authenticated;'
     )
-    expect(codeOnly).toContain(
+    expect(normalizedSql).toContain(
       'grant execute on function public.get_relationship_first_contact_funnel(timestamptz) to service_role;'
     )
   })
