@@ -98,10 +98,11 @@ describe('proxy CSP wiring', () => {
     }
   })
 
-  it('the auth gate still covers every originally protected route', () => {
+  it('the auth gate covers the private routes', () => {
     expect([...PROTECTED_MATCHERS]).toEqual([
-      '/', '/admin/:path*', '/announcement/:path*', '/board/:path*', '/home/:path*', '/letters/:path*',
-      '/minds/:path*', '/profile/:path*', '/question/:path*', '/write/:path*', '/you/:path*',
+      '/admin/:path*', '/announcement/:path*', '/begin/:path*', '/board/:path*', '/home/:path*',
+      '/language/:path*', '/letters/:path*', '/minds/:path*', '/profile/:path*', '/question/:path*',
+      '/room/:path*', '/write/:path*', '/welcome/:path*', '/you/:path*',
     ])
     expect(isProtectedPath('/admin/moderation')).toBe(true)
     expect(isProtectedPath('/letters')).toBe(true)

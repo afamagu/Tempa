@@ -164,9 +164,15 @@ describe('proxy — protected entry destinations', () => {
 })
 
 describe('proxy — consolidated account-entry read', () => {
-  it('normal authenticated entry = auth.getUser + ONE self-scoped RPC (was: getUser + status RPC + 3 table reads)', async () => {
+  it('normal authenticated entry uses only the expected account and onboarding reads', async () => {
     await visit('/home')
-    expect(fake.ops).toEqual(['auth.getUser', 'rpc:current_account_entry_state', 'from:member_language_preferences'])
+    expect(fake.ops).toEqual([
+      'auth.getUser',
+      'rpc:current_account_entry_state',
+      'from:member_language_preferences',
+      'rpc:current_pilot_access',
+      'from:profiles',
+    ])
   })
 
   it('passes only the server-side legal version constants — never a user id', async () => {

@@ -80,14 +80,14 @@ describe('PrivacyPage', () => {
 
     it('covers profile fields: pseudonym, country, region, languages, optional gender', () => {
       expect(html.toLowerCase()).toContain('pseudonym')
-      expect(html).toContain('country (shown publicly)')
-      expect(html).toContain('region (collected but not shown')
+      expect(html).toContain('Your pseudonym and country form part of your Tempa identity')
+      expect(html).toContain('region is collected but not shown to other members')
       expect(html.toLowerCase()).toContain('languages')
       expect(html.toLowerCase()).toContain('gender')
     })
 
     it('distinguishes public "Interests" (intent) from private reading interests, without conflating them', () => {
-      expect(html).toContain('shown publicly as')
+      expect(html).toContain('shown on your profile')
       expect(html).toContain('Reading interests (kept private)')
       expect(html).toContain('never shown on your profile or to other members')
     })
@@ -225,9 +225,10 @@ describe('PrivacyPage', () => {
     expect(lower).toContain('don’t run analytics trackers or advertising technology')
   })
 
-  it('does not invent unreleased functionality as current (no payments, ads, or Tempa Kids)', () => {
+  it('describes Credits checkout when available and does not advertise Tempa Kids', () => {
     const lower = html.toLowerCase()
-    expect(lower).toContain('don’t process payment information')
+    expect(lower).toContain('credits checkout information')
+    expect(lower).toContain('if you start a credits checkout through flutterwave')
     expect(lower).not.toContain('tempa kids')
   })
 })

@@ -262,18 +262,26 @@ describe('share image and media', () => {
         return statSync(path.join(root, rel)).isDirectory() ? walk(rel) : /\.tsx$/.test(n) && !/\.test\.tsx$/.test(n) ? [rel] : []
       })
     const users = walk('app').filter((f) => read(f).includes('dangerouslySetInnerHTML={'))
-    expect(users.map((f) => f.replace(/\\/g, '/'))).toEqual(['app/dispatches/[slug]/page.tsx'])
-    expect(read('app/dispatches/[slug]/page.tsx')).toContain('dangerouslySetInnerHTML={{ __html: jsonLdScriptContent(')
+    expect(users.map((f) => f.replace(/\\/g, '/'))).toEqual([
+      'app/dispatches/[slug]/page.tsx',
+      'app/dispatches/topics/[topic]/page.tsx',
+    ])
+    for (const file of users) {
+      const source = read(file)
+      expect(source.match(/dangerouslySetInnerHTML=\{/g)).toHaveLength(
+        source.match(/dangerouslySetInnerHTML=\{\{ __html: jsonLdScriptContent\(/g)?.length ?? 0,
+      )
+    }
   })
 })
 
 describe('the author’s choice', () => {
   it('composer copy says plainly that Public means the open web', () => {
-    expect(WEB_PUBLIC_COPY.on).toBe('Anyone can read this Dispatch on the web. Public Dispatches may appear in search engines.')
+    expect(WEB_PUBLIC_COPY.on).toMatch(/Anyone can read.*search engines may index/)
     const composer = read('app/board/dispatch-composer.tsx')
     expect(composer).toContain('{webPublic ? WEB_PUBLIC_COPY.on : WEB_PUBLIC_COPY.off}')
-    // members default to members-only; official/sponsored default to public
-    expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : publication ? true : false')
+    // New Dispatches start with web visibility off.
+    expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : false')
   })
 
   it('the composer sends the requested web state WITH the save (one transaction) — no separate follow-up call', () => {

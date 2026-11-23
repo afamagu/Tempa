@@ -164,7 +164,7 @@ export default function YourMarkPrototypePage() {
           <p className="text-[15px] leading-relaxed text-foreground/80">
             Choose a photo. It is processed entirely in this browser tab — never uploaded, never sent to any
             server. Each photo runs through four independent artistic families (V2, WEAVE, CONTOUR, GLYPH) so they can be
-            compared directly, at full, medium, and small (avatar-scale) size — the "choose your Mark" experience
+            compared directly, at full, medium, and small (avatar-scale) size — the &ldquo;choose your Mark&rdquo; experience
             this checkpoint is testing.
           </p>
         </div>

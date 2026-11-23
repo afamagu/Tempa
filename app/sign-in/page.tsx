@@ -363,7 +363,7 @@ function SignInForm() {
   // Supabase-hosted redirect flow: if Google's script cannot load, the
   // member sees a short note and email sign-in stays available.
   const googleClientId = googleIdentityClientId()
-  const useGoogleIdentity = Boolean(googleClientId)
+  const [googleRequested, setGoogleRequested] = useState(false)
   const [gisUnavailable, setGisUnavailable] = useState(false)
   // One submitted Google credential per page load (its nonce is then
   // spent); a retry reloads the page for a fresh GIS initialize + nonce.
@@ -474,7 +474,7 @@ function SignInForm() {
           <p className="text-sm leading-relaxed text-muted">{t('pilotInviteNote')}</p>
         )}
 
-        {useGoogleIdentity && googleClientId ? (
+        {googleRequested && googleClientId ? (
           googleLoading ? (
             <p className="py-2.5 text-center text-sm text-muted">{t('signingYouIn')}</p>
           ) : gisUnavailable ? (
@@ -498,7 +498,7 @@ function SignInForm() {
         ) : (
           <button
             type="button"
-            onClick={handleGoogleSignIn}
+            onClick={googleClientId ? () => setGoogleRequested(true) : handleGoogleSignIn}
             disabled={googleLoading}
             className="w-full rounded-md bg-accent text-accent-foreground px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent/90 disabled:opacity-50"
           >

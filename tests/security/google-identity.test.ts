@@ -139,11 +139,11 @@ describe('sign-in page wiring', () => {
   const page = read('app/sign-in/page.tsx')
   const button = read('app/sign-in/google-identity-button.tsx')
 
-  it('uses GIS whenever the client id is configured, and never falls back to the Supabase-hosted redirect flow', () => {
-    expect(page).toMatch(/const useGoogleIdentity = Boolean\(googleClientId\)\n/)
+  it('uses GIS after the member chooses Google when the client id is configured', () => {
+    expect(page).toContain('onClick={googleClientId ? () => setGoogleRequested(true) : handleGoogleSignIn}')
     expect(page).toContain('onUnavailable={() => setGisUnavailable(true)}')
     // GIS unavailable → a note; email sign-in stays; no signInWithOAuth.
-    const gisBranch = page.slice(page.indexOf('{useGoogleIdentity && googleClientId ? ('), page.indexOf('<GoogleIdentityButton'))
+    const gisBranch = page.slice(page.indexOf('{googleRequested && googleClientId ? ('), page.indexOf('<GoogleIdentityButton'))
     // Copy is localized (messages/*.json); the English wording is unchanged.
     expect(gisBranch).toContain("t('googleUnavailable')")
     expect(en.SignIn.googleUnavailable).toBe("Google sign-in isn't available right now. You can still sign in with your email below.")

@@ -164,7 +164,7 @@ describe('checkout initialisation', () => {
   it('an unknown currency is never initialised', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'XYZ', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' })).toEqual({ ok: false, reason: 'invalid_amount', httpStatus: null, providerMessage: null })
+    expect(await initializePayment(TEST, { reference: REF, amountMinor: 100, currency: 'XYZ', email: 'm@example.com', redirectUrl: 'https://jointempa.com/x', title: 't' })).toEqual({ ok: false, reason: 'invalid_amount', httpStatus: null, providerMessage: null, checkoutHost: null })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
