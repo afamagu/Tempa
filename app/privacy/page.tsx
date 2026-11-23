@@ -115,6 +115,7 @@ export default function PrivacyPage() {
           <li><strong>People with a Dispatch share link.</strong> If you create a separate share link, anyone holding it may read that Dispatch until the share is revoked.</li>
           <li><strong>Supabase.</strong> Supabase provides backend infrastructure, including our database, authentication, and file storage.</li>
           <li><strong>Vercel.</strong> Vercel hosts the Tempa web application.</li>
+          <li><strong>Google.</strong> If you choose to sign in with Google, your browser connects to Google to display the sign-in controls. When you complete Google sign-in, Tempa uses a Google-issued identity token to authenticate you through Supabase. You can also use an email magic link.</li>
           <li><strong>Cloudflare.</strong> Cloudflare Turnstile helps confirm that a sign-in attempt is genuine, not automated.</li>
           <li><strong>Professional advisers and authorities, only where appropriate.</strong> For example, legal advisers, or a law enforcement or regulatory request we&rsquo;re required to honor.</li>
         </ul>

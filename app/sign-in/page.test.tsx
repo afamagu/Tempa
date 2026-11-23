@@ -215,7 +215,7 @@ describe('SignInPage — Turnstile is passed as captchaToken to signInWithOtp', 
     // file (which also contains the substring "<TurnstileWidget").
     const formStart = source.indexOf('<form onSubmit={handleSubmit}')
     const widgetIndex = source.indexOf('<TurnstileWidget', formStart)
-    const googleButtonJsxIndex = source.indexOf('onClick={handleGoogleSignIn}')
+    const googleButtonJsxIndex = source.indexOf('<GoogleIdentityButton')
     expect(formStart).toBeGreaterThan(-1)
     expect(widgetIndex).toBeGreaterThan(formStart)
     expect(googleButtonJsxIndex).toBeGreaterThan(-1)
@@ -307,7 +307,7 @@ describe('SignInPage — Google OAuth does not depend on Turnstile', () => {
   })
 
   it('the Google button is never disabled by Turnstile state — only by its own googleLoading flag', () => {
-    expect(source).toMatch(/onClick=\{handleGoogleSignIn\}\s*\n\s*disabled=\{googleLoading\}/)
+    expect(source).toMatch(/onClick=\{googleClientId \? \(\) => setGoogleRequested\(true\) : handleGoogleSignIn\}\s*\n\s*disabled=\{googleLoading\}/)
   })
 })
 
