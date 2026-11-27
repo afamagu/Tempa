@@ -109,7 +109,7 @@ export default function LetterBody({
           return (
             <div key={index} className="wp-block" data-wp-role={roles[index]} {...(paragraphAttrs?.(index) ?? {})}>
               <p className={`whitespace-pre-wrap${roles[index] === 'opening' ? ' wp-opening' : ''}`}>
-                <FormattedText text={paragraph} isRich={isRich} />
+                <FormattedText text={paragraph} isRich={isRich} linkify />
                 {moment?.type === 'photo' && photoUrl && (
                   <span className="wp-interface">
                     <PhotoMomentToken

@@ -93,7 +93,7 @@ export default function DispatchBody({
               data-wp-role={roles[index]}
               {...(paragraphAttrs?.(index) ?? {})}
             >
-              <FormattedText text={paragraph} isRich={isRich} />
+              <FormattedText text={paragraph} isRich={isRich} linkify />
               {passageMoments.filter(moment => moment.imageUrl).map(moment => (
                 <span key={moment.id} className="wp-interface">
                   <PhotoMomentToken

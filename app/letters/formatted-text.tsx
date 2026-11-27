@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { parseFormattedText } from '@/lib/letter-editor-doc'
 
 /**
@@ -22,31 +23,71 @@ import { parseFormattedText } from '@/lib/letter-editor-doc'
  * at all, so it is structurally impossible for such text to be
  * reinterpreted as formatting regardless of its characters.
  *
+ * Web links are opt-in for full readers; preview cards may already
+ * be wrapped in a navigation link and must not contain nested anchors.
+ *
  * Used everywhere a letter's own words are shown as plain text today:
  * the reader (letter-body.tsx), and both Letterbox preview surfaces
  * (people-grid.tsx, archive-list.tsx) and Home's Arrivals preview.
  */
-export default function FormattedText({ text, isRich }: { text: string; isRich: boolean }) {
-  if (!isRich) return <>{text}</>
+
+/** Recognize web addresses without interpreting member text as HTML. */
+function linkedText(text: string): ReactNode {
+  const parts: ReactNode[] = []
+  const addresses = /(^|[\s([{>])((?:https?:\/\/|www\.)[^\s<>"'“”‘’]+)/gi
+  let cursor = 0
+  for (const match of text.matchAll(addresses)) {
+    const start = match.index! + match[1].length
+    let label = match[2].replace(/[.,!?:;]+$/, '')
+    // Keep balanced parentheses in paths, but leave prose punctuation outside.
+    for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+      while (label.endsWith(close) && label.split(close).length > label.split(open).length) {
+        label = label.slice(0, -1).replace(/[.,!?:;]+$/, '')
+      }
+    }
+    let url: URL
+    try {
+      url = new URL(/^www\./i.test(label) ? 'https://' + label : label)
+    } catch {
+      continue
+    }
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) continue
+    parts.push(text.slice(cursor, start))
+    parts.push(
+      <a key={start} href={url.href} target="_blank" rel="noopener noreferrer ugc nofollow"
+        className="break-all underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2">
+        {label}
+      </a>
+    )
+    cursor = start + label.length
+  }
+  if (cursor === 0) return text
+  parts.push(text.slice(cursor))
+  return parts
+}
+
+export default function FormattedText({ text, isRich, linkify = false }: { text: string; isRich: boolean; linkify?: boolean }) {
+  if (!isRich) return <>{linkify ? linkedText(text) : text}</>
 
   const segments = parseFormattedText(text)
 
   return (
     <>
       {segments.map((segment, i) => {
+        const content = linkify ? linkedText(segment.text) : segment.text
         if (segment.bold && segment.italic) {
           return (
             <strong key={i}>
-              <em>{segment.text}</em>
+              <em>{content}</em>
             </strong>
           )
         }
-        if (segment.bold) return <strong key={i}>{segment.text}</strong>
-        if (segment.italic) return <em key={i}>{segment.text}</em>
+        if (segment.bold) return <strong key={i}>{content}</strong>
+        if (segment.italic) return <em key={i}>{content}</em>
         // A bare string needs no key — only React elements in an array
         // do — and avoids an unnecessary wrapper element for the
         // common case of an entirely unformatted paragraph.
-        return segment.text
+        return content
       })}
     </>
   )
