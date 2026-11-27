@@ -27,7 +27,7 @@ describe('reply reminder email', () => {
       siteOrigin: 'https://jointempa.com',
     })
 
-    expect(rendered.html).toContain("A B's letter is still waiting.")
+    expect(rendered.html).toContain("A B&#39;s letter is still waiting.")
     expect(rendered.html).not.toContain('\r')
     expect(rendered.html).not.toContain('\nB')
   })

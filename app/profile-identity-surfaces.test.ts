@@ -38,9 +38,10 @@ describe('canonical member identity surfaces', () => {
     expect(renderer).toContain('<Mindform')
   })
 
-  it('does not replace the anonymous shared-Dispatch identity with a profile Mark', () => {
+  it('uses the public identity Mark only for member shared Dispatches', () => {
     const shared = read('app/d/[shareToken]/shared-dispatch-view.tsx')
-    expect(shared).not.toContain('ProfileIdentityMark')
+    expect(shared).toContain("dispatch.identity.kind === 'member'")
+    expect(shared).toContain('markUrl={dispatch.identity.markUrl}')
     expect(shared).not.toContain('mark_id')
   })
 })

@@ -7,7 +7,7 @@ const youPageSource = readFileSync(path.join(__dirname, '..', 'page.tsx'), 'utf8
 
 describe('/you/notifications — arrival-email preference', () => {
   it('redirects a signed-out visitor to sign-in', () => {
-    expect(source).toContain("redirect('/sign-in')")
+    expect(source).toContain("redirect('/sign-in?next=%2Fyou%2Fnotifications')")
   })
 
   it('reads the current preference via getArrivalEmailPreference, self-scoped to the signed-in user', () => {

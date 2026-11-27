@@ -157,7 +157,7 @@ describe('PhotoConsent — passive branches render through TempaNote', () => {
         reviewPhotoHref={undefined}
       />
     )
-    expect(html).toContain('Photos are enabled in this correspondence.')
+    expect(html).toContain('Moments are enabled in this correspondence.')
     expect(html).toContain('Tempa Note')
   })
 })

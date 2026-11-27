@@ -73,17 +73,17 @@ describe('BoardShelfCard', () => {
   })
 
   // Live-test regression (Checkpoint 1C, §7): the Home Board shelf's
-  // author pseudonym must itself link to /minds/[authorId] — the whole
+  // author pseudonym must itself link to /room/[authorId] — the whole
   // card used to be one single Link to /board/[id], leaving no way to
   // reach the author's profile without opening the Dispatch first.
   it('the author pseudonym links to their profile', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
-    expect(html).toMatch(/<a[^>]*href="\/minds\/author-1"[^>]*>[\s\S]*Evening Quill[\s\S]*<\/a>/)
+    expect(html).toMatch(/<a[^>]*href="\/room\/author-1"[^>]*>[\s\S]*Evening Quill[\s\S]*<\/a>/)
   })
 
   it('never nests the profile link inside the Dispatch-reader link — two sibling anchors, not one inside the other', () => {
     const html = renderToStaticMarkup(<BoardShelfCard dispatch={item()} />)
-    const profileLinkEnd = html.indexOf('</a>', html.indexOf('href="/minds/author-1"'))
+    const profileLinkEnd = html.indexOf('</a>', html.indexOf('href="/room/author-1"'))
     const readerLinkStart = html.indexOf('href="/board/letters/11111111-2222-4333-8444-555555555555"')
     expect(profileLinkEnd).toBeGreaterThan(-1)
     expect(profileLinkEnd).toBeLessThan(readerLinkStart)

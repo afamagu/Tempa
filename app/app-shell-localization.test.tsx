@@ -58,8 +58,8 @@ describe('AppShell navigation is localized from the dictionaries', () => {
 
   it('letter badge behaviour is unchanged in every language', () => {
     for (const locale of ['en', 'fr'] as const) {
-      expect(render(locale, 3)).toContain('h-2 w-2 rounded-full bg-accent')
-      expect(render(locale, 0)).not.toContain('h-2 w-2 rounded-full bg-accent')
+      expect(render(locale, 3)).toContain('h-2 w-2 shrink-0 rounded-full bg-accent')
+      expect(render(locale, 0)).not.toContain('h-2 w-2 shrink-0 rounded-full bg-accent')
     }
   })
 })

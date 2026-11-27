@@ -13,7 +13,7 @@ const sponsored = resolveDispatchIdentity({ ...admin, publishedAs: 'sponsored', 
 describe('DispatchIdentityLabel', () => {
   it('member: unchanged profile link with pseudonym + country', () => {
     const html = renderToStaticMarkup(<DispatchIdentityLabel identity={member} />)
-    expect(html).toContain('href="/minds/m-1"')
+    expect(html).toContain('href="/room/m-1"')
     expect(html).toContain('Quiet Harbour')
     expect(html).toContain('Kenya')
   })
@@ -23,7 +23,7 @@ describe('DispatchIdentityLabel', () => {
     expect(html).toContain('tempa-emblem.png')
     expect(html).toContain('>Tempa<')
     expect(html).not.toContain('href=')
-    expect(html).not.toMatch(/Afam|Nigeria|admin-1|\/minds\//)
+    expect(html).not.toMatch(/Afam|Nigeria|admin-1|\/room\//)
   })
 
   it('Sponsored: "Sponsored" disclosure + sponsor name, no link, not Tempa, no admin', () => {
@@ -77,13 +77,13 @@ describe('Board card uses the canonical identity', () => {
   it('Tempa card: emblem + Tempa, never the admin profile link', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={card(tempa, 'tempa')} />)
     expect(html).toContain('>Tempa<')
-    expect(html).not.toContain('href="/minds/admin-1"')
+    expect(html).not.toContain('href="/room/admin-1"')
   })
 
   it('Sponsored card: unmistakably labelled Sponsored', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={card(sponsored, 'sponsored')} />)
     expect(html).toContain('Sponsored')
     expect(html).toContain('Acme Paper')
-    expect(html).not.toContain('href="/minds/admin-1"')
+    expect(html).not.toContain('href="/room/admin-1"')
   })
 })

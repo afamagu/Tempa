@@ -13,7 +13,7 @@ describe('RecommendedMindCard', () => {
     // inside it — never split into a separate avatar link and text link.
     const anchorCount = (html.match(/<a /g) ?? []).length
     expect(anchorCount).toBe(1)
-    expect(html).toContain('href="/minds/user-1"')
+    expect(html).toContain('href="/room/user-1?source=worth_knowing"')
     expect(html).toContain('Evening Quill')
     expect(html).toContain('South Africa')
   })

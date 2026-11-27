@@ -57,7 +57,9 @@ export default function YourMarkStep({
   }
 
   useEffect(() => {
-    void loadReservation()
+    let active = true
+    queueMicrotask(() => { if (active) void loadReservation() })
+    return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

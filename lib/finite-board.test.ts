@@ -61,7 +61,7 @@ describe('Phase 11 finite Board selection', () => {
     const result = composeFiniteBoardItems(
       [
         item({ id:'kept-piece', authorId:'person', isKept:true, isFamiliar:true }),
-        item({ id:'cross-piece', authorId:'person', isKept:true, isFamiliar:true }),
+        item({ id:'cross-piece', authorId:'person', isKept:false, isFamiliar:true }),
       ],
       new Set(['person']),
       'viewer'

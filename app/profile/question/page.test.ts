@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { resolveOnboardingQuestionDestination } from './page'
+import { resolveOnboardingQuestionDestination } from './destination'
 
 // Onboarding & First-Use checkpoint (Checkpoint 2, Section A/B/R) — the
 // required first-Question onboarding step. Async Server Component with
@@ -26,21 +26,21 @@ describe('Onboarding required-Question page — reuses the existing Question inf
   })
 
   it('the secondary "Answer another Question" path reuses the existing nextEligibleQuestion resolution, no second lookup', () => {
-    expect(source).toContain('getEligibleQuestions(supabase, user.id)')
-    expect(source).toContain('nextEligibleQuestion(eligibleQuestions, flagship.id)')
+    expect(source).toContain('questionId={flagship.id}')
+    expect(source).not.toContain('nextEligibleQuestion(')
   })
 
   it('gracefully completes onboarding through the recovery RPC rather than deadlocking when no Flagship is configured', () => {
     expect(source).toContain('if (!flagship) {')
     const flagshipGuardStart = source.indexOf('if (!flagship) {')
-    const flagshipGuardEnd = source.indexOf("redirect('/minds')", flagshipGuardStart)
+    const flagshipGuardEnd = source.indexOf("redirect('/home')", flagshipGuardStart)
     expect(source.slice(flagshipGuardStart, flagshipGuardEnd)).toContain("rpc('complete_flagship_onboarding')")
   })
 
   it('redirects to /profile (never straight into the Question, and never onward) when no profiles row exists yet — this step assumes the profile step already completed', () => {
-    expect(source).toContain("if (!profile) {")
-    const profileGuardStart = source.indexOf('if (!profile) {')
-    const profileGuardEnd = source.indexOf('}', profileGuardStart)
+    expect(source).toContain("if (!profile) redirect('/profile')")
+    const profileGuardStart = source.indexOf('if (!profile)')
+    const profileGuardEnd = source.indexOf('\n', profileGuardStart)
     expect(source.slice(profileGuardStart, profileGuardEnd)).toContain("redirect('/profile')")
   })
 
@@ -52,8 +52,8 @@ describe('Onboarding required-Question page — reuses the existing Question inf
 
 describe('Onboarding required-Question page — durable resume safety', () => {
   it('documents central resumption plus route-local defense-in-depth checks', () => {
-    expect(source).toContain('shared central guard')
-    expect(source).toContain('defense in depth')
+    expect(source).toContain('onboarding_stage')
+    expect(source).toContain("redirect('/profile/mark')")
   })
 })
 
@@ -83,12 +83,12 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
   })
 
   // 5. ALREADY COMPLETED MEMBER, direct revisit: least-surprising
-  // behavior — redirect straight to /minds rather than re-rendering the
+  // behavior — redirect straight to /home rather than re-rendering the
   // onboarding UI (which would now show ordinary view-mode, not the
   // onboarding completion state, since QuestionAnswer's own
   // `confirmation` is never restored from a page load — still not the
   // right destination for a URL whose entire purpose is "do this once").
-  it('5. already-completed member revisiting directly: redirects to /minds, never re-renders onboarding', () => {
+  it('5. already-completed member revisiting directly: redirects to /home, never re-renders onboarding', () => {
     expect(
       resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: true, hasFlagshipAnswer: true })
     ).toBe('recover')
@@ -101,7 +101,7 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
   it('8. profile existence alone never counts as onboarding completion', () => {
     expect(
       resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: true, hasFlagshipAnswer: false })
-    ).not.toBe('/minds')
+    ).not.toBe('/home')
     // Only genuinely no profile, or a genuinely completed answer, ever
     // redirect away from rendering the Question.
     expect(
@@ -109,7 +109,7 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
     ).toBe('/profile')
   })
 
-  it('no Flagship Question currently configured: completes onboarding gracefully (redirects to /minds), never deadlocks', () => {
+  it('no Flagship Question currently configured: completes onboarding gracefully (redirects to /home), never deadlocks', () => {
     expect(
       resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'question', hasFlagshipQuestion: false, hasFlagshipAnswer: false })
     ).toBe('recover')
@@ -125,21 +125,21 @@ describe('resolveOnboardingQuestionDestination — the route/state safety audit 
 describe('Mark → Question stage enforcement', () => {
   it('sends a mark-stage member back to Your Mark and a complete member onward', () => {
     expect(resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'mark', hasFlagshipQuestion: true, hasFlagshipAnswer: false })).toBe('/profile/mark')
-    expect(resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'complete', hasFlagshipQuestion: true, hasFlagshipAnswer: false })).toBe('/minds')
+    expect(resolveOnboardingQuestionDestination({ hasProfile: true, onboardingStage: 'complete', hasFlagshipQuestion: true, hasFlagshipAnswer: false })).toBe('/home')
   })
 })
 
 describe('Checkpoint 2B, Section B — the actual page mirrors the tested pure decision for each guard', () => {
   it('no-profile guard redirects to /profile, matching resolveOnboardingQuestionDestination', () => {
-    const guardStart = source.indexOf('if (!profile) {')
-    const guardEnd = source.indexOf('}', guardStart)
+    const guardStart = source.indexOf('if (!profile)')
+    const guardEnd = source.indexOf('\n', guardStart)
     expect(source.slice(guardStart, guardEnd)).toContain("redirect('/profile')")
   })
 
-  it('already-answered guard completes durable onboarding before redirecting to /minds', () => {
+  it('already-answered guard completes durable onboarding before redirecting to /home', () => {
     expect(source).toContain('if (answer) {')
     const guardStart = source.indexOf('if (answer) {')
-    const guardEnd = source.indexOf("redirect('/minds')", guardStart)
+    const guardEnd = source.indexOf("redirect('/home')", guardStart)
     expect(source.slice(guardStart, guardEnd)).toContain("rpc('complete_flagship_onboarding')")
   })
 })

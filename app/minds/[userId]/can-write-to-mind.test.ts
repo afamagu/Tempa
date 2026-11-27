@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canWriteToMind, chooseProfileAnswer } from './page'
+import { canWriteToMind, chooseProfileAnswer } from './profile-helpers'
 import type { MyQuestionAnswer } from '@/lib/questions'
 
 function state(overrides: Partial<Parameters<typeof canWriteToMind>[0]> = {}) {

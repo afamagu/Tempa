@@ -45,7 +45,7 @@ describe('DispatchReader — automatic resume, no bookmark workflow', () => {
     expect(source).not.toContain('SavedPlaceControls')
     expect(source).not.toContain('SavedPlaceRibbon')
     expect(source).not.toContain('reading-places')
-    expect(source).not.toContain('reading_places')
+    expect(source).not.toContain(".from('reading_places')")
   })
 
   it('continues to restore and persist through dispatch_views', () => {

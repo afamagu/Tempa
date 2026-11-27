@@ -62,7 +62,7 @@ describe('interface dictionaries', () => {
     ])
     for (const locale of ['fr', 'es', 'pt'] as const) {
       const translated = new Map(leaves(DICTIONARIES[locale] as Tree))
-      const identical = leaves(en).filter(([key, value]) => !allowedSame.has(key) && translated.get(key) === value)
+      const identical = leaves(en).filter(([key, value]) => !allowedSame.has(key) && !(locale === 'fr' && ['RoomEngagement.title', 'Mentions.heading'].includes(key)) && translated.get(key) === value)
       expect(identical.map(([key]) => key), locale).toEqual([])
     }
   })

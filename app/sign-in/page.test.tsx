@@ -4,14 +4,15 @@ import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { NextIntlClientProvider } from 'next-intl'
 import en from '@/messages/en.json'
-import SignInPage, {
+import SignInPage from './page'
+import {
   getAuthErrorKey,
   getAuthErrorKeyFromFragment,
   getInitialErrorKey,
   googleResultErrorKey,
   isRefusedAccountFragment,
   type SignInErrorKey,
-} from './page'
+} from './auth-error-keys'
 import { GOOGLE_CAPTCHA_FAILED, GOOGLE_SIGN_IN_FAILED } from '@/lib/google-identity'
 
 let currentSearchParams = new URLSearchParams()

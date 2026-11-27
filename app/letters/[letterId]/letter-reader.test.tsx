@@ -31,7 +31,7 @@ describe('LetterReader — automatic resume only', () => {
 
   it('restores and records the automatic resume position', () => {
     expect(source).toContain('getReadingPlaceState')
-    expect(source).toContain('scrollToAnchor(container, scrollRoot, state.resumeParagraphIndex, state.resumeCharOffset')
+    expect(source).toContain('scrollToAnchor(container, scrollRoot, cached.paragraphIndex, cached.charOffset')
     expect(source).toContain('recordReadingProgress')
     expect(source).toContain('getCurrentReadingAnchor(container, scrollRoot)')
   })

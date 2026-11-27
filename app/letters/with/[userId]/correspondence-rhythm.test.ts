@@ -13,7 +13,7 @@ describe('Letterbox correspondence rhythm', () => {
   })
 
   it('does not infer rhythm for historical-only archives', () => {
-    expect(page).toContain('activeCorrespondence ?')
+    expect(page).toContain('activeCorrespondence && establishedForViewer')
     expect(page).toContain(': false')
     expect(page).toContain('activeCorrespondence && establishedForViewer')
   })

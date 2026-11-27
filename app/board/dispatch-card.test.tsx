@@ -96,18 +96,18 @@ describe('DispatchCard', () => {
   })
 
   // Live-test regression (Checkpoint 1C, §7): the Board card's author
-  // pseudonym must itself link to /minds/[authorId] — previously
+  // pseudonym must itself link to /room/[authorId] — previously
   // inert text, requiring a member to open the Dispatch first and click
   // the author there instead.
   it('the author pseudonym links to their profile', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={item()} />)
-    expect(html).toMatch(/<a[^>]*href="\/minds\/author-1"[^>]*>[\s\S]*Evening Quill[\s\S]*<\/a>/)
+    expect(html).toMatch(/<a[^>]*href="\/room\/author-1"[^>]*>[\s\S]*Evening Quill[\s\S]*<\/a>/)
   })
 
   it('never nests the profile link inside the Dispatch-reader link — two sibling anchors, not one inside the other', () => {
     const html = renderToStaticMarkup(<DispatchCard dispatch={item()} />)
     // The profile link must close (</a>) before the reader Link opens.
-    const profileLinkEnd = html.indexOf('</a>', html.indexOf('href="/minds/author-1"'))
+    const profileLinkEnd = html.indexOf('</a>', html.indexOf('href="/room/author-1"'))
     const readerLinkStart = html.indexOf('href="/board/d-1"')
     expect(profileLinkEnd).toBeGreaterThan(-1)
     expect(profileLinkEnd).toBeLessThan(readerLinkStart)

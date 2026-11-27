@@ -1,3 +1,4 @@
+import { canWriteToMind, chooseProfileAnswer } from './profile-helpers'
 import ProfileQuestions from '@/app/member-questions/profile-questions'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
@@ -17,7 +18,6 @@ import { getPublishedDispatchesByAuthor, getPinnedDispatch } from '@/lib/dispatc
 import { roomLetterContactPath, roomLetterPath } from '@/lib/room-paths'
 import { getBlockScope } from '@/lib/blocking'
 import { publicProfileMarkUrl } from '@/lib/profile-marks'
-import type { MyQuestionAnswer } from '@/lib/questions'
 import {
   sectionTitleClass,
   sectionLabelClass,
@@ -48,25 +48,6 @@ function genderDisplay(gender: string | null, genderCustom: string | null) {
   if (!gender || gender === 'Prefer not to say') return null
   if (gender === 'Self-describe') return genderCustom || null
   return gender
-}
-
-export function canWriteToMind(state: {
-  isSelf: boolean
-  alreadyCorresponding: boolean
-  hasCurrentAnswer: boolean
-  currentAnswerAlreadyContacted: boolean
-}): boolean {
-  return !state.isSelf && !state.alreadyCorresponding && state.hasCurrentAnswer && !state.currentAnswerAlreadyContacted
-}
-
-/** Stable introduction first, then a live/historical Room response, then latest. */
-export function chooseProfileAnswer(answers: MyQuestionAnswer[]): MyQuestionAnswer | null {
-  return (
-    answers.find((answer) => answer.isPrimary) ??
-    answers.find((answer) => answer.isCurrent) ??
-    [...answers].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ??
-    null
-  )
 }
 
 export default async function PublicProfilePage({

@@ -30,6 +30,10 @@ const mockCookiesGetAll = vi.fn()
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { exchangeCodeForSession: mockExchangeCodeForSession },
+    rpc: async (name: string) => {
+      if (name !== 'current_pilot_access') throw new Error('Unexpected RPC: ' + name)
+      return { data: true, error: null }
+    },
     from: (table: string) => {
       if (table === 'member_language_preferences') {
         return { select: () => ({ eq: () => ({ maybeSingle: mockLanguagePreference }) }) }

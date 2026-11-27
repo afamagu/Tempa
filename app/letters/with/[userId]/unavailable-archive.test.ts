@@ -27,7 +27,7 @@ describe('Letter archive when a correspondent profile is unavailable', () => {
   })
 
   it('still sends an invalid archive URL to the correspondence unavailable state', () => {
-    expect(source).toMatch(/if \(!otherProfile && !hasHistoricalAccess\) \{\s*notFound\(\)\s*\}/)
+    expect(source).toContain('if (!otherProfile && !hasHistoricalAccess) notFound()')
   })
 })
 

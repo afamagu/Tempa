@@ -33,7 +33,7 @@ describe('a hidden Dispatch renders the author\'s calm own-view, never the norma
     const hiddenBranchEnd = source.indexOf('await Promise.all([')
     const branch = source.slice(hiddenBranchStart, hiddenBranchEnd)
 
-    expect(branch).toContain('href="/board"')
+    expect(branch).toContain('href={boardReturnHref}')
     expect(branch).toContain('{dispatch.title}')
   })
 

@@ -34,7 +34,7 @@ describe('editorial Board header', () => {
     const html=card('Kenya', false)
     expect(html).not.toContain('data-editorial-card-header')
     expect(html).not.toContain('Tempa House Columnist')
-    expect(html).toContain('href="/minds/house"')
+    expect(html).toContain('href="/room/house"')
     expect(html).toContain('href="/board/d"')
   })
 })

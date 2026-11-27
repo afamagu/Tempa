@@ -262,18 +262,19 @@ describe('share image and media', () => {
         return statSync(path.join(root, rel)).isDirectory() ? walk(rel) : /\.tsx$/.test(n) && !/\.test\.tsx$/.test(n) ? [rel] : []
       })
     const users = walk('app').filter((f) => read(f).includes('dangerouslySetInnerHTML={'))
-    expect(users.map((f) => f.replace(/\\/g, '/'))).toEqual(['app/dispatches/[slug]/page.tsx'])
+    expect(users.map((f) => f.replace(/\\/g, '/')).sort()).toEqual(['app/dispatches/[slug]/page.tsx', 'app/dispatches/topics/[topic]/page.tsx'].sort())
+      for (const f of users) expect(read(f)).toContain('dangerouslySetInnerHTML={{ __html: jsonLdScriptContent(')
     expect(read('app/dispatches/[slug]/page.tsx')).toContain('dangerouslySetInnerHTML={{ __html: jsonLdScriptContent(')
   })
 })
 
 describe('the author’s choice', () => {
   it('composer copy says plainly that Public means the open web', () => {
-    expect(WEB_PUBLIC_COPY.on).toBe('Anyone can read this Dispatch on the web. Public Dispatches may appear in search engines.')
+    expect(WEB_PUBLIC_COPY.on).toBe('Anyone can read this letter, and search engines may index it. Your real identity and profile stay private; readers see only your Tempa identity — your pseudonym, country and Mark.')
     const composer = read('app/board/dispatch-composer.tsx')
     expect(composer).toContain('{webPublic ? WEB_PUBLIC_COPY.on : WEB_PUBLIC_COPY.off}')
     // members default to members-only; official/sponsored default to public
-    expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : publication ? true : false')
+    expect(composer).toContain('const initialWebPublic = isEdit ? existingDispatch?.webPublic ?? null : false')
   })
 
   it('the composer sends the requested web state WITH the save (one transaction) — no separate follow-up call', () => {

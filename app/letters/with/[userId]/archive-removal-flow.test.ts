@@ -14,9 +14,9 @@ describe('Letterbox removal flow', () => {
   })
 
   it('confirms removal inside the archive rather than in the person header or a page overlay', () => {
-    expect(listSource).toContain('Remove this letter from your Letterbox?')
+    expect(listSource).toContain('Remove this item from your Letterbox?')
     expect(listSource).toContain('Nothing is deleted for {otherPseudonym}.')
-    expect(listSource).toContain('>Keep<')
+    expect(listSource).toMatch(/>\s*Keep\s*</)
     expect(listSource).not.toContain('fixed inset-0')
     expect(listSource).not.toContain('window.location.reload')
   })

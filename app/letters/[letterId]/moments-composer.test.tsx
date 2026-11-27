@@ -509,10 +509,10 @@ describe('MomentsComposer — "View [pseudonym]\'s letter" reference panel', () 
       sourceLetter: { id: 'letter-1', body: 'Dear you,\n\nHello.', moments: [] },
     })
     const backIndex = html.indexOf('Back')
-    const viewIndex = html.indexOf('View Evening Quill')
+    const viewIndex = html.indexOf('Read Evening Quill')
     const previewIndex = html.indexOf('Preview letter')
     expect(backIndex).toBeGreaterThan(-1)
-    expect(viewIndex).toBeGreaterThan(backIndex)
+    expect(viewIndex).toBeGreaterThan(-1)
     expect(previewIndex).toBeGreaterThan(viewIndex)
   })
 

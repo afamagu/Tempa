@@ -34,7 +34,7 @@ function extractFunctionBody(qualifiedName: string): string {
   return sql.slice(start, end)
 }
 
-const codeOnly = stripLineComments(sql)
+const codeOnly = stripLineComments(sql).replace(/\s+/g, ' ')
 
 describe('Phase 1 relationship-health measurement migration', () => {
   it('is one forward transaction and is explicitly review-before-production', () => {
@@ -124,7 +124,7 @@ describe('Phase 1 relationship-health measurement migration', () => {
     )
 
     // There must be no general INSERT...SELECT backfill into snapshots.
-    const snapshotInsertSelect = /insert\s+into\s+public\.relationship_establishment_snapshots[\s\S]*?select\s+/i
+    const snapshotInsertSelect = /insert\s+into\s+public\.relationship_establishment_snapshots[^;]*?select\s+/i
     expect(codeOnly).not.toMatch(snapshotInsertSelect)
   })
 

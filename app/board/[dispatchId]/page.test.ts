@@ -163,7 +163,7 @@ describe('Dispatch detail page — Phase 11 origin and finite Board return', () 
     expect(source).toContain('const boardReturnHref = explicitReturn ?? (trailContext')
     expect(source).toContain('sessionStartedAt')
     expect(source).toContain('seed')
-    expect((source.match(/href=\\{boardReturnHref\\}/g) ?? []).length).toBeGreaterThanOrEqual(1)
+    expect((source.match(/href=\{boardReturnHref\}/g) ?? []).length).toBeGreaterThanOrEqual(1)
   })
 })
 

@@ -135,9 +135,9 @@ describe('BlockButton source — failed blockUser never reaches navigation (Chec
 // guessed from pathname; an explicit prop per the component's own doc
 // comment).
 describe('BlockButton call-site wiring — fullBlockRedirect', () => {
-  it('the public profile page passes fullBlockRedirect="/minds" (its own route becomes invalid after a full block)', async () => {
+  it('the public profile page passes fullBlockRedirect="/room" (its own route becomes invalid after a full block)', async () => {
     const source = await readFile(new URL('./minds/[userId]/page.tsx', import.meta.url), 'utf8')
-    expect(source).toMatch(/<BlockButton[\s\S]*?fullBlockRedirect="\/minds"[\s\S]*?\/>/)
+    expect(source).toMatch(/<BlockButton[\s\S]*?fullBlockRedirect="\/room"[\s\S]*?\/>/)
   })
 
   it('the existing-letter action menu does NOT pass fullBlockRedirect — the historical letter page stays valid regardless of block scope', async () => {

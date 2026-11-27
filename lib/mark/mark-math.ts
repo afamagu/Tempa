@@ -169,7 +169,7 @@ export function extractPalette(samples: RGB[], k: number, iterations = 6): RGB[]
     centers.push(sorted[idx])
   }
 
-  let assignments = new Int32Array(samples.length)
+  const assignments = new Int32Array(samples.length)
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < samples.length; i++) {
       assignments[i] = nearestPaletteIndex(samples[i], centers)
@@ -1055,8 +1055,8 @@ export function generateRegularizedMassPoints(
   const expansion = 1.35
   let rx = halfMajor * expansion
   let ry = halfMinor * expansion * Math.max(1, stats.elongation * 0.6)
-  let cx = centroid.x
-  let cy = centroid.y
+  const cx = centroid.x
+  const cy = centroid.y
   if (stats.touchesEdge.left) {
     rx = Math.max(rx, cx + rx * 0.4)
   }

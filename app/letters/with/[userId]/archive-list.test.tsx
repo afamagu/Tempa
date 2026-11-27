@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }))
+
 import ArchiveList from './archive-list'
 import type { ArchiveLetter } from '@/lib/letters'
 import type { ReturnCard } from '@/lib/return-cards'

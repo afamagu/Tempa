@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { renderToStaticMarkup as renderStatic } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { NextIntlClientProvider } from 'next-intl'
+import en from '@/messages/en.json'
+function renderToStaticMarkup(element: ReactNode) { return renderStatic(<NextIntlClientProvider locale="en" messages={en}>{element}</NextIntlClientProvider>) }
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import AuthoredProse from '@/app/authored-prose'

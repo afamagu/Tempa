@@ -329,8 +329,8 @@ describe('isEffectivelyExpired — established must gate expiry, not reply_to_id
     expect(isEffectivelyExpired(OLD_SENT_ROOT, true)).toBe(false)
   })
 
-  it('a genuinely unestablished first-contact letter past 72h IS effectively expired', () => {
-    expect(isEffectivelyExpired(OLD_SENT_ROOT, false)).toBe(true)
+  it('a delivered first-contact letter remains readable after capacity expiry', () => {
+    expect(isEffectivelyExpired(OLD_SENT_ROOT, false)).toBe(false)
   })
 
   it('never expired while fresh, regardless of establishment', () => {

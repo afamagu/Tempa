@@ -4,7 +4,7 @@ import path from 'node:path'
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }))
 
-import { resolveWritingStyleNext } from './page'
+import { resolveWritingStyleNext } from './destination'
 
 const source = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8')
 const youSource = readFileSync(path.join(__dirname, '..', '..', 'you', 'writing-style', 'page.tsx'), 'utf8')

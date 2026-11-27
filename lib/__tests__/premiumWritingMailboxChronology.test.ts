@@ -25,11 +25,11 @@ describe('premium writing/reading — mailbox arrival chronology', () => {
   it('leaves the canonical letter view untouched and uses an isolated mailbox view', () => {
     expect(migration).toContain('create or replace view public.mailbox_letters_for_participant')
     expect(migration).not.toContain('create or replace view public.letters_for_participant')
-    expect(letters).toContain("const LETTERS_VIEW = 'mailbox_letters_for_participant'")
+    expect(letters).toContain("const MAILBOX_LETTERS_VIEW = 'mailbox_letters_for_participant'")
   })
 
   it('orders member mailbox surfaces by mailbox_at instead of creation time', () => {
     expect(letters).toContain(".order('mailbox_at', { ascending: false })")
-    expect(letters).toContain("'created_at, mailbox_at, sender_id")
+    expect(letters).toContain("created_at, mailbox_at")
   })
 })

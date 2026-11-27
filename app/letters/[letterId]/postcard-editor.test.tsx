@@ -111,7 +111,7 @@ describe('PostcardEditor — Part 7. reuses the real Postcard visual shell', () 
 
   it('a restrained caption documents that Turn over is how to reach the writable back — no undocumented gesture', () => {
     const html = render()
-    expect(html).toContain('Turn over to write on the back.')
+    expect(html).toContain('Turn over to add a note, if you like.')
   })
 })
 

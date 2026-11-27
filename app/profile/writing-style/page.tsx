@@ -1,19 +1,10 @@
+import { resolveWritingStyleNext } from './destination'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
-import { sanitizeInternalPath } from '@/lib/safe-redirect'
-import { WRITING_STYLE_PATH } from '@/lib/onboarding'
 import { getMyWritingStyle } from '@/lib/writing-style-data'
 import { getWritingSample } from '@/lib/writing-style-sample'
 import WritingStyleChooser from '@/app/writing-style-chooser'
-
-export function resolveWritingStyleNext(next: string | undefined): string {
-  const safe = sanitizeInternalPath(next)
-  if (!safe) return '/home'
-  const pathname = safe.split(/[?#]/, 1)[0]
-  if (pathname === WRITING_STYLE_PATH || pathname.startsWith(`${WRITING_STYLE_PATH}/`)) return '/home'
-  return safe
-}
 
 export default async function WritingStyleStepPage({
   searchParams,
